@@ -42723,7 +42723,8 @@ function bindMessagesPageOnce() {
       scheduleMessagesThreadScrollToBottom({ force: true });
     });
     composer.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      // Send is the Nabad button only — Return inserts a newline.
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         sendCurrentThreadMessage();
       }

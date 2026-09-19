@@ -87,6 +87,18 @@
   --nabad-glass-size-round: 38px;
   --nabad-glass-active-scale: 0.96;
   --nabad-glass-transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease, box-shadow 160ms ease;
+  --nabad-sheet-blur: 36px;
+  --nabad-sheet-saturate: 155%;
+  --nabad-sheet-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.035) 36%, rgba(8, 10, 16, 0.28) 100%),
+    color-mix(in srgb, var(--bg) 44%, transparent);
+  --nabad-sheet-border: rgba(255, 255, 255, 0.14);
+  --nabad-sheet-shadow:
+    0 -18px 48px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.10);
+  --nabad-sheet-radius: 24px 24px 18px 18px;
+  --nabad-sheet-scrim: rgba(4, 6, 12, 0.38);
   /* Semantic theme tokens — dark defaults; light mode overrides in html[data-theme="light"]. */
   --surface: var(--card);
   --surface-secondary: var(--card2);
@@ -277,6 +289,14 @@ html[data-theme="light"]{
   --nabad-glass-shadow-hover: 0 10px 26px rgba(88, 104, 140, 0.12);
   --nabad-glass-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.95);
   --nabad-glass-inset-bottom: inset 0 -1px 0 rgba(15, 23, 40, 0.04);
+  --nabad-sheet-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.90), rgba(255, 255, 255, 0.72)),
+    color-mix(in srgb, var(--bg) 38%, transparent);
+  --nabad-sheet-border: rgba(255, 255, 255, 0.72);
+  --nabad-sheet-shadow:
+    0 -14px 36px rgba(15, 23, 40, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  --nabad-sheet-scrim: rgba(242, 242, 247, 0.36);
   /* Create greeting — teal-forward name gradient (Hey stays neutral). */
   --greeting-name-gradient: linear-gradient(120deg, #0d9488 0%, #2dd4bf 42%, #7c5cff 100%);
 }
@@ -39589,8 +39609,15 @@ html[data-theme="light"] .messagesBubbleText--coachMd strong{
   gap: 8px;
   padding: 8px 12px;
   padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid rgba(255,255,255,0.08);
-  background: var(--bg);
+  border-top: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 46%, rgba(255, 255, 255, 0.03)),
+    color-mix(in srgb, var(--bg) 42%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+          backdrop-filter: blur(28px) saturate(1.4);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
+    0 -8px 20px rgba(0, 0, 0, 0.12);
 }
 body[data-route="messages-thread"] .messagesComposer{
   position: fixed;
@@ -39626,24 +39653,32 @@ body[data-route="messages-thread"] .footer{
 html.is-web-shell body.messagesThreadViewportSized[data-route="messages-thread"] .messagesThreadPage{
   overflow: hidden;
 }
-.messagesComposerAttach{
+.messagesComposerAttach,
+.messagesComposerSend{
   flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  border-radius: 13px;
-  border: 1px solid rgba(124,92,255,0.28);
-  background: rgba(124,92,255,0.12);
-  color: rgba(215,198,255,0.96);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--nabad-glass-radius-round);
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  color: var(--nabad-glass-color);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
   -webkit-tap-highlight-color: transparent;
-  transition: transform 0.16s ease, background 0.16s ease;
+  transition: var(--nabad-glass-transition);
 }
-.messagesComposerAttach:active:not(:disabled){
-  transform: scale(0.94);
-  background: rgba(124,92,255,0.2);
+.messagesComposerAttach:active:not(:disabled),
+.messagesComposerSend:active:not(:disabled){
+  transform: scale(var(--nabad-glass-active-scale));
+  background: var(--nabad-glass-bg-hover);
+  border-color: var(--nabad-glass-border-hover);
 }
 .messagesComposerSheetList{
   display: flex;
@@ -39983,37 +40018,37 @@ body.coachComposerMode .messagesComposerSheetListDm{
 }
 .messagesComposerInput{
   flex: 1 1 auto;
-  min-height: 44px;
+  min-height: 40px;
   max-height: 120px;
   resize: none;
-  border-radius: 14px;
-  border: 1px solid rgba(124,92,255,0.18);
-  background: rgba(255,255,255,0.05);
-  color: #f8faff;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: var(--nabad-glass-radius-round);
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  color: var(--nabad-glass-color);
   font: inherit;
   font-size: 15px;
   line-height: 1.25;
-  padding: 12px 14px;
+  padding: 10px 16px;
   box-sizing: border-box;
+  outline: none;
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 .messagesComposerInput::placeholder{
   color: rgba(223,231,251,0.38);
 }
-.messagesComposerSend{
-  flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 13px;
-  background: linear-gradient(135deg, #7c5cff 0%, #9b6dff 52%, #b78bff 100%);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 8px 22px rgba(124,92,255,0.35);
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 0.18s ease, opacity 0.18s ease;
+.messagesComposerInput:focus,
+.messagesComposerInput:focus-visible{
+  outline: none;
+  border-color: var(--nabad-glass-border);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 @media (prefers-reduced-motion: no-preference){
   .messagesComposerSend--pulse{
@@ -57689,6 +57724,142 @@ html[data-theme="light"] .musicPrefsGrid .profileEditGenreChip.isSelected{
   font-weight: 650;
 }
 
+/* ========== Nabad glass bottom sheets ==========
+ * One liquid-glass surface for replies, DM plus, requests, player ⋯, and friends compose.
+ * Layout/animation stay on the original sheet classes; this only restyles the chrome. */
+.feedReplySheetCard,
+.messagesShareSheetCard,
+.shareChooserSheetCard,
+.sendToFriendSheetCard,
+.messagesRequestSheetCard,
+.discoverTrackSheetCard,
+.friendsComposeSheetCard,
+.coachSongPlanSheetCard,
+.proSingerSheetCard,
+.userActionSheetPanel{
+  isolation: isolate;
+  border: 1px solid var(--nabad-sheet-border);
+  border-bottom: 0;
+  border-radius: var(--nabad-sheet-radius);
+  background: var(--nabad-sheet-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-sheet-blur)) saturate(var(--nabad-sheet-saturate));
+          backdrop-filter: blur(var(--nabad-sheet-blur)) saturate(var(--nabad-sheet-saturate));
+  box-shadow: var(--nabad-sheet-shadow);
+}
+.feedReplySheetBackdrop,
+.messagesShareSheetBackdrop,
+.shareChooserSheetBackdrop,
+.sendToFriendSheetBackdrop,
+.messagesRequestSheetBackdrop,
+.discoverTrackSheetBackdrop,
+.friendsComposeSheetBackdrop,
+.coachSongPlanSheetBackdrop,
+.userActionSheetScrim{
+  background: var(--nabad-sheet-scrim);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+          backdrop-filter: blur(18px) saturate(120%);
+}
+.feedReplySheetClose,
+.messagesShareSheetClose,
+.messagesRequestSheetClose,
+.discoverTrackSheetClose,
+.friendsComposeSheetClose,
+.coachSongPlanSheetClose{
+  width: 34px;
+  height: 34px;
+  border-radius: var(--nabad-glass-radius-round);
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  color: var(--nabad-glass-color);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+.feedReplySheetClose:hover,
+.messagesShareSheetClose:hover,
+.messagesRequestSheetClose:hover,
+.discoverTrackSheetClose:hover,
+.friendsComposeSheetClose:hover,
+.coachSongPlanSheetClose:hover{
+  background: var(--nabad-glass-bg-hover);
+  border-color: var(--nabad-glass-border-hover);
+  color: var(--nabad-glass-color-hover);
+}
+.feedReplySheetGrab,
+.discoverTrackSheetGrab,
+.friendsComposeSheetGrab{
+  background: rgba(255, 255, 255, 0.22);
+}
+.messagesComposerSheetRow,
+.userActionSheetRow{
+  border: 1px solid var(--nabad-glass-border);
+  border-radius: 16px;
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+.userActionSheetRow + .userActionSheetRow{
+  margin-top: 6px;
+}
+.messagesComposerSheetRow:active:not(:disabled),
+.userActionSheetRow:active{
+  background: var(--nabad-glass-bg-hover);
+  border-color: var(--nabad-glass-border-hover);
+}
+.messagesShareSearch,
+.messagesRequestInput{
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+.messagesShareSearch:focus-within,
+.messagesRequestInput:focus,
+.messagesRequestInput:focus-visible{
+  outline: none;
+  border-color: var(--nabad-glass-border);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+.messagesRequestSend{
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg-hover);
+  color: var(--nabad-glass-color-hover);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+.discoverTrackSheetQuickBtn,
+.discoverTrackSheetList{
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+.discoverTrackSheetQuickBtn--accent{
+  border-color: var(--nabad-glass-border-hover);
+  background: var(--nabad-glass-bg-hover);
+  color: var(--nabad-glass-color-hover);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+.discoverTrackSheetRow:active{
+  background: rgba(255, 255, 255, 0.06);
+}
+
 /* Shared bottom sheets — comments, analytics, repost, gift, playlists */
 html[data-theme="light"] .feedReplySheetBackdrop{
   background: rgba(242, 242, 247, 0.88);
@@ -57696,9 +57867,9 @@ html[data-theme="light"] .feedReplySheetBackdrop{
           backdrop-filter: blur(10px) saturate(110%);
 }
 html[data-theme="light"] .feedReplySheetCard{
-  background: var(--card);
-  border-color: var(--border);
-  box-shadow: var(--elev-2);
+  background: var(--nabad-sheet-bg);
+  border-color: var(--nabad-sheet-border);
+  box-shadow: var(--nabad-sheet-shadow);
 }
 html[data-theme="light"] .feedReplySheetGrab{
   background: rgba(15, 23, 40, 0.14);
@@ -57979,9 +58150,9 @@ html[data-theme="light"] .userActionSheetScrim{
   background: rgba(242, 242, 247, 0.88);
 }
 html[data-theme="light"] .userActionSheetPanel{
-  border-color: var(--border);
-  background: var(--card);
-  box-shadow: var(--elev-2);
+  border-color: var(--nabad-sheet-border);
+  background: var(--nabad-sheet-bg);
+  box-shadow: var(--nabad-sheet-shadow);
 }
 html[data-theme="light"] .userActionSheetTitle{
   color: var(--text-muted);
@@ -57990,11 +58161,12 @@ html[data-theme="light"] .userActionSheetRow{
   color: var(--text-primary);
 }
 html[data-theme="light"] .userActionSheetRow:active{
-  background: var(--surface-secondary);
+  background: var(--nabad-glass-bg-hover);
 }
 html[data-theme="light"] .userActionSheetCancel{
   color: var(--text-secondary);
-  background: var(--surface-secondary);
+  background: var(--nabad-glass-bg);
+  border: 1px solid var(--nabad-glass-border);
 }
 
 /* Push notifications center (Settings sub-sheet) */
@@ -58433,25 +58605,41 @@ html[data-theme="light"] .messagesDmSongKind{
   color: #0d9488;
 }
 html[data-theme="light"] .messagesComposer{
-  border-top-color: var(--border);
-  background: var(--card);
+  border-top: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.52)),
+    color-mix(in srgb, var(--bg) 55%, transparent);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.88),
+    0 -8px 18px rgba(15, 23, 40, 0.05);
 }
 html[data-theme="light"] .messagesComposerInput{
-  border-color: var(--border);
-  background: var(--surface-secondary);
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
   color: var(--text-primary);
+}
+html[data-theme="light"] .messagesComposerInput:focus,
+html[data-theme="light"] .messagesComposerInput:focus-visible{
+  border-color: var(--nabad-glass-border);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 html[data-theme="light"] .messagesComposerInput::placeholder{
   color: var(--text-muted);
 }
-html[data-theme="light"] .messagesComposerAttach{
-  border-color: var(--accent-violet-border);
-  background: var(--accent-violet-soft);
-  color: #6d4df5;
+html[data-theme="light"] .messagesComposerAttach,
+html[data-theme="light"] .messagesComposerSend{
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  color: var(--nabad-glass-color);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 html[data-theme="light"] .messagesComposerSheetRow{
-  border-color: var(--border);
-  background: var(--surface-secondary);
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
   color: var(--text-primary);
 }
 html[data-theme="light"] .messagesComposerSheetIcon--song{
@@ -58519,9 +58707,9 @@ html[data-theme="light"] .messagesShareSheetBackdrop{
 html[data-theme="light"] .shareChooserSheetCard,
 html[data-theme="light"] .sendToFriendSheetCard,
 html[data-theme="light"] .messagesShareSheetCard{
-  border-color: var(--border);
-  background: var(--card);
-  box-shadow: var(--elev-2);
+  border-color: var(--nabad-sheet-border);
+  background: var(--nabad-sheet-bg);
+  box-shadow: var(--nabad-sheet-shadow);
 }
 html[data-theme="light"] .messagesShareSheetTitle{
   color: var(--text-primary);
@@ -58634,9 +58822,9 @@ html[data-theme="light"] .discoverTrackSheetBackdrop{
           backdrop-filter: blur(10px) saturate(110%);
 }
 html[data-theme="light"] .discoverTrackSheetCard{
-  border-color: var(--border);
-  background: var(--card);
-  box-shadow: var(--elev-2);
+  border-color: var(--nabad-sheet-border);
+  background: var(--nabad-sheet-bg);
+  box-shadow: var(--nabad-sheet-shadow);
 }
 html[data-theme="light"] .discoverTrackSheetCard::after{
   background: linear-gradient(90deg, transparent, var(--border), transparent);
@@ -61242,7 +61430,9 @@ html[data-theme="light"] .proSingerRequestsList{
   color: var(--text-primary);
 }
 html[data-theme="light"] .proSingerSheetCard{
-  background: var(--card);
+  background: var(--nabad-sheet-bg);
+  border-color: var(--nabad-sheet-border);
+  box-shadow: var(--nabad-sheet-shadow);
 }
 .proSingerPhotoRow{
   display: flex;

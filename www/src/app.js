@@ -5259,6 +5259,7 @@ function syncRoutePanelVisibility(wanted) {
   if (route !== "generate") clearCreatePageKeyboardInset();
   if (route !== "auth") clearAuthKeyboardInset();
   document.body.setAttribute("data-route", route);
+  if (route !== "messages-thread") setMessagesThreadHeadCollapsed(false);
   if (route !== "discover") {
     _discoverHeroVisitKey = "";
     stopDiscoverHeroAutoSlide();
@@ -36162,6 +36163,7 @@ function applyMessagesNativeKeyboardInset(rawInset) {
   const open = inset > 0;
   _messagesThreadKeyboardOpen = open;
   document.body.classList.toggle("messagesThreadKeyboardOpen", open);
+  if (open) setMessagesThreadHeadCollapsed(false);
   try {
     document.documentElement.style.setProperty("--messages-keyboard-inset", `${inset}px`);
   } catch {}
@@ -36345,6 +36347,86 @@ function updateMessagesThreadHeadReserve() {
   } catch {}
 }
 
+const MESSAGES_THREAD_HEAD_COLLAPSE_THRESH = 16;
+const MESSAGES_THREAD_HEAD_EXPAND_BOTTOM_PX = 88;
+let _messagesThreadHeadLastScrollTop = 0;
+
+function messagesThreadHeadMayCollapse() {
+  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return false;
+  if (document.body.classList.contains("messagesThreadKeyboardOpen")) return false;
+  if (document.querySelector(".messagesThreadPage.deskCoachDocked")) return false;
+  return true;
+}
+
+function measureMessagesThreadHeadFan() {
+  const head = document.querySelector(".messagesThreadHead");
+  const back = document.getElementById("messagesThreadBackBtn");
+  const more = document.getElementById("messagesThreadMoreBtn");
+  const avatar = document.getElementById("messagesThreadAvatar");
+  if (!head || !back || !more || !avatar) return;
+  const a = avatar.getBoundingClientRect();
+  const b = back.getBoundingClientRect();
+  const m = more.getBoundingClientRect();
+  const ax = a.left + a.width / 2;
+  const ay = a.top + a.height / 2;
+  head.style.setProperty("--head-fan-back-x", `${Math.round(ax - (b.left + b.width / 2))}px`);
+  head.style.setProperty("--head-fan-back-y", `${Math.round(ay - (b.top + b.height / 2))}px`);
+  head.style.setProperty("--head-fan-more-x", `${Math.round(ax - (m.left + m.width / 2))}px`);
+  head.style.setProperty("--head-fan-more-y", `${Math.round(ay - (m.top + m.height / 2))}px`);
+}
+
+function syncMessagesThreadHeadCollapseAria() {
+  const meta = document.getElementById("messagesThreadHeadMeta");
+  if (!meta) return;
+  const collapsed = document.body.classList.contains("messagesThreadHeadCollapsed");
+  const name = String(_chatHeaderUser?.displayName || "").replace(/^@/, "") || "chat";
+  const isCoach = String(_chatHeaderUser?.userId || "") === COACH_SENDER_ID;
+  if (collapsed) {
+    meta.setAttribute("role", "button");
+    meta.setAttribute("tabindex", "0");
+    meta.setAttribute("aria-expanded", "false");
+    meta.setAttribute("aria-label", `Show ${name} header`);
+    return;
+  }
+  meta.removeAttribute("aria-expanded");
+  if (isCoach) {
+    meta.removeAttribute("role");
+    meta.removeAttribute("tabindex");
+    meta.removeAttribute("aria-label");
+    return;
+  }
+  if (meta.classList.contains("messagesThreadHeadMeta--profile")) {
+    meta.setAttribute("aria-label", `View ${name}'s profile`);
+  }
+}
+
+function setMessagesThreadHeadCollapsed(collapsed) {
+  const next = Boolean(collapsed) && messagesThreadHeadMayCollapse();
+  const on = document.body.classList.contains("messagesThreadHeadCollapsed");
+  if (next === on) return;
+  if (next) measureMessagesThreadHeadFan();
+  document.body.classList.toggle("messagesThreadHeadCollapsed", next);
+  syncMessagesThreadHeadCollapseAria();
+  try { updateMessagesThreadHeadReserve(); } catch {}
+}
+
+function syncMessagesThreadHeadFromScroll(mount) {
+  if (!mount || !messagesThreadHeadMayCollapse()) {
+    setMessagesThreadHeadCollapsed(false);
+    return;
+  }
+  const y = Number(mount.scrollTop || 0);
+  const max = Math.max(0, mount.scrollHeight - mount.clientHeight);
+  const fromBottom = max - y;
+  const dy = y - _messagesThreadHeadLastScrollTop;
+  _messagesThreadHeadLastScrollTop = y;
+  if (fromBottom < MESSAGES_THREAD_HEAD_EXPAND_BOTTOM_PX) {
+    setMessagesThreadHeadCollapsed(false);
+    return;
+  }
+  if (dy < -MESSAGES_THREAD_HEAD_COLLAPSE_THRESH) setMessagesThreadHeadCollapsed(true);
+}
+
 function syncMessagesThreadWebComposerPosition() {
   if (isNativeShell()) return;
   document.querySelector(".messagesComposer")?.style.removeProperty("bottom");
@@ -36398,6 +36480,7 @@ function syncMessagesThreadComposerInset() {
   if (!keyboardOpen) rememberMessagesViewportBaseBottom();
   _messagesThreadKeyboardOpen = keyboardOpen;
   document.body.classList.toggle("messagesThreadKeyboardOpen", keyboardOpen);
+  if (keyboardOpen) setMessagesThreadHeadCollapsed(false);
   try {
     document.documentElement.style.setProperty("--messages-keyboard-inset", `${inset}px`);
   } catch {}
@@ -37107,6 +37190,8 @@ function renderChatHeaderSkeleton() {
     metaEl.removeAttribute("role");
     metaEl.removeAttribute("tabindex");
     metaEl.removeAttribute("aria-label");
+    delete metaEl.dataset.presenceStatus;
+    metaEl.style.removeProperty("--pulse-art");
   }
   updateMessagesThreadHeadReserve();
   syncCoachThreadClearBtn(false);
@@ -37521,6 +37606,7 @@ function wireMessagesThreadScrollOnce() {
   if (!mount) return;
   mount.addEventListener("scroll", () => {
     if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+    syncMessagesThreadHeadFromScroll(mount);
     if ((mount.scrollTop || 0) > MESSAGES_THREAD_LOAD_OLDER_THRESHOLD_PX) return;
     void loadOlderThreadMessages();
   }, { passive: true });
@@ -38813,9 +38899,32 @@ function openChatPartnerProfile() {
   try { showToast("Profile unavailable", { icon: "!", durationMs: 2200 }); } catch {}
 }
 
+function cssUrlIfHttp(url) {
+  const u = String(url || "").trim();
+  if (!/^https?:\/\//i.test(u)) return "";
+  if (/["')\\\s]/.test(u)) return "";
+  return `url("${u}")`;
+}
+
+function syncMessagesThreadHeadPresenceAura() {
+  const metaEl = document.getElementById("messagesThreadHeadMeta");
+  if (!metaEl) return;
+  const isCoach = String(_chatHeaderUser?.userId || "") === COACH_SENDER_ID;
+  const status = isCoach ? "idle" : String(_chatPartnerPresence?.status || "idle");
+  if (status && status !== "idle") metaEl.dataset.presenceStatus = status;
+  else delete metaEl.dataset.presenceStatus;
+  const cover = !isCoach && status === "now_playing"
+    ? String(_chatPartnerPresence?.songCover || "").trim()
+    : "";
+  const art = cssUrlIfHttp(cover);
+  if (art) metaEl.style.setProperty("--pulse-art", art);
+  else metaEl.style.removeProperty("--pulse-art");
+}
+
 function renderChatHeaderPresence() {
   const relationEl = document.getElementById("messagesThreadRelation");
   if (!relationEl) return;
+  syncMessagesThreadHeadPresenceAura();
   const line = presenceLineFromState(_chatPartnerPresence) || {
     status: "idle",
     iconKey: "pulse",
@@ -40323,6 +40432,8 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   _messagesHasMoreOlder = true;
   _messagesLoadingOlder = false;
   _conversationId = tid;
+  _messagesThreadHeadLastScrollTop = 0;
+  setMessagesThreadHeadCollapsed(false);
   const threadCache = tid ? getThreadMessagesCache(tid) : null;
   if (threadCache?.loadedOnce) {
     _messagesList = threadCache.messages.map((m) => ({ ...m }));
@@ -42556,6 +42667,7 @@ function renderCoachChatHeader() {
     metaEl.removeAttribute("tabindex");
     metaEl.removeAttribute("aria-label");
   }
+  syncMessagesThreadHeadPresenceAura();
   updateMessagesThreadHeadReserve();
   syncCoachSongPlanBar();
   syncCoachThreadClearBtn(true);
@@ -42564,6 +42676,8 @@ function renderCoachChatHeader() {
 function enterCoachThread(bootToken) {
   _messagesThreadNeedsInitialScroll = true;
   _conversationId = COACH_THREAD_ID;
+  _messagesThreadHeadLastScrollTop = 0;
+  setMessagesThreadHeadCollapsed(false);
   try { patchSignupCoachWelcomeCredits(); } catch {}
   if (!creditsState.loaded) {
     void refreshMyCredits({ silent: true }).then(() => {
@@ -43077,6 +43191,13 @@ function bindMessagesPageOnce() {
       });
       return;
     }
+    const collapsedMeta = e.target.closest("#messagesThreadHeadMeta");
+    if (collapsedMeta && document.body.classList.contains("messagesThreadHeadCollapsed")) {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      setMessagesThreadHeadCollapsed(false);
+      return;
+    }
     const headMeta = e.target.closest(".messagesThreadHeadMeta.messagesThreadHeadMeta--profile");
     if (headMeta && !e.target.closest("#messagesThreadRelation.messagesThreadRelation--np")) {
       e.preventDefault();
@@ -43223,6 +43344,12 @@ function bindMessagesPageOnce() {
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
+    const collapsedMeta = e.target.closest?.("#messagesThreadHeadMeta");
+    if (collapsedMeta && document.body.classList.contains("messagesThreadHeadCollapsed")) {
+      e.preventDefault();
+      setMessagesThreadHeadCollapsed(false);
+      return;
+    }
     const headMeta = e.target.closest?.(".messagesThreadHeadMeta.messagesThreadHeadMeta--profile");
     if (!headMeta || e.target.closest?.("#messagesThreadRelation.messagesThreadRelation--np")) return;
     e.preventDefault();

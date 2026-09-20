@@ -38581,6 +38581,7 @@ body[data-route="messages"]{
   display: flex;
   flex-direction: column;
   gap: 18px;
+  padding: 0 8px;
 }
 .messagesInboxSectionLabel{
   margin: 0;
@@ -38604,16 +38605,23 @@ body[data-route="messages"]{
   min-width: 22px;
   height: 22px;
   padding: 0 7px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.08);
-  color: rgba(223,231,251,0.72);
+  border-radius: var(--nabad-glass-radius-round);
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  color: var(--nabad-glass-color);
   font-size: 11px;
   font-weight: 800;
-  line-height: 22px;
+  line-height: 20px;
   text-align: center;
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 .messagesInboxSection--requests .messagesInboxSectionCount{
-  background: rgba(255,77,109,0.16);
+  border-color: rgba(255, 77, 109, 0.28);
+  background: color-mix(in srgb, var(--danger) 16%, var(--nabad-glass-bg));
   color: rgba(255,180,196,0.96);
 }
 .messagesInboxList,
@@ -38621,7 +38629,7 @@ body[data-route="messages"]{
 .messagesSentRequestList{
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 .messagesInboxSection--requests{
   margin-bottom: 16px;
@@ -38633,9 +38641,14 @@ body[data-route="messages"]{
   display: flex;
   gap: 12px;
   padding: 12px 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.06);
-  background: rgba(255,255,255,0.02);
+  border-radius: 18px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 .messagesSentRequestBody{
   flex: 1 1 auto;
@@ -38650,20 +38663,34 @@ body[data-route="messages"]{
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 11px 8px;
-  border: 0;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  border-radius: 0;
+  padding: 11px 10px;
+  border: 1px solid transparent;
+  border-radius: 18px;
   background: transparent;
   color: inherit;
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: background 180ms ease;
+  transition: var(--nabad-glass-transition);
 }
 .messagesRow:hover,
 .messagesRow:focus-visible{
-  background: rgba(255,255,255,0.04);
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+.messagesRow:active{
+  transform: scale(var(--nabad-glass-active-scale));
+  border-color: var(--nabad-glass-border-hover);
+  background: var(--nabad-glass-bg-hover);
+}
+.messagesRow.is-unread{
+  border-color: color-mix(in srgb, var(--nabad-glass-border) 70%, transparent);
+  background: color-mix(in srgb, var(--nabad-glass-bg) 82%, transparent);
 }
 .messagesRow.is-unread .messagesRowHandle{
   color: #f8faff;
@@ -38727,6 +38754,25 @@ body[data-route="messages"]{
 }
 .messagesInboxSection--coach{
   margin-bottom: 6px;
+}
+.messagesRow--coach{
+  padding: 12px 12px 12px 10px;
+  border-radius: 22px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+.messagesRow--coach:hover,
+.messagesRow--coach:focus-visible{
+  background: var(--nabad-glass-bg-hover);
+  border-color: var(--nabad-glass-border-hover);
+}
+.messagesRow--coach:active{
+  transform: scale(var(--nabad-glass-active-scale));
 }
 .coachSignupCtas{
   display: flex;
@@ -39059,9 +39105,14 @@ body[data-route="messages-thread"] .coachSongPlanBar{
   display: flex;
   gap: 12px;
   padding: 14px 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.03);
+  border-radius: 18px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 .messagesRequestBody{
   flex: 1 1 auto;
@@ -39145,13 +39196,20 @@ body[data-route="messages-thread"] .coachSongPlanBar{
   100% { background-position: -200% 0; }
 }
 .messagesThreadHeadMeta{
+  --pulse-aura: transparent;
+  --pulse-aura-soft: transparent;
+  --pulse-art: none;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 40px;
-  padding: 3px 12px 3px 3px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 14px 0 0;
+  overflow: hidden;
+  position: relative;
+  isolation: isolate;
   border-radius: var(--nabad-glass-radius-round);
   border: 1px solid var(--nabad-glass-border);
   background: var(--nabad-glass-bg);
@@ -39161,7 +39219,33 @@ body[data-route="messages-thread"] .coachSongPlanBar{
     var(--nabad-glass-inset-top),
     var(--nabad-glass-inset-bottom);
   color: var(--nabad-glass-color);
-  transition: var(--nabad-glass-transition);
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 220ms ease,
+    flex-grow 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    flex-basis 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    gap 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.messagesThreadHeadMeta::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  background: var(--pulse-art) center / cover no-repeat;
+  mix-blend-mode: overlay;
+  transition: opacity 240ms ease;
+}
+.messagesThreadHeadMeta > *{
+  position: relative;
+  z-index: 1;
 }
 .messagesThreadHead .messagesBackBtn.nabadBackBtn,
 .messagesThreadHeadBtn,
@@ -39170,8 +39254,8 @@ body[data-route="messages-thread"] .coachSongPlanBar{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   margin: 0;
   padding: 0;
   border-radius: var(--nabad-glass-radius-round);
@@ -39185,7 +39269,13 @@ body[data-route="messages-thread"] .coachSongPlanBar{
     var(--nabad-glass-inset-top),
     var(--nabad-glass-inset-bottom);
   -webkit-tap-highlight-color: transparent;
-  transition: var(--nabad-glass-transition);
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .messagesThreadHead .messagesBackBtn.nabadBackBtn:hover,
 .messagesThreadHeadBtn:hover,
@@ -39254,12 +39344,121 @@ html[data-theme="light"] .coachAvatar .coachOrbOuterRing{
   background: var(--nabad-glass-bg-hover);
   border-color: var(--nabad-glass-border-hover);
 }
+body.messagesThreadHeadCollapsed .messagesThreadHeadMeta--profile:active{
+  transform: none;
+}
+body.messagesThreadHeadCollapsed .messagesThreadHead .messagesBackBtn.nabadBackBtn{
+  transform: translate(var(--head-fan-back-x, 56px), var(--head-fan-back-y, 0px)) scale(0.18);
+  opacity: 0;
+  pointer-events: none;
+}
+body.messagesThreadHeadCollapsed .messagesThreadMoreBtn{
+  transform: translate(var(--head-fan-more-x, -220px), var(--head-fan-more-y, 0px)) scale(0.18);
+  opacity: 0;
+  pointer-events: none;
+}
+body.messagesThreadHeadCollapsed .messagesThreadHead .messagesBackBtn.nabadBackBtn:active{
+  transform: translate(var(--head-fan-back-x, 56px), var(--head-fan-back-y, 0px)) scale(0.18);
+}
+body.messagesThreadHeadCollapsed .messagesThreadMoreBtn:active{
+  transform: translate(var(--head-fan-more-x, -220px), var(--head-fan-more-y, 0px)) scale(0.18);
+}
+body.messagesThreadHeadCollapsed .messagesThreadHeadMeta{
+  flex: 0 0 48px;
+  width: 48px;
+  min-width: 48px;
+  padding: 0;
+  gap: 0;
+  cursor: pointer;
+}
+body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
+  opacity: 0;
+  width: 0;
+  min-width: 0;
+  flex: 0 0 0;
+  overflow: hidden;
+  pointer-events: none;
+}
 .messagesThreadHeadCopy{
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1px;
+  transition:
+    opacity 200ms ease,
+    width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    flex-basis 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Presence aura — the identity capsule breathes with Pulse. */
+.messagesThreadHeadMeta[data-presence-status="now_playing"]{
+  --pulse-aura: rgba(94, 234, 212, 0.48);
+  --pulse-aura-soft: rgba(94, 234, 212, 0.34);
+  border-color: color-mix(in srgb, #5eead4 42%, var(--nabad-glass-border));
+}
+.messagesThreadHeadMeta[data-presence-status="creating"]{
+  --pulse-aura: rgba(167, 139, 250, 0.52);
+  --pulse-aura-soft: rgba(167, 139, 250, 0.36);
+  border-color: color-mix(in srgb, #a78bfa 46%, var(--nabad-glass-border));
+}
+.messagesThreadHeadMeta[data-presence-status="recording"]{
+  --pulse-aura: rgba(255, 120, 160, 0.5);
+  --pulse-aura-soft: rgba(255, 120, 160, 0.34);
+  border-color: color-mix(in srgb, #ff7aa0 46%, var(--nabad-glass-border));
+}
+.messagesThreadHeadMeta[data-presence-status="now_playing"]::before{
+  opacity: 0.5;
+  background:
+    radial-gradient(circle at 22% 50%, rgba(94, 234, 212, 0.42), transparent 68%),
+    var(--pulse-art) center / cover no-repeat;
+  mix-blend-mode: screen;
+}
+.messagesThreadHeadMeta[data-presence-status="creating"]::before{
+  opacity: 0.55;
+  background: radial-gradient(circle at 22% 50%, rgba(167, 139, 250, 0.5), transparent 68%);
+  mix-blend-mode: screen;
+}
+.messagesThreadHeadMeta[data-presence-status="recording"]::before{
+  opacity: 0.55;
+  background: radial-gradient(circle at 22% 50%, rgba(255, 120, 160, 0.48), transparent 68%);
+  mix-blend-mode: screen;
+}
+.messagesThreadHeadMeta[data-presence-status="now_playing"],
+.messagesThreadHeadMeta[data-presence-status="creating"],
+.messagesThreadHeadMeta[data-presence-status="recording"]{
+  animation: messagesPresencePulse 2.4s ease-in-out infinite;
+}
+@keyframes messagesPresencePulse{
+  0%, 100%{
+    box-shadow:
+      var(--nabad-glass-inset-top),
+      var(--nabad-glass-inset-bottom),
+      0 0 0 0 var(--pulse-aura),
+      0 0 12px var(--pulse-aura-soft);
+  }
+  50%{
+    box-shadow:
+      var(--nabad-glass-inset-top),
+      var(--nabad-glass-inset-bottom),
+      0 0 0 3px color-mix(in srgb, var(--pulse-aura) 55%, transparent),
+      0 0 26px var(--pulse-aura-soft);
+  }
+}
+@media (prefers-reduced-motion: reduce){
+  body.messagesThreadHeadCollapsed .messagesThreadHead .messagesBackBtn.nabadBackBtn,
+  body.messagesThreadHeadCollapsed .messagesThreadMoreBtn{
+    transform: none;
+  }
+  .messagesThreadHeadMeta[data-presence-status="now_playing"],
+  .messagesThreadHeadMeta[data-presence-status="creating"],
+  .messagesThreadHeadMeta[data-presence-status="recording"]{
+    animation: none;
+    box-shadow:
+      var(--nabad-glass-inset-top),
+      var(--nabad-glass-inset-bottom),
+      0 0 16px var(--pulse-aura-soft);
+  }
 }
 .messagesThreadDisplayName{
   color: #f8faff;
@@ -39442,18 +39641,30 @@ html[data-theme="light"] .coachAvatar .coachOrbOuterRing{
   color: #fff;
 }
 .messagesThreadAvatar{
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--nabad-squircle-radius);
+  flex: 0 0 46px;
+  align-self: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
   overflow: hidden;
+  background: rgba(124,92,255,0.18);
 }
 .messagesThreadAvatar .messagesThreadAvatarImg,
 .messagesThreadAvatar .messagesAvatarFallback{
-  width: 32px;
-  height: 32px;
-  border-radius: var(--nabad-squircle-radius);
-  border: 1px solid rgba(124,92,255,0.22);
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 0;
+  object-fit: cover;
+}
+.messagesThreadAvatar .coachAvatar{
+  width: 46px;
+  height: 46px;
+  overflow: hidden;
+  border-radius: 50%;
+}
+.messagesThreadAvatar .coachAvatar svg{
+  filter: none;
 }
 .messagesThreadHandle{
   display: none;
@@ -39511,9 +39722,9 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
 }
 .messagesThreadAvatarSkel{
   display: block;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--nabad-squircle-radius);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
   background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.14), rgba(255,255,255,0.06));
   background-size: 200% 100%;
   animation: messagesThreadSkelPulse 1.15s ease-in-out infinite;
@@ -58865,26 +59076,30 @@ html[data-theme="light"] .messagesStatus{
   color: var(--text-secondary);
   box-shadow: var(--chart-surface-shadow);
 }
-html[data-theme="light"] .messagesInboxSectionCount{
-  background: var(--surface-secondary);
-  color: var(--text-secondary);
+html[data-theme="light"] .messagesInboxSectionCount,
+html[data-theme="light"] .messagesRow--coach,
+html[data-theme="light"] .messagesRequestRow,
+html[data-theme="light"] .messagesSentRequestRow{
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  color: var(--nabad-glass-color);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 html[data-theme="light"] .messagesInboxList,
 html[data-theme="light"] .messagesRequestList,
 html[data-theme="light"] .messagesSentRequestList{
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--card);
-  box-shadow: var(--chart-surface-shadow);
-  overflow: hidden;
-  gap: 0;
+  gap: 4px;
 }
 html[data-theme="light"] .messagesRow{
-  border-bottom-color: var(--border);
+  border-color: transparent;
 }
 html[data-theme="light"] .messagesRow:hover,
-html[data-theme="light"] .messagesRow:focus-visible{
-  background: var(--surface-secondary);
+html[data-theme="light"] .messagesRow:focus-visible,
+html[data-theme="light"] .messagesRow.is-unread{
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
 }
 html[data-theme="light"] .messagesRowHandle{
   color: var(--text-primary);

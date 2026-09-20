@@ -39496,10 +39496,18 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
   border-color: color-mix(in srgb, #ff7aa0 46%, var(--nabad-glass-border));
 }
 .messagesThreadHeadMeta[data-presence-status="now_playing"]::before{
-  opacity: 0.58;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0.62;
   background:
     radial-gradient(circle at 22% 50%, var(--pulse-aura), transparent 68%),
-    var(--pulse-art) center / cover no-repeat;
+    var(--pulse-art) center / 160% no-repeat;
+  filter: blur(18px) saturate(1.35);
+  /* iOS filter blur otherwise paints a rectangle past the pill */
+  -webkit-clip-path: inset(0 round 999px);
+          clip-path: inset(0 round 999px);
+  -webkit-mask-image: -webkit-radial-gradient(#fff, #fff);
+  transform: translateZ(0);
   mix-blend-mode: screen;
 }
 .messagesThreadHeadMeta[data-presence-status="creating"]::before{

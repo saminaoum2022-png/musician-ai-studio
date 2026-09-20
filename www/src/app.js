@@ -280,7 +280,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260919-172159";
+const APP_BUILD = "20260921-014527";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -41183,7 +41183,7 @@ function coachPathPickerCtas() {
 function coachOccasionPickerCtas(ids = COACH_OCCASION_PRIMARY_IDS) {
   const emoji = {
     birthday: "🎂", anniversary: "💍", wedding: "💒", apology: "🙏", congrats: "🎓", "mom-day": "💐",
-    "proud-of-you": "🏆", "missing-you": "💭", christmas: "🎄", "new-year": "🎆", prom: "✨",
+    "proud-of-you": "🏆", thanks: "🙌", "missing-you": "💭", christmas: "🎄", "new-year": "🎆", prom: "✨",
   };
   const ctas = ids.map((id) => {
     const occ = coachOccasionById(id);

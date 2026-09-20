@@ -102,6 +102,18 @@ const OCCASION_COVER_HINTS = [
     re: /prom|graduation|congrats|congratulations|new year|mom day|for mom/i,
     hint: "celebration still life, confetti and golden lights on dark surface, no people, no writing",
   },
+  {
+    re: /sorry|apology|i'?m sorry|اعتذار/i,
+    hint: "quiet still life, a folded note and a single flower on dark wood, soft amber light, no people, no writing",
+  },
+  {
+    re: /thank you|thanks|gratitude|شكر/i,
+    hint: "warm still life, a small bouquet and handwritten card on dark linen, golden studio light, no people, no writing",
+  },
+  {
+    re: /miss you|missing you|long distance|اشتق/i,
+    hint: "night still life, a paper plane and window light on a dark desk, cool blue glow, no people, no writing",
+  },
 ];
 
 function occasionArtworkHintFromMeta(meta) {

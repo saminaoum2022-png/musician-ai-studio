@@ -169,6 +169,16 @@ const OCCASION_IDEAS = {
       "الرسالة اللي لازم تقلّه لـ {name}. قصيرة ومباشرة ونهاية مكتملة.",
     ],
   },
+  thanks: {
+    english: [
+      "A sincere thank-you for {name}. One specific thing they did, then thank you in a chorus people can sing back.",
+      "Write {name} the gratitude you never said out loud. Warm, short, complete.",
+    ],
+    arabic: [
+      "اكتب شكر صادق لـ {name}. شي واحد عملو، وبعدين شكراً بكورس سهل يتكرر.",
+      "الأغنية اللي لازم تقلّه لـ {name}: امتنان حقيقي، مش بطاقة جاهزة.",
+    ],
+  },
   "proud-of-you": {
     english: [
       "Clap for {name}. Chorus: proud, grateful, you knew they could do it.",

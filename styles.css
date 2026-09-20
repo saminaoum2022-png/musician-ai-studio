@@ -47755,10 +47755,14 @@ body[data-route="generate"] .aiGenerate{
 }
 #discoverFeedTabs .nabadTabsTrack{
   align-items: flex-end;
-  gap: 22px;
-  padding: 4px 2px 0 8px;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 10px 0;
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
+  scroll-snap-type: none;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -49126,6 +49130,9 @@ html[data-theme="light"] .chartTitle{
     radial-gradient(ellipse at 18% 110%, rgba(35, 213, 171, 0.32), transparent 52%),
     radial-gradient(ellipse at 88% 0%, rgba(124, 92, 255, 0.42), transparent 56%);
 }
+.discoverMomentTile--gold .discoverMomentTileWash{
+  background: radial-gradient(ellipse at 80% 0%, rgba(245, 179, 70, 0.40), transparent 58%);
+}
 .discoverMomentTileKicker,
 .discoverMomentTileTitle{
   position: relative;
@@ -49172,6 +49179,9 @@ html[data-theme="light"] .chartTitle{
 .discoverMomentTileShape--birthday{ color: #7AF0D2; }
 .discoverMomentTileShape--wedding{ color: #F3A7D4; }
 .discoverMomentTileShape--just-because{ color: #C9B6FF; }
+.discoverMomentTileShape--apology{ color: #F0A3C4; }
+.discoverMomentTileShape--thanks{ color: #F3C56A; }
+.discoverMomentTileShape--missing-you{ color: #8FD4FF; }
 .discoverMomentTile--gift{
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
@@ -49214,6 +49224,20 @@ html[data-theme="light"] .chartTitle{
 }
 .discoverMomentTile:active{
   transform: scale(0.98);
+}
+@media (min-width: 720px){
+  .discoverMomentSection .discoverMomentRail{
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    overflow: visible;
+    scroll-snap-type: none;
+    padding-right: 2px;
+  }
+  .discoverMomentSection .discoverMomentTile--gift{
+    flex: none;
+    width: 100%;
+    max-width: none;
+  }
 }
 
 /* Your vibes — square editorial playlists */
@@ -49376,6 +49400,9 @@ html[data-theme="light"] .discoverMomentTile--teal .discoverMomentTileWash{
 }
 html[data-theme="light"] .discoverMomentTile--violet .discoverMomentTileWash{
   background: radial-gradient(ellipse at 80% 0%, rgba(124, 92, 255, 0.26), transparent 58%);
+}
+html[data-theme="light"] .discoverMomentTile--gold .discoverMomentTileWash{
+  background: radial-gradient(ellipse at 80% 0%, rgba(217, 145, 32, 0.22), transparent 58%);
 }
 
 /* ─── Discover Templates tab — song showcase ─────────────────────────── */

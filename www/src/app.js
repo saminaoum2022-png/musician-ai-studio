@@ -9092,11 +9092,19 @@ const CHALLENGE_OCCASIONS = [
   },
   {
     id: "apology",
-    label: "Apology",
+    label: "Sorry",
     title: "I'm Sorry",
     angle: "a sincere apology song that feels honest, not cheesy",
     lyricSeed: "Write like you're finally saying what you should have said.\nVerse: what went wrong. Chorus: one clear sorry and one hope to fix it.\nKeep it ~25 seconds — short, direct, complete ending.",
     tags: ["Sorry", "Heart"],
+  },
+  {
+    id: "thanks",
+    label: "Thanks",
+    title: "Thank You",
+    angle: "a sincere thank-you song that feels personal, not a greeting card",
+    lyricSeed: "Write the thank-you you would actually say out loud.\nVerse: one specific thing they did. Chorus: thank you, simply, and why it mattered.\nKeep it short, warm, complete.",
+    tags: ["Thanks", "Gift"],
   },
   {
     id: "proud-of-you",
@@ -13615,6 +13623,15 @@ function discoverGiftShapeSvg(kind) {
   if (kind === "wedding") {
     return `<svg class="discoverMomentTileShapeIco" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 20.35S4.4 15.7 2.55 11.5C1.15 8.4 3.2 5.15 6.7 5.15c1.85 0 3.25 1.05 5.3 3.15 2.05-2.1 3.45-3.15 5.3-3.15 3.5 0 5.55 3.25 4.15 6.35-1.85 4.2-9.45 8.85-9.45 8.85Z"/></svg>`;
   }
+  if (kind === "apology") {
+    return `<svg class="discoverMomentTileShapeIco" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5.1 5.6h13.8c1.05 0 1.9.85 1.9 1.9v7.2c0 1.05-.85 1.9-1.9 1.9H10.2l-3.9 3.2c-.55.45-1.35.06-1.35-.64v-2.56H5.1c-1.05 0-1.9-.85-1.9-1.9V7.5c0-1.05.85-1.9 1.9-1.9Z"/></svg>`;
+  }
+  if (kind === "thanks") {
+    return `<svg class="discoverMomentTileShapeIco" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3.4c1.15 2.05 1.2 3.7.15 5.15C11 7.1 10.95 5.45 12 3.4Zm0 17.2c-1.15-2.05-1.2-3.7-.15-5.15C13 16.9 13.05 18.55 12 20.6ZM3.4 12c2.05-1.15 3.7-1.2 5.15-.15C7.1 13 5.45 13.05 3.4 12Zm17.2 0c-2.05-1.15-3.7-1.2-5.15-.15C16.9 13 18.55 13.05 20.6 12Z"/><circle fill="currentColor" cx="12" cy="12" r="2.05"/></svg>`;
+  }
+  if (kind === "missing-you") {
+    return `<svg class="discoverMomentTileShapeIco" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.15 11.05 20.7 3.6c.72-.3 1.42.4 1.12 1.12L14.36 21.3c-.32.74-1.36.64-1.54-.16l-1.5-6.45-6.45-1.5c-.8-.18-.9-1.22-.16-1.54Z"/></svg>`;
+  }
   return `<svg class="discoverMomentTileShapeIco" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.8 14.5 8.4l6.1.7-4.6 4.1 1.4 6-5.4-2.9-5.4 2.9 1.4-6-4.6-4.1 6.1-.7Z"/></svg>`;
 }
 
@@ -13623,6 +13640,9 @@ function discoverOccasionStripHtml() {
     { id: "birthday", label: "Birthday", sub: "Make it special", tone: "teal", shape: "birthday" },
     { id: "wedding", label: "Wedding", sub: "Songs for love", tone: "violet", shape: "wedding" },
     { id: "just-because", label: "Just because", sub: "Brighten their day", tone: "mix", shape: "just-because" },
+    { id: "apology", label: "Sorry", sub: "Say it honestly", tone: "rose", shape: "apology" },
+    { id: "thanks", label: "Thanks", sub: "A real thank you", tone: "gold", shape: "thanks" },
+    { id: "missing-you", label: "Miss you", sub: "For someone far", tone: "teal", shape: "missing-you" },
   ];
   const cards = tiles.map((tile) => `
     <button type="button" class="discoverMomentTile discoverMomentTile--gift discoverMomentTile--${escapeHtml(tile.tone)}" data-discover-occasion-open="${escapeHtml(tile.id)}" aria-label="Gift a song: ${escapeHtml(tile.label)}">
@@ -40633,7 +40653,7 @@ const COACH_PROJECT_CHAT_STEPS = new Set([
 /** Steps where typed chat must stay in Song plan — never fall through to generic Coach API. */
 const COACH_PROJECT_INTAKE_STEPS = COACH_PROJECT_CHIP_STEPS;
 const COACH_OCCASION_PRIMARY_IDS = ["birthday", "anniversary", "wedding", "apology", "congrats", "mom-day"];
-const COACH_OCCASION_MORE_IDS = ["proud-of-you", "missing-you", "christmas", "new-year", "prom"];
+const COACH_OCCASION_MORE_IDS = ["thanks", "proud-of-you", "missing-you", "christmas", "new-year", "prom"];
 const COACH_TOPIC_LABELS = Object.freeze({
   love: "Love song",
   apology: "Apology",

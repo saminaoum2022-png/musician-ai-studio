@@ -1938,7 +1938,7 @@
 
         <section class="messagesThreadPage wide" data-route="messages-thread" id="messagesThreadPage">
           <header class="messagesThreadHead">
-            <button type="button" class="nabadBackBtn messagesBackBtn" id="messagesThreadBackBtn" aria-label="Back to Messages">
+            <button type="button" class="nabadBackBtn messagesBackBtn messagesThreadHeadBtn" id="messagesThreadBackBtn" aria-label="Back to Messages">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </button>
             <div class="messagesThreadHeadMeta" id="messagesThreadHeadMeta">
@@ -1949,8 +1949,8 @@
                 <span class="messagesThreadRelation" id="messagesThreadRelation" hidden></span>
               </div>
             </div>
-            <button type="button" class="coachClearChatBtn" id="coachClearChatBtn" aria-label="Clear chat" title="Clear chat" hidden>
-              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-2.64-6.36"/><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M21 3v6h-6"/></svg>
+            <button type="button" class="messagesThreadMoreBtn messagesThreadHeadBtn" id="messagesThreadMoreBtn" aria-label="Chat options" aria-haspopup="dialog" aria-controls="messagesThreadMoreSheet">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="6" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="18" cy="12" r="1.7" fill="currentColor"/></svg>
             </button>
           </header>
           <div id="coachSongPlanBar" class="coachSongPlanBar" hidden aria-hidden="true">
@@ -5143,6 +5143,36 @@
         <p id="sendToFriendLead" class="messagesShareSheetLead">Pick someone you fan who fans you back.</p>
         <div id="sendToFriendList" class="messagesShareList" role="listbox" aria-label="Friends"></div>
         <div id="sendToFriendConfirm" class="messagesShareConfirm" hidden aria-hidden="true"></div>
+      </section>
+    </div>
+
+    <div id="messagesThreadMoreSheet" class="messagesComposerSheet messagesShareSheet" hidden aria-hidden="true">
+      <div class="messagesShareSheetBackdrop" id="messagesThreadMoreSheetBackdrop"></div>
+      <section class="messagesComposerSheetCard messagesShareSheetCard" role="dialog" aria-modal="true" aria-labelledby="messagesThreadMoreSheetTitle">
+        <header class="messagesShareSheetHead">
+          <h2 id="messagesThreadMoreSheetTitle" class="messagesShareSheetTitle">Chat</h2>
+          <button type="button" class="messagesShareSheetClose" id="messagesThreadMoreSheetClose" aria-label="Close">×</button>
+        </header>
+        <div class="messagesComposerSheetList" role="menu" aria-label="Chat options">
+          <button type="button" class="messagesComposerSheetRow" id="messagesThreadMoreProfile" data-messages-thread-more="profile" role="menuitem">
+            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--song" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z"/><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M4.5 20.2a7.5 7.5 0 0 1 15 0"/></svg>
+            </span>
+            <span class="messagesComposerSheetCopy">
+              <strong>View profile</strong>
+              <span>Open their page</span>
+            </span>
+          </button>
+          <button type="button" class="messagesComposerSheetRow" id="messagesThreadMoreClear" data-messages-thread-more="clear" role="menuitem" hidden>
+            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--planList" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-2.64-6.36"/><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M21 3v6h-6"/></svg>
+            </span>
+            <span class="messagesComposerSheetCopy">
+              <strong>Clear chat</strong>
+              <span>Start Coach over</span>
+            </span>
+          </button>
+        </div>
       </section>
     </div>
 

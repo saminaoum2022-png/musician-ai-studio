@@ -37092,6 +37092,11 @@ function renderChatHeaderSkeleton() {
     handleEl.textContent = "";
     handleEl.classList.add("messagesThreadHeadSkel");
   }
+  const relationEl = document.getElementById("messagesThreadRelation");
+  if (relationEl) {
+    relationEl.hidden = true;
+    relationEl.innerHTML = "";
+  }
   if (avatarEl) {
     avatarEl.dataset.chatAvKey = "skel";
     avatarEl.innerHTML = `<span class="messagesThreadAvatarSkel" aria-hidden="true"></span>`;
@@ -37150,11 +37155,11 @@ function renderChatHeader() {
   }
   updateChatHeaderRelationOnly();
   updateMessagesThreadHeadReserve();
+  syncMessagesThreadMoreSheet();
 }
 
 function updateChatHeaderRelationOnly() {
-  // Presence (Now Playing / Creating / Recording) wins over the relation label;
-  // this renderer falls back to "Following each other" etc. when idle.
+  // Pulse (Now Playing / Creating / Recording / quiet) always fills this line.
   renderChatHeaderPresence();
   updateMessagesThreadHeadReserve();
 }
@@ -38611,6 +38616,8 @@ const NABAD_PRESENCE_ICONS = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.2l1.7 4.9 4.9 1.7-4.9 1.7L12 17.4l-1.7-4.9-4.9-1.7 4.9-1.7z"/><path d="M18.5 4.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>',
   recording:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg>',
+  pulse:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.2-5 3.6 10 2.2-5H21"/></svg>',
 };
 
 const PRESENCE_NOWPLAYING_LINGER_MS = 45000;
@@ -38724,7 +38731,7 @@ function startPresenceWatcher() {
 // in boot would hit the temporal dead zone on the consts above).
 try { startPresenceWatcher(); } catch {}
 
-/** Build the header presence line, or null to fall back to the relation label. */
+/** Build the header Pulse line. Idle is "Pulse quiet" — never the fan relation. */
 function presenceLineFromState(p) {
   const s = p && p.status ? String(p.status) : "idle";
   if (s === "recording") return { status: s, iconKey: "recording", text: "Recording vocals\u2026", tappable: false };
@@ -38734,7 +38741,7 @@ function presenceLineFromState(p) {
     if (p.hideTitle || !p.songTitle) return { status: s, iconKey: "now_playing", text: "Now Playing", tappable: false };
     return { status: s, iconKey: "now_playing", text: `Now Playing \u2022 ${p.songTitle}`, tappable: true };
   }
-  return null;
+  return { status: "idle", iconKey: "pulse", text: "Pulse quiet", tappable: false };
 }
 
 function isPartnerTypingActive() {
@@ -38809,23 +38816,17 @@ function openChatPartnerProfile() {
 function renderChatHeaderPresence() {
   const relationEl = document.getElementById("messagesThreadRelation");
   if (!relationEl) return;
-  const line = presenceLineFromState(_chatPartnerPresence);
-  let nextSig;
-  let nextHtml;
-  let isPresence = false;
-  let tappable = false;
-  let statusAttr = "";
-  if (line) {
-    isPresence = true;
-    tappable = Boolean(line.tappable);
-    statusAttr = line.status;
-    nextSig = `p|${line.status}|${line.text}`;
-    nextHtml = `<span class="dmPresenceIco" aria-hidden="true">${NABAD_PRESENCE_ICONS[line.iconKey] || ""}</span><span class="dmPresenceTxt">${escapeHtml(line.text)}</span>`;
-  } else {
-    const relation = dmRelationshipLabel(_chatHeaderPartnerStats);
-    nextSig = `r|${relation}`;
-    nextHtml = relation ? `<span class="dmPresenceTxt">${escapeHtml(relation)}</span>` : "";
-  }
+  const line = presenceLineFromState(_chatPartnerPresence) || {
+    status: "idle",
+    iconKey: "pulse",
+    text: "Pulse quiet",
+    tappable: false,
+  };
+  const isPresence = true;
+  const tappable = Boolean(line.tappable);
+  const statusAttr = line.status || "idle";
+  const nextSig = `p|${line.status}|${line.text}`;
+  const nextHtml = `<span class="dmPresenceIco" aria-hidden="true">${NABAD_PRESENCE_ICONS[line.iconKey] || NABAD_PRESENCE_ICONS.pulse}</span><span class="dmPresenceTxt">${escapeHtml(line.text)}</span>`;
   relationEl.classList.toggle("messagesThreadRelation--presence", isPresence);
   relationEl.classList.toggle("messagesThreadRelation--np", tappable);
   if (statusAttr) relationEl.dataset.presenceStatus = statusAttr;
@@ -38995,6 +38996,7 @@ function closeMessagesComposerSheet() {
 
 function openMessagesComposerSheet() {
   syncCoachComposerSheet();
+  closeMessagesThreadMoreSheet();
   const sheet = document.getElementById("messagesComposerSheet");
   if (!sheet) return;
   sheet.hidden = false;
@@ -40502,9 +40504,40 @@ function saveCoachChat(list) {
 }
 function syncCoachThreadClearBtn(show = isCoachThreadId(_conversationId)) {
   const btn = document.getElementById("coachClearChatBtn");
-  if (!btn) return;
-  btn.hidden = !show;
-  btn.setAttribute("aria-hidden", show ? "false" : "true");
+  if (btn) {
+    btn.hidden = true;
+    btn.setAttribute("aria-hidden", "true");
+  }
+  syncMessagesThreadMoreSheet(show);
+}
+function syncMessagesThreadMoreSheet(coach = isCoachThreadId(_conversationId) || _chatHeaderUser?.userId === COACH_SENDER_ID) {
+  const isCoach = Boolean(coach);
+  const profileRow = document.getElementById("messagesThreadMoreProfile");
+  const clearRow = document.getElementById("messagesThreadMoreClear");
+  if (profileRow) {
+    profileRow.hidden = isCoach;
+    profileRow.setAttribute("aria-hidden", isCoach ? "true" : "false");
+  }
+  if (clearRow) {
+    clearRow.hidden = !isCoach;
+    clearRow.setAttribute("aria-hidden", isCoach ? "false" : "true");
+  }
+}
+function closeMessagesThreadMoreSheet() {
+  const sheet = document.getElementById("messagesThreadMoreSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("messagesThreadMoreSheetOpen");
+}
+function openMessagesThreadMoreSheet() {
+  syncMessagesThreadMoreSheet();
+  closeMessagesComposerSheet();
+  const sheet = document.getElementById("messagesThreadMoreSheet");
+  if (!sheet) return;
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("messagesThreadMoreSheetOpen");
 }
 function resetCoachChat() {
   if (_coachReplyInFlight) {
@@ -43090,7 +43123,31 @@ function bindMessagesPageOnce() {
       e.preventDefault();
       try { haptic("light"); } catch {}
       syncCoachComposerSheet();
+      closeMessagesThreadMoreSheet();
       openMessagesComposerSheet();
+      return;
+    }
+    const moreBtn = e.target.closest("#messagesThreadMoreBtn");
+    if (moreBtn) {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      openMessagesThreadMoreSheet();
+      return;
+    }
+    const threadMore = e.target.closest("[data-messages-thread-more]");
+    if (threadMore) {
+      e.preventDefault();
+      const action = String(threadMore.getAttribute("data-messages-thread-more") || "").trim();
+      closeMessagesThreadMoreSheet();
+      if (action === "profile") {
+        openChatPartnerProfile();
+        return;
+      }
+      if (action === "clear") {
+        try { haptic("medium"); } catch {}
+        resetCoachChat();
+        return;
+      }
       return;
     }
     const composerAction = e.target.closest("[data-messages-composer-action]");
@@ -43250,6 +43307,8 @@ function bindMessagesPageOnce() {
     document.getElementById("messagesShareSheetBackdrop")?.addEventListener("click", closeMessagesShareSheet);
     document.getElementById("messagesComposerSheetClose")?.addEventListener("click", closeMessagesComposerSheet);
     document.getElementById("messagesComposerSheetBackdrop")?.addEventListener("click", closeMessagesComposerSheet);
+    document.getElementById("messagesThreadMoreSheetClose")?.addEventListener("click", closeMessagesThreadMoreSheet);
+    document.getElementById("messagesThreadMoreSheetBackdrop")?.addEventListener("click", closeMessagesThreadMoreSheet);
     const shareSearchInput = document.getElementById("messagesShareSearchInput");
     if (shareSearchInput && !shareSearchInput.dataset.boundMessagesShareSearch) {
       shareSearchInput.dataset.boundMessagesShareSearch = "1";

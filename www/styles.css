@@ -38524,28 +38524,49 @@ body[data-route="messages"]{
     0 0 12px rgba(255, 77, 109, 0.45);
 }
 .messagesThreadHead{
+  --messages-thread-fade-h: 72px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
-  padding: 4px 2px 8px;
-  min-width: 0;
-}
-.messagesThreadHead{
   flex: 0 0 auto;
   position: fixed;
+  isolation: isolate;
   top: 0;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
   width: min(100%, 640px);
   box-sizing: border-box;
-  align-items: center;
   padding-top: calc(6px + env(safe-area-inset-top, 0px));
   padding-right: max(12px, env(safe-area-inset-right, 0px));
   padding-bottom: 8px;
   padding-left: max(12px, env(safe-area-inset-left, 0px));
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  background: var(--bg);
+  min-width: 0;
+  border-bottom: 0;
+  background: transparent;
+  pointer-events: none;
+}
+.messagesThreadHead::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc(100% + var(--messages-thread-fade-h));
+  pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    0deg,
+    transparent 0%,
+    color-mix(in srgb, var(--bg) 28%, transparent) 38%,
+    color-mix(in srgb, var(--bg) 62%, transparent) 68%,
+    color-mix(in srgb, var(--bg) 90%, #000) 100%
+  );
+}
+.messagesThreadHead > *{
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
 }
 .messagesStatus{
   margin: 0 0 10px;
@@ -39126,32 +39147,74 @@ body[data-route="messages-thread"] .coachSongPlanBar{
 .messagesThreadHeadMeta{
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex: 1 1 auto;
   min-width: 0;
-  padding-top: 0;
+  min-height: 40px;
+  padding: 3px 12px 3px 3px;
+  border-radius: var(--nabad-glass-radius-round);
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+  color: var(--nabad-glass-color);
+  transition: var(--nabad-glass-transition);
 }
+.messagesThreadHead .messagesBackBtn.nabadBackBtn,
+.messagesThreadHeadBtn,
 .messagesThreadMoreBtn{
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   margin: 0;
   padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.06);
-  color: rgba(223,231,251,0.78);
+  border-radius: var(--nabad-glass-radius-round);
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  color: var(--nabad-glass-color);
   cursor: pointer;
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
   -webkit-tap-highlight-color: transparent;
+  transition: var(--nabad-glass-transition);
 }
-.messagesThreadMoreBtn:active{ transform: scale(0.96); opacity: 0.88; }
+.messagesThreadHead .messagesBackBtn.nabadBackBtn:hover,
+.messagesThreadHeadBtn:hover,
+.messagesThreadMoreBtn:hover{
+  background: var(--nabad-glass-bg-hover);
+  border-color: var(--nabad-glass-border-hover);
+  color: var(--nabad-glass-color-hover);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+.messagesThreadHead .messagesBackBtn.nabadBackBtn:active,
+.messagesThreadHeadBtn:active,
+.messagesThreadMoreBtn:active{
+  transform: scale(var(--nabad-glass-active-scale));
+  background: var(--nabad-glass-bg-hover);
+  border-color: var(--nabad-glass-border-hover);
+}
 .messagesThreadMoreBtn[hidden]{ display: none !important; }
-html[data-theme="light"] .messagesThreadMoreBtn{
-  background: rgba(15,23,42,0.06);
-  color: var(--text-secondary);
+html[data-theme="light"] .messagesThreadHead .messagesBackBtn.nabadBackBtn,
+html[data-theme="light"] .messagesThreadHeadBtn,
+html[data-theme="light"] .messagesThreadMoreBtn,
+html[data-theme="light"] .messagesThreadHeadMeta{
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  color: var(--nabad-glass-color);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 .coachClearChatBtn{
   flex: 0 0 auto;
@@ -39185,10 +39248,11 @@ html[data-theme="light"] .coachAvatar .coachOrbOuterRing{
 .messagesThreadHeadMeta--profile{
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  border-radius: 10px;
 }
 .messagesThreadHeadMeta--profile:active{
-  opacity: 0.88;
+  transform: scale(var(--nabad-glass-active-scale));
+  background: var(--nabad-glass-bg-hover);
+  border-color: var(--nabad-glass-border-hover);
 }
 .messagesThreadHeadCopy{
   flex: 1 1 auto;
@@ -39199,15 +39263,21 @@ html[data-theme="light"] .coachAvatar .coachOrbOuterRing{
 }
 .messagesThreadDisplayName{
   color: #f8faff;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .messagesThreadHandleSub{
   color: rgba(223,231,251,0.52);
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .messagesThreadRelation{
   margin-top: 2px;
@@ -39242,6 +39312,7 @@ html[data-theme="light"] .coachAvatar .coachOrbOuterRing{
   white-space: nowrap;
 }
 /* Status tints (Nabad palette — subtle, premium). */
+.messagesThreadRelation--presence[data-presence-status="idle"]{ color: rgba(223,231,251,0.52); }
 .messagesThreadRelation--presence[data-presence-status="now_playing"]{ color: rgba(150,210,255,0.95); }
 .messagesThreadRelation--presence[data-presence-status="creating"]{ color: rgba(196,182,255,0.95); }
 .messagesThreadRelation--presence[data-presence-status="recording"]{ color: rgba(255,150,170,0.95); }
@@ -39372,15 +39443,15 @@ html[data-theme="light"] .coachAvatar .coachOrbOuterRing{
 }
 .messagesThreadAvatar{
   flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--nabad-squircle-radius);
   overflow: hidden;
 }
 .messagesThreadAvatar .messagesThreadAvatarImg,
 .messagesThreadAvatar .messagesAvatarFallback{
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--nabad-squircle-radius);
   border: 1px solid rgba(124,92,255,0.22);
 }
@@ -39440,8 +39511,8 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
 }
 .messagesThreadAvatarSkel{
   display: block;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--nabad-squircle-radius);
   background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.14), rgba(255,255,255,0.06));
   background-size: 200% 100%;
@@ -53376,7 +53447,7 @@ body[data-route="user"] #userPublicRepostsList{
     right: 0;
     width: 100%;
     transform: none;
-    border-radius: 20px 20px 0 0;
+    border-radius: 0;
     padding-left: 16px;
     padding-right: 16px;
     padding-top: 12px;
@@ -53456,7 +53527,7 @@ body[data-route="user"] #userPublicRepostsList{
     right: 0;
     width: 100%;
     transform: none;
-    border-radius: 20px 20px 0 0;
+    border-radius: 0;
     padding-left: 16px;
     padding-right: 16px;
     padding-top: 12px;
@@ -58868,7 +58939,17 @@ html[data-theme="light"] .messagesEmptyLead{
   color: var(--text-secondary);
 }
 html[data-theme="light"] .messagesThreadHead{
-  border-bottom-color: var(--border);
+  border-bottom: 0;
+  background: transparent;
+}
+html[data-theme="light"] .messagesThreadHead::before{
+  background: linear-gradient(
+    0deg,
+    transparent 0%,
+    color-mix(in srgb, var(--bg) 38%, transparent) 42%,
+    color-mix(in srgb, var(--bg) 78%, transparent) 72%,
+    color-mix(in srgb, var(--bg) 94%, #fff) 100%
+  );
 }
 html[data-theme="light"] .messagesThreadDisplayName{
   color: var(--text-primary);

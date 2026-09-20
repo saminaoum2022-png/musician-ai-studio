@@ -36054,6 +36054,7 @@ let _messagesInboxScrollY = 0;
 let _messagesInboxPollTimer = 0;
 let _dmReceiptHeartbeatTimer = 0;
 let _messagesMarkReadTimer = 0;
+let _messagesMarkReadPendingTid = "";
 let _messagesMarkReadCursorKey = "";
 let _messagesReceiptPollInFlight = false;
 let _messagesReceiptPollLastAt = 0;
@@ -36925,6 +36926,11 @@ function markInboxThreadReadLocally(threadId) {
     return { ...t, unread: false, unreadCount: 0 };
   });
   if (changed) {
+    saveMessagesInboxToStorage();
+    const remaining = (_messagesInboxState.threads || []).reduce((n, t) => (
+      n + Math.max(0, Number(t?.unreadCount) || (t?.unread ? 1 : 0))
+    ), 0);
+    updateMessagesUnreadBadge(remaining);
     const route = String(document.body.getAttribute("data-route") || "");
     if (route === "messages" || route === "friends") {
       renderMessagesInbox();
@@ -37018,6 +37024,11 @@ function applyInboxServerState(data) {
         unread: local.unread,
         unreadCount: local.unreadCount,
       };
+    }
+    // Same last message: don't resurrect unread after the viewer already opened it
+    // (mark_read can still be in flight).
+    if (localAt === serverAt && local.unread === false && t.unread) {
+      return { ...t, unread: false, unreadCount: 0 };
     }
     return t;
   });
@@ -37893,6 +37904,8 @@ async function retryFailedThreadMessage(clientMessageId) {
 }
 
 function resetMessagesThreadRouteState() {
+  flushPendingThreadMarkRead();
+  document.body.classList.remove("messagesThreadHeadCollapsed");
   _messagesComposerAutofocusToken += 1;
   _messagesBubbleEnterKeys.clear();
   _messagesThreadOpenReveal = false;
@@ -37910,22 +37923,24 @@ function resetMessagesThreadRouteState() {
   _messagesLastFetchedId = "";
   _messagesPartnerLastReadAt = "";
   _messagesDeliveredAckedIds.clear();
-  _messagesMarkReadCursorKey = "";
-  if (_messagesMarkReadTimer) {
-    window.clearTimeout(_messagesMarkReadTimer);
-    _messagesMarkReadTimer = 0;
-  }
   _messagesHasMoreOlder = true;
   _messagesLoadingOlder = false;
 }
 
 function beginMessagesThreadEnterTransition() {
   if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+    document.body.classList.remove("messagesThreadEntering", "messagesThreadLeaving");
     return;
   }
   document.body.classList.remove("messagesThreadLeaving");
   document.body.classList.add("messagesThreadEntering");
-  window.setTimeout(() => document.body.classList.remove("messagesThreadEntering"), 320);
+  if (beginMessagesThreadEnterTransition._t) {
+    window.clearTimeout(beginMessagesThreadEnterTransition._t);
+  }
+  beginMessagesThreadEnterTransition._t = window.setTimeout(() => {
+    document.body.classList.remove("messagesThreadEntering");
+    beginMessagesThreadEnterTransition._t = 0;
+  }, 280);
 }
 
 function leaveMessagesThreadRoute(callback) {
@@ -37969,6 +37984,31 @@ function latestPartnerMessageCursorKey(threadId) {
   return `${tid}:${lastId || "empty"}`;
 }
 
+function postThreadMarkRead(threadId, cursorKey = "") {
+  const tid = String(threadId || "").trim();
+  if (!tid || isCoachThreadId(tid)) return Promise.resolve();
+  const key = String(cursorKey || latestPartnerMessageCursorKey(tid));
+  return messagesApi("/api/messages", {
+    method: "POST",
+    body: JSON.stringify({ action: "mark_read", threadId: tid }),
+  }).then((data) => {
+    _messagesMarkReadCursorKey = key;
+    if (!data?.skipped) void refreshMessagesUnreadBadge({ force: true });
+  }).catch(() => {});
+}
+
+function flushPendingThreadMarkRead() {
+  const tid = String(_messagesMarkReadPendingTid || "").trim();
+  if (_messagesMarkReadTimer) {
+    window.clearTimeout(_messagesMarkReadTimer);
+    _messagesMarkReadTimer = 0;
+  }
+  _messagesMarkReadPendingTid = "";
+  if (!tid || isCoachThreadId(tid)) return;
+  const key = latestPartnerMessageCursorKey(tid);
+  void postThreadMarkRead(tid, key);
+}
+
 async function markThreadReadQuiet(threadId, { skipDeliveryAck = false, readDelayMs = 0 } = {}) {
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid || isCoachThreadId(tid)) return;
@@ -37982,34 +38022,27 @@ async function markThreadReadQuiet(threadId, { skipDeliveryAck = false, readDela
   }
   const cursorKey = latestPartnerMessageCursorKey(tid);
   // Already marked read for this partner-message cursor — skip repeat POSTs.
-  if (_messagesMarkReadCursorKey === cursorKey) return;
+  if (_messagesMarkReadCursorKey === cursorKey && !_messagesMarkReadPendingTid) return;
 
-  const doMarkRead = async () => {
+  const doMarkRead = () => {
     _messagesMarkReadTimer = 0;
-    if (String(_conversationId || "") !== tid) return;
-    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
-    const keyNow = latestPartnerMessageCursorKey(tid);
-    if (_messagesMarkReadCursorKey === keyNow) return;
-    try {
-      const data = await messagesApi("/api/messages", {
-        method: "POST",
-        body: JSON.stringify({ action: "mark_read", threadId: tid }),
-      });
-      if (String(_conversationId || "") !== tid) return;
-      _messagesMarkReadCursorKey = keyNow;
-      if (!data?.skipped) void refreshMessagesUnreadBadge({ force: true });
-    } catch {}
+    const pending = String(_messagesMarkReadPendingTid || tid).trim();
+    _messagesMarkReadPendingTid = "";
+    if (!pending) return;
+    const keyNow = latestPartnerMessageCursorKey(pending);
+    void postThreadMarkRead(pending, keyNow);
   };
 
+  _messagesMarkReadPendingTid = tid;
   if (_messagesMarkReadTimer) {
     window.clearTimeout(_messagesMarkReadTimer);
     _messagesMarkReadTimer = 0;
   }
   const delay = Math.max(0, Number(readDelayMs) || 0);
   if (delay > 0) {
-    _messagesMarkReadTimer = window.setTimeout(() => void doMarkRead(), delay);
+    _messagesMarkReadTimer = window.setTimeout(doMarkRead, delay);
   } else {
-    await doMarkRead();
+    doMarkRead();
   }
 }
 
@@ -38841,7 +38874,7 @@ function startPresenceWatcher() {
 // in boot would hit the temporal dead zone on the consts above).
 try { startPresenceWatcher(); } catch {}
 
-/** Build the header Pulse line. Idle is "Pulse quiet" — never the fan relation. */
+/** Build the header Pulse line. Idle shows no subtitle — the missing aura is enough. */
 function presenceLineFromState(p) {
   const s = p && p.status ? String(p.status) : "idle";
   if (s === "recording") return { status: s, iconKey: "recording", text: "Recording vocals\u2026", tappable: false };
@@ -38851,7 +38884,7 @@ function presenceLineFromState(p) {
     if (p.hideTitle || !p.songTitle) return { status: s, iconKey: "now_playing", text: "Now Playing", tappable: false };
     return { status: s, iconKey: "now_playing", text: `Now Playing \u2022 ${p.songTitle}`, tappable: true };
   }
-  return { status: "idle", iconKey: "pulse", text: "Pulse quiet", tappable: false };
+  return { status: "idle", iconKey: "pulse", text: "", tappable: false };
 }
 
 function isPartnerTypingActive() {
@@ -38943,24 +38976,43 @@ function syncMessagesThreadHeadPresenceAura() {
   const art = cssUrlIfHttp(cover);
   if (art) metaEl.style.setProperty("--pulse-art", art);
   else metaEl.style.removeProperty("--pulse-art");
+  if (!cover) {
+    metaEl.style.removeProperty("--pulse-aura");
+    metaEl.style.removeProperty("--pulse-aura-soft");
+    return;
+  }
+  sampleHubCoverColor(cover).then((rgb) => {
+    if (!metaEl.isConnected) return;
+    if (String(_chatPartnerPresence?.songCover || "").trim() !== cover) return;
+    if (!rgb) return;
+    const [r, g, b] = rgb;
+    metaEl.style.setProperty("--pulse-aura", `rgba(${r}, ${g}, ${b}, 0.55)`);
+    metaEl.style.setProperty("--pulse-aura-soft", `rgba(${r}, ${g}, ${b}, 0.38)`);
+  });
 }
 
 function renderChatHeaderPresence() {
   const relationEl = document.getElementById("messagesThreadRelation");
   if (!relationEl) return;
   syncMessagesThreadHeadPresenceAura();
-  const line = presenceLineFromState(_chatPartnerPresence) || {
-    status: "idle",
-    iconKey: "pulse",
-    text: "Pulse quiet",
-    tappable: false,
-  };
-  const isPresence = true;
+  const line = presenceLineFromState(_chatPartnerPresence);
+  const text = String(line?.text || "").trim();
+  const idle = !line || line.status === "idle" || !text;
+  if (idle) {
+    _chatPresenceSig = "p|idle|";
+    relationEl.hidden = true;
+    relationEl.innerHTML = "";
+    relationEl.classList.remove("messagesThreadRelation--presence", "messagesThreadRelation--np", "dmPresenceFadeOut");
+    delete relationEl.dataset.presenceStatus;
+    relationEl.removeAttribute("role");
+    relationEl.removeAttribute("tabindex");
+    return;
+  }
   const tappable = Boolean(line.tappable);
   const statusAttr = line.status || "idle";
   const nextSig = `p|${line.status}|${line.text}`;
   const nextHtml = `<span class="dmPresenceIco" aria-hidden="true">${NABAD_PRESENCE_ICONS[line.iconKey] || NABAD_PRESENCE_ICONS.pulse}</span><span class="dmPresenceTxt">${escapeHtml(line.text)}</span>`;
-  relationEl.classList.toggle("messagesThreadRelation--presence", isPresence);
+  relationEl.classList.toggle("messagesThreadRelation--presence", true);
   relationEl.classList.toggle("messagesThreadRelation--np", tappable);
   if (statusAttr) relationEl.dataset.presenceStatus = statusAttr;
   else delete relationEl.dataset.presenceStatus;
@@ -40282,10 +40334,7 @@ function stopMessagesThreadRealtime() {
     window.clearInterval(_messagesReadPollTimer);
     _messagesReadPollTimer = 0;
   }
-  if (_messagesMarkReadTimer) {
-    window.clearTimeout(_messagesMarkReadTimer);
-    _messagesMarkReadTimer = 0;
-  }
+  flushPendingThreadMarkRead();
   stopMessagesConnectPoll();
   clearPartnerTypingState();
   _messagesThreadRealtimeReady = false;
@@ -40458,6 +40507,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   _messagesLoadingOlder = false;
   _conversationId = tid;
   _messagesThreadHeadLastScrollTop = 0;
+  beginMessagesThreadEnterTransition();
   setMessagesThreadHeadCollapsed(false);
   const threadCache = tid ? getThreadMessagesCache(tid) : null;
   if (threadCache?.loadedOnce) {
@@ -42704,6 +42754,7 @@ function enterCoachThread(bootToken) {
   _messagesThreadNeedsInitialScroll = true;
   _conversationId = COACH_THREAD_ID;
   _messagesThreadHeadLastScrollTop = 0;
+  beginMessagesThreadEnterTransition();
   setMessagesThreadHeadCollapsed(false);
   try { patchSignupCoachWelcomeCredits(); } catch {}
   if (!creditsState.loaded) {
@@ -76318,8 +76369,11 @@ try {
     setAppActiveState(!document.hidden);
     document.addEventListener("visibilitychange", () => {
       setAppActiveState(!document.hidden);
-      if (!document.hidden) {
-        catchUpMessagesReceipts({ reason: "visibility" });
+      if (document.hidden) {
+        flushPendingThreadMarkRead();
+        return;
+      }
+      catchUpMessagesReceipts({ reason: "visibility" });
         ackAllPendingDeliveriesQuiet();
         ensureGlobalDmDeliveryListener();
         void tryRecoverGenerationFromPushNotification();
@@ -76335,7 +76389,6 @@ try {
             console.warn("[auth] visibility rehydrate failed", e);
           }
         })();
-      }
     });
   } catch {}
 } catch {}

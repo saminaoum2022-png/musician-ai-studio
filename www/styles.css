@@ -38406,6 +38406,16 @@ body.messagesThreadEntering .messagesThreadHead,
 body.messagesThreadEntering .messagesThreadMount,
 body.messagesThreadEntering .coachSongPlanBar{
   animation: messagesThreadSlideIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+/* Don't fan/expand the identity capsule during the slide — that hitch
+   (slide, pause, then grow left) was the enter feeling laggy. */
+body.messagesThreadEntering .messagesThreadHeadMeta,
+body.messagesThreadEntering .messagesThreadHeadCopy,
+body.messagesThreadEntering .messagesThreadHead .messagesBackBtn,
+body.messagesThreadEntering .messagesThreadMoreBtn{
+  transition: none !important;
 }
 body.messagesThreadLeaving .messagesThreadPage{
   animation: messagesThreadSlideOut 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -38536,10 +38546,11 @@ body[data-route="messages"]{
   position: fixed;
   isolation: isolate;
   top: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
   z-index: 10;
   width: min(100%, 640px);
+  margin-inline: auto;
   box-sizing: border-box;
   padding-top: calc(6px + env(safe-area-inset-top, 0px));
   padding-right: max(12px, env(safe-area-inset-right, 0px));
@@ -39459,6 +39470,7 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
   min-width: 0;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 1px;
   transition:
     opacity 200ms ease,
@@ -39466,11 +39478,12 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
     flex-basis 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Presence aura — the identity capsule breathes with Pulse. */
+/* Presence aura — identity capsule breathes with Pulse.
+   now_playing glow follows the song cover (--pulse-aura sampled in JS). */
 .messagesThreadHeadMeta[data-presence-status="now_playing"]{
-  --pulse-aura: rgba(94, 234, 212, 0.48);
-  --pulse-aura-soft: rgba(94, 234, 212, 0.34);
-  border-color: color-mix(in srgb, #5eead4 42%, var(--nabad-glass-border));
+  --pulse-aura: rgba(180, 140, 255, 0.48);
+  --pulse-aura-soft: rgba(180, 140, 255, 0.34);
+  border-color: color-mix(in srgb, var(--pulse-aura) 72%, var(--nabad-glass-border));
 }
 .messagesThreadHeadMeta[data-presence-status="creating"]{
   --pulse-aura: rgba(167, 139, 250, 0.52);
@@ -39483,9 +39496,9 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
   border-color: color-mix(in srgb, #ff7aa0 46%, var(--nabad-glass-border));
 }
 .messagesThreadHeadMeta[data-presence-status="now_playing"]::before{
-  opacity: 0.5;
+  opacity: 0.58;
   background:
-    radial-gradient(circle at 22% 50%, rgba(94, 234, 212, 0.42), transparent 68%),
+    radial-gradient(circle at 22% 50%, var(--pulse-aura), transparent 68%),
     var(--pulse-art) center / cover no-repeat;
   mix-blend-mode: screen;
 }

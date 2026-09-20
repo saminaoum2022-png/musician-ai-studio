@@ -1282,7 +1282,11 @@ const els = {
   profileNabadCertCheck: document.getElementById("profileNabadCertCheck"),
   profileMusicStylesInline: document.getElementById("profileMusicStylesInline"),
   profileMusicStylesBtn: document.getElementById("profileMusicStylesBtn"),
-  profileFeaturedCreation: null,
+  profileFeaturedCreationWrap: document.getElementById("profileFeaturedCreationWrap"),
+  profileFeaturedCreation: document.getElementById("profileFeaturedCreation"),
+  btnProfileAvatarEdit: document.getElementById("btnProfileAvatarEdit"),
+  userPublicFeaturedCreationWrap: document.getElementById("userPublicFeaturedCreationWrap"),
+  userPublicFeaturedCreation: document.getElementById("userPublicFeaturedCreation"),
   profileIdentityLine: document.getElementById("profileIdentityLine"),
   profileHeroBio: document.getElementById("profileHeroBio"),
   // Spotify-x-Nabad redesign nodes
@@ -25716,6 +25720,250 @@ function isFeaturedOnProfile(track) {
   return track?.meta?.featuredOnProfile === true || String(track?.meta?.featuredOnProfile || "").toLowerCase() === "true";
 }
 
+function profileFeaturedCreatorLine(track, fallback = "") {
+  const display = String(
+    track?.meta?.displayName || track?.displayName || "",
+  ).trim();
+  if (display && !display.startsWith("@")) return display;
+  const fallbackDisplay = String(fallback || "").trim();
+  if (fallbackDisplay && !fallbackDisplay.startsWith("@") && /\s/.test(fallbackDisplay)) {
+    return fallbackDisplay;
+  }
+  const handle = String(
+    track?.username || track?.meta?.username || fallbackDisplay || "",
+  ).trim().replace(/^@/, "");
+  return handle ? `@${handle}` : "Artist";
+}
+
+function resolveExplicitFeaturedProfileTrack(sourceSongs) {
+  const pool = Array.isArray(sourceSongs)
+    ? sourceSongs
+    : [
+        ...(getOwnerPublicPostsSongs() || []),
+        ...loadLibrary().filter((t) => Boolean(t.publicOnProfile)),
+      ];
+  const seen = new Set();
+  for (const t of pool) {
+    const id = String(t?.id || t?.songId || "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    if (!isFeaturedOnProfile(t)) continue;
+    if (!String(t?.url || "").trim()) continue;
+    return t;
+  }
+  return loadLibrary().find(
+    (t) => isFeaturedOnProfile(t) && Boolean(t.publicOnProfile) && String(t?.url || "").trim(),
+  ) || null;
+}
+
+function profileFeaturedTrackCardHtml(track, opts = {}) {
+  if (!track) return "";
+  const mode = opts.mode === "public" ? "public" : "own";
+  const title = escapeHtml(String(track.title || "Untitled"));
+  const art = escapeHtml(String(
+    (track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "./assets/nabadai-logo.png",
+  ));
+  const sid = escapeHtml(String(track.id || track.songId || ""));
+  const creator = escapeHtml(profileFeaturedCreatorLine(track, opts.creatorFallback || activeProfile?.username || ""));
+  const playAttr = mode === "own" ? "data-profile-featured-play" : "data-public-featured-play";
+  const menuBtn = mode === "own"
+    ? `<button type="button" class="profileFeaturedTrackMenu" data-profile-featured-menu="${sid}" aria-label="Featured track options">⋯</button>`
+    : "";
+  return `
+    <section class="profileFeaturedCreation" data-featured-song="${sid}">
+      <div class="profileFeaturedCreationMain profileFeaturedTrackCard" data-featured-track-id="${sid}">
+        <span class="profileFeaturedCreationArt"><img src="${art}" alt="" loading="lazy" decoding="async" /></span>
+        <span class="profileFeaturedCreationBody">
+          <span class="profileFeaturedTrackCopyTop">
+            <span class="profileFeaturedCreationKicker">Featured track</span>
+            ${menuBtn}
+          </span>
+          <strong class="profileFeaturedCreationTitle profileFeaturedCreationTitleText">${title}</strong>
+          <span class="profileFeaturedCreationMeta">${creator}</span>
+        </span>
+        <button type="button" class="profileFeaturedTrackPlay nabadGlassCtrl nabadGlassCtrl--round" ${playAttr}="${sid}" aria-label="Play ${title}">
+          <span class="profileFeaturedTrackPlayIco profileFeaturedTrackPlayIco--play" aria-hidden="true">${discoverPlayBtnSvg(14)}</span>
+          <span class="profileFeaturedTrackPlayIco profileFeaturedTrackPlayIco--pause" aria-hidden="true">${discoverPauseBtnSvg(14)}</span>
+          <span class="profileFeaturedTrackPlayIco profileFeaturedTrackPlayIco--loading" aria-hidden="true"><span class="coverArtPlaySpinner"></span></span>
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+function syncProfileFeaturedTrackPlaybackUi() {
+  const roots = [
+    els.profileFeaturedCreation,
+    els.userPublicFeaturedCreation,
+  ].filter(Boolean);
+  if (!roots.length) return;
+  roots.forEach((root) => {
+    root.querySelectorAll(".profileFeaturedTrackCard[data-featured-track-id]").forEach((card) => {
+      const id = card.getAttribute("data-featured-track-id") || "";
+      const playBtn = card.querySelector("[data-profile-featured-play], [data-public-featured-play]");
+      let ui = getLibraryRowPlaybackUiForTrack(id);
+      if (!ui.active && playBtn?.hasAttribute("data-public-featured-play")) {
+        const enc = playBtn.getAttribute("data-public-featured-url") || "";
+        let url = "";
+        try { url = decodeURIComponent(enc); } catch {}
+        if (url) ui = getPublicProfileLibPlaybackUiForUrl(url);
+      }
+      card.classList.toggle("profileFeaturedTrackCard--playing", Boolean(ui.audible));
+      card.classList.toggle("profileFeaturedTrackCard--active", Boolean(ui.active && !ui.audible));
+      card.classList.toggle("profileFeaturedTrackCard--loading", Boolean(ui.loading));
+      if (playBtn) {
+        const title = card.querySelector(".profileFeaturedCreationTitle")?.textContent?.trim() || "track";
+        playBtn.setAttribute(
+          "aria-label",
+          ui.audible ? `Pause ${title}` : ui.loading ? `Loading ${title}` : `Play ${title}`,
+        );
+      }
+    });
+  });
+}
+
+async function toggleProfileFeaturedTrackPlayback(track, mode = "own") {
+  if (!track) return;
+  const id = String(track.id || "").trim();
+  if (mode === "own" && id) {
+    const inLib = loadLibrary().some((x) => String(x.id) === id);
+    const ui = inLib ? getLibraryRowPlaybackUiForTrack(id) : getPublicProfileLibPlaybackUiForUrl(String(track.url || ""));
+    if (ui.audible) {
+      try { playerEl?.pause(); } catch {}
+      try { syncAllPlaybackRowHighlights(); } catch {}
+      return;
+    }
+    if (ui.active && !ui.audible && playerEl) {
+      try {
+        await playerEl.play();
+        syncAllPlaybackRowHighlights();
+      } catch {}
+      return;
+    }
+    if (inLib) {
+      void playLibraryListRowById(id, { openPlayer: false });
+      return;
+    }
+  }
+  const url = String(track.url || "").trim();
+  if (!url) return;
+  if (mode === "own") {
+    void playLibraryUrlOnPlayer(url, track.title || "Song", track.artUrl || "", {
+      discoverFeed: false,
+      openPlayer: false,
+      playSource: {
+        songId: id,
+        ownerUserId: String(authSession?.user?.id || activeProfile?.id || ""),
+        taskId: String(track.taskId || ""),
+        audioId: String(track.audioId || ""),
+      },
+    });
+    return;
+  }
+  const ui = getPublicProfileLibPlaybackUiForUrl(url);
+  if (ui.audible) {
+    try { playerEl?.pause(); } catch {}
+    try { syncAllPlaybackRowHighlights(); } catch {}
+    return;
+  }
+  void playLibraryUrlOnPlayer(url, track.title || "Song", track.artUrl || "", {
+    discoverFeed: false,
+    openPlayer: false,
+    playSource: {
+      songId: String(track.id || track.songId || ""),
+      ownerUserId: String(track.userId || track.ownerUserId || ""),
+      taskId: String(track.taskId || ""),
+      audioId: String(track.audioId || ""),
+    },
+  });
+}
+
+function bindProfileFeaturedCreationPlayHandlers(root, mode = "own", tracks = []) {
+  if (!root) return;
+  const ownAttr = "data-profile-featured-play";
+  const pubAttr = "data-public-featured-play";
+  root.querySelectorAll(`[${ownAttr}], [${pubAttr}]`).forEach((btn) => {
+    if (btn.dataset.featuredPlayBound) return;
+    btn.dataset.featuredPlayBound = "1";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const sid = btn.getAttribute(ownAttr) || btn.getAttribute(pubAttr);
+      if (!sid) return;
+      haptic("light");
+      if (mode === "own") {
+        const t = loadLibrary().find((x) => String(x.id) === String(sid))
+          || (getOwnerPublicPostsSongs() || []).find((x) => String(x.id) === String(sid));
+        void toggleProfileFeaturedTrackPlayback(t, "own");
+        return;
+      }
+      const t = tracks.find((x) => String(x.id) === String(sid));
+      void toggleProfileFeaturedTrackPlayback(t, "public");
+    });
+  });
+  root.querySelectorAll("[data-profile-featured-menu]").forEach((btn) => {
+    if (btn.dataset.featuredMenuBound) return;
+    btn.dataset.featuredMenuBound = "1";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const sid = btn.getAttribute("data-profile-featured-menu");
+      if (!sid) return;
+      haptic("light");
+      openProfilePublicTrackSheet(sid);
+    });
+  });
+}
+
+function renderProfileFeaturedCreation() {
+  const wrap = els.profileFeaturedCreationWrap;
+  const slot = els.profileFeaturedCreation;
+  if (!wrap || !slot) return;
+  const route = document.body.getAttribute("data-route") || "";
+  if (route !== "profile" || profileEditing) {
+    wrap.hidden = true;
+    wrap.setAttribute("aria-hidden", "true");
+    slot.innerHTML = "";
+    return;
+  }
+  const track = resolveExplicitFeaturedProfileTrack();
+  if (!track) {
+    wrap.hidden = true;
+    wrap.setAttribute("aria-hidden", "true");
+    slot.innerHTML = "";
+    return;
+  }
+  wrap.hidden = false;
+  wrap.setAttribute("aria-hidden", "false");
+  slot.innerHTML = profileFeaturedTrackCardHtml(track, {
+    mode: "own",
+    creatorFallback: activeProfile?.displayName || activeProfile?.username || "",
+  });
+  bindProfileFeaturedCreationPlayHandlers(slot, "own");
+  try { syncProfileFeaturedTrackPlaybackUi(); } catch {}
+}
+
+function renderUserPublicFeaturedCreation(songs, prof) {
+  const wrap = els.userPublicFeaturedCreationWrap;
+  const slot = els.userPublicFeaturedCreation;
+  if (!wrap || !slot) return;
+  const list = Array.isArray(songs) ? songs : [];
+  const track = list.find((t) => isFeaturedOnProfile(t) && String(t?.url || "").trim()) || null;
+  if (!track) {
+    wrap.hidden = true;
+    wrap.setAttribute("aria-hidden", "true");
+    slot.innerHTML = "";
+    return;
+  }
+  wrap.hidden = false;
+  wrap.setAttribute("aria-hidden", "false");
+  const handle = String(prof?.displayName || prof?.username || "").trim();
+  slot.innerHTML = profileFeaturedTrackCardHtml(track, { mode: "public", creatorFallback: handle });
+  bindProfileFeaturedCreationPlayHandlers(slot, "public", list);
+  slot.querySelectorAll("[data-public-featured-play]").forEach((btn) => {
+    btn.setAttribute("data-public-featured-url", encodeURIComponent(String(track.url || "")));
+  });
+  try { syncProfileFeaturedTrackPlaybackUi(); } catch {}
+}
+
 function sortLibraryForDisplay(items) {
   return [...(items || [])].sort((a, b) => {
     const pa = isFeaturedOnProfile(a) ? 1 : 0;
@@ -25725,7 +25973,30 @@ function sortLibraryForDisplay(items) {
   });
 }
 
-function renderProfileFeaturedCreation() {}
+
+function patchOwnerPublicPostsCacheFeatured(trackId, featured) {
+  if (!_ownerPublicPostsCache?.songs?.length) return;
+  const tid = String(trackId || "").trim();
+  if (!tid) return;
+  _ownerPublicPostsCache = {
+    at: Date.now(),
+    songs: _ownerPublicPostsCache.songs.map((t) => {
+      const id = String(t.id || "").trim();
+      if (id === tid) {
+        const meta = { ...(t.meta || {}) };
+        if (featured) meta.featuredOnProfile = true;
+        else delete meta.featuredOnProfile;
+        return { ...t, meta };
+      }
+      if (featured) {
+        const meta = { ...(t.meta || {}) };
+        if (meta.featuredOnProfile) delete meta.featuredOnProfile;
+        return { ...t, meta };
+      }
+      return t;
+    }),
+  };
+}
 
 async function setLibraryTrackFeaturedOnProfile(id, featured) {
   const trackId = String(id || "").trim();
@@ -25733,6 +26004,10 @@ async function setLibraryTrackFeaturedOnProfile(id, featured) {
   const lib = loadLibrary();
   const target = lib.find((t) => String(t.id) === trackId);
   if (!target) return;
+  if (featured && !target.publicOnProfile) {
+    showToast("Publish this song before featuring it on your profile.", { icon: "!", durationMs: 3600 });
+    return;
+  }
   const previousFeaturedIds = new Set(lib.filter(isFeaturedOnProfile).map((t) => String(t.id)));
   const nextLib = lib.map((t) => {
     const shouldFeature = featured && String(t.id) === trackId;
@@ -25743,8 +26018,10 @@ async function setLibraryTrackFeaturedOnProfile(id, featured) {
   });
   saveLibrary(nextLib);
   renderProfileHubShared();
-  showToast(featured ? "Pinned to top." : "Unpinned.");
+  showToast(featured ? "Featured on your profile." : "Featured track removed.");
   try { renderLibrary(); } catch {}
+  try { renderProfileFeaturedCreation(); } catch {}
+  try { patchOwnerPublicPostsCacheFeatured(id, featured); } catch {}
   const changed = nextLib.filter((t) => String(t.id) === trackId || previousFeaturedIds.has(String(t.id)));
   for (const t of changed) {
     await supabasePatchUserSong(t, { meta: t.meta || {} }, { reason: "featured-pin-toggle" }).catch(() => null);
@@ -32243,10 +32520,7 @@ function renderAuthStatus() {
     els.btnProfileShareIcon.style.display = isAuthed ? "" : "none";
     els.btnProfileShareIcon.setAttribute("aria-hidden", isAuthed ? "false" : "true");
   }
-  if (els.btnProfileEditPill) {
-    els.btnProfileEditPill.hidden = !isAuthed;
-    els.btnProfileEditPill.setAttribute("aria-hidden", isAuthed ? "false" : "true");
-  }
+  syncProfileAvatarEditBtnVisibility(isAuthed);
   document.body.setAttribute("data-logged-in", isAuthed ? "true" : "false");
   try { updateProfilePersonaRow(); } catch {}
 }
@@ -43073,7 +43347,7 @@ function renderUserPublicSocialStats({ songCount, stats }) {
     els.userPublicStats.innerHTML = `
       <div class="profileStatCol" data-stat="songs">
         <strong class="profileStatValue">${formatStatCount(songCount || 0)}</strong>
-        <span class="profileStatLabel">Songs</span>
+        <span class="profileStatLabel">Posts</span>
       </div>
       <div class="profileStatCol" data-stat="plays">
         <strong class="profileStatValue">${formatStatCount(plays)}</strong>
@@ -46836,7 +47110,7 @@ function renderTrackSheetLibrary(track) {
   const quickMashup = mashupEligible
     ? `<button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_mashup">Mashup</button>`
     : "";
-  const pinLabel = isFeaturedOnProfile(track) ? "Unpin song" : "Pin song";
+  const pinLabel = isFeaturedOnProfile(track) ? "Remove featured track" : "Feature on profile";
   q.innerHTML = `
     ${quickRemix}
     ${quickMashup}
@@ -46879,7 +47153,7 @@ function renderTrackSheetProfileLib(t) {
   const kind = String(t?.kind || "full");
   const isSound = kind === "sound";
   const remixEligible = !isSound && Boolean(t?.url && String(t.url).trim());
-  const featuredLabel = isFeaturedOnProfile(t) ? "Unpin song" : "Pin song";
+  const featuredLabel = isFeaturedOnProfile(t) ? "Remove featured track" : "Feature on profile";
   const quickRemix = remixEligible
     ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="profile_lib_remix">Remix</button>`
     : "";
@@ -47955,6 +48229,7 @@ function syncAllPlaybackRowHighlights() {
   try { syncMyVocalsRowsFromPlayer(); } catch {}
   try { syncProfileHubSharedRowsFromPlayer(); } catch {}
   try { syncUserPlaylistPlayingHighlights(); } catch {}
+  try { syncProfileFeaturedTrackPlaybackUi(); } catch {}
 }
 
 /** Set pending + repaint Discover rows the instant a cover is tapped. */
@@ -52031,6 +52306,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     publicHandle,
   };
   syncUserPublicSegmentUi();
+  try { renderUserPublicFeaturedCreation(songs, prof); } catch {}
   renderUserPublicSegmentFromCache();
   setUserPublicLoading(false);
   void fetchPlayCountsForTracks(allTracks).then((playCountMap) => {
@@ -54973,6 +55249,29 @@ function scheduleProfileUsernameAvailabilityCheck(raw) {
   }, 400);
 }
 
+function syncProfileAvatarEditBtnVisibility(isAuthed = Boolean(authSession?.user?.id)) {
+  const show = Boolean(isAuthed) && !profileEditing;
+  if (els.btnProfileAvatarEdit) {
+    els.btnProfileAvatarEdit.hidden = !show;
+    els.btnProfileAvatarEdit.setAttribute("aria-hidden", show ? "false" : "true");
+  }
+  if (els.btnProfileEditPill) {
+    els.btnProfileEditPill.hidden = true;
+    els.btnProfileEditPill.setAttribute("aria-hidden", "true");
+  }
+}
+
+function openProfileEditFromAvatar(e) {
+  e?.preventDefault?.();
+  if (!authSession?.user?.id && !getSupabaseAuthToken()) {
+    try { location.hash = "#/auth"; } catch {}
+    try { showToast("Sign in to edit your profile", { icon: "👤", durationMs: 2600 }); } catch {}
+    return;
+  }
+  try { haptic("light"); } catch {}
+  openProfileEditPage();
+}
+
 function setProfileEditing(on) {
   profileEditing = Boolean(on);
   if (!profileEditing) {
@@ -54983,26 +55282,16 @@ function setProfileEditing(on) {
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.disabled = !profileEditing;
   if (els.profilePreviewBioInput) els.profilePreviewBioInput.disabled = !profileEditing;
   if (els.btnProfileEdit) els.btnProfileEdit.style.display = profileEditing ? "none" : "";
-  if (els.btnProfileEditPill) {
-    els.btnProfileEditPill.hidden = profileEditing;
-    els.btnProfileEditPill.setAttribute("aria-hidden", profileEditing ? "true" : "false");
-  }
+  syncProfileAvatarEditBtnVisibility(Boolean(authSession?.user?.id));
   if (els.profileEditActions) {
     els.profileEditActions.style.display = profileEditing ? "flex" : "none";
     els.profileEditActions.setAttribute("aria-hidden", profileEditing ? "false" : "true");
   }
   const hint = document.getElementById("profileAvatarEditHint");
   if (hint) hint.style.display = profileEditing ? "" : "none";
-  // Toggle the editing class on the hero — the CSS uses it to swap the
-  // About card vs the bio textarea, hide the shuffle play, etc.
   if (els.profileAura) {
     els.profileAura.classList.toggle("profileAuraEditing", profileEditing);
   }
-  // Hide the chrome while editing — it overlaps form fields and
-  // confuses the touch targets on small screens. The hero identity
-  // line + bio quote are hidden via CSS off the editing class; we
-  // still need to manually hide the music sections below so they
-  // don't repaint stale data right under the form.
   const sections = [
     els.profileActionRow,
     els.profileTopWeek,
@@ -55019,7 +55308,6 @@ function setProfileEditing(on) {
   });
   renderProfileUsernamePrompt();
   renderProfileCallingCardHint();
-  // Refresh the identity line so it picks up edits when we leave edit mode.
   if (!profileEditing) {
     try { renderProfileIdentityLine(); } catch {}
   }
@@ -74176,14 +74464,13 @@ document.addEventListener("keydown", (e) => {
 });
 if (els.btnProfileEditPill) {
   els.btnProfileEditPill.addEventListener("click", (e) => {
-    e.preventDefault();
-    if (!authSession?.user?.id && !getSupabaseAuthToken()) {
-      try { location.hash = "#/auth"; } catch {}
-      try { showToast("Sign in to edit your profile", { icon: "👤", durationMs: 2600 }); } catch {}
-      return;
-    }
-    try { haptic("light"); } catch {}
-    openProfileEditPage();
+    openProfileEditFromAvatar(e);
+  });
+}
+if (els.btnProfileAvatarEdit) {
+  els.btnProfileAvatarEdit.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openProfileEditFromAvatar(e);
   });
 }
 if (els.profileUsernamePrompt) {

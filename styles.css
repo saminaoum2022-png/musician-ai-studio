@@ -862,6 +862,15 @@ html[data-theme="light"] .profileStatPill:not(:last-child)::after{
   background: linear-gradient(180deg, transparent, rgba(15, 23, 40, 0.12), transparent);
 }
 
+html[data-theme="light"] .profileSegBar{
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+html[data-theme="light"] .profileSegBar::after{
+  background: var(--row-divider);
+}
+
 html[data-theme="light"] .profileSegTab{
   color: var(--text-muted);
   opacity: 1;
@@ -17775,6 +17784,124 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
  *  edit mode (profileAura form fields still work underneath).
  * ================================================================= */
 
+/* --- Profile hero: localized teal/violet ambient glow behind avatar. --- */
+.profileAuraIdentity{
+  position: relative;
+}
+.profileAuraAvatarWrapNeon::before{
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 168%;
+  height: 168%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 28% 40%, rgba(35, 213, 171, 0.46), transparent 58%),
+    radial-gradient(circle at 78% 46%, rgba(124, 92, 255, 0.44), transparent 60%);
+  filter: blur(22px);
+}
+.profileAuraAvatar{
+  color: transparent;
+}
+.profileAvatarEditBtn{
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 6;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(248, 250, 255, 0.94);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom),
+    0 6px 16px rgba(0, 0, 0, 0.28);
+}
+.profileAvatarEditBtn:active{
+  transform: scale(0.96);
+}
+.profileAura.profileAuraEditing .profileAvatarEditBtn{
+  display: none !important;
+}
+.profileAuraNameAffixes .profileEditPill{
+  display: none !important;
+}
+.profileAura{
+  --profile-header-pad-top: 38px;
+  --profile-header-gap: 8px;
+  --profile-avatar-size: 88px;
+}
+.profileStatCol + .profileStatCol{
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+.profileStatCol{
+  padding: 0 10px;
+}
+.profileStatsRow{
+  margin: 8px auto 2px;
+}
+.profileStatValue{
+  font-size: clamp(19px, 4.9vw, 24px);
+}
+.profileHeroBio{
+  margin: 2px auto 4px;
+}
+.profileMusicStylesInline{
+  margin: 6px auto 0;
+}
+.profileSongsBlock:has(> .profileFeaturedCreationWrap:not([hidden])){
+  padding-top: 0;
+}
+.profileSongsBlock:has(> .profileFeaturedCreationWrap:not([hidden])) > .profileSegBar,
+.userPublic:has(#userPublicFeaturedCreationWrap:not([hidden])) .profileSegBar{
+  margin-top: 14px;
+}
+.profileFeaturedCreationWrap:not([hidden]),
+#userPublicFeaturedCreationWrap:not([hidden]){
+  margin-top: 22px;
+}
+.profileFeaturedTrackPlayIco{
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.profileFeaturedTrackPlayIco--play{
+  opacity: 1;
+}
+.profileFeaturedTrackCard--playing .profileFeaturedTrackPlayIco--play,
+.profileFeaturedTrackCard--loading .profileFeaturedTrackPlayIco--play{
+  opacity: 0;
+}
+.profileFeaturedTrackCard--playing .profileFeaturedTrackPlayIco--pause{
+  opacity: 1;
+}
+.profileFeaturedTrackCard--loading .profileFeaturedTrackPlayIco--loading{
+  opacity: 1;
+}
+.profileFeaturedTrackPlay:focus-visible{
+  outline: 2px solid rgba(124, 92, 255, 0.55);
+  outline-offset: 2px;
+}
+html[data-theme="light"] .profileAuraAvatarWrapNeon::before{
+  background:
+    radial-gradient(circle at 28% 40%, rgba(35, 213, 171, 0.22), transparent 58%),
+    radial-gradient(circle at 78% 46%, rgba(124, 92, 255, 0.20), transparent 60%);
+}
+html[data-theme="light"] .profileStatCol + .profileStatCol{
+  border-left-color: rgba(15, 23, 40, 0.08);
+}
+
 /* --- Profile hero: no local wash. Route-level body::before (below) is the
    only atmosphere so color reaches the status-bar edge without a stacked
    bruise. --- */
@@ -18313,8 +18440,11 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
 }
 .profileTopWeekLikes svg{ width: 11px; height: 11px; color: #ff688f; }
 .profileFeaturedCreationWrap{
-  margin: 0 0 8px;
+  margin: 0;
   max-width: 100%;
+}
+.profileFeaturedCreationWrap:not([hidden]){
+  margin-top: 22px;
 }
 .profileFeaturedCreationWrap[hidden]{
   display: none !important;
@@ -18323,47 +18453,76 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
   margin: 0;
   max-width: 100%;
 }
-.profileFeaturedCreationKicker{
-  margin: 0 0 6px;
-  padding: 0 2px;
-  color: rgba(223, 231, 251, 0.42);
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.profileFeaturedTrackCopyTop{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
-.profileFeaturedCreationMain{
+.profileFeaturedCreationKicker{
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  color: rgba(223, 231, 251, 0.46);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profileFeaturedCreationMain,
+.profileFeaturedCreationMain.profileFeaturedTrackCard{
   width: 100%;
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr) auto;
+  grid-template-columns: 64px minmax(0, 1fr) 40px;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(211, 202, 255, 0.20);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(124, 92, 255, 0.16), transparent 56%),
+    radial-gradient(90% 120% at 100% 100%, rgba(35, 213, 171, 0.08), transparent 58%),
+    var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
   color: inherit;
   text-align: left;
-  cursor: pointer;
-  box-shadow: none;
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom),
+    0 10px 28px rgba(0, 0, 0, 0.22);
   -webkit-tap-highlight-color: transparent;
   transition: background 160ms ease, border-color 160ms ease;
 }
 .profileFeaturedCreationMain:hover{
-  background: rgba(255, 255, 255, 0.045);
-  border-color: rgba(255, 255, 255, 0.1);
-}
-.profileFeaturedCreationMain:active{
-  background: rgba(255, 255, 255, 0.055);
+  border-color: var(--nabad-glass-border-hover);
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(124, 92, 255, 0.20), transparent 56%),
+    radial-gradient(90% 120% at 100% 100%, rgba(35, 213, 171, 0.10), transparent 58%),
+    var(--nabad-glass-bg-hover);
 }
 .profileFeaturedCreationArt{
-  width: 58px;
-  height: 58px;
+  grid-column: 1;
+  width: 64px;
+  height: 64px;
   border-radius: 12px;
   overflow: hidden;
+  flex-shrink: 0;
   background: rgba(255, 255, 255, 0.04);
 }
-.profileFeaturedCreationArt img{
+.profileFeaturedCreationBody{
+  grid-column: 2;
+  min-width: 0;
+  overflow: hidden;
+}
+.profileFeaturedTrackPlay{
+  grid-column: 3;
+}
+.profileFeaturedCreationArt img,
+.profileFeaturedSongArt img{
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -18371,9 +18530,42 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
 }
 .profileFeaturedCreationBody{
   min-width: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+}
+.profileFeaturedTrackMenu{
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(232, 238, 247, 0.48);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.profileFeaturedTrackPlay{
+  width: var(--nabad-glass-size-round);
+  height: var(--nabad-glass-size-round);
+  position: relative;
+  color: var(--nabad-glass-color);
+}
+.profileFeaturedTrackPlay svg{
+  display: block;
+}
+.profileFeaturedCreationBody{
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 .profileFeaturedCreationTitle,
 .profileFeaturedCreationTitleText{
@@ -19489,11 +19681,12 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   overflow: visible;
 }
 .userPublic{
+  --profile-avatar-size: 88px;
   position: relative;
   isolation: isolate;
   display:flex;
   flex-direction:column;
-  gap:11px;
+  gap:14px;
   width: min(100%, 680px);
   margin: 0 auto;
   min-width: 0;
@@ -19518,19 +19711,17 @@ body[data-route="user"] section.card.wide[data-route="user"]{
 }
 .userPublicAvatarWrap{
   position: relative;
-  width: 100px;
-  height: 100px;
-  flex: 0 0 100px;
+  width: var(--profile-avatar-size, 88px);
+  height: var(--profile-avatar-size, 88px);
+  flex: 0 0 var(--profile-avatar-size, 88px);
   border-radius: var(--nabad-squircle-radius);
-  box-shadow:
-    0 18px 42px rgba(0,0,0,0.34),
-    0 0 34px rgba(124,92,255,0.14);
+  box-shadow: 0 0 38px -14px rgba(124,92,255,0.22);
 }
 .userPublic .userPublicAvatarWrap.profileAuraAvatarWrap,
 .userPublic .userPublicAvatarWrap.profileAuraAvatarWrapNeon{
-  width: 100px;
-  height: 100px;
-  flex: 0 0 100px;
+  width: var(--profile-avatar-size, 88px);
+  height: var(--profile-avatar-size, 88px);
+  flex: 0 0 var(--profile-avatar-size, 88px);
   margin: 4px auto 2px;
 }
 .userPublicAvatarRing{
@@ -19755,23 +19946,23 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   display: inline-flex !important;
 }
 .userPublicFollowRow{
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
   justify-content: center;
   align-self: center;
   gap: 8px;
-  width: auto;
-  max-width: 100%;
-  margin: 8px auto 10px;
-  padding: 0 2px 2px;
+  width: 100%;
+  max-width: min(100%, 340px);
+  margin: 0 auto;
+  padding: 0;
   overflow: visible;
 }
 .userPublicFollowRow[hidden]{
   display: none !important;
 }
 .userPublicRelationStatus{
-  margin: 8px 0 0;
+  margin: 0 auto;
   padding: 0 8px;
   width: 100%;
   text-align: center;
@@ -19796,14 +19987,15 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   align-items: center;
   justify-content: center;
   gap: 0;
-  flex: 0 0 auto;
+  flex: 1 1 0;
   box-sizing: border-box;
   width: auto;
   max-width: 100%;
   min-width: 0;
+  min-height: 40px;
   margin: 0;
-  padding: 11px 16px;
-  border: 0;
+  padding: 10px 14px;
+  border: 1px solid transparent;
   border-radius: 999px;
   font-size: 13px;
   font-weight: 700;
@@ -19813,25 +20005,27 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   cursor: pointer;
   overflow: visible;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 140ms ease, background 220ms ease, color 220ms ease, opacity 220ms ease, box-shadow 220ms ease;
+  transition: transform 140ms ease, background 220ms ease, color 220ms ease, opacity 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
 }
-.userPublicFollowBtn{
-  color: rgba(223,231,251,0.78);
-  background: rgba(255,255,255,0.06);
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.12);
-}
-.userPublicFollowBtn[data-following="true"]{
-  color: rgba(223,231,251,0.78);
-  background: rgba(255,255,255,0.06);
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.12);
-}
+.userPublicFollowBtn,
 .userPublicFollowBtn[data-following="false"]{
   color: #fff;
-  background: var(--brand-violet);
+  -webkit-text-fill-color: #fff;
+  background: linear-gradient(148deg, #23d5ab 0%, #2ec4b8 34%, #6b78e8 72%, #7c5cff 100%);
+  border-color: transparent;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
+}
+.userPublicFollowBtn[data-following="true"],
+.userPublicMessageBtn{
+  color: var(--nabad-glass-color);
+  -webkit-text-fill-color: var(--nabad-glass-color);
+  background: var(--nabad-glass-bg);
+  border-color: var(--nabad-glass-border);
   box-shadow:
-    0 8px 22px rgba(0, 0, 0, 0.32),
-    0 0 0 1px rgba(255, 255, 255, 0.14),
-    0 4px 18px rgba(124, 92, 255, 0.48);
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
 }
 .userPublicFollowBtn.is-disabled{
   opacity: 0.55;
@@ -19841,11 +20035,10 @@ body[data-route="user"] section.card.wide[data-route="user"]{
 .userPublicMessageBtn:active{
   transform: scale(0.98);
 }
-.userPublicMessageBtn{
-  color: rgba(223,231,251,0.78);
-  background: rgba(255,255,255,0.06);
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.12);
-  transition: transform 140ms ease, background 180ms ease, box-shadow 180ms ease;
+.userPublicFollowRow:not(:has(#btnUserPublicMessage:not([hidden]))) .userPublicFollowBtn{
+  flex: 0 1 auto;
+  min-width: 168px;
+  padding-inline: 22px;
 }
 .userPublicBio{
   min-width: 0;
@@ -19995,9 +20188,9 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   .userPublicAvatarWrap,
   .userPublic .userPublicAvatarWrap.profileAuraAvatarWrap,
   .userPublic .userPublicAvatarWrap.profileAuraAvatarWrapNeon{
-    width: 100px;
-    height: 100px;
-    flex: 0 0 100px;
+    width: var(--profile-avatar-size, 88px);
+    height: var(--profile-avatar-size, 88px);
+    flex: 0 0 var(--profile-avatar-size, 88px);
   }
 }
 @media (max-width:390px){
@@ -30905,16 +31098,23 @@ button.discoverySpotCard{
   width: 100%;
   --profile-seg-gap: 22px;
   margin: var(--profile-seg-gap) 0 0;
-  padding: 8px 6px;
-  border: 1px solid var(--nabad-glass-border);
-  border-radius: 16px;
-  background: var(--nabad-glass-bg);
-  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
-          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
-  box-shadow:
-    var(--nabad-glass-inset-top),
-    var(--nabad-glass-inset-bottom),
-    0 8px 20px rgba(0, 0, 0, 0.18);
+  padding: 6px 0 12px;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+}
+.profileSegBar::after{
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: rgba(211, 202, 255, 0.14);
+  pointer-events: none;
 }
 .profileSegBar--dual{
   margin: 18px 0 0;
@@ -57493,16 +57693,19 @@ html[data-theme="light"] .userPublicAvatarWrap .userPublicAvatarFallback.activit
 }
 html[data-theme="light"] .userPublicFollowBtn[data-following="true"],
 html[data-theme="light"] .userPublicMessageBtn{
-  color: var(--text-primary);
-  background: var(--card);
-  box-shadow: 0 0 0 1px var(--border);
+  color: var(--nabad-glass-color);
+  background: var(--nabad-glass-bg);
+  border-color: var(--nabad-glass-border);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 html[data-theme="light"] .userPublicFollowBtn[data-following="false"]{
   color: #fff;
-  background: var(--brand-violet);
-  box-shadow:
-    0 6px 18px rgba(109, 77, 245, 0.22),
-    0 0 0 1px rgba(255, 255, 255, 0.12);
+  -webkit-text-fill-color: #fff;
+  background: linear-gradient(148deg, #23d5ab 0%, #2ec4b8 34%, #6b78e8 72%, #7c5cff 100%);
+  border-color: transparent;
+  box-shadow: 0 6px 16px rgba(109, 77, 245, 0.22);
 }
 html[data-theme="light"] .userPublicFollowBtn:active,
 html[data-theme="light"] .userPublicMessageBtn:active{

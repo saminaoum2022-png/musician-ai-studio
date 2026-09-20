@@ -3217,11 +3217,6 @@
                     <span></span><span></span><span></span><span></span><span></span>
                   </span>
                 </button>
-                <p id="userPublicFollowsYou" class="userPublicRelationStatus" hidden></p>
-                <div class="userPublicFollowRow" id="userPublicFollowRow" hidden>
-                  <div id="btnUserPublicFollow" class="userPublicFollowBtn" role="button" tabindex="0" hidden>Become a fan</div>
-                  <button id="btnUserPublicMessage" class="userPublicMessageBtn" type="button" hidden>Message</button>
-                </div>
               </div>
               <button id="btnUserPublicBack" class="nabadBackBtn userPublicBack" type="button" aria-label="Back" hidden>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
@@ -3230,15 +3225,23 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/></svg>
               </button>
             </div>
-            <div class="userPublicStats profileStatsRow" id="userPublicStats"></div>
-            <div id="userPublicMusicStyles" class="profileMusicStylesInline userPublicMusicStyles" hidden aria-hidden="true">
-              <div id="userPublicMusicStylesRow" class="profileMusicStylesLine profileMusicStylesLine--readonly" aria-label="Music styles"></div>
-            </div>
-            <audio id="userPublicCallingCardAudio" preload="none" playsinline></audio>
             <div class="userPublicBio profileHeroBio" id="userPublicBio" hidden>
               <span class="profileHeroBioQuote" aria-hidden="true">"</span>
               <p id="userPublicBioText" class="profileHeroBioText"></p>
             </div>
+            <p id="userPublicFollowsYou" class="userPublicRelationStatus" hidden></p>
+            <div class="userPublicFollowRow" id="userPublicFollowRow" hidden>
+              <div id="btnUserPublicFollow" class="userPublicFollowBtn" role="button" tabindex="0" hidden>Become a fan</div>
+              <button id="btnUserPublicMessage" class="userPublicMessageBtn" type="button" hidden>Message</button>
+            </div>
+            <div class="userPublicStats profileStatsRow" id="userPublicStats"></div>
+            <div id="userPublicMusicStyles" class="profileMusicStylesInline userPublicMusicStyles" hidden aria-hidden="true">
+              <div id="userPublicMusicStylesRow" class="profileMusicStylesLine profileMusicStylesLine--readonly" aria-label="Music styles"></div>
+            </div>
+            <div id="userPublicFeaturedCreationWrap" class="profileFeaturedCreationWrap" hidden aria-hidden="true">
+              <div id="userPublicFeaturedCreation" class="profileFeaturedCreationMount"></div>
+            </div>
+            <audio id="userPublicCallingCardAudio" preload="none" playsinline></audio>
             <nav class="profileSegBar profileSegBar--dual" id="userPublicSegBar" role="tablist" aria-label="Profile content" hidden>
               <button type="button" class="profileSegTab is-active" role="tab" aria-selected="true" data-user-public-segment="posts" id="userPublicSegPosts" aria-label="Posts">
                 <span class="profileSegIconWrap" aria-hidden="true">
@@ -3314,6 +3317,19 @@
                     </svg>
                   </span>
                   <span id="profileProAvatarPill" class="profileProAvatarPill" hidden aria-hidden="true" title="NabadAi Pro">Pro</span>
+                  <button
+                    type="button"
+                    id="btnProfileAvatarEdit"
+                    class="profileAvatarEditBtn nabadGlassCtrl nabadGlassCtrl--round"
+                    hidden
+                    aria-label="Edit profile"
+                    title="Edit profile"
+                  >
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 20h9"/>
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                    </svg>
+                  </button>
                 </div>
               </div>
 
@@ -3354,7 +3370,7 @@
                       aria-label="Username"
                     />
                     <span class="profileAuraNameAffixes" id="profileAuraNameAffixes">
-                      <button type="button" id="btnProfileEditPill" class="profileEditPill" aria-label="Edit profile" hidden>
+                      <button type="button" id="btnProfileEditPill" class="profileEditPill srOnly" aria-label="Edit profile" hidden tabindex="-1">
                         Edit
                       </button>
                       <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon profileAuraGender" hidden aria-hidden="true"></span>
@@ -3364,6 +3380,23 @@
               </div>
               </div>
               <p id="profileUsernameAvailability" class="profileUsernameAvailability" hidden aria-live="polite"></p>
+
+              <textarea
+                id="profilePreviewBioInput"
+                class="profileAuraBio"
+                rows="2"
+                maxlength="120"
+                disabled
+                spellcheck="true"
+                aria-label="Bio"
+                placeholder="Add a short bio to introduce your music style."
+              ></textarea>
+
+              <!-- Bio quote — view-mode only; edit mode uses the textarea above. -->
+              <div id="profileHeroBio" class="profileHeroBio" hidden>
+                <span class="profileHeroBioQuote" aria-hidden="true">"</span>
+                <p id="profileAboutText" class="profileHeroBioText"></p>
+              </div>
 
               <div class="profileStatsRow" id="profileStatsPills" aria-live="polite" hidden>
                 <div class="profileStatCol" data-stat="posts">
@@ -3409,23 +3442,6 @@
                     <span></span><span></span><span></span><span></span><span></span>
                   </span>
                 </button>
-              </div>
-
-              <textarea
-                id="profilePreviewBioInput"
-                class="profileAuraBio"
-                rows="2"
-                maxlength="120"
-                disabled
-                spellcheck="true"
-                aria-label="Bio"
-                placeholder="Add a short bio to introduce your music style."
-              ></textarea>
-
-              <!-- Bio quote — view-mode only; edit mode uses the textarea above. -->
-              <div id="profileHeroBio" class="profileHeroBio" hidden>
-                <span class="profileHeroBioQuote" aria-hidden="true">"</span>
-                <p id="profileAboutText" class="profileHeroBioText"></p>
               </div>
 
               <div id="authLoggedInEmailInline" class="profileAuraEmail hint" style="display:none"></div>
@@ -3511,6 +3527,9 @@
 
           <!-- Songs — Public (Discover / link) vs All (full library) -->
           <div class="profileSongsBlock">
+            <div id="profileFeaturedCreationWrap" class="profileFeaturedCreationWrap" hidden aria-hidden="true">
+              <div id="profileFeaturedCreation" class="profileFeaturedCreationMount"></div>
+            </div>
             <nav class="profileSegBar" role="tablist" aria-label="Profile content">
               <button type="button" class="profileSegTab is-active" role="tab" aria-selected="true" data-profile-songs-segment="activities" id="profileSongsSegActivity" aria-label="Posts">
                 <span class="profileSegIconWrap" aria-hidden="true">

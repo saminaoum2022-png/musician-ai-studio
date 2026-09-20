@@ -43253,45 +43253,49 @@ function bindMessagesPageOnce() {
     if (tid && !isCoachThreadId(tid)) void prefetchThreadMessagesQuiet(tid);
   }, { passive: true });
 
-  const INBOX_PRESS_SLOP_PX = 10;
-  let _inboxPressRow = null;
-  let _inboxPressX = 0;
-  let _inboxPressY = 0;
-  const clearInboxRowPress = () => {
-    document.querySelectorAll(".messagesRow.is-pressing").forEach((el) => {
+  const LIST_PRESS_SLOP_PX = 10;
+  const LIST_PRESS_SELECTOR = ".messagesRow, .activityRow";
+  let _listPressRow = null;
+  let _listPressX = 0;
+  let _listPressY = 0;
+  const clearListRowPress = () => {
+    document.querySelectorAll(".messagesRow.is-pressing, .activityRow.is-pressing").forEach((el) => {
       el.classList.remove("is-pressing");
     });
     const active = document.activeElement;
-    if (active?.classList?.contains("messagesRow")) {
+    if (active?.matches?.(LIST_PRESS_SELECTOR)) {
       try { active.blur(); } catch {}
     }
-    _inboxPressRow = null;
+    _listPressRow = null;
   };
   document.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    const row = e.target.closest?.(".messagesRow");
-    if (!row || !row.closest("#messagesPage")) return;
-    clearInboxRowPress();
-    _inboxPressRow = row;
-    _inboxPressX = e.clientX;
-    _inboxPressY = e.clientY;
+    const row = e.target.closest?.(LIST_PRESS_SELECTOR);
+    if (!row) return;
+    if (row.classList.contains("messagesRow") && !row.closest("#messagesPage")) return;
+    if (row.classList.contains("activityRow") && !row.closest("#activityPage")) return;
+    if (row.classList.contains("activityRow--unavailable")) return;
+    clearListRowPress();
+    _listPressRow = row;
+    _listPressX = e.clientX;
+    _listPressY = e.clientY;
     row.classList.add("is-pressing");
   }, { passive: true, capture: true });
   document.addEventListener("pointermove", (e) => {
-    if (!_inboxPressRow) return;
-    const dx = e.clientX - _inboxPressX;
-    const dy = e.clientY - _inboxPressY;
-    if ((dx * dx + dy * dy) < INBOX_PRESS_SLOP_PX * INBOX_PRESS_SLOP_PX) return;
-    clearInboxRowPress();
+    if (!_listPressRow) return;
+    const dx = e.clientX - _listPressX;
+    const dy = e.clientY - _listPressY;
+    if ((dx * dx + dy * dy) < LIST_PRESS_SLOP_PX * LIST_PRESS_SLOP_PX) return;
+    clearListRowPress();
   }, { passive: true, capture: true });
   document.addEventListener("pointerup", () => {
-    const row = _inboxPressRow;
-    _inboxPressRow = null;
+    const row = _listPressRow;
+    _listPressRow = null;
     if (!row) return;
     window.setTimeout(() => row.classList.remove("is-pressing"), 280);
   }, { passive: true, capture: true });
-  window.addEventListener("scroll", clearInboxRowPress, { passive: true, capture: true });
-  document.addEventListener("pointercancel", clearInboxRowPress, { passive: true, capture: true });
+  window.addEventListener("scroll", clearListRowPress, { passive: true, capture: true });
+  document.addEventListener("pointercancel", clearListRowPress, { passive: true, capture: true });
 
   document.addEventListener("mouseenter", (e) => {
     const threadRow = e.target.closest?.("[data-messages-thread]");

@@ -37817,7 +37817,7 @@ html[data-theme="light"] .homeDeskTopChrome{
   line-height: 1.45;
 }
 
-/* --- Activity tab (Instagram-style notification list + NabadAi music touch) --- */
+/* --- Activity tab (Messages-style glass list) --- */
 .activityPage.wide,
 section.activityPage{
   grid-column: 1 / -1;
@@ -37839,28 +37839,43 @@ section.activityPage{
 }
 .activityFilterBar{
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 22px;
-  padding: 0 16px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 4px 16px 0;
+  border-bottom: 1px solid var(--border);
 }
 .activityFilterBtn{
+  position: relative;
   appearance: none;
   border: 0;
   margin: 0;
-  padding: 8px 0;
+  padding: 6px 0 8px;
   background: transparent;
-  color: rgba(223,231,251,0.42);
+  color: var(--tab-inactive);
   font: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 16.5px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  transition: color 180ms ease, font-weight 180ms ease;
 }
 .activityFilterBtn.is-active{
   color: #fff;
+  font-weight: 650;
+}
+.activityFilterBtn.is-active::after{
+  content: "";
+  display: block;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--brand-teal), var(--brand-violet));
+  z-index: 1;
 }
 .activityFilterBtn:active{
   opacity: 0.82;
@@ -37877,15 +37892,20 @@ section.activityPage{
 .activityFeed{
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 4px;
+  padding: 0 8px 8px;
 }
 .activitySectionLabel{
   margin: 0;
-  padding: 18px 16px 6px;
-  color: rgba(223,231,251,0.52);
+  padding: 16px 10px 6px;
+  color: rgba(223,231,251,0.62);
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.activityFeed > .activitySectionLabel:first-child{
+  padding-top: 12px;
 }
 .activityRow{
   position: relative;
@@ -37894,24 +37914,78 @@ section.activityPage{
   gap: 12px;
   width: 100%;
   margin: 0;
-  padding: 10px 16px;
-  border: 0;
-  border-radius: 0;
+  padding: 11px 10px;
+  border: 1px solid transparent;
+  border-radius: 18px;
   background: transparent;
   box-shadow: none;
   color: inherit;
   text-align: left;
   cursor: pointer;
-  touch-action: manipulation;
+  touch-action: pan-y;
   -webkit-tap-highlight-color: transparent;
-  transition: background 120ms ease;
+  transition: var(--nabad-glass-transition);
 }
 button.activityRow{
   appearance: none;
   font: inherit;
 }
-.activityRow:active{
-  background: rgba(255,255,255,0.03);
+.activityRow:focus{
+  outline: none;
+}
+@media (hover: hover) and (pointer: fine){
+  .activityRow:hover,
+  .activityRow:focus-visible{
+    border-color: var(--nabad-glass-border);
+    background: var(--nabad-glass-bg);
+    -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+            backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+    box-shadow:
+      var(--nabad-glass-inset-top),
+      var(--nabad-glass-inset-bottom);
+  }
+  .activityRow:active{
+    transform: scale(var(--nabad-glass-active-scale));
+    border-color: var(--nabad-glass-border-hover);
+    background: var(--nabad-glass-bg-hover);
+  }
+}
+@media (hover: none), (pointer: coarse){
+  .activityRow{
+    cursor: default;
+    transition: background 90ms ease, border-color 90ms ease, box-shadow 90ms ease;
+  }
+  .activityRow:hover,
+  .activityRow:active,
+  .activityRow:focus,
+  .activityRow:focus-visible{
+    transform: none;
+    border-color: transparent;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+    box-shadow: none;
+  }
+  .activityRow.isUnread:hover,
+  .activityRow.isUnread:active,
+  .activityRow.isUnread:focus,
+  .activityRow.isUnread:focus-visible{
+    border-color: color-mix(in srgb, var(--nabad-glass-border) 70%, transparent);
+    background: color-mix(in srgb, var(--nabad-glass-bg) 82%, transparent);
+  }
+}
+.activityRow.isUnread{
+  border-color: color-mix(in srgb, var(--nabad-glass-border) 70%, transparent);
+  background: color-mix(in srgb, var(--nabad-glass-bg) 82%, transparent);
+}
+.activityRow.is-pressing{
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 .activityRow.isUnread .activityRowText{
   color: #fff;
@@ -37934,9 +38008,6 @@ button.activityRow--unavailable{
 .activityRow--split{
   cursor: default;
 }
-.activityRow--split:active{
-  background: transparent;
-}
 .activityRowProfileTap{
   appearance: none;
   border: 0;
@@ -37954,12 +38025,12 @@ button.activityRow--unavailable{
 .activityRowTargetTap{
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 44px;
+  min-height: 48px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: center;
   align-self: center;
-  padding-top: 13px;
+  padding-top: 0;
   box-sizing: border-box;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -37985,21 +38056,25 @@ button.activityRow--unavailable{
 .activityRowAvatarWrap,
 .activityRowSongWrap{
   position: relative;
-  flex: 0 0 44px;
-  width: 44px;
-  height: 44px;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   align-self: center;
 }
 .activityRowSongTile{
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--nabad-squircle-radius);
   object-fit: cover;
   display: block;
   background: rgba(255,255,255,0.06);
+  border: 1px solid var(--nabad-glass-border);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
   box-sizing: border-box;
 }
 .activityRowSongTile--placeholder{
@@ -38009,7 +38084,7 @@ button.activityRow--unavailable{
   background:
     linear-gradient(145deg, rgba(124,92,255,0.14), rgba(45,212,191,0.10)),
     rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--nabad-glass-border);
   color: rgba(167,139,250,0.88);
   font-size: 16px;
   font-weight: 700;
@@ -38018,11 +38093,11 @@ button.activityRow--unavailable{
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: var(--nabad-squircle-radius);
   background:
     linear-gradient(145deg, rgba(45,212,191,0.12), rgba(124,92,255,0.16)),
     rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--nabad-glass-border);
   color: rgba(45,212,191,0.95);
 }
 .activityRowSongTile--icon .activityRowBadgeIcon,
@@ -38035,17 +38110,22 @@ button.activityRow--unavailable{
   bottom: -3px;
 }
 .activityRowAvatar{
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   object-fit: cover;
   display: block;
+  overflow: hidden;
   background: rgba(255,255,255,0.06);
+  border: 1px solid var(--nabad-glass-border);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
   box-sizing: border-box;
 }
 .activityRowAvatar--blank{
   background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.10);
+  border: 1px solid var(--nabad-glass-border);
 }
 .activityRowAvatar.activityAvatarSilhouette{
   display: none;
@@ -38053,12 +38133,12 @@ button.activityRow--unavailable{
 .activityRowBody{
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 44px;
+  min-height: 48px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: center;
   align-self: center;
-  padding-top: 13px;
+  padding-top: 0;
   box-sizing: border-box;
   gap: 2px;
 }
@@ -38093,9 +38173,9 @@ button.activityRow--unavailable{
   margin-top: 1px;
 }
 .activityRowThumb{
-  flex: 0 0 44px;
-  width: 44px;
-  height: 44px;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -38115,41 +38195,39 @@ button.activityRow--unavailable{
 }
 .activityRowCover{
   display: block;
-  width: 44px;
-  height: 44px;
-  border-radius: 6px;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--nabad-squircle-radius);
   object-fit: cover;
   background: rgba(255,255,255,0.06);
+  border: 1px solid var(--nabad-glass-border);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 .activityRowCoverPlaceholder,
 .activityRowLeadPlaceholder{
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 6px;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--nabad-squircle-radius);
   background:
     linear-gradient(145deg, rgba(124,92,255,0.18), rgba(45,212,191,0.12)),
     rgba(255,255,255,0.04);
+  border: 1px solid var(--nabad-glass-border);
   color: rgba(167,139,250,0.9);
   font-size: 16px;
 }
 .activityRowUnreadDot{
-  flex: 0 0 8px;
-  width: 8px;
-  height: 8px;
-  margin-left: -2px;
-  align-self: center;
-  border-radius: 50%;
-  background: #2dd4bf;
-  box-shadow: 0 0 10px rgba(45,212,191,0.45);
+  display: none;
 }
 /* Legacy aliases kept for notifications center + skeleton paths */
-.activityRowArtWrap{ position: relative; flex: 0 0 44px; width: 44px; height: 44px; }
+.activityRowArtWrap{ position: relative; flex: 0 0 48px; width: 48px; height: 48px; }
 .activityRowArt{
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   object-fit: cover;
   background: rgba(255,255,255,0.06);
@@ -38160,9 +38238,9 @@ button.activityRow--unavailable{
 .activityRowTitle,
 .activityRowDesc{ display: none; }
 .activityRowAvatarWrap.activityRowArtWrap,
-.activityRowAvatarWrap{ position: relative; flex: 0 0 44px; width: 44px; height: 44px; }
+.activityRowAvatarWrap{ position: relative; flex: 0 0 48px; width: 48px; height: 48px; }
 .activityRowAvatarWrap .activityRowAvatar,
-.activityRowAvatarWrap .activityRowArt{ width: 44px; height: 44px; border-radius: 50%; }
+.activityRowAvatarWrap .activityRowArt{ width: 48px; height: 48px; border-radius: 50%; }
 .activityRowAvatarWrap .activityRowAvatar.activityAvatarSilhouette,
 .activityRowAvatarWrap .activityRowArt.activityAvatarSilhouette{ display: flex; align-items: center; justify-content: center; }
 .activityRowAvatarWrap .activityAvatarSilhouette svg,
@@ -51636,8 +51714,40 @@ html[data-theme="light"] .activityFilterBtn.is-active{
   color: var(--text-primary);
 }
 html[data-theme="light"] .activityRow{
+  border-color: transparent;
   background: transparent;
   color: var(--text-primary);
+}
+@media (hover: hover) and (pointer: fine){
+  html[data-theme="light"] .activityRow:hover,
+  html[data-theme="light"] .activityRow:focus-visible{
+    border-color: var(--nabad-glass-border);
+    background: var(--nabad-glass-bg);
+  }
+}
+@media (hover: none), (pointer: coarse){
+  html[data-theme="light"] .activityRow:hover,
+  html[data-theme="light"] .activityRow:active,
+  html[data-theme="light"] .activityRow:focus,
+  html[data-theme="light"] .activityRow:focus-visible{
+    border-color: transparent;
+    background: transparent;
+  }
+  html[data-theme="light"] .activityRow.isUnread:hover,
+  html[data-theme="light"] .activityRow.isUnread:active,
+  html[data-theme="light"] .activityRow.isUnread:focus,
+  html[data-theme="light"] .activityRow.isUnread:focus-visible{
+    border-color: var(--nabad-glass-border);
+    background: var(--nabad-glass-bg);
+  }
+}
+html[data-theme="light"] .activityRow.is-pressing{
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+}
+html[data-theme="light"] .activityRow.isUnread{
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
 }
 html[data-theme="light"] .activityRowText,
 html[data-theme="light"] .activityRow.isUnread .activityRowText,
@@ -51683,8 +51793,11 @@ html[data-theme="light"] .activityRowLeadPlaceholder{
 html[data-theme="light"] .activityRowSkel .activitySkelLine{
   background: rgba(15, 23, 42, 0.08);
 }
-html[data-theme="light"] .activityRowAvatar{
+html[data-theme="light"] .activityRowAvatar,
+html[data-theme="light"] .activityRowCover,
+html[data-theme="light"] .activityRowSongTile{
   background: var(--surface-secondary);
+  border-color: var(--nabad-glass-border);
 }
 html[data-theme="light"] .activityRowSongTile--placeholder,
 html[data-theme="light"] .activityRowSongTile--icon{
@@ -58158,7 +58271,7 @@ html[data-theme="light"] .modalCard{
 
 /* Activity — actor links + art placeholders (titles/times fixed above) */
 html[data-theme="light"] .activityRow:active{
-  background: var(--surface-secondary);
+  background: transparent;
 }
 html[data-theme="light"] .activityRowActorLink{
   color: var(--link-accent);

@@ -1977,11 +1977,26 @@
           <div id="messagesThreadMount" class="messagesThreadMount" aria-live="polite"></div>
           <footer class="messagesComposer">
             <button type="button" class="messagesComposerAttach" id="messagesComposerAttach" aria-label="More send options" aria-haspopup="dialog" aria-controls="messagesComposerSheet">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+              <svg class="messagesComposerAttachIco messagesComposerAttachIco--plus" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+              <svg class="messagesComposerAttachIco messagesComposerAttachIco--cancel" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
             </button>
             <textarea id="messagesComposerInput" class="messagesComposerInput" rows="1" maxlength="500" dir="auto" placeholder="Write a message…" aria-label="Message" autocorrect="off" autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="enter"></textarea>
+            <div id="messagesVoiceComposer" class="messagesVoiceComposer" hidden>
+              <div class="messagesVoiceDrop messagesVoiceDrop--composer is-mine" id="messagesVoiceComposerPill">
+                <button type="button" class="messagesVoiceDropPlay" id="messagesVoiceComposerPlay" aria-label="Stop recording">
+                  <span class="messagesVoiceDropPlayDisc" aria-hidden="true">
+                    <svg class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--play" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M9 7.5v9l7.5-4.5z"/></svg>
+                    <svg class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--pause" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7 6h3v12H7zm7 0h3v12h-3z"/></svg>
+                    <span class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--stop"></span>
+                  </span>
+                </button>
+                <div class="messagesVoiceDropWave" id="messagesVoiceComposerWave" aria-hidden="true"></div>
+                <span class="messagesVoiceDropDur" id="messagesVoiceComposerDur">0:00</span>
+              </div>
+            </div>
             <button type="button" class="messagesComposerSend" id="messagesComposerSend" aria-label="Send message">
-              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3.4 20.6 22 12 3.4 3.4l2.8 7.2L17 12l-10.8 1.4-2.8 7.2Z"/></svg>
+              <svg class="messagesComposerSendIco messagesComposerSendIco--send" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3.4 20.6 22 12 3.4 3.4l2.8 7.2L17 12l-10.8 1.4-2.8 7.2Z"/></svg>
+              <svg class="messagesComposerSendIco messagesComposerSendIco--mic" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/><path fill="currentColor" d="M19 11a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-3.08A7 7 0 0 0 19 11Z"/></svg>
             </button>
           </footer>
         </section>
@@ -5231,35 +5246,6 @@
               <span>Apply your plan to Generate</span>
             </span>
           </button>
-        </div>
-      </section>
-    </div>
-
-    <div id="messagesVoiceDropSheet" class="messagesVoiceDropSheet messagesShareSheet" hidden aria-hidden="true">
-      <div class="messagesShareSheetBackdrop" id="messagesVoiceDropBackdrop"></div>
-      <section class="messagesVoiceDropCard messagesShareSheetCard" role="dialog" aria-modal="true" aria-labelledby="messagesVoiceDropTitle">
-        <header class="messagesShareSheetHead">
-          <h2 id="messagesVoiceDropTitle" class="messagesShareSheetTitle">Voice drop</h2>
-          <button type="button" class="messagesShareSheetClose" id="messagesVoiceDropClose" aria-label="Close">×</button>
-        </header>
-        <p class="messagesVoiceDropLead">Say it, hum it, drop it — not another chat voice note.</p>
-        <div class="voiceDropStage" aria-live="polite">
-          <svg class="voiceDropProgressSvg" viewBox="0 0 120 120" aria-hidden="true">
-            <circle class="voiceDropProgressTrack" cx="60" cy="60" r="52" fill="none" stroke-width="3"/>
-            <circle class="voiceDropProgressRing" id="voiceDropProgressRing" cx="60" cy="60" r="52" fill="none" stroke-width="3" stroke-linecap="round" transform="rotate(-90 60 60)"/>
-          </svg>
-          <div class="voiceDropBloom" id="voiceDropBloom" aria-hidden="true"></div>
-          <button type="button" class="voiceDropOrb" id="voiceDropOrb" aria-label="Start voice drop">
-            <span class="voiceDropOrbGlow" aria-hidden="true"></span>
-            <span class="voiceDropOrbCore" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/><path fill="currentColor" d="M19 11a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-3.08A7 7 0 0 0 19 11Z"/></svg>
-            </span>
-          </button>
-        </div>
-        <p class="voiceDropStatus" id="voiceDropStatus">Tap the orb to capture your drop</p>
-        <div class="voiceDropActions" id="voiceDropActions" hidden>
-          <button type="button" class="voiceDropBtn voiceDropBtn--ghost" id="voiceDropDiscard">Re-drop</button>
-          <button type="button" class="voiceDropBtn voiceDropBtn--send" id="voiceDropSend">Send drop</button>
         </div>
       </section>
     </div>

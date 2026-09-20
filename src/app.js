@@ -63,8 +63,11 @@ import {
 import { initEcho, openEchoFromCreateChooser } from "./echo.js";
 import {
   initDmVoiceDrop,
-  openDmVoiceDropSheet,
   closeDmVoiceDropSheet,
+  startComposerVoiceDrop,
+  sendComposerVoiceDrop,
+  discardComposerVoiceDrop,
+  isComposerVoiceActive,
   messagesVoiceDropBubbleHtml,
   formatDmVoiceInboxPreview,
   handleVoiceDropBubbleClick,
@@ -5259,7 +5262,10 @@ function syncRoutePanelVisibility(wanted) {
   if (route !== "generate") clearCreatePageKeyboardInset();
   if (route !== "auth") clearAuthKeyboardInset();
   document.body.setAttribute("data-route", route);
-  if (route !== "messages-thread") setMessagesThreadHeadCollapsed(false);
+  if (route !== "messages-thread") {
+    setMessagesThreadHeadCollapsed(false);
+    closeDmVoiceDropSheet();
+  }
   if (route !== "discover") {
     _discoverHeroVisitKey = "";
     stopDiscoverHeroAutoSlide();
@@ -8387,6 +8393,8 @@ try {
     closeMessagesComposerSheet,
     feedbackMessagesComposerSend,
     refreshMessagesUnreadBadge,
+    syncMessagesThreadComposerReady,
+    updateMessagesComposerReserve,
   });
 } catch {}
 try {
@@ -36067,9 +36075,23 @@ function syncMessagesThreadComposerReady() {
   const sendBtn = document.getElementById("messagesComposerSend");
   const attachBtn = document.getElementById("messagesComposerAttach");
   const ready = Boolean(String(_conversationId || "").trim());
-  if (input) input.disabled = !ready;
-  if (sendBtn) sendBtn.disabled = !ready;
-  if (attachBtn) attachBtn.disabled = !ready;
+  const coach = isCoachThreadId(_conversationId);
+  const voice = isComposerVoiceActive();
+  const empty = !String(input?.value || "").trim();
+  if (input) input.disabled = !ready || voice;
+  if (sendBtn) {
+    sendBtn.disabled = !ready;
+    sendBtn.classList.toggle("messagesComposerSend--mic", ready && empty && !voice && !coach);
+    sendBtn.setAttribute(
+      "aria-label",
+      voice ? "Send voice" : (ready && empty && !coach ? "Record voice" : "Send message"),
+    );
+  }
+  if (attachBtn) {
+    attachBtn.disabled = !ready;
+    attachBtn.classList.toggle("messagesComposerAttach--cancel", voice);
+    attachBtn.setAttribute("aria-label", voice ? "Delete voice" : (coach ? "Coach actions" : "More send options"));
+  }
 }
 
 let _messagesThreadKeyboardOpen = false;
@@ -40400,6 +40422,7 @@ async function bootstrapMessagesThread({ bootToken, threadId, targetUserId }) {
 }
 
 function enterMessagesThreadRoute(threadId, targetUserId = "") {
+  closeDmVoiceDropSheet();
   const pref = readMessagesNavPrefetch();
   const bootToken = ++_messagesThreadBootToken;
   const tid = String(threadId || pref?.threadId || "").trim();
@@ -42674,6 +42697,7 @@ function renderCoachChatHeader() {
 }
 
 function enterCoachThread(bootToken) {
+  closeDmVoiceDropSheet();
   _messagesThreadNeedsInitialScroll = true;
   _conversationId = COACH_THREAD_ID;
   _messagesThreadHeadLastScrollTop = 0;
@@ -42940,6 +42964,10 @@ function coachInboxRowHtml() {
 }
 
 function sendCurrentThreadMessage() {
+  if (isComposerVoiceActive()) {
+    void sendComposerVoiceDrop();
+    return;
+  }
   const input = document.getElementById("messagesComposerInput");
   const text = String(input?.value || "").trim();
   if (isCoachThreadId(_conversationId)) {
@@ -42964,6 +42992,7 @@ function sendCurrentThreadMessage() {
   _lastTypingSentAt = 0;
   applyUserTextInputDir(input);
   syncMessagesComposerInputHeight(input);
+  syncMessagesThreadComposerReady();
   addOptimisticThreadMessage(optimistic);
   patchInboxFromOutgoingMessage({
     threadId,
@@ -43230,7 +43259,22 @@ function bindMessagesPageOnce() {
     const sendBtn = e.target.closest("#messagesComposerSend");
     if (sendBtn) {
       e.preventDefault();
+      if (isComposerVoiceActive()) {
+        void sendComposerVoiceDrop();
+        return;
+      }
+      if (sendBtn.classList.contains("messagesComposerSend--mic")) {
+        try { haptic("light"); } catch {}
+        startComposerVoiceDrop();
+        return;
+      }
       sendCurrentThreadMessage();
+      return;
+    }
+    const voicePill = e.target.closest("#messagesVoiceComposerPill");
+    if (voicePill) {
+      e.preventDefault();
+      handleVoiceDropBubbleClick(e.target);
       return;
     }
     const retryBtn = e.target.closest("[data-retry-client-msg]");
@@ -43242,6 +43286,11 @@ function bindMessagesPageOnce() {
     const attachBtn = e.target.closest("#messagesComposerAttach");
     if (attachBtn) {
       e.preventDefault();
+      if (isComposerVoiceActive()) {
+        try { haptic("light"); } catch {}
+        discardComposerVoiceDrop();
+        return;
+      }
       try { haptic("light"); } catch {}
       syncCoachComposerSheet();
       closeMessagesThreadMoreSheet();
@@ -43298,7 +43347,7 @@ function bindMessagesPageOnce() {
       if (action === "voice" && !composerAction.disabled) {
         try { haptic("light"); } catch {}
         closeMessagesComposerSheet();
-        openDmVoiceDropSheet();
+        startComposerVoiceDrop();
       }
       return;
     }
@@ -43381,8 +43430,9 @@ function bindMessagesPageOnce() {
       applyUserTextInputDir(composer);
       syncMessagesComposerInputHeight(composer);
       updateMessagesComposerReserve();
+      maybeSendDmTypingPulse();
+      syncMessagesThreadComposerReady();
       scrollMessagesMountToBottom({ force: true });
-      void maybeSendDmTypingPulse();
     });
     composer.addEventListener("paste", (e) => {
       const raw = e.clipboardData?.getData("text/plain");
@@ -43392,6 +43442,8 @@ function bindMessagesPageOnce() {
       applyUserTextInputDir(composer);
       syncMessagesComposerInputHeight(composer);
       updateMessagesComposerReserve();
+      maybeSendDmTypingPulse();
+      syncMessagesThreadComposerReady();
       scrollMessagesMountToBottom({ force: true });
     });
     composer.addEventListener("focus", () => {

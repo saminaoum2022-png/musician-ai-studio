@@ -1,6 +1,5 @@
 /**
- * DM Voice Drop — radial "sound bloom" recorder + arc-spectrum playback bubbles.
- * Not a WhatsApp/IG waveform bar; Nabad-native voice drops for musician DMs.
+ * DM Voice Drop — record in the composer glass pill, send the same capsule into chat.
  */
 
 import {
@@ -15,6 +14,7 @@ export const DM_VOICE_MAX_MS = 30000;
 export const DM_VOICE_MAX_BYTES = 512 * 1024;
 export const DM_VOICE_BLOOM_BARS = 12;
 export const DM_VOICE_ARC_BARS = 9;
+export const DM_VOICE_WAVE_BARS = 24;
 
 let _deps = {};
 let _recState = "idle";
@@ -36,6 +36,7 @@ let _playingRaf = 0;
 const _voicePlayBlobCache = new Map();
 let _nativeRec = false;
 let _sendInFlight = false;
+let _stopResolvers = [];
 
 function d() {
   return _deps;
@@ -127,82 +128,95 @@ async function computePeaksFromBlob(blob, barCount = 52) {
   }
 }
 
-function liveBloomHeights() {
+function liveWaveHeights() {
   if (_nativeRec && _recState === "recording") {
     const t = performance.now() / 180;
-    const raw = Array.from({ length: DM_VOICE_BLOOM_BARS }, (_, i) => {
-      const w = 0.28 + Math.abs(Math.sin(t + i * 0.85)) * 0.62;
+    const raw = Array.from({ length: DM_VOICE_WAVE_BARS }, (_, i) => {
+      const w = 0.28 + Math.abs(Math.sin(t + i * 0.55)) * 0.62;
       return w;
     });
-    return normalizeVoicePeaks(raw, DM_VOICE_BLOOM_BARS);
+    return normalizeVoicePeaks(raw, DM_VOICE_WAVE_BARS);
   }
   if (!_composeAnalyser || _recState !== "recording") {
-    return normalizeVoicePeaks(_peaks, DM_VOICE_BLOOM_BARS);
+    return normalizeVoicePeaks(_peaks, DM_VOICE_WAVE_BARS);
   }
   const data = new Uint8Array(_composeAnalyser.frequencyBinCount);
   _composeAnalyser.getByteFrequencyData(data);
-  const step = Math.max(1, Math.floor(data.length / DM_VOICE_BLOOM_BARS));
+  const step = Math.max(1, Math.floor(data.length / DM_VOICE_WAVE_BARS));
   const raw = [];
-  for (let i = 0; i < DM_VOICE_BLOOM_BARS; i++) {
+  for (let i = 0; i < DM_VOICE_WAVE_BARS; i++) {
     let sum = 0;
     const base = i * step;
     for (let j = 0; j < step; j++) sum += data[base + j] || 0;
     raw.push(sum / step / 255);
   }
-  return normalizeVoicePeaks(raw, DM_VOICE_BLOOM_BARS);
+  return normalizeVoicePeaks(raw, DM_VOICE_WAVE_BARS);
 }
 
-function renderBloom({ live = false } = {}) {
-  const mount = document.getElementById("voiceDropBloom");
-  if (!mount) return;
-  const heights = live ? liveBloomHeights() : normalizeVoicePeaks(_peaks, DM_VOICE_BLOOM_BARS);
-  mount.classList.toggle("is-live", live);
-  mount.innerHTML = heights.map((h, i) => {
-    const ht = Math.max(0.15, Math.min(1, Number(h) || 0.25));
-    return `<span class="voiceDropBloomBar" style="--i:${i};--h:${ht.toFixed(3)}"></span>`;
-  }).join("");
+function renderComposerWave({ live = false } = {}) {
+  const wave = document.getElementById("messagesVoiceComposerWave");
+  if (!wave) return;
+  const heights = live ? liveWaveHeights() : normalizeVoicePeaks(_peaks, DM_VOICE_WAVE_BARS);
+  const bars = wave.querySelectorAll(".messagesVoiceDropBar");
+  if (bars.length !== heights.length) {
+    wave.innerHTML = heights.map((h, i) => {
+      const ht = Math.max(0.28, Math.min(1, Number(h) || 0.4));
+      return `<span class="messagesVoiceDropBar" style="--h:${ht.toFixed(3)}" data-bar="${i}"></span>`;
+    }).join("");
+    return;
+  }
+  bars.forEach((bar, i) => {
+    const ht = Math.max(0.28, Math.min(1, Number(heights[i]) || 0.4));
+    bar.style.setProperty("--h", ht.toFixed(3));
+  });
 }
 
-function syncProgressRing() {
-  const ring = document.getElementById("voiceDropProgressRing");
-  if (!ring) return;
-  const pct = _recState === "recording"
-    ? Math.min(1, (performance.now() - _startedAt) / DM_VOICE_MAX_MS)
-    : _durationMs > 0
-      ? Math.min(1, _durationMs / DM_VOICE_MAX_MS)
-      : 0;
-  const circumference = 2 * Math.PI * 52;
-  ring.style.strokeDasharray = `${circumference}`;
-  ring.style.strokeDashoffset = `${circumference * (1 - pct)}`;
+function notifyVoiceStopped() {
+  const fns = _stopResolvers.splice(0, _stopResolvers.length);
+  fns.forEach((fn) => {
+    try { fn(); } catch {}
+  });
+}
+
+export function isComposerVoiceActive() {
+  return _recState === "recording" || _recState === "ready";
 }
 
 function syncVoiceDropUi() {
-  const sheet = document.getElementById("messagesVoiceDropSheet");
-  const status = document.getElementById("voiceDropStatus");
-  const actions = document.getElementById("voiceDropActions");
-  const orb = document.getElementById("voiceDropOrb");
-  const hasBlob = Boolean(_blob?.size);
   const recording = _recState === "recording";
-  if (sheet) sheet.classList.toggle("is-recording", recording);
-  if (sheet) sheet.classList.toggle("is-ready", hasBlob && !recording);
-  if (orb) {
-    orb.classList.toggle("is-recording", recording);
-    orb.classList.toggle("is-ready", hasBlob && !recording);
-    orb.setAttribute("aria-label", recording ? "Stop recording" : hasBlob ? "Play preview" : "Start voice drop");
+  const hasBlob = Boolean(_blob?.size) && !recording;
+  const active = recording || hasBlob || _recState === "ready";
+  const dock = document.getElementById("messagesVoiceComposer");
+  const pill = document.getElementById("messagesVoiceComposerPill");
+  const play = document.getElementById("messagesVoiceComposerPlay");
+  const durEl = document.getElementById("messagesVoiceComposerDur");
+  document.body.classList.toggle("messagesVoiceComposing", active);
+  if (dock) dock.hidden = !active;
+  if (pill) {
+    pill.classList.toggle("is-recording", recording);
+    pill.classList.toggle("is-ready", hasBlob);
+    const url = String(_blobUrl || "");
+    if (url) pill.setAttribute("data-voice-url", url);
+    else pill.removeAttribute("data-voice-url");
   }
-  if (status) {
-    const fmt = d().formatMsAsVoiceTime || ((ms) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`);
-    if (recording) {
-      status.textContent = `Capturing… ${fmt(performance.now() - _startedAt)} · ${fmt(DM_VOICE_MAX_MS)}`;
-    } else if (hasBlob) {
-      status.textContent = `Ready · ${fmt(_durationMs)} — tap Send drop`;
-    } else {
-      status.textContent = "Tap the orb to capture your drop";
-    }
+  if (play) {
+    play.setAttribute("aria-label", recording ? "Stop recording" : "Preview voice");
   }
-  if (actions) actions.hidden = !hasBlob || recording;
-  renderBloom({ live: recording });
-  syncProgressRing();
+  if (durEl) {
+    const ms = recording ? Math.max(0, performance.now() - _startedAt) : _durationMs;
+    durEl.textContent = formatDurationSec(ms / 1000);
+  }
+  renderComposerWave({ live: recording });
+  try { d().syncMessagesThreadComposerReady?.(); } catch {}
+  try { d().updateMessagesComposerReserve?.(); } catch {}
+}
+
+function tickComposerRecordingUi() {
+  const durEl = document.getElementById("messagesVoiceComposerDur");
+  if (durEl) {
+    durEl.textContent = formatDurationSec(Math.max(0, performance.now() - _startedAt) / 1000);
+  }
+  renderComposerWave({ live: true });
 }
 
 function stopVisualizer() {
@@ -289,6 +303,7 @@ function resetRecording() {
     _blobUrl = "";
   }
   syncVoiceDropUi();
+  notifyVoiceStopped();
 }
 
 export function buildDmVoicePayload({ url, key, durationSec, peaks } = {}) {
@@ -413,10 +428,10 @@ async function togglePreviewPlayback() {
   const audio = createVoiceDropAudio(_blobUrl);
   _playingAudio = audio;
   _playingId = "preview";
-  const orb = document.getElementById("voiceDropOrb");
-  orb?.classList.add("is-playing");
+  const pill = document.getElementById("messagesVoiceComposerPill");
+  pill?.classList.add("is-playing");
   audio.onended = () => {
-    orb?.classList.remove("is-playing");
+    pill?.classList.remove("is-playing");
     stopPreviewPlayback();
   };
   try {
@@ -459,13 +474,13 @@ async function finishNativeRecording() {
       syncVoiceDropUi();
     });
     try { d().haptic?.("success"); } catch {}
-    d().showToast?.(`Drop ready · ${Math.round(blob.size / 1024)} KB`, { durationMs: 1800 });
   } catch (e) {
     _recState = "idle";
     syncVoiceDropUi();
     d().showToast?.(String(e?.message || "Recording failed — try again."), { durationMs: 3200 });
   } finally {
     _nativeRec = false;
+    notifyVoiceStopped();
   }
 }
 
@@ -485,8 +500,7 @@ async function startRecording() {
       try { d().haptic?.("medium"); } catch {}
       const tick = () => {
         if (_recState !== "recording") return;
-        renderBloom({ live: true });
-        syncVoiceDropUi();
+        tickComposerRecordingUi();
         if (performance.now() - _startedAt < DM_VOICE_MAX_MS) {
           _tickRaf = requestAnimationFrame(tick);
         }
@@ -544,18 +558,21 @@ async function startRecording() {
     if (!blob.size) {
       _recState = "idle";
       syncVoiceDropUi();
+      notifyVoiceStopped();
       d().showToast?.("Empty drop — try again.", { durationMs: 2400 });
       return;
     }
     if (blob.size < minBytes) {
       _recState = "idle";
       syncVoiceDropUi();
+      notifyVoiceStopped();
       d().showToast?.(`Recording failed (${blob.size} bytes) — try again.`, { durationMs: 3200 });
       return;
     }
     if (blob.size > DM_VOICE_MAX_BYTES) {
       _recState = "idle";
       syncVoiceDropUi();
+      notifyVoiceStopped();
       d().showToast?.("Drop too large — keep it under 30s.", { durationMs: 2800 });
       return;
     }
@@ -569,6 +586,7 @@ async function startRecording() {
       syncVoiceDropUi();
     });
     try { d().haptic?.("success"); } catch {}
+    notifyVoiceStopped();
   };
   _stream = stream;
   _recorder = rec;
@@ -593,8 +611,7 @@ async function startRecording() {
   try { d().haptic?.("medium"); } catch {}
   const tick = () => {
     if (_recState !== "recording") return;
-    renderBloom({ live: true });
-    syncVoiceDropUi();
+    tickComposerRecordingUi();
     if (performance.now() - _startedAt < DM_VOICE_MAX_MS) {
       _tickRaf = requestAnimationFrame(tick);
     }
@@ -617,12 +634,11 @@ function stopRecording() {
   try { _recorder.stop(); } catch {}
 }
 
-function arcBarsHtml(peaks, { playing = false } = {}) {
-  const heights = normalizeVoicePeaks(peaks, DM_VOICE_ARC_BARS);
+function waveBarsHtml(peaks) {
+  const heights = normalizeVoicePeaks(peaks, DM_VOICE_WAVE_BARS);
   return heights.map((h, i) => {
-    const ht = Math.max(0.12, Math.min(1, Number(h) || 0.2));
-    const rot = -36 + i * 9;
-    return `<span class="messagesVoiceDropBar" style="--rot:${rot}deg;--h:${ht.toFixed(3)}" data-bar="${i}"></span>`;
+    const ht = Math.max(0.28, Math.min(1, Number(h) || 0.4));
+    return `<span class="messagesVoiceDropBar" style="--h:${ht.toFixed(3)}" data-bar="${i}"></span>`;
   }).join("");
 }
 
@@ -631,21 +647,18 @@ export function messagesVoiceDropBubbleHtml(parsed, { mine = false, msgId = "" }
   const storageKey = escapeAttr(parsed?.storageKey || voiceDropKeyFromUrl(parsed?.url) || "");
   const dur = Math.max(0, Number(parsed?.durationSec) || 0);
   const durLabel = formatDurationSec(dur);
-  const peaksJson = escapeAttr(JSON.stringify(normalizeVoicePeaks(parsed?.peaks, DM_VOICE_ARC_BARS)));
+  const peaksJson = escapeAttr(JSON.stringify(normalizeVoicePeaks(parsed?.peaks, DM_VOICE_WAVE_BARS)));
   const id = escapeAttr(String(msgId || ""));
   return `
     <div class="messagesVoiceDrop${mine ? " is-mine" : ""}" data-voice-drop="${id}" data-voice-url="${url}" data-voice-key="${storageKey}" data-voice-peaks="${peaksJson}" data-voice-dur="${dur}">
       <button type="button" class="messagesVoiceDropPlay" aria-label="Play voice drop">
-        <span class="messagesVoiceDropPlayHex" aria-hidden="true">
-          <svg class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--play" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M9 7.5v9l7.5-4.5z"/></svg>
-          <svg class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--pause" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M7 6h3v12H7zm7 0h3v12h-3z"/></svg>
+        <span class="messagesVoiceDropPlayDisc" aria-hidden="true">
+          <svg class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--play" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M9 7.5v9l7.5-4.5z"/></svg>
+          <svg class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--pause" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7 6h3v12H7zm7 0h3v12h-3z"/></svg>
         </span>
       </button>
-      <div class="messagesVoiceDropArc" aria-hidden="true">${arcBarsHtml(parsed?.peaks)}</div>
-      <div class="messagesVoiceDropMeta">
-        <span class="messagesVoiceDropLabel">Voice drop</span>
-        <span class="messagesVoiceDropDur">${durLabel}</span>
-      </div>
+      <div class="messagesVoiceDropWave" aria-hidden="true">${waveBarsHtml(parsed?.peaks)}</div>
+      <span class="messagesVoiceDropDur">${durLabel}</span>
     </div>`;
 }
 
@@ -716,33 +729,47 @@ export async function toggleVoiceDropPlayback(card) {
   }
 }
 
-export function openDmVoiceDropSheet() {
-  const sheet = document.getElementById("messagesVoiceDropSheet");
-  if (!sheet) return;
-  resetRecording();
-  sheet.hidden = false;
-  sheet.setAttribute("aria-hidden", "false");
-  document.body.classList.add("messagesVoiceDropOpen");
-  syncVoiceDropUi();
+export function startComposerVoiceDrop() {
+  if (_recState === "recording" || _recState === "ready") return;
+  try { document.getElementById("messagesComposerInput")?.blur(); } catch {}
+  d().closeMessagesComposerSheet?.();
+  void startRecording();
 }
 
-export function closeDmVoiceDropSheet({ skipReset = false, animate = false } = {}) {
+export function openDmVoiceDropSheet() {
+  startComposerVoiceDrop();
+}
+
+export function closeDmVoiceDropSheet({ skipReset = false } = {}) {
   stopPreviewPlayback();
   if (!skipReset) resetRecording();
-  const sheet = document.getElementById("messagesVoiceDropSheet");
-  if (!sheet) return;
-  const finish = () => {
-    sheet.hidden = true;
-    sheet.setAttribute("aria-hidden", "true");
-    sheet.classList.remove("is-closing");
-    document.body.classList.remove("messagesVoiceDropOpen");
-  };
-  if (animate && !sheet.hidden) {
-    sheet.classList.add("is-closing");
-    window.setTimeout(finish, 220);
-    return;
-  }
-  finish();
+  document.body.classList.remove("messagesVoiceComposing");
+  const dock = document.getElementById("messagesVoiceComposer");
+  if (dock) dock.hidden = true;
+  try { d().syncMessagesThreadComposerReady?.(); } catch {}
+  try { d().updateMessagesComposerReserve?.(); } catch {}
+}
+
+export function discardComposerVoiceDrop() {
+  closeDmVoiceDropSheet({ skipReset: false });
+}
+
+async function stopRecordingAndWait() {
+  if (_recState !== "recording") return;
+  const waited = new Promise((resolve) => {
+    _stopResolvers.push(resolve);
+  });
+  stopRecording();
+  await Promise.race([
+    waited,
+    new Promise((resolve) => window.setTimeout(resolve, 4000)),
+  ]);
+}
+
+export async function sendComposerVoiceDrop() {
+  if (_recState === "recording") await stopRecordingAndWait();
+  if (_recState !== "ready") return;
+  await sendVoiceDrop();
 }
 
 function clearVoiceDropAfterSend(localPlayUrl) {
@@ -821,13 +848,13 @@ async function sendVoiceDropInBackground({ clientMessageId, threadId, blob, dura
 
 async function sendVoiceDrop() {
   const threadId = String(d().getThreadId?.() || "").trim();
-  const sendBtn = document.getElementById("voiceDropSend");
+  const sendBtn = document.getElementById("messagesComposerSend");
   if (!threadId) {
     d().showToast?.("Open a chat first.", { durationMs: 2600 });
     return;
   }
   if (!_blob?.size || _blob.size < 800) {
-    d().showToast?.("Record a voice drop first (preview it before sending).", { durationMs: 2800 });
+    d().showToast?.("Record a little longer, then send.", { durationMs: 2800 });
     return;
   }
   if (_sendInFlight || sendBtn?.getAttribute("aria-busy") === "true") return;
@@ -854,7 +881,6 @@ async function sendVoiceDrop() {
 
   _sendInFlight = true;
   sendBtn?.setAttribute("aria-busy", "true");
-  if (sendBtn) sendBtn.textContent = "Sending…";
 
   d().feedbackMessagesComposerSend?.();
   d().addOptimisticThreadMessage?.(optimistic);
@@ -865,7 +891,7 @@ async function sendVoiceDrop() {
   });
 
   clearVoiceDropAfterSend(localPlayUrl);
-  closeDmVoiceDropSheet({ skipReset: true, animate: true });
+  closeDmVoiceDropSheet({ skipReset: true });
   d().closeMessagesComposerSheet?.();
 
   void sendVoiceDropInBackground({
@@ -877,32 +903,24 @@ async function sendVoiceDrop() {
   });
 
   sendBtn?.removeAttribute("aria-busy");
-  if (sendBtn) sendBtn.textContent = "Send drop";
 }
 
 export function initDmVoiceDrop(deps = {}) {
   _deps = { ...deps };
   if (document.documentElement.dataset.dmVoiceDropWired) return;
   document.documentElement.dataset.dmVoiceDropWired = "1";
-
-  document.getElementById("messagesVoiceDropClose")?.addEventListener("click", closeDmVoiceDropSheet);
-  document.getElementById("messagesVoiceDropBackdrop")?.addEventListener("click", closeDmVoiceDropSheet);
-  document.getElementById("voiceDropDiscard")?.addEventListener("click", () => {
-    try { d().haptic?.("light"); } catch {}
-    resetRecording();
-  });
-  document.getElementById("voiceDropSend")?.addEventListener("click", () => void sendVoiceDrop());
-  document.getElementById("voiceDropOrb")?.addEventListener("click", () => {
-    if (_recState === "recording") stopRecording();
-    else if (_recState === "ready" && _blobUrl) void togglePreviewPlayback();
-    else void startRecording();
-  });
 }
 
 export function handleVoiceDropBubbleClick(target) {
-  const playBtn = target?.closest?.(".messagesVoiceDropPlay");
+  const composer = target?.closest?.("#messagesVoiceComposerPill");
+  if (composer) {
+    if (_recState === "recording") stopRecording();
+    else if (_recState === "ready" && _blobUrl) void togglePreviewPlayback();
+    try { d().haptic?.("light"); } catch {}
+    return true;
+  }
   const card = target?.closest?.(".messagesVoiceDrop");
-  if (!playBtn || !card) return false;
+  if (!card) return false;
   void toggleVoiceDropPlayback(card);
   try { d().haptic?.("light"); } catch {}
   return true;

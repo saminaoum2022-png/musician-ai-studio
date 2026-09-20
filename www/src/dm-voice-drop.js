@@ -450,10 +450,10 @@ async function finishNativeRecording() {
     const result = await stopNativeVoiceDropRecording();
     const blob = await blobFromNativeVoiceResult(result);
     if (!blob?.size) throw new Error("Native recording missing audio data");
-    const recordedMs = Math.min(
-      DM_VOICE_MAX_MS,
-      Math.max(400, Math.round(Number(result?.durationSec || 0) * 1000) || (performance.now() - _startedAt)),
-    );
+    const elapsedMs = Math.max(400, Math.round(performance.now() - _startedAt));
+    const nativeMs = Math.round(Number(result?.durationSec || 0) * 1000);
+    const nativeLooksRight = nativeMs >= 400 && Math.abs(nativeMs - elapsedMs) <= 1500;
+    const recordedMs = Math.min(DM_VOICE_MAX_MS, nativeLooksRight ? nativeMs : elapsedMs);
     const minBytes = minBytesForVoiceDrop(recordedMs, blob.size);
     if (!blob.size || blob.size < minBytes) {
       throw new Error(`Recording too short (${blob.size || 0} bytes) — try again.`);

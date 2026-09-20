@@ -68,6 +68,7 @@ import {
   sendComposerVoiceDrop,
   discardComposerVoiceDrop,
   isComposerVoiceActive,
+  warmupComposerVoice,
   messagesVoiceDropBubbleHtml,
   formatDmVoiceInboxPreview,
   handleVoiceDropBubbleClick,
@@ -8395,6 +8396,7 @@ try {
     refreshMessagesUnreadBadge,
     syncMessagesThreadComposerReady,
     updateMessagesComposerReserve,
+    cancelMessagesComposerAutofocus: () => { _messagesComposerAutofocusToken += 1; },
   });
 } catch {}
 try {
@@ -36074,7 +36076,7 @@ function syncMessagesThreadComposerReady() {
   const input = document.getElementById("messagesComposerInput");
   const sendBtn = document.getElementById("messagesComposerSend");
   const attachBtn = document.getElementById("messagesComposerAttach");
-  const ready = Boolean(String(_conversationId || "").trim());
+  const ready = Boolean(String(_conversationId || "").trim() || String(_chatHeaderUser?.userId || "").trim());
   const coach = isCoachThreadId(_conversationId);
   const voice = isComposerVoiceActive();
   const empty = !String(input?.value || "").trim();
@@ -40522,6 +40524,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   syncMessagesThreadViewportLayout();
   scheduleMessagesThreadScrollToBottom({ force: true });
   beginMessagesThreadEnterTransition();
+  warmupComposerVoice();
   if (tid) void markThreadReadQuiet(tid, { readDelayMs: DM_READ_MARK_DELAY_MS });
   startMessagesInboxRealtime();
   _chatPartnerPresence = { status: "idle" };
@@ -43145,6 +43148,34 @@ async function openMessagesThreadFromInbox(threadId) {
   });
 }
 
+function shouldRecordFromComposerSend(sendBtn) {
+  if (isComposerVoiceActive()) return "send";
+  const input = document.getElementById("messagesComposerInput");
+  const empty = !String(input?.value || "").trim();
+  const coach = isCoachThreadId(_conversationId);
+  if (sendBtn?.classList.contains("messagesComposerSend--mic") || (empty && !coach)) return "record";
+  return "text";
+}
+
+let _messagesComposerSendArmedAt = 0;
+function activateMessagesComposerSend(sendBtn) {
+  if (!sendBtn || sendBtn.disabled) return;
+  const now = performance.now();
+  if (now - _messagesComposerSendArmedAt < 450) return;
+  _messagesComposerSendArmedAt = now;
+  const kind = shouldRecordFromComposerSend(sendBtn);
+  if (kind === "send") {
+    void sendComposerVoiceDrop();
+    return;
+  }
+  if (kind === "record") {
+    try { haptic("light"); } catch {}
+    startComposerVoiceDrop();
+    return;
+  }
+  sendCurrentThreadMessage();
+}
+
 function bindMessagesPageOnce() {
   syncFriendsMessagesBtn();
   wireInAppShareSheetsOnce();
@@ -43152,12 +43183,64 @@ function bindMessagesPageOnce() {
   if (_messagesPageBound) return;
   _messagesPageBound = true;
 
+  const composerSendBtn = document.getElementById("messagesComposerSend");
+  if (composerSendBtn && !composerSendBtn.dataset.boundComposerSendPtr) {
+    composerSendBtn.dataset.boundComposerSendPtr = "1";
+    composerSendBtn.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      const kind = shouldRecordFromComposerSend(composerSendBtn);
+      if (kind === "text") return;
+      e.preventDefault();
+      activateMessagesComposerSend(composerSendBtn);
+    });
+  }
+
   document.addEventListener("pointerdown", (e) => {
     const threadRow = e.target.closest("[data-messages-thread]");
     if (!threadRow || e.target.closest("[data-messages-request-accept],[data-messages-request-decline]")) return;
     const tid = String(threadRow.getAttribute("data-messages-thread") || "").trim();
     if (tid && !isCoachThreadId(tid)) void prefetchThreadMessagesQuiet(tid);
   }, { passive: true });
+
+  const INBOX_PRESS_SLOP_PX = 10;
+  let _inboxPressRow = null;
+  let _inboxPressX = 0;
+  let _inboxPressY = 0;
+  const clearInboxRowPress = () => {
+    document.querySelectorAll(".messagesRow.is-pressing").forEach((el) => {
+      el.classList.remove("is-pressing");
+    });
+    const active = document.activeElement;
+    if (active?.classList?.contains("messagesRow")) {
+      try { active.blur(); } catch {}
+    }
+    _inboxPressRow = null;
+  };
+  document.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const row = e.target.closest?.(".messagesRow");
+    if (!row || !row.closest("#messagesPage")) return;
+    clearInboxRowPress();
+    _inboxPressRow = row;
+    _inboxPressX = e.clientX;
+    _inboxPressY = e.clientY;
+    row.classList.add("is-pressing");
+  }, { passive: true, capture: true });
+  document.addEventListener("pointermove", (e) => {
+    if (!_inboxPressRow) return;
+    const dx = e.clientX - _inboxPressX;
+    const dy = e.clientY - _inboxPressY;
+    if ((dx * dx + dy * dy) < INBOX_PRESS_SLOP_PX * INBOX_PRESS_SLOP_PX) return;
+    clearInboxRowPress();
+  }, { passive: true, capture: true });
+  document.addEventListener("pointerup", () => {
+    const row = _inboxPressRow;
+    _inboxPressRow = null;
+    if (!row) return;
+    window.setTimeout(() => row.classList.remove("is-pressing"), 280);
+  }, { passive: true, capture: true });
+  window.addEventListener("scroll", clearInboxRowPress, { passive: true, capture: true });
+  document.addEventListener("pointercancel", clearInboxRowPress, { passive: true, capture: true });
 
   document.addEventListener("mouseenter", (e) => {
     const threadRow = e.target.closest?.("[data-messages-thread]");
@@ -43259,16 +43342,7 @@ function bindMessagesPageOnce() {
     const sendBtn = e.target.closest("#messagesComposerSend");
     if (sendBtn) {
       e.preventDefault();
-      if (isComposerVoiceActive()) {
-        void sendComposerVoiceDrop();
-        return;
-      }
-      if (sendBtn.classList.contains("messagesComposerSend--mic")) {
-        try { haptic("light"); } catch {}
-        startComposerVoiceDrop();
-        return;
-      }
-      sendCurrentThreadMessage();
+      activateMessagesComposerSend(sendBtn);
       return;
     }
     const voicePill = e.target.closest("#messagesVoiceComposerPill");
@@ -43343,11 +43417,6 @@ function bindMessagesPageOnce() {
         try { haptic("light"); } catch {}
         closeMessagesComposerSheet();
         void openMessagesShareSheet();
-      }
-      if (action === "voice" && !composerAction.disabled) {
-        try { haptic("light"); } catch {}
-        closeMessagesComposerSheet();
-        startComposerVoiceDrop();
       }
       return;
     }

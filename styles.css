@@ -38402,14 +38402,18 @@ section.messagesThreadPage{
   from{ transform: translate3d(0, 0, 0); }
   to{ transform: translate3d(100%, 0, 0); }
 }
-body.messagesThreadEntering .messagesThreadPage{
+body.messagesThreadEntering .messagesThreadHead,
+body.messagesThreadEntering .messagesThreadMount,
+body.messagesThreadEntering .coachSongPlanBar{
   animation: messagesThreadSlideIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 body.messagesThreadLeaving .messagesThreadPage{
   animation: messagesThreadSlideOut 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 @media (prefers-reduced-motion: reduce){
-  body.messagesThreadEntering .messagesThreadPage,
+  body.messagesThreadEntering .messagesThreadHead,
+  body.messagesThreadEntering .messagesThreadMount,
+  body.messagesThreadEntering .coachSongPlanBar,
   body.messagesThreadLeaving .messagesThreadPage{
     animation: none;
   }
@@ -38671,10 +38675,60 @@ body[data-route="messages"]{
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  touch-action: pan-y;
   transition: var(--nabad-glass-transition);
 }
-.messagesRow:hover,
-.messagesRow:focus-visible{
+.messagesRow:focus{
+  outline: none;
+}
+@media (hover: hover) and (pointer: fine){
+  .messagesRow:hover,
+  .messagesRow:focus-visible{
+    border-color: var(--nabad-glass-border);
+    background: var(--nabad-glass-bg);
+    -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+            backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+    box-shadow:
+      var(--nabad-glass-inset-top),
+      var(--nabad-glass-inset-bottom);
+  }
+  .messagesRow:active{
+    transform: scale(var(--nabad-glass-active-scale));
+    border-color: var(--nabad-glass-border-hover);
+    background: var(--nabad-glass-bg-hover);
+  }
+}
+/* iOS sticky :hover/:active on buttons during scroll. Selection glass is
+   `.is-pressing` only — JS adds it on a real press and drops it on move. */
+@media (hover: none), (pointer: coarse){
+  .messagesRow{
+    cursor: default;
+    transition: background 90ms ease, border-color 90ms ease, box-shadow 90ms ease;
+  }
+  .messagesRow:hover,
+  .messagesRow:active,
+  .messagesRow:focus,
+  .messagesRow:focus-visible{
+    transform: none;
+    border-color: transparent;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+    box-shadow: none;
+  }
+  .messagesRow.is-unread:hover,
+  .messagesRow.is-unread:active,
+  .messagesRow.is-unread:focus,
+  .messagesRow.is-unread:focus-visible{
+    border-color: color-mix(in srgb, var(--nabad-glass-border) 70%, transparent);
+    background: color-mix(in srgb, var(--nabad-glass-bg) 82%, transparent);
+  }
+}
+.messagesRow.is-unread{
+  border-color: color-mix(in srgb, var(--nabad-glass-border) 70%, transparent);
+  background: color-mix(in srgb, var(--nabad-glass-bg) 82%, transparent);
+}
+.messagesRow.is-pressing{
   border-color: var(--nabad-glass-border);
   background: var(--nabad-glass-bg);
   -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
@@ -38682,15 +38736,6 @@ body[data-route="messages"]{
   box-shadow:
     var(--nabad-glass-inset-top),
     var(--nabad-glass-inset-bottom);
-}
-.messagesRow:active{
-  transform: scale(var(--nabad-glass-active-scale));
-  border-color: var(--nabad-glass-border-hover);
-  background: var(--nabad-glass-bg-hover);
-}
-.messagesRow.is-unread{
-  border-color: color-mix(in srgb, var(--nabad-glass-border) 70%, transparent);
-  background: color-mix(in srgb, var(--nabad-glass-bg) 82%, transparent);
 }
 .messagesRow.is-unread .messagesRowHandle{
   color: #f8faff;
@@ -38709,6 +38754,15 @@ body[data-route="messages"]{
   object-fit: cover;
   background: rgba(124,92,255,0.18);
   border: 1px solid rgba(255,255,255,0.08);
+}
+.messagesRowAvatar,
+.messagesRowAvatar.messagesAvatarFallback{
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid var(--nabad-glass-border);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 .messagesAvatarFallback{
   display: inline-flex;
@@ -38766,13 +38820,34 @@ body[data-route="messages"]{
     var(--nabad-glass-inset-top),
     var(--nabad-glass-inset-bottom);
 }
-.messagesRow--coach:hover,
-.messagesRow--coach:focus-visible{
+@media (hover: hover) and (pointer: fine){
+  .messagesRow--coach:hover,
+  .messagesRow--coach:focus-visible{
+    background: var(--nabad-glass-bg-hover);
+    border-color: var(--nabad-glass-border-hover);
+  }
+  .messagesRow--coach:active{
+    transform: scale(var(--nabad-glass-active-scale));
+  }
+}
+@media (hover: none), (pointer: coarse){
+  .messagesRow--coach:hover,
+  .messagesRow--coach:active,
+  .messagesRow--coach:focus,
+  .messagesRow--coach:focus-visible{
+    transform: none;
+    border-color: var(--nabad-glass-border);
+    background: var(--nabad-glass-bg);
+    -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+            backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+    box-shadow:
+      var(--nabad-glass-inset-top),
+      var(--nabad-glass-inset-bottom);
+  }
+}
+.messagesRow--coach.is-pressing{
   background: var(--nabad-glass-bg-hover);
   border-color: var(--nabad-glass-border-hover);
-}
-.messagesRow--coach:active{
-  transform: scale(var(--nabad-glass-active-scale));
 }
 .coachSignupCtas{
   display: flex;
@@ -39181,7 +39256,7 @@ body[data-route="messages-thread"] .coachSongPlanBar{
 .messagesRowSkelAv{
   width: 48px;
   height: 48px;
-  border-radius: var(--nabad-squircle-radius);
+  border-radius: 50%;
 }
 .messagesRowSkelLine{
   display: block;
@@ -40197,6 +40272,7 @@ html.is-web-shell body.messagesThreadViewportSized[data-route="messages-thread"]
     var(--nabad-glass-inset-top),
     var(--nabad-glass-inset-bottom);
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   transition: var(--nabad-glass-transition);
 }
 .messagesComposerAttach:active:not(:disabled),
@@ -59006,8 +59082,33 @@ html[data-theme="light"] .messagesSentRequestList{
 html[data-theme="light"] .messagesRow{
   border-color: transparent;
 }
-html[data-theme="light"] .messagesRow:hover,
-html[data-theme="light"] .messagesRow:focus-visible,
+@media (hover: hover) and (pointer: fine){
+  html[data-theme="light"] .messagesRow:hover,
+  html[data-theme="light"] .messagesRow:focus-visible{
+    border-color: var(--nabad-glass-border);
+    background: var(--nabad-glass-bg);
+  }
+}
+@media (hover: none), (pointer: coarse){
+  html[data-theme="light"] .messagesRow:hover,
+  html[data-theme="light"] .messagesRow:active,
+  html[data-theme="light"] .messagesRow:focus,
+  html[data-theme="light"] .messagesRow:focus-visible{
+    border-color: transparent;
+    background: transparent;
+  }
+  html[data-theme="light"] .messagesRow.is-unread:hover,
+  html[data-theme="light"] .messagesRow.is-unread:active,
+  html[data-theme="light"] .messagesRow.is-unread:focus,
+  html[data-theme="light"] .messagesRow.is-unread:focus-visible{
+    border-color: var(--nabad-glass-border);
+    background: var(--nabad-glass-bg);
+  }
+}
+html[data-theme="light"] .messagesRow.is-pressing{
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+}
 html[data-theme="light"] .messagesRow.is-unread{
   border-color: var(--nabad-glass-border);
   background: var(--nabad-glass-bg);
@@ -59036,7 +59137,7 @@ html[data-theme="light"] .messagesRow.is-unread .messagesRowPreviewTick--deliver
 }
 html[data-theme="light"] .messagesRowAvatar,
 html[data-theme="light"] .messagesAvatarFallback{
-  border-color: var(--border);
+  border-color: var(--nabad-glass-border);
   background: var(--surface-secondary);
 }
 html[data-theme="light"] .messagesAvatarFallback{

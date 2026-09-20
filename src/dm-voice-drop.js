@@ -36,6 +36,10 @@ let _playingRaf = 0;
 const _voicePlayBlobCache = new Map();
 let _nativeRec = false;
 let _sendInFlight = false;
+let _composerSendLock = false;
+let _sendRequested = false;
+let _startPromise = null;
+let _finishPromise = null;
 let _stopResolvers = [];
 
 function d() {
@@ -179,11 +183,11 @@ function notifyVoiceStopped() {
 }
 
 export function isComposerVoiceActive() {
-  return _recState === "recording" || _recState === "ready";
+  return _recState === "starting" || _recState === "recording" || _recState === "ready";
 }
 
 function syncVoiceDropUi() {
-  const recording = _recState === "recording";
+  const recording = _recState === "recording" || _recState === "starting";
   const hasBlob = Boolean(_blob?.size) && !recording;
   const active = recording || hasBlob || _recState === "ready";
   const dock = document.getElementById("messagesVoiceComposer");
@@ -278,6 +282,9 @@ async function blobFromNativeVoiceResult(result) {
 }
 
 function resetRecording() {
+  _sendRequested = false;
+  _startPromise = null;
+  _finishPromise = null;
   if (_nativeRec) {
     void cancelNativeVoiceDropRecording().catch(() => {});
     _nativeRec = false;
@@ -440,64 +447,87 @@ async function togglePreviewPlayback() {
 }
 
 async function finishNativeRecording() {
-  if (_recState !== "recording" || !_nativeRec) return;
-  if (_autostopTimer) {
-    clearTimeout(_autostopTimer);
-    _autostopTimer = 0;
-  }
-  stopVisualizer();
-  try {
-    const result = await stopNativeVoiceDropRecording();
-    const blob = await blobFromNativeVoiceResult(result);
-    if (!blob?.size) throw new Error("Native recording missing audio data");
-    const elapsedMs = Math.max(400, Math.round(performance.now() - _startedAt));
-    const nativeMs = Math.round(Number(result?.durationSec || 0) * 1000);
-    const nativeLooksRight = nativeMs >= 400 && Math.abs(nativeMs - elapsedMs) <= 1500;
-    const recordedMs = Math.min(DM_VOICE_MAX_MS, nativeLooksRight ? nativeMs : elapsedMs);
-    const minBytes = minBytesForVoiceDrop(recordedMs, blob.size);
-    if (!blob.size || blob.size < minBytes) {
-      throw new Error(`Recording too short (${blob.size || 0} bytes) — try again.`);
-    }
-    if (blob.size > DM_VOICE_MAX_BYTES) {
-      throw new Error("Drop too large — keep it under 30s.");
-    }
-    _blob = blob;
-    _durationMs = recordedMs;
-    if (_blobUrl) {
-      try { URL.revokeObjectURL(_blobUrl); } catch {}
-    }
-    _blobUrl = URL.createObjectURL(blob);
-    _recState = "ready";
-    syncVoiceDropUi();
-    void computePeaksFromBlob(blob).then((peaks) => {
-      _peaks = peaks;
-      syncVoiceDropUi();
-    });
-    try { d().haptic?.("success"); } catch {}
-  } catch (e) {
-    _recState = "idle";
-    syncVoiceDropUi();
-    d().showToast?.(String(e?.message || "Recording failed — try again."), { durationMs: 3200 });
-  } finally {
-    _nativeRec = false;
+  if (_finishPromise) return _finishPromise;
+  if (_recState !== "recording" || !_nativeRec) {
     notifyVoiceStopped();
+    return;
+  }
+  _finishPromise = (async () => {
+    if (_autostopTimer) {
+      clearTimeout(_autostopTimer);
+      _autostopTimer = 0;
+    }
+    stopVisualizer();
+    try {
+      const result = await stopNativeVoiceDropRecording();
+      const blob = await blobFromNativeVoiceResult(result);
+      if (!blob?.size) throw new Error("Native recording missing audio data");
+      const elapsedMs = Math.max(400, Math.round(performance.now() - _startedAt));
+      const nativeMs = Math.round(Number(result?.durationSec || 0) * 1000);
+      const nativeLooksRight = nativeMs >= 400 && Math.abs(nativeMs - elapsedMs) <= 1500;
+      const recordedMs = Math.min(DM_VOICE_MAX_MS, nativeLooksRight ? nativeMs : elapsedMs);
+      const minBytes = minBytesForVoiceDrop(recordedMs, blob.size);
+      if (!blob.size || blob.size < Math.min(400, minBytes)) {
+        throw new Error(`Recording too short (${blob.size || 0} bytes) — try again.`);
+      }
+      if (blob.size > DM_VOICE_MAX_BYTES) {
+        throw new Error("Drop too large — keep it under 30s.");
+      }
+      _blob = blob;
+      _durationMs = recordedMs;
+      if (_blobUrl) {
+        try { URL.revokeObjectURL(_blobUrl); } catch {}
+      }
+      _blobUrl = URL.createObjectURL(blob);
+      _recState = "ready";
+      _nativeRec = false;
+      syncVoiceDropUi();
+      notifyVoiceStopped();
+      void computePeaksFromBlob(blob).then((peaks) => {
+        _peaks = peaks;
+        syncVoiceDropUi();
+      });
+      try { d().haptic?.("success"); } catch {}
+      if (_sendRequested) {
+        _sendRequested = false;
+        await sendVoiceDrop();
+      }
+    } catch (e) {
+      _recState = "idle";
+      _nativeRec = false;
+      _sendRequested = false;
+      syncVoiceDropUi();
+      notifyVoiceStopped();
+      d().showToast?.(String(e?.message || "Recording failed — try again."), { durationMs: 3200 });
+    }
+  })();
+  try {
+    await _finishPromise;
+  } finally {
+    _finishPromise = null;
   }
 }
 
 async function startRecording() {
-  if (_recState === "recording") return;
+  if (_startPromise) return _startPromise;
+  if (_recState === "recording" || _recState === "ready") return;
   stopPreviewPlayback();
-  resetRecording();
+  _startedAt = performance.now();
+  _recState = "starting";
+  syncVoiceDropUi();
+  try { d().haptic?.("medium"); } catch {}
 
-  if (isNativeVoiceDropRecordingAvailable()) {
-    try {
-      await d().prepareNativeRecordingSession?.();
+  const run = (async () => {
+    if (isNativeVoiceDropRecordingAvailable()) {
       await startNativeVoiceDropRecording();
+      if (_recState !== "starting") {
+        void cancelNativeVoiceDropRecording().catch(() => {});
+        return;
+      }
       _nativeRec = true;
       _startedAt = performance.now();
       _recState = "recording";
       syncVoiceDropUi();
-      try { d().haptic?.("medium"); } catch {}
       const tick = () => {
         if (_recState !== "recording") return;
         tickComposerRecordingUi();
@@ -510,119 +540,127 @@ async function startRecording() {
         if (_recState === "recording") void finishNativeRecording();
       }, DM_VOICE_MAX_MS + 40);
       return;
-    } catch (e) {
-      _nativeRec = false;
-      d().showToast?.(String(e?.message || "Native recorder failed — try again."), { durationMs: 3200 });
-      return;
     }
-  }
 
-  if (isSafariLikeRecorderEnv()) {
-    d().showToast?.("Voice drop needs the latest app build — reinstall from Xcode.", { durationMs: 3600 });
-    return;
-  }
+    if (isSafariLikeRecorderEnv()) {
+      throw new Error("Voice needs the latest app build — reinstall from Xcode.");
+    }
 
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-  } catch {
-    d().showToast?.("Microphone permission needed.", { durationMs: 2800 });
-    return;
-  }
-  const pickMime = d().pickRecorderMimeType || (() => "");
-  const mimeType = pickMime();
-  let rec;
-  try {
-    rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-  } catch {
-    try { stream.getTracks().forEach((t) => t.stop()); } catch {}
-    d().showToast?.("Recorder not supported on this device.", { durationMs: 2800 });
-    return;
-  }
-  _chunks = [];
-  rec.ondataavailable = (e) => {
-    if (e.data?.size) _chunks.push(e.data);
-  };
-  rec.onstop = () => {
-    try { stream.getTracks().forEach((t) => t.stop()); } catch {}
-    _stream = null;
-    _recorder = null;
-    stopVisualizer();
-    if (_autostopTimer) {
-      clearTimeout(_autostopTimer);
-      _autostopTimer = 0;
-    }
-    const blob = new Blob(_chunks, { type: rec.mimeType || mimeType || "audio/webm" });
-    const recordedMs = Math.min(DM_VOICE_MAX_MS, Math.max(400, Math.round(performance.now() - _startedAt)));
-    const minBytes = minBytesForVoiceDrop(recordedMs, blob.size);
-    if (!blob.size) {
-      _recState = "idle";
-      syncVoiceDropUi();
-      notifyVoiceStopped();
-      d().showToast?.("Empty drop — try again.", { durationMs: 2400 });
-      return;
-    }
-    if (blob.size < minBytes) {
-      _recState = "idle";
-      syncVoiceDropUi();
-      notifyVoiceStopped();
-      d().showToast?.(`Recording failed (${blob.size} bytes) — try again.`, { durationMs: 3200 });
-      return;
-    }
-    if (blob.size > DM_VOICE_MAX_BYTES) {
-      _recState = "idle";
-      syncVoiceDropUi();
-      notifyVoiceStopped();
-      d().showToast?.("Drop too large — keep it under 30s.", { durationMs: 2800 });
-      return;
-    }
-    _blob = blob;
-    _durationMs = recordedMs;
-    _blobUrl = URL.createObjectURL(blob);
-    _recState = "ready";
-    syncVoiceDropUi();
-    void computePeaksFromBlob(blob).then((peaks) => {
-      _peaks = peaks;
-      syncVoiceDropUi();
-    });
-    try { d().haptic?.("success"); } catch {}
-    notifyVoiceStopped();
-  };
-  _stream = stream;
-  _recorder = rec;
-  void attachAnalyser(stream);
-  const safariLike = isSafariLikeRecorderEnv();
-  try {
-    // iOS WKWebView often delivers tiny/empty blobs unless we use a timeslice.
-    if (safariLike) rec.start(250);
-    else rec.start();
-  } catch {
+    let stream;
     try {
-      rec.start();
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } catch {
+      throw new Error("Microphone permission needed.");
+    }
+    if (_recState !== "starting") {
+      try { stream.getTracks().forEach((t) => t.stop()); } catch {}
+      return;
+    }
+    const pickMime = d().pickRecorderMimeType || (() => "");
+    const mimeType = pickMime();
+    let rec;
+    try {
+      rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
     } catch {
       try { stream.getTracks().forEach((t) => t.stop()); } catch {}
-      d().showToast?.("Could not start recording.", { durationMs: 2600 });
-      return;
+      throw new Error("Recorder not supported on this device.");
     }
+    _chunks = [];
+    rec.ondataavailable = (e) => {
+      if (e.data?.size) _chunks.push(e.data);
+    };
+    rec.onstop = () => {
+      try { stream.getTracks().forEach((t) => t.stop()); } catch {}
+      _stream = null;
+      _recorder = null;
+      stopVisualizer();
+      if (_autostopTimer) {
+        clearTimeout(_autostopTimer);
+        _autostopTimer = 0;
+      }
+      const blob = new Blob(_chunks, { type: rec.mimeType || mimeType || "audio/webm" });
+      const recordedMs = Math.min(DM_VOICE_MAX_MS, Math.max(400, Math.round(performance.now() - _startedAt)));
+      const minBytes = minBytesForVoiceDrop(recordedMs, blob.size);
+      if (!blob.size || blob.size < Math.min(400, minBytes)) {
+        _recState = "idle";
+        syncVoiceDropUi();
+        notifyVoiceStopped();
+        d().showToast?.("Empty drop — try again.", { durationMs: 2400 });
+        return;
+      }
+      if (blob.size > DM_VOICE_MAX_BYTES) {
+        _recState = "idle";
+        syncVoiceDropUi();
+        notifyVoiceStopped();
+        d().showToast?.("Drop too large — keep it under 30s.", { durationMs: 2800 });
+        return;
+      }
+      _blob = blob;
+      _durationMs = recordedMs;
+      _blobUrl = URL.createObjectURL(blob);
+      _recState = "ready";
+      syncVoiceDropUi();
+      notifyVoiceStopped();
+      void computePeaksFromBlob(blob).then((peaks) => {
+        _peaks = peaks;
+        syncVoiceDropUi();
+      });
+      try { d().haptic?.("success"); } catch {}
+      if (_sendRequested) {
+        _sendRequested = false;
+        void sendVoiceDrop();
+      }
+    };
+    _stream = stream;
+    _recorder = rec;
+    void attachAnalyser(stream);
+    const safariLike = isSafariLikeRecorderEnv();
+    try {
+      if (safariLike) rec.start(250);
+      else rec.start();
+    } catch {
+      try {
+        rec.start();
+      } catch {
+        try { stream.getTracks().forEach((t) => t.stop()); } catch {}
+        throw new Error("Could not start recording.");
+      }
+    }
+    _startedAt = performance.now();
+    _recState = "recording";
+    syncVoiceDropUi();
+    const tick = () => {
+      if (_recState !== "recording") return;
+      tickComposerRecordingUi();
+      if (performance.now() - _startedAt < DM_VOICE_MAX_MS) {
+        _tickRaf = requestAnimationFrame(tick);
+      }
+    };
+    _tickRaf = requestAnimationFrame(tick);
+    _autostopTimer = setTimeout(() => {
+      if (_recState === "recording") stopRecording();
+    }, DM_VOICE_MAX_MS + 40);
+  })();
+
+  _startPromise = run;
+  try {
+    await run;
+  } catch (e) {
+    _nativeRec = false;
+    _recState = "idle";
+    _sendRequested = false;
+    syncVoiceDropUi();
+    d().showToast?.(String(e?.message || "Could not start recording."), { durationMs: 3200 });
+  } finally {
+    if (_startPromise === run) _startPromise = null;
   }
-  _startedAt = performance.now();
-  _recState = "recording";
-  syncVoiceDropUi();
-  try { d().haptic?.("medium"); } catch {}
-  const tick = () => {
-    if (_recState !== "recording") return;
-    tickComposerRecordingUi();
-    if (performance.now() - _startedAt < DM_VOICE_MAX_MS) {
-      _tickRaf = requestAnimationFrame(tick);
-    }
-  };
-  _tickRaf = requestAnimationFrame(tick);
-  _autostopTimer = setTimeout(() => {
-    if (_recState === "recording") stopRecording();
-  }, DM_VOICE_MAX_MS + 40);
 }
 
 function stopRecording() {
+  if (_startPromise && _recState === "starting") {
+    void _startPromise.then(() => stopRecording()).catch(() => {});
+    return;
+  }
   if (_nativeRec) {
     void finishNativeRecording();
     return;
@@ -730,10 +768,16 @@ export async function toggleVoiceDropPlayback(card) {
 }
 
 export function startComposerVoiceDrop() {
-  if (_recState === "recording" || _recState === "ready") return;
+  if (_recState === "starting" || _recState === "recording" || _recState === "ready") return;
+  try { d().cancelMessagesComposerAutofocus?.(); } catch {}
   try { document.getElementById("messagesComposerInput")?.blur(); } catch {}
   d().closeMessagesComposerSheet?.();
   void startRecording();
+}
+
+export function warmupComposerVoice() {
+  if (!isNativeVoiceDropRecordingAvailable()) return;
+  void d().prepareNativeRecordingSession?.().catch(() => {});
 }
 
 export function openDmVoiceDropSheet() {
@@ -755,6 +799,10 @@ export function discardComposerVoiceDrop() {
 }
 
 async function stopRecordingAndWait() {
+  if (_recState !== "recording" && _recState !== "starting") return;
+  if (_startPromise) {
+    try { await _startPromise; } catch { return; }
+  }
   if (_recState !== "recording") return;
   const waited = new Promise((resolve) => {
     _stopResolvers.push(resolve);
@@ -762,13 +810,24 @@ async function stopRecordingAndWait() {
   stopRecording();
   await Promise.race([
     waited,
-    new Promise((resolve) => window.setTimeout(resolve, 4000)),
+    new Promise((resolve) => window.setTimeout(resolve, 8000)),
   ]);
 }
 
 export async function sendComposerVoiceDrop() {
-  if (_recState === "recording") await stopRecordingAndWait();
+  _sendRequested = true;
+  if (_startPromise) {
+    try { await _startPromise; } catch {
+      _sendRequested = false;
+      return;
+    }
+  }
+  if (_recState === "recording" || _recState === "starting") {
+    await stopRecordingAndWait();
+  }
   if (_recState !== "ready") return;
+  if (!_blob?.size || _composerSendLock) return;
+  _sendRequested = false;
   await sendVoiceDrop();
 }
 
@@ -849,60 +908,63 @@ async function sendVoiceDropInBackground({ clientMessageId, threadId, blob, dura
 async function sendVoiceDrop() {
   const threadId = String(d().getThreadId?.() || "").trim();
   const sendBtn = document.getElementById("messagesComposerSend");
+  if (_composerSendLock) return;
   if (!threadId) {
     d().showToast?.("Open a chat first.", { durationMs: 2600 });
     return;
   }
-  if (!_blob?.size || _blob.size < 800) {
+  if (!_blob?.size || _blob.size < 400) {
     d().showToast?.("Record a little longer, then send.", { durationMs: 2800 });
     return;
   }
-  if (_sendInFlight || sendBtn?.getAttribute("aria-busy") === "true") return;
+  _composerSendLock = true;
+  try {
+    const blob = _blob;
+    const durationMs = _durationMs;
+    const peaks = Array.isArray(_peaks) ? [..._peaks] : [];
+    const localPlayUrl = _blobUrl;
+    const clientMessageId = String(d().newClientMessageId?.() || `cm_${Date.now()}`);
+    const viewerId = String(d().getViewerId?.() || d().getAuthSession?.()?.user?.id || "");
+    const optimisticBody = buildDmVoicePayload({
+      url: localPlayUrl,
+      durationSec: Math.round(durationMs / 1000),
+      peaks,
+    });
+    const optimistic = {
+      id: `pending:${clientMessageId}`,
+      client_message_id: clientMessageId,
+      sender_id: viewerId,
+      body: optimisticBody,
+      created_at: new Date().toISOString(),
+      sendStatus: "sending",
+    };
 
-  const blob = _blob;
-  const durationMs = _durationMs;
-  const peaks = Array.isArray(_peaks) ? [..._peaks] : [];
-  const localPlayUrl = _blobUrl;
-  const clientMessageId = String(d().newClientMessageId?.() || `cm_${Date.now()}`);
-  const viewerId = String(d().getViewerId?.() || d().getAuthSession?.()?.user?.id || "");
-  const optimisticBody = buildDmVoicePayload({
-    url: localPlayUrl,
-    durationSec: Math.round(durationMs / 1000),
-    peaks,
-  });
-  const optimistic = {
-    id: `pending:${clientMessageId}`,
-    client_message_id: clientMessageId,
-    sender_id: viewerId,
-    body: optimisticBody,
-    created_at: new Date().toISOString(),
-    sendStatus: "sending",
-  };
+    _sendInFlight = true;
+    sendBtn?.setAttribute("aria-busy", "true");
 
-  _sendInFlight = true;
-  sendBtn?.setAttribute("aria-busy", "true");
+    d().feedbackMessagesComposerSend?.();
+    d().addOptimisticThreadMessage?.(optimistic);
+    d().patchInboxFromOutgoingMessage?.({
+      threadId,
+      body: optimisticBody,
+      createdAt: optimistic.created_at,
+    });
 
-  d().feedbackMessagesComposerSend?.();
-  d().addOptimisticThreadMessage?.(optimistic);
-  d().patchInboxFromOutgoingMessage?.({
-    threadId,
-    body: optimisticBody,
-    createdAt: optimistic.created_at,
-  });
+    clearVoiceDropAfterSend(localPlayUrl);
+    closeDmVoiceDropSheet({ skipReset: true });
+    d().closeMessagesComposerSheet?.();
 
-  clearVoiceDropAfterSend(localPlayUrl);
-  closeDmVoiceDropSheet({ skipReset: true });
-  d().closeMessagesComposerSheet?.();
-
-  void sendVoiceDropInBackground({
-    clientMessageId,
-    threadId,
-    blob,
-    durationMs,
-    peaks,
-  });
-
-  sendBtn?.removeAttribute("aria-busy");
+    void sendVoiceDropInBackground({
+      clientMessageId,
+      threadId,
+      blob,
+      durationMs,
+      peaks,
+    });
+  } finally {
+    sendBtn?.removeAttribute("aria-busy");
+    _composerSendLock = false;
+  }
 }
 
 export function initDmVoiceDrop(deps = {}) {
@@ -914,7 +976,7 @@ export function initDmVoiceDrop(deps = {}) {
 export function handleVoiceDropBubbleClick(target) {
   const composer = target?.closest?.("#messagesVoiceComposerPill");
   if (composer) {
-    if (_recState === "recording") stopRecording();
+    if (_recState === "recording" || _recState === "starting") stopRecording();
     else if (_recState === "ready" && _blobUrl) void togglePreviewPlayback();
     try { d().haptic?.("light"); } catch {}
     return true;

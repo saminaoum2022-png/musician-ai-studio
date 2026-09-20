@@ -1,6 +1,7 @@
 /**
- * Nabad Edit — admin-only Create tab (ElevenLabs song inpaint / section rewrite).
+ * Nabad Edit — admin-only section rewrite (ElevenLabs inpaint).
  * Hidden until launch — staging bake: nabadSongEditUi.
+ * Entry is the song ⋯ sheet ("Edit"), not a Create tab.
  */
 
 import { NABAD_SONG_EDIT_PUBLIC_SHIPPED } from "./feature-flags.js";
@@ -35,26 +36,19 @@ export function configureNabadSongEdit(b) {
 }
 
 export function syncNabadSongEditCreateTab() {
-  const photoSolo = Boolean(document.body.getAttribute("data-photo-solo-challenge"));
-  const show = nabadSongEditEnabled() && !photoSolo;
   const tab = document.getElementById("createTabEdit");
   if (tab) {
-    tab.hidden = !show;
-    tab.style.display = show ? "" : "none";
-    tab.setAttribute("aria-hidden", show ? "false" : "true");
+    tab.hidden = true;
+    tab.style.display = "none";
+    tab.setAttribute("aria-hidden", "true");
   }
-  if (!show) {
-    const active = tab?.classList.contains("isActive");
-    if (active && typeof bridge.setActiveCreateTab === "function") {
-      bridge.setActiveCreateTab("lyrics");
-      return;
-    }
-  }
-  if (typeof bridge.setActiveCreateTab === "function") {
-    const mode =
-      (typeof bridge.getActiveCreateTab === "function" && bridge.getActiveCreateTab())
-      || document.querySelector(".createPanes")?.dataset?.mode
-      || "lyrics";
-    bridge.setActiveCreateTab(mode);
+  const photoSolo = Boolean(document.body.getAttribute("data-photo-solo-challenge"));
+  const allowed = nabadSongEditEnabled() && !photoSolo;
+  const mode =
+    (typeof bridge.getActiveCreateTab === "function" && bridge.getActiveCreateTab())
+    || document.querySelector(".createPanes")?.dataset?.mode
+    || "lyrics";
+  if (mode === "edit" && !allowed && typeof bridge.setActiveCreateTab === "function") {
+    bridge.setActiveCreateTab("lyrics");
   }
 }

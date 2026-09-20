@@ -23570,6 +23570,42 @@ function resetSongEditSession() {
   try { syncCreateGenerateDock(); } catch {}
 }
 
+async function openSongEditFromLibraryTrack(track) {
+  if (!nabadSongEditEnabled()) {
+    showToast("Edit is admin-only on this build.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  const url = String(track?.url || "").trim();
+  if (!url) {
+    showToast("This song has no audio to edit.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  try { location.hash = "#/generate"; } catch {}
+  try { setActiveCreateTab("edit"); } catch {}
+  const title = String(track?.title || "").trim();
+  setCreateEditAttachmentPreview("Loading this song…", title || "Song");
+  try {
+    const blob = await fetchAudioForRemix(url);
+    const safeName = `${(title || "song").replace(/[^\w\s.-]+/g, "").trim() || "song"}.mp3`;
+    let file;
+    try {
+      file = new File([blob], safeName, { type: blob.type || "audio/mpeg" });
+    } catch {
+      file = blob;
+      try { file.name = safeName; } catch {}
+    }
+    if (els.sunoTitle && title && !String(els.sunoTitle.value || "").trim()) {
+      els.sunoTitle.value = title;
+    }
+    await prepareSongEditFromFile(file);
+  } catch (e) {
+    resetSongEditSession();
+    const msg = String(e?.message || "Couldn't open Edit for this song.").trim();
+    showToast(msg, { icon: "!", durationMs: 3600 });
+    setStatus(`Edit failed: ${msg}`);
+  }
+}
+
 async function prepareSongEditFromFile(file) {
   if (!nabadSongEditEnabled()) {
     showToast("Edit is admin-only on this build.", { icon: "!", durationMs: 3200 });
@@ -47128,6 +47164,7 @@ function renderTrackSheetLibrary(track) {
   l.innerHTML = `
     ${publishRow}
     ${recordEligible ? `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--studio" data-track-sheet-action="library_record_voice">Open in Studio</button>` : ""}
+    ${nabadSongEditEnabled() && recordEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_song_edit">Edit structure</button>` : ""}
     ${!isSound && recordEligible ? `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--proSinger" data-track-sheet-action="library_pro_singer">Request real singer</button>` : ""}
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
     ${profilePublic ? "" : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_change_cover">Change cover</button>`}
@@ -47983,6 +48020,12 @@ function runTrackSheetAction(action, sourceEl) {
     if (action === "library_record_voice") {
       shut();
       try { openStudioForTrack(t); } catch {}
+      return;
+    }
+    if (action === "library_song_edit") {
+      if (!nabadSongEditEnabled()) return;
+      shut();
+      void openSongEditFromLibraryTrack(t);
       return;
     }
     if (action === "library_pro_singer") {
@@ -77900,6 +77943,7 @@ function setActiveCreateTab(mode, opts = {}) {
     else mode = "lyrics";
     if (opts.requestPro) return;
   }
+  if (mode === "edit" && !nabadSongEditEnabled()) mode = "lyrics";
   ["photo", "hum", "lyrics", "vibe", "edit"].forEach((k) => {
     const el = createTabEls[k];
     if (!el || el.hidden) return;

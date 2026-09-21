@@ -38864,6 +38864,11 @@ body[data-route="messages"]{
   background: radial-gradient(circle at 22% 50%, rgba(255, 120, 160, 0.48), transparent 68%);
   mix-blend-mode: screen;
 }
+#messagesPresenceSheet.messagesShareSheet{
+  --presence-keyboard-inset: 0px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px) + var(--presence-keyboard-inset, 0px));
+  transition: padding-bottom 180ms ease;
+}
 .messagesPresenceSheetCard{
   max-height: min(78dvh, 620px);
 }
@@ -38909,8 +38914,15 @@ body[data-route="messages"]{
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+.messagesPresenceNoteRow{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .messagesPresenceNoteInput{
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
   height: 44px;
   margin: 0;
   padding: 0 14px;
@@ -38929,6 +38941,27 @@ body[data-route="messages"]{
 .messagesPresenceNoteInput:focus{
   border-color: var(--nabad-glass-border-hover);
   box-shadow: none;
+}
+.messagesPresenceNoteSave{
+  flex: 0 0 auto;
+  height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(167, 139, 250, 0.92);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.messagesPresenceNoteSave:disabled{
+  opacity: 0.38;
+  pointer-events: none;
+}
+.messagesPresenceNoteSave:active{
+  transform: scale(0.96);
 }
 .messagesPresenceToggles{
   display: flex;
@@ -59629,6 +59662,9 @@ html[data-theme="light"] .messagesPresenceNoteLbl{
 }
 html[data-theme="light"] .messagesPresenceNoteInput{
   color: var(--text-primary);
+}
+html[data-theme="light"] .messagesPresenceNoteSave{
+  background: #6d4df5;
 }
 html[data-theme="light"] .messagesRowHandle{
   color: var(--text-primary);

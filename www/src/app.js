@@ -43188,8 +43188,8 @@ function messagesInboxPresenceView() {
     }
   } catch {}
   const note = presenceStatusNoteLocal();
-  if (note) return { status: "note", line: note, detail: "Your status", live: false };
-  return { status: "idle", line: "No activity right now", detail: "Add a status", live: false };
+  if (note) return { status: "note", line: note, detail: "", live: false };
+  return { status: "idle", line: "No activity right now", detail: "", live: false };
 }
 
 function messagesPresencePreviewHtml() {
@@ -43205,7 +43205,7 @@ function messagesPresencePreviewHtml() {
       <span class="messagesInboxPresenceCopy">
         <span class="messagesInboxPresenceKicker">People see</span>
         <strong class="messagesInboxPresenceLine">${escapeHtml(view.line)}</strong>
-        <span class="messagesInboxPresenceDetail">${escapeHtml(view.detail)}</span>
+        ${view.detail ? `<span class="messagesInboxPresenceDetail">${escapeHtml(view.detail)}</span>` : ""}
       </span>
     </div>`;
 }
@@ -43225,23 +43225,89 @@ function syncMessagesPresenceSheet() {
   if (titlesRow) titlesRow.hidden = !on;
   const noteInput = document.getElementById("messagesPresenceNoteInput");
   if (noteInput && document.activeElement !== noteInput) noteInput.value = presenceStatusNoteLocal();
+  syncMessagesPresenceNoteSaveBtn();
+}
+
+function syncMessagesPresenceNoteSaveBtn() {
+  const input = document.getElementById("messagesPresenceNoteInput");
+  const btn = document.getElementById("messagesPresenceNoteSave");
+  if (!input || !btn) return;
+  const draft = String(input.value || "").trim().slice(0, 48);
+  btn.disabled = draft === presenceStatusNoteLocal();
+}
+
+function saveMessagesPresenceNote() {
+  const input = document.getElementById("messagesPresenceNoteInput");
+  if (!input) return;
+  setPresenceStatusNoteLocal(input.value);
+  syncMessagesPresenceNoteSaveBtn();
+  syncMessagesPresenceSheet();
+  try { syncMessagesInboxPresenceCard(); } catch {}
+  try { input.blur(); } catch {}
+}
+
+function syncMessagesPresenceSheetKeyboardInset() {
+  const sheet = document.getElementById("messagesPresenceSheet");
+  if (!sheet || sheet.hidden) {
+    try { sheet?.style.removeProperty("--presence-keyboard-inset"); } catch {}
+    return;
+  }
+  const vv = window.visualViewport;
+  const inset = vv ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
+  sheet.style.setProperty("--presence-keyboard-inset", `${inset}px`);
+}
+
+function wireMessagesPresenceSheetKeyboardOnce() {
+  if (document.documentElement.dataset.presenceSheetKbWired) return;
+  document.documentElement.dataset.presenceSheetKbWired = "1";
+  const onChange = () => syncMessagesPresenceSheetKeyboardInset();
+  const vv = window.visualViewport;
+  vv?.addEventListener("resize", onChange);
+  vv?.addEventListener("scroll", onChange);
+  const Keyboard = getNativeKeyboardPlugin();
+  try {
+    Keyboard?.addListener?.("keyboardWillShow", (info) => {
+      const sheet = document.getElementById("messagesPresenceSheet");
+      if (!sheet || sheet.hidden) return;
+      const h = Math.max(0, Math.round(Number(info?.keyboardHeight) || 0));
+      sheet.style.setProperty("--presence-keyboard-inset", `${h}px`);
+    });
+    Keyboard?.addListener?.("keyboardDidShow", (info) => {
+      const sheet = document.getElementById("messagesPresenceSheet");
+      if (!sheet || sheet.hidden) return;
+      const h = Math.max(0, Math.round(Number(info?.keyboardHeight) || 0));
+      if (h) sheet.style.setProperty("--presence-keyboard-inset", `${h}px`);
+      else syncMessagesPresenceSheetKeyboardInset();
+    });
+    Keyboard?.addListener?.("keyboardWillHide", () => {
+      const sheet = document.getElementById("messagesPresenceSheet");
+      if (sheet) sheet.style.setProperty("--presence-keyboard-inset", "0px");
+    });
+  } catch {}
 }
 
 function openMessagesPresenceSheet() {
   const sheet = document.getElementById("messagesPresenceSheet");
   if (!sheet) return;
+  wireMessagesPresenceSheetKeyboardOnce();
   syncMessagesPresenceSheet();
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
   document.body.classList.add("messagesShareSheetOpen");
+  sheet.style.setProperty("--presence-keyboard-inset", "0px");
+  setMessagesNativeKeyboardScroll(true);
+  syncMessagesPresenceSheetKeyboardInset();
 }
 
 function closeMessagesPresenceSheet() {
   const sheet = document.getElementById("messagesPresenceSheet");
   if (!sheet) return;
+  try { document.getElementById("messagesPresenceNoteInput")?.blur?.(); } catch {}
   sheet.hidden = true;
   sheet.setAttribute("aria-hidden", "true");
   document.body.classList.remove("messagesShareSheetOpen");
+  try { sheet.style.removeProperty("--presence-keyboard-inset"); } catch {}
+  setMessagesNativeKeyboardScroll(false);
 }
 
 function wireMessagesPresenceSheetOnce() {
@@ -43279,11 +43345,16 @@ function wireMessagesPresenceSheetOnce() {
     try { syncMessagesInboxPresenceCard(); } catch {}
   });
   const noteInput = document.getElementById("messagesPresenceNoteInput");
-  noteInput?.addEventListener("input", () => {
-    setPresenceStatusNoteLocal(noteInput.value);
-    try { syncMessagesInboxPresenceCard(); } catch {}
-    const preview = document.getElementById("messagesPresencePreview");
-    if (preview) preview.innerHTML = messagesPresencePreviewHtml();
+  noteInput?.addEventListener("input", syncMessagesPresenceNoteSaveBtn);
+  noteInput?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    saveMessagesPresenceNote();
+  });
+  document.getElementById("messagesPresenceNoteSave")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    try { haptic("light"); } catch {}
+    saveMessagesPresenceNote();
   });
 }
 
@@ -43301,7 +43372,7 @@ function messagesInboxMeHeaderHtml() {
         <span class="messagesInboxPresenceCopy">
           <span class="messagesInboxPresenceKicker">Your presence</span>
           <strong class="messagesInboxPresenceLine">${escapeHtml(view.line)}</strong>
-          <span class="messagesInboxPresenceDetail">${escapeHtml(view.detail)}</span>
+          ${view.detail ? `<span class="messagesInboxPresenceDetail">${escapeHtml(view.detail)}</span>` : ""}
         </span>
       </button>
     </section>`;

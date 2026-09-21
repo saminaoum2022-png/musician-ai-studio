@@ -5291,7 +5291,10 @@
         <div id="messagesPresencePreview" class="messagesPresencePreview" aria-live="polite"></div>
         <label class="messagesPresenceNote">
           <span class="messagesPresenceNoteLbl">Status</span>
-          <input id="messagesPresenceNoteInput" class="messagesPresenceNoteInput" type="text" maxlength="48" autocomplete="off" placeholder="Add a status" aria-label="Status" />
+          <span class="messagesPresenceNoteRow">
+            <input id="messagesPresenceNoteInput" class="messagesPresenceNoteInput" type="text" maxlength="48" autocomplete="off" enterkeyhint="done" placeholder="Add a status" aria-label="Status" />
+            <button type="button" class="messagesPresenceNoteSave" id="messagesPresenceNoteSave" disabled>Save</button>
+          </span>
         </label>
         <div class="messagesPresenceToggles">
           <label class="messagesPresenceToggle">

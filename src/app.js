@@ -37236,7 +37236,7 @@ function renderChatHeaderSkeleton() {
   }
   if (avatarEl) {
     avatarEl.dataset.chatAvKey = "skel";
-    avatarEl.classList.remove("is-online");
+    avatarEl.classList.remove("is-online", "is-recent");
     avatarEl.innerHTML = `<span class="messagesThreadAvatarSkel" aria-hidden="true"></span>`;
   }
   const metaEl = document.getElementById("messagesThreadHeadMeta");
@@ -38789,8 +38789,8 @@ const PRESENCE_NOWPLAYING_LINGER_MS = 45000;
 const PRESENCE_TICK_MS = 3000;
 const PRESENCE_RESEND_MS = 25000;
 const PRESENCE_IDLE_HEARTBEAT_MS = 60000;
-const PRESENCE_ONLINE_MS = 4 * 60 * 1000;
-const PRESENCE_LAST_SEEN_MS = 24 * 60 * 60 * 1000;
+const PRESENCE_ONLINE_MS = 5 * 60 * 1000;
+const PRESENCE_LAST_SEEN_MS = 7 * 24 * 60 * 60 * 1000;
 const PARTNER_PRESENCE_POLL_MS = 20000;
 
 let _chatPartnerPresence = { status: "idle" };
@@ -38925,7 +38925,10 @@ function lastSeenLineFromAt(iso) {
   }
   const h = Math.max(1, Math.round(ago / 3600000));
   if (h < 6) return { status: "last_seen", iconKey: "", text: `Active ${h}h ago`, tappable: false };
-  return { status: "last_seen", iconKey: "", text: "Active today", tappable: false };
+  if (ago < 24 * 60 * 60 * 1000) {
+    return { status: "last_seen", iconKey: "", text: "Active today", tappable: false };
+  }
+  return { status: "last_seen", iconKey: "", text: "Active this week", tappable: false };
 }
 
 /** Pulse first (playing / creating / recording). Idle falls back to online / last seen. */
@@ -39023,6 +39026,7 @@ function syncChatHeaderOnlineDot() {
   const isCoach = String(_chatHeaderUser?.userId || "") === COACH_SENDER_ID;
   const line = presenceLineFromState(_chatPartnerPresence);
   avatarEl.classList.toggle("is-online", !isCoach && line?.status === "online");
+  avatarEl.classList.toggle("is-recent", !isCoach && line?.status === "last_seen");
 }
 
 function syncMessagesThreadHeadPresenceAura() {
@@ -39107,6 +39111,30 @@ function renderChatHeaderPresence() {
   }
 }
 
+function lastActiveHintFromInbox(partnerId) {
+  const uid = String(partnerId || "").trim();
+  if (!uid) return "";
+  let best = 0;
+  for (const thread of _messagesInboxState.threads || []) {
+    if (String(thread?.partnerUserId || "") !== uid) continue;
+    if (String(thread?.lastMessageSenderId || "") !== uid) continue;
+    const at = Date.parse(thread?.lastMessageAt);
+    if (Number.isFinite(at) && at > best) best = at;
+  }
+  return best ? new Date(best).toISOString() : "";
+}
+
+function mergePresenceLastActive(presence, partnerId) {
+  const next = presence && typeof presence === "object" ? { ...presence } : { status: "idle" };
+  const hint = lastActiveHintFromInbox(partnerId);
+  if (!hint) return next;
+  const cur = Date.parse(next.lastActiveAt);
+  const hinted = Date.parse(hint);
+  if (!Number.isFinite(hinted)) return next;
+  if (!Number.isFinite(cur) || hinted > cur) next.lastActiveAt = hint;
+  return next;
+}
+
 async function refreshPartnerPresence() {
   const uid = String(_chatHeaderUser?.userId || "").trim();
   if (!uid) return;
@@ -39117,10 +39145,17 @@ async function refreshPartnerPresence() {
   try {
     const data = await messagesApi(`/api/messages?type=presence&userId=${encodeURIComponent(uid)}`, { timeoutMs: 8000 });
     if (String(_chatHeaderUser?.userId || "") !== uid) return;
-    _chatPartnerPresence = (data && data.presence) ? data.presence : { status: "idle" };
+    _chatPartnerPresence = mergePresenceLastActive(
+      (data && data.presence) ? data.presence : { status: "idle" },
+      uid,
+    );
     renderChatHeaderPresence();
   } catch {
-    // keep last known presence; relation label stays as fallback
+    const hinted = mergePresenceLastActive(_chatPartnerPresence, uid);
+    if (hinted.lastActiveAt && hinted.lastActiveAt !== _chatPartnerPresence?.lastActiveAt) {
+      _chatPartnerPresence = hinted;
+      renderChatHeaderPresence();
+    }
   } finally {
     _partnerPresenceInFlight = false;
   }
@@ -39501,6 +39536,19 @@ function messagesInboxPreviewStatusHtml(status) {
   return `<span class="messagesRowPreviewTick messagesRowPreviewTick--${status}" aria-label="${label}">${messagesBbmTickHtml(status)}</span>`;
 }
 
+function inboxPresenceWrapClass(t) {
+  const raw = String(t?.partnerPresence || "").trim();
+  if (raw === "online" || t?.partnerOnline) return " is-online";
+  if (raw === "recent") return " is-recent";
+  const uid = String(t?.partnerUserId || "").trim();
+  if (uid && String(t?.lastMessageSenderId || "") === uid) {
+    const line = lastSeenLineFromAt(t?.lastMessageAt);
+    if (line?.status === "online") return " is-online";
+    if (line?.status === "last_seen") return " is-recent";
+  }
+  return "";
+}
+
 function messagesInboxThreadRowHtml(t) {
   const handle = String(t?.partnerUsername || "").trim();
   const threadId = String(t?.threadId || "").trim();
@@ -39513,7 +39561,7 @@ function messagesInboxThreadRowHtml(t) {
   const previewHtml = `<span class="messagesRowPreviewLine">${statusTick}${userTextHtml(previewText, { tag: "span", className: "messagesRowPreview", escapeHtml })}</span>`;
   return `
     <button type="button" class="messagesRow${unread ? " is-unread" : ""}" data-messages-thread="${escapeHtml(threadId)}">
-      <span class="messagesRowAvatarWrap${t?.partnerOnline ? " is-online" : ""}">${messagesAvatarHtml(t?.partnerAvatar, handle)}</span>
+      <span class="messagesRowAvatarWrap${inboxPresenceWrapClass(t)}">${messagesAvatarHtml(t?.partnerAvatar, handle)}</span>
       <span class="messagesRowBody">
         <span class="messagesRowTop">
           <strong class="messagesRowHandle">${escapeHtml(handle ? `@${handle.replace(/^@/, "")}` : "creator")}</strong>
@@ -40641,8 +40689,9 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   beginMessagesThreadEnterTransition();
   if (tid) void markThreadReadQuiet(tid, { readDelayMs: DM_READ_MARK_DELAY_MS });
   startMessagesInboxRealtime();
-  _chatPartnerPresence = { status: "idle" };
+  _chatPartnerPresence = mergePresenceLastActive({ status: "idle" }, _chatHeaderUser?.userId);
   _chatPresenceSig = "";
+  try { renderChatHeaderPresence(); } catch {}
   if (_chatHeaderUser?.userId) {
     void loadMessagesThreadPartnerMeta(_chatHeaderUser.userId);
     void refreshPartnerPresence();
@@ -42797,7 +42846,7 @@ function renderCoachChatHeader() {
     relationEl.textContent = "";
   }
   if (avatarEl) {
-    avatarEl.classList.remove("is-online");
+    avatarEl.classList.remove("is-online", "is-recent");
     if (avatarEl.dataset.chatAvKey !== "coach") {
       avatarEl.dataset.chatAvKey = "coach";
       avatarEl.innerHTML = coachAvatarHtml("messagesThreadAvatarImg");

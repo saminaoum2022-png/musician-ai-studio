@@ -20,8 +20,8 @@ const SVC_FETCH_TIMEOUT_MS = 80000;
 const MAX_BODY = 2000;
 const DM_VOICE_BUCKET = "dm_voice";
 const DM_VOICE_MAX_BYTES = 512 * 1024;
-const PRESENCE_ONLINE_MS = 4 * 60 * 1000;
-const PRESENCE_LAST_SEEN_MS = 24 * 60 * 60 * 1000;
+const PRESENCE_ONLINE_MS = 5 * 60 * 1000;
+const PRESENCE_LAST_SEEN_MS = 7 * 24 * 60 * 60 * 1000;
 
 function svcHeaders(extra) {
   return {
@@ -278,13 +278,22 @@ async function enrichInboxThreads(threadRows, viewerId) {
   if (!uid || !threadRows.length) return [];
   const threadIds = threadRows.map((t) => String(t.id || "")).filter(Boolean);
   const partnerIds = threadRows.map((t) => threadPartnerId(t, uid)).filter(Boolean);
-  const [profileMap, readMap, lastMsgMap, partnerReadMap, onlineMap] = await Promise.all([
+  const [profileMap, readMap, lastMsgMap, partnerReadMap] = await Promise.all([
     profilesByUserIds(partnerIds),
     readsForUserThreads(uid, threadIds),
     lastMessagesForThreads(threadIds),
     partnerReadsForThreads(uid, threadRows),
-    inboxOnlineByPartnerIds(uid, partnerIds),
   ]);
+  const extraLastAt = new Map();
+  for (const thread of threadRows) {
+    const tid = String(thread.id || "");
+    const partnerId = threadPartnerId(thread, uid);
+    const last = lastMsgMap.get(tid);
+    if (partnerId && last && String(last.sender_id || "") === String(partnerId)) {
+      extraLastAt.set(partnerId, last.created_at);
+    }
+  }
+  const presenceMap = await inboxPresenceByPartnerIds(uid, partnerIds, extraLastAt);
   const unreadCandidates = [];
   for (const thread of threadRows) {
     const tid = String(thread.id || "");
@@ -318,7 +327,8 @@ async function enrichInboxThreads(threadRows, viewerId) {
       partnerLastReadAt: partnerReadMap.get(tid) || null,
       unread: Boolean(hasUnread),
       unreadCount,
-      partnerOnline: Boolean(partnerId && onlineMap.get(partnerId)),
+      partnerPresence: partnerId ? (presenceMap.get(partnerId) || "") : "",
+      partnerOnline: Boolean(partnerId && presenceMap.get(partnerId) === "online"),
     };
   });
 }
@@ -339,46 +349,29 @@ async function isBlockedEitherWay(a, b) {
   return Array.isArray(r.data) && r.data.length > 0;
 }
 
-async function mutualFollowPartnerSet(viewerId, partnerIds) {
-  const viewer = cleanUserId(viewerId);
-  const ids = [...new Set((partnerIds || []).map((id) => cleanUserId(id)).filter(Boolean))];
-  const out = new Set();
-  if (!viewer || !ids.length) return out;
-  for (const chunk of chunkIds(ids)) {
-    const inClause = chunk.map(encodeURIComponent).join(",");
-    const [outR, inR] = await Promise.all([
-      svcFetch(
-        `social_follows?select=following_user_id&follower_user_id=eq.${encodeURIComponent(viewer)}&following_user_id=in.(${inClause})`,
-      ),
-      svcFetch(
-        `social_follows?select=follower_user_id&following_user_id=eq.${encodeURIComponent(viewer)}&follower_user_id=in.(${inClause})`,
-      ),
-    ]);
-    const iFollow = new Set(
-      (Array.isArray(outR.data) ? outR.data : []).map((row) => String(row.following_user_id || "")).filter(Boolean),
-    );
-    const theyFollow = new Set(
-      (Array.isArray(inR.data) ? inR.data : []).map((row) => String(row.follower_user_id || "")).filter(Boolean),
-    );
-    for (const id of chunk) {
-      if (iFollow.has(id) && theyFollow.has(id)) out.add(id);
-    }
+function latestTimestamp(...values) {
+  let best = 0;
+  for (const value of values) {
+    const at = Date.parse(value);
+    if (!Number.isFinite(at) || at <= 0) continue;
+    if (at > best) best = at;
   }
-  return out;
+  return best || 0;
 }
 
-function isFreshLastActive(iso, windowMs) {
-  const at = Date.parse(iso);
-  if (!Number.isFinite(at)) return false;
+function presenceTierFromMs(at) {
+  if (!at) return "";
   const ago = Date.now() - at;
-  return ago >= 0 && ago <= windowMs;
+  if (ago < 0) return "online";
+  if (ago <= PRESENCE_ONLINE_MS) return "online";
+  if (ago <= PRESENCE_LAST_SEEN_MS) return "recent";
+  return "";
 }
 
-async function inboxOnlineByPartnerIds(viewerId, partnerIds) {
-  const mutual = await mutualFollowPartnerSet(viewerId, partnerIds);
+async function inboxPresenceByPartnerIds(viewerId, partnerIds, extraLastAtByUser = new Map()) {
+  const ids = [...new Set((partnerIds || []).map((id) => cleanUserId(id)).filter(Boolean))];
   const map = new Map();
-  if (!mutual.size) return map;
-  const ids = [...mutual];
+  if (!ids.length) return map;
   for (const chunk of chunkIds(ids)) {
     const inClause = chunk.map(encodeURIComponent).join(",");
     const [profR, presR] = await Promise.all([
@@ -386,22 +379,40 @@ async function inboxOnlineByPartnerIds(viewerId, partnerIds) {
         `profiles?user_id=in.(${inClause})&select=user_id,presence_enabled,last_active_at`,
       ),
       svcFetch(
-        `user_presence?user_id=in.(${inClause})&select=user_id,status,expires_at`,
+        `user_presence?user_id=in.(${inClause})&select=user_id,status,expires_at,updated_at`,
       ),
     ]);
     const live = new Set();
+    const presenceUpdated = new Map();
     for (const row of Array.isArray(presR.data) ? presR.data : []) {
       const uid = String(row.user_id || "");
+      if (!uid) continue;
+      if (row.updated_at) presenceUpdated.set(uid, row.updated_at);
       const status = String(row.status || "idle");
-      if (!uid || status === "idle") continue;
+      if (status === "idle") continue;
       if (row.expires_at && new Date(row.expires_at) < new Date()) continue;
       live.add(uid);
     }
+    const prefs = new Map();
     for (const row of Array.isArray(profR.data) ? profR.data : []) {
       const uid = String(row.user_id || "");
-      if (!uid || row.presence_enabled === false) continue;
-      const online = live.has(uid) || isFreshLastActive(row.last_active_at, PRESENCE_ONLINE_MS);
-      if (online) map.set(uid, true);
+      if (!uid) continue;
+      prefs.set(uid, row);
+    }
+    for (const uid of chunk) {
+      const row = prefs.get(uid);
+      if (row?.presence_enabled === false) continue;
+      if (live.has(uid)) {
+        map.set(uid, "online");
+        continue;
+      }
+      const at = latestTimestamp(
+        row?.last_active_at,
+        presenceUpdated.get(uid),
+        extraLastAtByUser.get(uid),
+      );
+      const tier = presenceTierFromMs(at);
+      if (tier) map.set(uid, tier);
     }
   }
   return map;
@@ -453,16 +464,15 @@ async function presenceForViewer(viewerId, partnerId) {
   const viewer = cleanUserId(viewerId);
   const partner = cleanUserId(partnerId);
   if (!viewer || !partner || viewer === partner) return { status: "idle" };
-  const mutual = await isMutualFollow(viewer, partner);
-  if (!mutual) return { status: "idle" };
   const prefs = await presencePrefsForUser(partner);
   if (!prefs.enabled) return { status: "idle" };
   const r = await svcFetch(
-    `user_presence?user_id=eq.${encodeURIComponent(partner)}&select=status,song_id,song_title,song_cover,song_url,song_owner_id,expires_at&limit=1`,
+    `user_presence?user_id=eq.${encodeURIComponent(partner)}&select=status,song_id,song_title,song_cover,song_url,song_owner_id,expires_at,updated_at&limit=1`,
   );
   const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
-  const lastActiveAt = isFreshLastActive(prefs.lastActiveAt, PRESENCE_LAST_SEEN_MS)
-    ? prefs.lastActiveAt
+  const lastActiveMs = latestTimestamp(prefs.lastActiveAt, row?.updated_at);
+  const lastActiveAt = lastActiveMs && (Date.now() - lastActiveMs) <= PRESENCE_LAST_SEEN_MS
+    ? new Date(lastActiveMs).toISOString()
     : null;
   const idleOut = { status: "idle", lastActiveAt };
   if (!row) return idleOut;

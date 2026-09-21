@@ -38853,11 +38853,15 @@ body[data-route="messages"]{
     var(--nabad-glass-inset-top),
     var(--nabad-glass-inset-bottom);
 }
+.messagesRow{
+  overflow: visible;
+}
 .messagesRowAvatarWrap{
   position: relative;
   flex: 0 0 auto;
   width: 48px;
   height: 48px;
+  overflow: visible;
 }
 .messagesRowAvatarWrap .messagesRowAvatar,
 .messagesRowAvatarWrap .messagesAvatarFallback{
@@ -38865,18 +38869,28 @@ body[data-route="messages"]{
   height: 48px;
 }
 .messagesRowAvatarWrap.is-online::after,
-.messagesThreadAvatar.is-online::after{
+.messagesRowAvatarWrap.is-recent::after,
+.messagesThreadAvatar.is-online::after,
+.messagesThreadAvatar.is-recent::after{
   content: "";
   position: absolute;
-  right: -1px;
-  bottom: -1px;
+  right: 1px;
+  bottom: 1px;
   width: 12px;
   height: 12px;
   border-radius: 50%;
   background: #34d399;
   border: 2px solid var(--bg);
-  box-shadow: none;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.18);
   z-index: 2;
+  pointer-events: none;
+}
+.messagesRowAvatarWrap.is-recent::after,
+.messagesThreadAvatar.is-recent::after{
+  background: #f59e0b;
+}
+.messagesThreadAvatar.is-recent{
+  overflow: visible;
 }
 .messagesAvatarFallback{
   display: inline-flex;

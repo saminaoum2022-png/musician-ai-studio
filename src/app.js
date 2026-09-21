@@ -37236,6 +37236,7 @@ function renderChatHeaderSkeleton() {
   }
   if (avatarEl) {
     avatarEl.dataset.chatAvKey = "skel";
+    avatarEl.classList.remove("is-online");
     avatarEl.innerHTML = `<span class="messagesThreadAvatarSkel" aria-hidden="true"></span>`;
   }
   const metaEl = document.getElementById("messagesThreadHeadMeta");
@@ -38780,11 +38781,17 @@ const NABAD_PRESENCE_ICONS = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/></svg>',
   pulse:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.2-5 3.6 10 2.2-5H21"/></svg>',
+  online:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg>',
 };
 
 const PRESENCE_NOWPLAYING_LINGER_MS = 45000;
 const PRESENCE_TICK_MS = 3000;
 const PRESENCE_RESEND_MS = 25000;
+const PRESENCE_IDLE_HEARTBEAT_MS = 60000;
+const PRESENCE_ONLINE_MS = 4 * 60 * 1000;
+const PRESENCE_LAST_SEEN_MS = 24 * 60 * 60 * 1000;
+const PARTNER_PRESENCE_POLL_MS = 20000;
 
 let _chatPartnerPresence = { status: "idle" };
 let _chatPresenceSig = "";
@@ -38793,6 +38800,7 @@ let _myPresenceLastSentAt = 0;
 let _myPresenceLastPlayingAt = 0;
 let _presenceWatcherTimer = 0;
 let _partnerPresenceInFlight = false;
+let _partnerPresenceLastAt = 0;
 
 function presenceLocalKey(base) {
   const uid = String(authSession?.user?.id || activeProfile?.id || "").trim();
@@ -38855,8 +38863,10 @@ async function sendMyPresence(p) {
   const now = Date.now();
   // Skip duplicate writes; resend periodically only while active to extend TTL.
   if (key === _myPresenceLastKey) {
-    if (status === "idle") return;
-    if (now - _myPresenceLastSentAt < PRESENCE_RESEND_MS) return;
+    if (status === "idle") {
+      if (!presenceEnabledLocal()) return;
+      if (now - _myPresenceLastSentAt < PRESENCE_IDLE_HEARTBEAT_MS) return;
+    } else if (now - _myPresenceLastSentAt < PRESENCE_RESEND_MS) return;
   }
   _myPresenceLastKey = key;
   _myPresenceLastSentAt = now;
@@ -38883,6 +38893,14 @@ async function sendMyPresence(p) {
 
 function presenceTick() {
   try { void sendMyPresence(computeMyPresenceStatus()); } catch {}
+  try {
+    const route = String(document.body.getAttribute("data-route") || "");
+    if (route !== "messages-thread") return;
+    if (isCoachThreadId(_conversationId)) return;
+    if (Date.now() - _partnerPresenceLastAt < PARTNER_PRESENCE_POLL_MS) return;
+    _partnerPresenceLastAt = Date.now();
+    void refreshPartnerPresence();
+  } catch {}
 }
 
 function startPresenceWatcher() {
@@ -38893,7 +38911,24 @@ function startPresenceWatcher() {
 // in boot would hit the temporal dead zone on the consts above).
 try { startPresenceWatcher(); } catch {}
 
-/** Build the header Pulse line. Idle shows no subtitle — the missing aura is enough. */
+function lastSeenLineFromAt(iso) {
+  const at = Date.parse(iso);
+  if (!Number.isFinite(at)) return null;
+  const ago = Date.now() - at;
+  if (ago < PRESENCE_ONLINE_MS) {
+    return { status: "online", iconKey: "online", text: "Online", tappable: false };
+  }
+  if (ago > PRESENCE_LAST_SEEN_MS) return null;
+  if (ago < 60 * 60 * 1000) {
+    const m = Math.max(1, Math.round(ago / 60000));
+    return { status: "last_seen", iconKey: "", text: `Active ${m}m ago`, tappable: false };
+  }
+  const h = Math.max(1, Math.round(ago / 3600000));
+  if (h < 6) return { status: "last_seen", iconKey: "", text: `Active ${h}h ago`, tappable: false };
+  return { status: "last_seen", iconKey: "", text: "Active today", tappable: false };
+}
+
+/** Pulse first (playing / creating / recording). Idle falls back to online / last seen. */
 function presenceLineFromState(p) {
   const s = p && p.status ? String(p.status) : "idle";
   if (s === "recording") return { status: s, iconKey: "recording", text: "Recording vocals\u2026", tappable: false };
@@ -38903,7 +38938,7 @@ function presenceLineFromState(p) {
     if (p.hideTitle || !p.songTitle) return { status: s, iconKey: "now_playing", text: "Now Playing", tappable: false };
     return { status: s, iconKey: "now_playing", text: `Now Playing \u2022 ${p.songTitle}`, tappable: true };
   }
-  return { status: "idle", iconKey: "pulse", text: "", tappable: false };
+  return lastSeenLineFromAt(p?.lastActiveAt) || { status: "idle", iconKey: "pulse", text: "", tappable: false };
 }
 
 function isPartnerTypingActive() {
@@ -38982,11 +39017,20 @@ function cssUrlIfHttp(url) {
   return `url("${u}")`;
 }
 
+function syncChatHeaderOnlineDot() {
+  const avatarEl = document.getElementById("messagesThreadAvatar");
+  if (!avatarEl) return;
+  const isCoach = String(_chatHeaderUser?.userId || "") === COACH_SENDER_ID;
+  const line = presenceLineFromState(_chatPartnerPresence);
+  avatarEl.classList.toggle("is-online", !isCoach && line?.status === "online");
+}
+
 function syncMessagesThreadHeadPresenceAura() {
   const metaEl = document.getElementById("messagesThreadHeadMeta");
   if (!metaEl) return;
   const isCoach = String(_chatHeaderUser?.userId || "") === COACH_SENDER_ID;
-  const status = isCoach ? "idle" : String(_chatPartnerPresence?.status || "idle");
+  const pulse = String(_chatPartnerPresence?.status || "idle");
+  const status = isCoach || pulse === "idle" || pulse === "online" ? "idle" : pulse;
   if (status && status !== "idle") metaEl.dataset.presenceStatus = status;
   else delete metaEl.dataset.presenceStatus;
   const cover = !isCoach && status === "now_playing"
@@ -39014,6 +39058,7 @@ function renderChatHeaderPresence() {
   const relationEl = document.getElementById("messagesThreadRelation");
   if (!relationEl) return;
   syncMessagesThreadHeadPresenceAura();
+  syncChatHeaderOnlineDot();
   const line = presenceLineFromState(_chatPartnerPresence);
   const text = String(line?.text || "").trim();
   const idle = !line || line.status === "idle" || !text;
@@ -39030,7 +39075,8 @@ function renderChatHeaderPresence() {
   const tappable = Boolean(line.tappable);
   const statusAttr = line.status || "idle";
   const nextSig = `p|${line.status}|${line.text}`;
-  const nextHtml = `<span class="dmPresenceIco" aria-hidden="true">${NABAD_PRESENCE_ICONS[line.iconKey] || NABAD_PRESENCE_ICONS.pulse}</span><span class="dmPresenceTxt">${escapeHtml(line.text)}</span>`;
+  const ico = line.iconKey ? (NABAD_PRESENCE_ICONS[line.iconKey] || "") : "";
+  const nextHtml = `${ico ? `<span class="dmPresenceIco" aria-hidden="true">${ico}</span>` : ""}<span class="dmPresenceTxt">${escapeHtml(line.text)}</span>`;
   relationEl.classList.toggle("messagesThreadRelation--presence", true);
   relationEl.classList.toggle("messagesThreadRelation--np", tappable);
   if (statusAttr) relationEl.dataset.presenceStatus = statusAttr;
@@ -39467,7 +39513,7 @@ function messagesInboxThreadRowHtml(t) {
   const previewHtml = `<span class="messagesRowPreviewLine">${statusTick}${userTextHtml(previewText, { tag: "span", className: "messagesRowPreview", escapeHtml })}</span>`;
   return `
     <button type="button" class="messagesRow${unread ? " is-unread" : ""}" data-messages-thread="${escapeHtml(threadId)}">
-      ${messagesAvatarHtml(t?.partnerAvatar, handle)}
+      <span class="messagesRowAvatarWrap${t?.partnerOnline ? " is-online" : ""}">${messagesAvatarHtml(t?.partnerAvatar, handle)}</span>
       <span class="messagesRowBody">
         <span class="messagesRowTop">
           <strong class="messagesRowHandle">${escapeHtml(handle ? `@${handle.replace(/^@/, "")}` : "creator")}</strong>
@@ -42750,9 +42796,12 @@ function renderCoachChatHeader() {
     relationEl.hidden = true;
     relationEl.textContent = "";
   }
-  if (avatarEl && avatarEl.dataset.chatAvKey !== "coach") {
-    avatarEl.dataset.chatAvKey = "coach";
-    avatarEl.innerHTML = coachAvatarHtml("messagesThreadAvatarImg");
+  if (avatarEl) {
+    avatarEl.classList.remove("is-online");
+    if (avatarEl.dataset.chatAvKey !== "coach") {
+      avatarEl.dataset.chatAvKey = "coach";
+      avatarEl.innerHTML = coachAvatarHtml("messagesThreadAvatarImg");
+    }
   }
   const metaEl = document.getElementById("messagesThreadHeadMeta");
   if (metaEl) {

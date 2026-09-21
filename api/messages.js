@@ -20,6 +20,8 @@ const SVC_FETCH_TIMEOUT_MS = 80000;
 const MAX_BODY = 2000;
 const DM_VOICE_BUCKET = "dm_voice";
 const DM_VOICE_MAX_BYTES = 512 * 1024;
+const PRESENCE_ONLINE_MS = 4 * 60 * 1000;
+const PRESENCE_LAST_SEEN_MS = 24 * 60 * 60 * 1000;
 
 function svcHeaders(extra) {
   return {
@@ -276,11 +278,12 @@ async function enrichInboxThreads(threadRows, viewerId) {
   if (!uid || !threadRows.length) return [];
   const threadIds = threadRows.map((t) => String(t.id || "")).filter(Boolean);
   const partnerIds = threadRows.map((t) => threadPartnerId(t, uid)).filter(Boolean);
-  const [profileMap, readMap, lastMsgMap, partnerReadMap] = await Promise.all([
+  const [profileMap, readMap, lastMsgMap, partnerReadMap, onlineMap] = await Promise.all([
     profilesByUserIds(partnerIds),
     readsForUserThreads(uid, threadIds),
     lastMessagesForThreads(threadIds),
     partnerReadsForThreads(uid, threadRows),
+    inboxOnlineByPartnerIds(uid, partnerIds),
   ]);
   const unreadCandidates = [];
   for (const thread of threadRows) {
@@ -315,6 +318,7 @@ async function enrichInboxThreads(threadRows, viewerId) {
       partnerLastReadAt: partnerReadMap.get(tid) || null,
       unread: Boolean(hasUnread),
       unreadCount,
+      partnerOnline: Boolean(partnerId && onlineMap.get(partnerId)),
     };
   });
 }
@@ -333,6 +337,74 @@ async function isBlockedEitherWay(a, b) {
   const q = `or=(and(blocker_id.eq.${encodeURIComponent(ua)},blocked_id.eq.${encodeURIComponent(ub)}),and(blocker_id.eq.${encodeURIComponent(ub)},blocked_id.eq.${encodeURIComponent(ua)}))`;
   const r = await svcFetch(`dm_blocks?select=blocker_id&${q}&limit=1`);
   return Array.isArray(r.data) && r.data.length > 0;
+}
+
+async function mutualFollowPartnerSet(viewerId, partnerIds) {
+  const viewer = cleanUserId(viewerId);
+  const ids = [...new Set((partnerIds || []).map((id) => cleanUserId(id)).filter(Boolean))];
+  const out = new Set();
+  if (!viewer || !ids.length) return out;
+  for (const chunk of chunkIds(ids)) {
+    const inClause = chunk.map(encodeURIComponent).join(",");
+    const [outR, inR] = await Promise.all([
+      svcFetch(
+        `social_follows?select=following_user_id&follower_user_id=eq.${encodeURIComponent(viewer)}&following_user_id=in.(${inClause})`,
+      ),
+      svcFetch(
+        `social_follows?select=follower_user_id&following_user_id=eq.${encodeURIComponent(viewer)}&follower_user_id=in.(${inClause})`,
+      ),
+    ]);
+    const iFollow = new Set(
+      (Array.isArray(outR.data) ? outR.data : []).map((row) => String(row.following_user_id || "")).filter(Boolean),
+    );
+    const theyFollow = new Set(
+      (Array.isArray(inR.data) ? inR.data : []).map((row) => String(row.follower_user_id || "")).filter(Boolean),
+    );
+    for (const id of chunk) {
+      if (iFollow.has(id) && theyFollow.has(id)) out.add(id);
+    }
+  }
+  return out;
+}
+
+function isFreshLastActive(iso, windowMs) {
+  const at = Date.parse(iso);
+  if (!Number.isFinite(at)) return false;
+  const ago = Date.now() - at;
+  return ago >= 0 && ago <= windowMs;
+}
+
+async function inboxOnlineByPartnerIds(viewerId, partnerIds) {
+  const mutual = await mutualFollowPartnerSet(viewerId, partnerIds);
+  const map = new Map();
+  if (!mutual.size) return map;
+  const ids = [...mutual];
+  for (const chunk of chunkIds(ids)) {
+    const inClause = chunk.map(encodeURIComponent).join(",");
+    const [profR, presR] = await Promise.all([
+      svcFetch(
+        `profiles?user_id=in.(${inClause})&select=user_id,presence_enabled,last_active_at`,
+      ),
+      svcFetch(
+        `user_presence?user_id=in.(${inClause})&select=user_id,status,expires_at`,
+      ),
+    ]);
+    const live = new Set();
+    for (const row of Array.isArray(presR.data) ? presR.data : []) {
+      const uid = String(row.user_id || "");
+      const status = String(row.status || "idle");
+      if (!uid || status === "idle") continue;
+      if (row.expires_at && new Date(row.expires_at) < new Date()) continue;
+      live.add(uid);
+    }
+    for (const row of Array.isArray(profR.data) ? profR.data : []) {
+      const uid = String(row.user_id || "");
+      if (!uid || row.presence_enabled === false) continue;
+      const online = live.has(uid) || isFreshLastActive(row.last_active_at, PRESENCE_ONLINE_MS);
+      if (online) map.set(uid, true);
+    }
+  }
+  return map;
 }
 
 async function isMutualFollow(userA, userB) {
@@ -365,13 +437,14 @@ async function presencePrefsForUser(userId) {
   const uid = cleanUserId(userId);
   if (!uid) return { enabled: false, hideTitles: false };
   const r = await svcFetch(
-    `profiles?user_id=eq.${encodeURIComponent(uid)}&select=presence_enabled,presence_hide_titles&limit=1`,
+    `profiles?user_id=eq.${encodeURIComponent(uid)}&select=presence_enabled,presence_hide_titles,last_active_at&limit=1`,
   );
   const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
   // Default ON when the column is absent/null (feature is opt-out).
   return {
     enabled: row ? row.presence_enabled !== false : true,
     hideTitles: row ? row.presence_hide_titles === true : false,
+    lastActiveAt: row?.last_active_at || null,
   };
 }
 
@@ -388,11 +461,15 @@ async function presenceForViewer(viewerId, partnerId) {
     `user_presence?user_id=eq.${encodeURIComponent(partner)}&select=status,song_id,song_title,song_cover,song_url,song_owner_id,expires_at&limit=1`,
   );
   const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
-  if (!row) return { status: "idle" };
+  const lastActiveAt = isFreshLastActive(prefs.lastActiveAt, PRESENCE_LAST_SEEN_MS)
+    ? prefs.lastActiveAt
+    : null;
+  const idleOut = { status: "idle", lastActiveAt };
+  if (!row) return idleOut;
   const status = String(row.status || "idle");
-  if (status === "idle") return { status: "idle" };
-  if (row.expires_at && new Date(row.expires_at) < new Date()) return { status: "idle" };
-  const out = { status };
+  if (status === "idle") return idleOut;
+  if (row.expires_at && new Date(row.expires_at) < new Date()) return idleOut;
+  const out = { status, lastActiveAt };
   if (status === "now_playing") {
     out.isYourSong = cleanUserId(row.song_owner_id) === viewer;
     out.songId = String(row.song_id || "");
@@ -983,6 +1060,13 @@ async function handlePost(req, res, user) {
       body: JSON.stringify(row),
     });
     if (!r.ok) return sendJson(res, 500, { ok: false, error: "Presence update failed" });
+    runMessagesBackground(
+      svcFetch(`profiles?user_id=eq.${encodeURIComponent(user.userId)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ last_active_at: nowIso }),
+      }),
+    );
     return sendJson(res, 200, { ok: true });
   }
 

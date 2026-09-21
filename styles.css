@@ -38853,6 +38853,31 @@ body[data-route="messages"]{
     var(--nabad-glass-inset-top),
     var(--nabad-glass-inset-bottom);
 }
+.messagesRowAvatarWrap{
+  position: relative;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+}
+.messagesRowAvatarWrap .messagesRowAvatar,
+.messagesRowAvatarWrap .messagesAvatarFallback{
+  width: 48px;
+  height: 48px;
+}
+.messagesRowAvatarWrap.is-online::after,
+.messagesThreadAvatar.is-online::after{
+  content: "";
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #34d399;
+  border: 2px solid var(--bg);
+  box-shadow: none;
+  z-index: 2;
+}
 .messagesAvatarFallback{
   display: inline-flex;
   align-items: center;
@@ -38896,47 +38921,24 @@ body[data-route="messages"]{
   align-items: center;
 }
 .messagesInboxSection--coach{
-  margin-bottom: 6px;
+  margin-bottom: 2px;
 }
 .messagesRow--coach{
-  padding: 12px 12px 12px 10px;
-  border-radius: 22px;
-  border: 1px solid var(--nabad-glass-border);
-  background: var(--nabad-glass-bg);
-  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
-          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
-  box-shadow:
-    var(--nabad-glass-inset-top),
-    var(--nabad-glass-inset-bottom);
+  padding: 11px 10px;
+  overflow: visible;
 }
-@media (hover: hover) and (pointer: fine){
-  .messagesRow--coach:hover,
-  .messagesRow--coach:focus-visible{
-    background: var(--nabad-glass-bg-hover);
-    border-color: var(--nabad-glass-border-hover);
-  }
-  .messagesRow--coach:active{
-    transform: scale(var(--nabad-glass-active-scale));
-  }
+.messagesRow--coach .coachAvatar.messagesRowAvatar,
+.messagesRow--coach .coachAvatar{
+  width: 48px;
+  height: 48px;
+  overflow: visible;
+  border-radius: 0;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
-@media (hover: none), (pointer: coarse){
-  .messagesRow--coach:hover,
-  .messagesRow--coach:active,
-  .messagesRow--coach:focus,
-  .messagesRow--coach:focus-visible{
-    transform: none;
-    border-color: var(--nabad-glass-border);
-    background: var(--nabad-glass-bg);
-    -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
-            backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
-    box-shadow:
-      var(--nabad-glass-inset-top),
-      var(--nabad-glass-inset-bottom);
-  }
-}
-.messagesRow--coach.is-pressing{
-  background: var(--nabad-glass-bg-hover);
-  border-color: var(--nabad-glass-border-hover);
+.messagesRow--coach .coachAvatar svg{
+  filter: drop-shadow(0 3px 8px rgba(91, 60, 255, 0.30));
 }
 .coachSignupCtas{
   display: flex;
@@ -39670,6 +39672,13 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
   color: rgba(196,182,255,0.95);
   transition: opacity 180ms ease;
 }
+.messagesThreadRelation[data-presence-status="online"]{
+  color: #34d399;
+}
+.messagesThreadRelation[data-presence-status="last_seen"]{
+  color: rgba(223,231,251,0.52);
+  font-weight: 600;
+}
 .messagesThreadRelation.dmPresenceFadeOut{ opacity: 0; }
 .messagesThreadRelation--presence .dmPresenceIco{
   flex: 0 0 auto;
@@ -39822,6 +39831,10 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
   border-radius: 50%;
   overflow: hidden;
   background: rgba(124,92,255,0.18);
+  position: relative;
+}
+.messagesThreadAvatar.is-online{
+  overflow: visible;
 }
 .messagesThreadAvatar .messagesThreadAvatarImg,
 .messagesThreadAvatar .messagesAvatarFallback{
@@ -59225,7 +59238,6 @@ html[data-theme="light"] .messagesStatus{
   box-shadow: var(--chart-surface-shadow);
 }
 html[data-theme="light"] .messagesInboxSectionCount,
-html[data-theme="light"] .messagesRow--coach,
 html[data-theme="light"] .messagesRequestRow,
 html[data-theme="light"] .messagesSentRequestRow{
   border-color: var(--nabad-glass-border);
@@ -59347,6 +59359,12 @@ html[data-theme="light"] .messagesThreadHandleSub{
 }
 html[data-theme="light"] .messagesThreadRelation{
   color: #6d4df5;
+}
+html[data-theme="light"] .messagesThreadRelation[data-presence-status="online"]{
+  color: #059669;
+}
+html[data-theme="light"] .messagesThreadRelation[data-presence-status="last_seen"]{
+  color: var(--text-secondary);
 }
 html[data-theme="light"] .messagesBubble{
   background: var(--card);

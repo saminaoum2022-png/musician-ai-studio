@@ -38673,8 +38673,315 @@ body[data-route="messages"]{
 .messagesInboxMount{
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   padding: 0 8px;
+}
+.messagesConnectHead{
+  padding-bottom: 10px;
+}
+.messagesConnectSearchClose{
+  display: none;
+  margin-top: 2px;
+}
+.messagesConnectSearchField{
+  display: none;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.messagesConnectSearchInput{
+  width: 100%;
+  height: 38px;
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.06);
+  color: #f8faff;
+  font-size: 16px;
+  font-weight: 550;
+  letter-spacing: -0.02em;
+  outline: none;
+  box-shadow: none;
+}
+.messagesConnectSearchInput::placeholder{
+  color: rgba(223,231,251,0.42);
+}
+.messagesConnectSearchInput:focus{
+  box-shadow: none;
+  border-color: transparent;
+}
+.messagesPage.isSearchOpen .messagesConnectHead .discoveryStudioTitles{
+  display: none;
+}
+.messagesPage.isSearchOpen .messagesConnectSearchClose{
+  display: inline-flex;
+}
+.messagesPage.isSearchOpen .messagesConnectSearchField{
+  display: block;
+}
+.messagesPage.isSearchOpen #messagesInboxSearchBtn,
+.messagesPage.isSearchOpen #messagesInboxAddBtn{
+  display: none;
+}
+.messagesInboxPresence{
+  margin: 0;
+  padding: 0 2px 2px;
+}
+.messagesInboxPresenceCard{
+  --pulse-aura: transparent;
+  --pulse-aura-soft: transparent;
+  --pulse-art: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 84px;
+  margin: 0;
+  padding: 12px 20px 12px 12px;
+  overflow: hidden;
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--nabad-glass-radius-round);
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+  color: var(--nabad-glass-color);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.messagesInboxPresenceCard::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  background: var(--pulse-art) center / cover no-repeat;
+  mix-blend-mode: overlay;
+}
+.messagesInboxPresenceCard > *{
+  position: relative;
+  z-index: 1;
+}
+.messagesInboxPresenceCard:active{
+  transform: scale(0.985);
+}
+.messagesInboxPresenceAvatarWrap{
+  position: relative;
+  flex: 0 0 58px;
+  width: 58px;
+  height: 58px;
+  overflow: visible;
+}
+.messagesInboxPresenceAvatar,
+.messagesInboxPresenceAvatar.messagesAvatarFallback{
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.messagesInboxPresenceAvatarWrap.is-online::after{
+  content: "";
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #34d399;
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.18);
+  z-index: 2;
+  pointer-events: none;
+}
+.messagesInboxPresenceCopy{
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.messagesInboxPresenceKicker{
+  color: rgba(223,231,251,0.52);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.messagesInboxPresenceLine{
+  color: #f8faff;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.messagesInboxPresenceDetail{
+  color: rgba(223,231,251,0.54);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.messagesInboxPresenceCard[data-presence-status="now_playing"]{
+  --pulse-aura: rgba(180, 140, 255, 0.48);
+  border-color: color-mix(in srgb, var(--pulse-aura) 72%, var(--nabad-glass-border));
+}
+.messagesInboxPresenceCard[data-presence-status="creating"]{
+  --pulse-aura: rgba(167, 139, 250, 0.52);
+  border-color: color-mix(in srgb, #a78bfa 46%, var(--nabad-glass-border));
+}
+.messagesInboxPresenceCard[data-presence-status="recording"]{
+  --pulse-aura: rgba(255, 120, 160, 0.5);
+  border-color: color-mix(in srgb, #ff7aa0 46%, var(--nabad-glass-border));
+}
+.messagesInboxPresenceCard[data-presence-status="now_playing"]::before{
+  opacity: 0.55;
+  background:
+    radial-gradient(circle at 22% 50%, var(--pulse-aura), transparent 68%),
+    var(--pulse-art) center / 160% no-repeat;
+  filter: blur(18px) saturate(1.35);
+  -webkit-clip-path: inset(0 round 999px);
+          clip-path: inset(0 round 999px);
+  mix-blend-mode: screen;
+}
+.messagesInboxPresenceCard[data-presence-status="creating"]::before{
+  opacity: 0.5;
+  background: radial-gradient(circle at 22% 50%, rgba(167, 139, 250, 0.5), transparent 68%);
+  mix-blend-mode: screen;
+}
+.messagesInboxPresenceCard[data-presence-status="recording"]::before{
+  opacity: 0.5;
+  background: radial-gradient(circle at 22% 50%, rgba(255, 120, 160, 0.48), transparent 68%);
+  mix-blend-mode: screen;
+}
+.messagesPresenceSheetCard{
+  max-height: min(78dvh, 620px);
+}
+.messagesPresencePreview{
+  margin: 4px 0 14px;
+}
+.messagesPresencePreviewCard{
+  --pulse-aura: transparent;
+  --pulse-art: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 84px;
+  padding: 12px 18px 12px 12px;
+  overflow: hidden;
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--nabad-glass-radius-round);
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+  color: var(--nabad-glass-color);
+}
+.messagesPresencePreviewCard > *{
+  position: relative;
+  z-index: 1;
+}
+.messagesPresenceNote{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+.messagesPresenceNoteLbl{
+  color: rgba(223,231,251,0.52);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.messagesPresenceNoteInput{
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--nabad-glass-border);
+  background: rgba(255,255,255,0.05);
+  color: #f8faff;
+  font-size: 15px;
+  font-weight: 550;
+  outline: none;
+  box-shadow: none;
+}
+.messagesPresenceNoteInput::placeholder{
+  color: rgba(223,231,251,0.38);
+}
+.messagesPresenceNoteInput:focus{
+  border-color: var(--nabad-glass-border-hover);
+  box-shadow: none;
+}
+.messagesPresenceToggles{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 4px 0 0;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.messagesPresenceToggle{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 58px;
+  padding: 10px 2px;
+}
+.messagesPresenceToggle + .messagesPresenceToggle{
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.messagesPresenceToggle--nested{
+  margin-left: 12px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(167, 139, 250, 0.35);
+}
+.messagesPresenceToggleCopy{
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-right: 8px;
+}
+.messagesPresenceToggleCopy strong{
+  color: #f8faff;
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.messagesPresenceToggleCopy span{
+  color: rgba(223,231,251,0.52);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.3;
+}
+.messagesPresenceToggle .settingsSwitch{
+  flex: 0 0 44px;
+  width: 44px;
+  margin: 0;
+  align-self: center;
+}
+.messagesPresenceToggle[hidden]{
+  display: none !important;
 }
 .messagesInboxSectionLabel{
   margin: 0;
@@ -59299,6 +59606,29 @@ html[data-theme="light"] .messagesRow.is-pressing{
 html[data-theme="light"] .messagesRow.is-unread{
   border-color: var(--nabad-glass-border);
   background: var(--nabad-glass-bg);
+}
+html[data-theme="light"] .messagesInboxPresenceKicker,
+html[data-theme="light"] .messagesInboxPresenceDetail{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesInboxPresenceLine{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesConnectSearchInput{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesConnectSearchInput::placeholder{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .messagesPresenceToggleCopy strong{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesPresenceToggleCopy span,
+html[data-theme="light"] .messagesPresenceNoteLbl{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesPresenceNoteInput{
+  color: var(--text-primary);
 }
 html[data-theme="light"] .messagesRowHandle{
   color: var(--text-primary);

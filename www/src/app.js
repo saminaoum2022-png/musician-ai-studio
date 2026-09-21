@@ -7927,6 +7927,8 @@ function wireSettingsPresenceToggles() {
       try {
         await messagesApi("/api/messages", { method: "POST", timeoutMs: 8000, body: JSON.stringify({ action: "set_presence_prefs", presenceEnabled: on }) });
       } catch {}
+      try { syncMessagesPresenceSheet(); } catch {}
+      try { syncMessagesInboxPresenceCard(); } catch {}
     });
   }
   if (hideT && !hideT.dataset.bound) {
@@ -7937,6 +7939,8 @@ function wireSettingsPresenceToggles() {
       try {
         await messagesApi("/api/messages", { method: "POST", timeoutMs: 8000, body: JSON.stringify({ action: "set_presence_prefs", hideTitles: on }) });
       } catch {}
+      try { syncMessagesPresenceSheet(); } catch {}
+      try { syncMessagesInboxPresenceCard(); } catch {}
     });
   }
 }
@@ -36020,6 +36024,7 @@ let _messagesUnreadCount = 0;
 let _messagesUnreadLastFetchedAt = 0;
 let _messagesUnreadFetchInFlight = false;
 let _messagesInboxState = { threads: [], requests: [], sentRequests: [] };
+let _messagesInboxQuery = "";
 let _chatHeaderUser = null;
 let _chatHeaderUserKey = "";
 let _chatHeaderPartnerStats = {};
@@ -38818,6 +38823,12 @@ function setPresenceEnabledLocal(on) {
 function setPresenceHideTitlesLocal(on) {
   try { localStorage.setItem(presenceLocalKey("hideTitles"), on ? "1" : "0"); } catch {}
 }
+function presenceStatusNoteLocal() {
+  try { return String(localStorage.getItem(presenceLocalKey("note")) || "").trim().slice(0, 48); } catch { return ""; }
+}
+function setPresenceStatusNoteLocal(note) {
+  try { localStorage.setItem(presenceLocalKey("note"), String(note || "").trim().slice(0, 48)); } catch {}
+}
 
 /** True when any in-app Nabad recording flow is live. */
 function appIsRecordingNow() {
@@ -38891,10 +38902,23 @@ async function sendMyPresence(p) {
   }
 }
 
+function syncMessagesInboxPresenceCard() {
+  const mount = document.getElementById("messagesInboxMount");
+  const existing = mount?.querySelector?.(".messagesInboxPresence");
+  if (!existing) return;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = messagesInboxMeHeaderHtml().trim();
+  const next = wrap.firstElementChild;
+  if (next) existing.replaceWith(next);
+}
+
 function presenceTick() {
   try { void sendMyPresence(computeMyPresenceStatus()); } catch {}
   try {
     const route = String(document.body.getAttribute("data-route") || "");
+    if (route === "messages") {
+      try { syncMessagesInboxPresenceCard(); } catch {}
+    }
     if (route !== "messages-thread") return;
     if (isCoachThreadId(_conversationId)) return;
     if (Date.now() - _partnerPresenceLastAt < PARTNER_PRESENCE_POLL_MS) return;
@@ -39450,14 +39474,14 @@ function updateMessagesUnreadBadge(count) {
   }
   if (btn) {
     btn.classList.toggle("hasNotice", hasUnread);
-    const label = hasUnread ? `Messages, ${n} unread` : "Messages";
+    const label = hasUnread ? `Connect, ${n} unread` : "Connect";
     btn.setAttribute("aria-label", label);
   }
   try {
     els.friendsTabLink?.classList?.toggle?.("hasNotice", hasUnread);
     const tabLabel = hasUnread
-      ? `Messages, ${n} unread ${n === 1 ? "message" : "messages"}`
-      : "Messages";
+      ? `Connect, ${n} unread ${n === 1 ? "chat" : "chats"}`
+      : "Connect";
     els.friendsTabLink?.setAttribute?.("aria-label", tabLabel);
     if (els.friendsTabBadge) {
       if (!hasUnread) {
@@ -39626,21 +39650,12 @@ function renderMessagesInbox() {
   const threads = Array.isArray(_messagesInboxState.threads) ? _messagesInboxState.threads : [];
   const requests = Array.isArray(_messagesInboxState.requests) ? _messagesInboxState.requests : [];
   const sentRequests = Array.isArray(_messagesInboxState.sentRequests) ? _messagesInboxState.sentRequests : [];
-  const visibleRequests = requests;
-  const visibleThreads = threads;
-  const visibleSent = sentRequests;
-  // Nabad Coach is a pinned, always-present helper at the top of the inbox.
-  const coachHtml = `<section class="messagesInboxSection messagesInboxSection--coach"><div class="messagesInboxList">${coachInboxRowHtml()}</div></section>`;
-
-  if (!visibleRequests.length && !visibleThreads.length && !visibleSent.length) {
-    mount.innerHTML = `${coachHtml}
-      <div class="messagesEmpty">
-        <p class="messagesEmptyTitle">No messages yet</p>
-        <p class="messagesEmptyLead">When you and another creator follow each other, you can chat here.</p>
-      </div>`;
-    if (statusEl) statusEl.hidden = true;
-    return;
-  }
+  const visibleRequests = requests.filter((req) => inboxMatchesQuery(req?.fromUsername, req?.body, "request"));
+  const visibleThreads = threads.filter((t) => inboxMatchesQuery(t?.partnerUsername, t?.lastMessage));
+  const visibleSent = sentRequests.filter((req) => inboxMatchesQuery(req?.toUsername, req?.body, "waiting"));
+  const showCoach = inboxMatchesQuery("nabadai coach", "coach", "nabad");
+  const meHtml = messagesInboxMeHeaderHtml();
+  const coachRow = showCoach ? coachInboxRowHtml() : "";
 
   const requestsHtml = visibleRequests.length
     ? `<section class="messagesInboxSection messagesInboxSection--requests">
@@ -39662,17 +39677,19 @@ function renderMessagesInbox() {
       </section>`
     : "";
 
-  const threadsHtml = visibleThreads.length
+  const listRows = `${coachRow}${visibleThreads.map(messagesInboxThreadRowHtml).join("")}`;
+  const threadsHtml = (showCoach || visibleThreads.length)
     ? `<section class="messagesInboxSection messagesInboxSection--chats">
-        <div class="messagesInboxSectionHead">
-          <h3 class="messagesInboxSectionLabel">${visibleRequests.length || visibleSent.length ? "Chats" : "Messages"}</h3>
-          ${visibleThreads.length ? `<span class="messagesInboxSectionCount">${visibleThreads.length}</span>` : ""}
-        </div>
-        <div class="messagesInboxList">${visibleThreads.map(messagesInboxThreadRowHtml).join("")}</div>
+        <div class="messagesInboxList">${listRows}</div>
       </section>`
-    : "";
+    : (_messagesInboxQuery.trim()
+      ? `<div class="messagesEmpty"><p class="messagesEmptyLead">No chats match</p></div>`
+      : `<div class="messagesEmpty">
+          <p class="messagesEmptyTitle">No chats yet</p>
+          <p class="messagesEmptyLead">When you and another creator follow each other, you can chat here.</p>
+        </div>`);
 
-  mount.innerHTML = coachHtml + requestsHtml + sentHtml + threadsHtml;
+  mount.innerHTML = meHtml + requestsHtml + sentHtml + threadsHtml;
   if (statusEl) statusEl.hidden = true;
 }
 
@@ -43116,6 +43133,180 @@ async function sendCoachMessage(text, input) {
   }
 }
 
+function setConnectSearchOpen(open) {
+  const page = document.getElementById("messagesPage");
+  const btn = document.getElementById("messagesInboxSearchBtn");
+  const close = document.getElementById("messagesInboxSearchClose");
+  const field = page?.querySelector?.(".messagesConnectSearchField");
+  const input = document.getElementById("messagesInboxSearch");
+  page?.classList.toggle("isSearchOpen", Boolean(open));
+  if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+  if (close) close.hidden = !open;
+  if (field) field.hidden = !open;
+  if (!open) {
+    _messagesInboxQuery = "";
+    if (input) input.value = "";
+    renderMessagesInbox();
+    return;
+  }
+  requestAnimationFrame(() => {
+    window.setTimeout(() => input?.focus?.(), 80);
+  });
+}
+
+function inboxSearchHay(...parts) {
+  return parts.map((p) => String(p || "").toLowerCase()).join(" ");
+}
+
+function inboxMatchesQuery(...parts) {
+  const q = String(_messagesInboxQuery || "").trim().toLowerCase();
+  if (!q) return true;
+  return inboxSearchHay(...parts).includes(q);
+}
+
+function messagesInboxPresenceView() {
+  if (!presenceEnabledLocal()) {
+    return { status: "hidden", line: "Hidden from others", detail: "Activity is off", live: false };
+  }
+  try {
+    const p = computeMyPresenceStatus();
+    if (p.status === "recording") {
+      return { status: "recording", line: "Recording vocals", detail: "Visible on your chats", live: true };
+    }
+    if (p.status === "creating") {
+      return { status: "creating", line: "Creating a song", detail: "Visible on your chats", live: true };
+    }
+    if (p.status === "now_playing") {
+      const title = presenceHideTitlesLocal() ? "" : String(p.songTitle || "").trim();
+      return {
+        status: "now_playing",
+        line: title ? `Listening · ${title}` : "Listening",
+        detail: "Visible on your chats",
+        cover: String(p.songCover || "").trim(),
+        live: true,
+      };
+    }
+  } catch {}
+  const note = presenceStatusNoteLocal();
+  if (note) return { status: "note", line: note, detail: "Your status", live: false };
+  return { status: "idle", line: "No activity right now", detail: "Add a status", live: false };
+}
+
+function messagesPresencePreviewHtml() {
+  const view = messagesInboxPresenceView();
+  const username = String(activeProfile?.username || "").replace(/^@/, "").trim();
+  const name = String(activeProfile?.displayName || "").trim() || (username ? `@${username}` : "You");
+  const cover = String(view.cover || "").trim();
+  const style = cover ? ` style="--pulse-art: url('${escapeHtml(cover)}')"` : "";
+  const wrapClass = view.live ? " is-online" : "";
+  return `
+    <div class="messagesPresencePreviewCard" data-presence-status="${escapeHtml(view.status)}"${style}>
+      <span class="messagesInboxPresenceAvatarWrap${wrapClass}">${messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar")}</span>
+      <span class="messagesInboxPresenceCopy">
+        <span class="messagesInboxPresenceKicker">People see</span>
+        <strong class="messagesInboxPresenceLine">${escapeHtml(view.line)}</strong>
+        <span class="messagesInboxPresenceDetail">${escapeHtml(view.detail)}</span>
+      </span>
+    </div>`;
+}
+
+function syncMessagesPresenceSheet() {
+  const preview = document.getElementById("messagesPresencePreview");
+  if (preview) preview.innerHTML = messagesPresencePreviewHtml();
+  const enabledT = document.getElementById("messagesPresenceEnabledToggle");
+  const titlesT = document.getElementById("messagesPresenceShowTitlesToggle");
+  const titlesRow = document.getElementById("messagesPresenceTitlesRow");
+  const on = presenceEnabledLocal();
+  if (enabledT) enabledT.checked = on;
+  if (titlesT) {
+    titlesT.checked = !presenceHideTitlesLocal();
+    titlesT.disabled = !on;
+  }
+  if (titlesRow) titlesRow.hidden = !on;
+  const noteInput = document.getElementById("messagesPresenceNoteInput");
+  if (noteInput && document.activeElement !== noteInput) noteInput.value = presenceStatusNoteLocal();
+}
+
+function openMessagesPresenceSheet() {
+  const sheet = document.getElementById("messagesPresenceSheet");
+  if (!sheet) return;
+  syncMessagesPresenceSheet();
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("messagesShareSheetOpen");
+}
+
+function closeMessagesPresenceSheet() {
+  const sheet = document.getElementById("messagesPresenceSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("messagesShareSheetOpen");
+}
+
+function wireMessagesPresenceSheetOnce() {
+  const sheet = document.getElementById("messagesPresenceSheet");
+  if (!sheet || sheet.dataset.bound === "1") return;
+  sheet.dataset.bound = "1";
+  document.getElementById("messagesPresenceSheetClose")?.addEventListener("click", closeMessagesPresenceSheet);
+  document.getElementById("messagesPresenceSheetBackdrop")?.addEventListener("click", closeMessagesPresenceSheet);
+  const enabledT = document.getElementById("messagesPresenceEnabledToggle");
+  const titlesT = document.getElementById("messagesPresenceShowTitlesToggle");
+  enabledT?.addEventListener("change", async () => {
+    const on = Boolean(enabledT.checked);
+    setPresenceEnabledLocal(on);
+    if (!on) {
+      _myPresenceLastKey = "";
+      try { await sendMyPresence({ status: "idle" }); } catch {}
+    } else {
+      presenceTick();
+    }
+    try {
+      await messagesApi("/api/messages", { method: "POST", timeoutMs: 8000, body: JSON.stringify({ action: "set_presence_prefs", presenceEnabled: on }) });
+    } catch {}
+    syncSettingsPresenceToggles();
+    syncMessagesPresenceSheet();
+    try { syncMessagesInboxPresenceCard(); } catch {}
+  });
+  titlesT?.addEventListener("change", async () => {
+    const hide = !Boolean(titlesT.checked);
+    setPresenceHideTitlesLocal(hide);
+    try {
+      await messagesApi("/api/messages", { method: "POST", timeoutMs: 8000, body: JSON.stringify({ action: "set_presence_prefs", hideTitles: hide }) });
+    } catch {}
+    syncSettingsPresenceToggles();
+    syncMessagesPresenceSheet();
+    try { syncMessagesInboxPresenceCard(); } catch {}
+  });
+  const noteInput = document.getElementById("messagesPresenceNoteInput");
+  noteInput?.addEventListener("input", () => {
+    setPresenceStatusNoteLocal(noteInput.value);
+    try { syncMessagesInboxPresenceCard(); } catch {}
+    const preview = document.getElementById("messagesPresencePreview");
+    if (preview) preview.innerHTML = messagesPresencePreviewHtml();
+  });
+}
+
+function messagesInboxMeHeaderHtml() {
+  const username = String(activeProfile?.username || "").replace(/^@/, "").trim();
+  const name = String(activeProfile?.displayName || "").trim() || (username ? `@${username}` : "You");
+  const view = messagesInboxPresenceView();
+  const cover = String(view.cover || "").trim();
+  const style = cover ? ` style="--pulse-art: url('${escapeHtml(cover)}')"` : "";
+  const wrapClass = view.live ? " is-online" : "";
+  return `
+    <section class="messagesInboxPresence">
+      <button type="button" class="messagesInboxPresenceCard" data-messages-me-header data-presence-status="${escapeHtml(view.status)}"${style}>
+        <span class="messagesInboxPresenceAvatarWrap${wrapClass}">${messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar")}</span>
+        <span class="messagesInboxPresenceCopy">
+          <span class="messagesInboxPresenceKicker">Your presence</span>
+          <strong class="messagesInboxPresenceLine">${escapeHtml(view.line)}</strong>
+          <span class="messagesInboxPresenceDetail">${escapeHtml(view.detail)}</span>
+        </span>
+      </button>
+    </section>`;
+}
+
 function coachInboxRowHtml() {
   const chat = loadCoachChat();
   const signupUnread = coachSignupUnreadBump() > 0;
@@ -43350,6 +43541,39 @@ function bindMessagesPageOnce() {
   if (_messagesPageBound) return;
   _messagesPageBound = true;
 
+  const inboxSearch = document.getElementById("messagesInboxSearch");
+  if (inboxSearch) {
+    inboxSearch.value = _messagesInboxQuery;
+    inboxSearch.addEventListener("input", () => {
+      _messagesInboxQuery = String(inboxSearch.value || "");
+      renderMessagesInbox();
+    });
+  }
+  const inboxSearchBtn = document.getElementById("messagesInboxSearchBtn");
+  const inboxSearchClose = document.getElementById("messagesInboxSearchClose");
+  if (inboxSearchBtn) {
+    inboxSearchBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      setConnectSearchOpen(true);
+    });
+  }
+  if (inboxSearchClose) {
+    inboxSearchClose.addEventListener("click", (e) => {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      setConnectSearchOpen(false);
+    });
+  }
+  const inboxAdd = document.getElementById("messagesInboxAddBtn");
+  if (inboxAdd) {
+    inboxAdd.addEventListener("click", (e) => {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+    });
+  }
+  wireMessagesPresenceSheetOnce();
+
   const composerSendBtn = document.getElementById("messagesComposerSend");
   if (composerSendBtn && !composerSendBtn.dataset.boundComposerSendPtr) {
     composerSendBtn.dataset.boundComposerSendPtr = "1";
@@ -43485,6 +43709,13 @@ function bindMessagesPageOnce() {
     if (headMeta && !e.target.closest("#messagesThreadRelation.messagesThreadRelation--np")) {
       e.preventDefault();
       openChatPartnerProfile();
+      return;
+    }
+    const meHead = e.target.closest("[data-messages-me-header]");
+    if (meHead) {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      openMessagesPresenceSheet();
       return;
     }
     const threadRow = e.target.closest("[data-messages-thread]");

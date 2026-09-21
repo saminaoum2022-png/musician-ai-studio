@@ -361,7 +361,7 @@
           <h1 id="brandTitle" class="brandTitle" title="Start new"><span class="brandLockup brandLockup--header"><span class="brandLockupMark" aria-hidden="true"></span><span class="brandLockupText brandPrimary">abadAi</span></span><span id="brandSecondary" class="brandSecondary">Music</span></h1>
           <div class="journeyBar" aria-label="Primary navigation">
             <a href="#/discover" class="journeyStep" data-route-link="discover"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.75 19.75 11v8.25a1.25 1.25 0 0 1-1.25 1.25H5.5A1.25 1.25 0 0 1 4.25 19.25V11L12 4.75z"/></svg></span><span class="journeyLabel">Home</span></a>
-            <a href="#/messages" class="journeyStep" data-route-link="messages"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg></span><span class="journeyLabel">Messages</span></a>
+            <a href="#/messages" class="journeyStep" data-route-link="messages"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg></span><span class="journeyLabel">Connect</span></a>
             <a href="#/generate" class="journeyStep" data-route-link="challenges"><span class="journeyIco" aria-hidden="true"><span class="journeyIcoCreate"></span></span><span class="journeyLabel">Create</span></a>
             <a href="#/activity" class="journeyStep" data-route-link="activity"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span><span class="journeyLabel">Activity</span></a>
             <a href="#/profile" class="journeyStep" data-route-link="profile"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="journeyLabel">Profile</span></a>
@@ -1927,18 +1927,37 @@
         </section>
 
         <section class="messagesPage wide" data-route="messages" id="messagesPage">
-          <header class="discoveryStudioHead">
+          <header class="discoveryStudioHead messagesConnectHead">
+            <button type="button" class="nabadBackBtn messagesConnectSearchClose" id="messagesInboxSearchClose" aria-label="Close search" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
+            </button>
             <div class="discoveryStudioTitles">
-              <h2 class="discoveryStudioH2 appScreenTitle">Messages</h2>
+              <h2 class="discoveryStudioH2 appScreenTitle">Connect</h2>
+            </div>
+            <div class="messagesConnectSearchField" hidden>
+              <input id="messagesInboxSearch" class="messagesConnectSearchInput" type="search" enterkeyhint="search" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Search" aria-label="Search chats" />
+            </div>
+            <div class="discoveryHeadActions">
+              <button type="button" class="discoveryRefreshBtn discoveryHeadIconBtn" id="messagesInboxSearchBtn" aria-label="Search chats" aria-expanded="false">
+                <svg class="discoveryRefreshIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.85"/>
+                  <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M20 20l-4.2-4.2"/>
+                </svg>
+              </button>
+              <button type="button" class="discoveryRefreshBtn discoveryHeadIconBtn" id="messagesInboxAddBtn" aria-label="New">
+                <svg class="discoveryRefreshIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                  <path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M12 5v14M5 12h14"/>
+                </svg>
+              </button>
             </div>
           </header>
           <div id="messagesStatus" class="messagesStatus" role="status" aria-live="polite" hidden></div>
-          <div id="messagesInboxMount" class="messagesInboxMount" aria-label="Message threads"></div>
+          <div id="messagesInboxMount" class="messagesInboxMount" aria-label="Chats"></div>
         </section>
 
         <section class="messagesThreadPage wide" data-route="messages-thread" id="messagesThreadPage">
           <header class="messagesThreadHead">
-            <button type="button" class="nabadBackBtn messagesBackBtn messagesThreadHeadBtn" id="messagesThreadBackBtn" aria-label="Back to Messages">
+            <button type="button" class="nabadBackBtn messagesBackBtn messagesThreadHeadBtn" id="messagesThreadBackBtn" aria-label="Back to Connect">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </button>
             <div class="messagesThreadHeadMeta" id="messagesThreadHeadMeta">
@@ -4221,7 +4240,7 @@
                   </span>
                   <span class="settingsRowBody">
                     <span class="settingsRowTitle">Show my activity</span>
-                    <span class="settingsRowSub">Friends only — share when you're online, and what you're playing or creating</span>
+                    <span class="settingsRowSub">Friends only — share when you're listening or creating</span>
                   </span>
                   <input type="checkbox" id="settingsPresenceEnabledToggle" class="settingsSwitch" checked aria-label="Show my music activity" />
                 </label>
@@ -4937,11 +4956,11 @@
           </svg>
           <span class="tabLabel">Home</span>
         </a>
-        <a href="#/messages" data-route-link="messages" class="messagesTab" data-tab-slot="l1" aria-label="Messages">
+        <a href="#/messages" data-route-link="messages" class="messagesTab" data-tab-slot="l1" aria-label="Connect">
           <svg class="tabIco tabIcoMessages" viewBox="0 0 24 24" aria-hidden="true">
             <path fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/>
           </svg>
-          <span class="tabLabel">Messages</span>
+          <span class="tabLabel">Connect</span>
           <span id="messagesTabBadge" class="friendsTabDmBadge" hidden aria-hidden="true"></span>
         </a>
         <a href="#/challenges" data-route-link="challenges" id="tabCreate" class="tabCreate challengesTab" data-tab-slot="c" aria-label="Create">
@@ -5258,6 +5277,38 @@
         </div>
         <div id="messagesShareList" class="messagesShareList" role="listbox" aria-label="Your songs"></div>
         <div id="messagesShareConfirm" class="messagesShareConfirm" hidden aria-hidden="true"></div>
+      </section>
+    </div>
+
+    <div id="messagesPresenceSheet" class="messagesShareSheet" hidden aria-hidden="true">
+      <div class="messagesShareSheetBackdrop" id="messagesPresenceSheetBackdrop"></div>
+      <section class="messagesShareSheetCard messagesPresenceSheetCard" role="dialog" aria-modal="true" aria-labelledby="messagesPresenceSheetTitle">
+        <header class="messagesShareSheetHead">
+          <h2 id="messagesPresenceSheetTitle" class="messagesShareSheetTitle">Your presence</h2>
+          <button type="button" class="messagesShareSheetClose" id="messagesPresenceSheetClose" aria-label="Close">×</button>
+        </header>
+        <p class="messagesShareSheetLead">Listening and creating show on their own. Add a status for when you’re not.</p>
+        <div id="messagesPresencePreview" class="messagesPresencePreview" aria-live="polite"></div>
+        <label class="messagesPresenceNote">
+          <span class="messagesPresenceNoteLbl">Status</span>
+          <input id="messagesPresenceNoteInput" class="messagesPresenceNoteInput" type="text" maxlength="48" autocomplete="off" placeholder="Add a status" aria-label="Status" />
+        </label>
+        <div class="messagesPresenceToggles">
+          <label class="messagesPresenceToggle">
+            <span class="messagesPresenceToggleCopy">
+              <strong>Share my activity</strong>
+              <span>Listening and creating</span>
+            </span>
+            <input type="checkbox" id="messagesPresenceEnabledToggle" class="settingsSwitch" checked aria-label="Share my activity" />
+          </label>
+          <label class="messagesPresenceToggle messagesPresenceToggle--nested" id="messagesPresenceTitlesRow">
+            <span class="messagesPresenceToggleCopy">
+              <strong>Include song titles</strong>
+              <span>Or just show Listening</span>
+            </span>
+            <input type="checkbox" id="messagesPresenceShowTitlesToggle" class="settingsSwitch" checked aria-label="Include song titles" />
+          </label>
+        </div>
       </section>
     </div>
 

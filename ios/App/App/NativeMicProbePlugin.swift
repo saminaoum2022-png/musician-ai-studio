@@ -212,7 +212,7 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
     // MARK: - DM voice drop (native recorder)
 
     private func startVoiceDropEngine() throws {
-        cancelVoiceDropEngine()
+        cancelVoiceDropEngine(restorePlayback: false)
         let session = AVAudioSession.sharedInstance()
         if session.category != .playAndRecord {
             _ = try Self.configureRecordingSession()
@@ -265,6 +265,7 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
         recorder.stop()
         let durationSec = max(recorder.currentTime, Date().timeIntervalSince1970 - voiceDropStartedAt)
         voiceDropRecorder = nil
+        Self.restorePlaybackSession()
 
         guard let url = voiceDropFileURL else {
             throw NSError(
@@ -327,7 +328,7 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    private func cancelVoiceDropEngine() {
+    private func cancelVoiceDropEngine(restorePlayback: Bool = true) {
         voiceDropRecording = false
         if let recorder = voiceDropRecorder {
             recorder.stop()
@@ -345,9 +346,24 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
         samplesLock.lock()
         voiceDropSamples.removeAll(keepingCapacity: true)
         samplesLock.unlock()
+        if restorePlayback {
+            Self.restorePlaybackSession()
+        }
     }
 
     // MARK: - Session configuration
+
+    /// Put the session back to playback so mini-player audio can continue
+    /// after a voice drop. Do not call this on chat enter — only after record.
+    private static func restorePlaybackSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .default, options: [])
+            try session.setActive(true)
+        } catch {
+            NSLog("AVAudioSession restore playback failed: \(error.localizedDescription)")
+        }
+    }
 
     private static func configureRecordingSession() throws -> [String: Any] {
         let session = AVAudioSession.sharedInstance()

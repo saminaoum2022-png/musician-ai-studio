@@ -3,6 +3,7 @@
  */
 
 import {
+  isNativeIosStudio,
   isNativeVoiceDropRecordingAvailable,
   startNativeVoiceDropRecording,
   stopNativeVoiceDropRecording,
@@ -542,7 +543,9 @@ async function startRecording() {
       return;
     }
 
-    if (isSafariLikeRecorderEnv()) {
+    // Native Capacitor iOS uses AVAudioRecorder above. Web (including iPhone
+    // Safari / PWA) must use MediaRecorder — do not send people to Xcode.
+    if (isNativeIosStudio()) {
       throw new Error("Voice needs the latest app build — reinstall from Xcode.");
     }
 
@@ -775,10 +778,9 @@ export function startComposerVoiceDrop() {
   void startRecording();
 }
 
-export function warmupComposerVoice() {
-  if (!isNativeVoiceDropRecordingAvailable()) return;
-  void d().prepareNativeRecordingSession?.().catch(() => {});
-}
+/** Intentionally a no-op. Preparing playAndRecord on thread enter interrupts
+ *  the mini-player. Native session is configured when the user taps record. */
+export function warmupComposerVoice() {}
 
 export function openDmVoiceDropSheet() {
   startComposerVoiceDrop();

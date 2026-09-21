@@ -68,7 +68,6 @@ import {
   sendComposerVoiceDrop,
   discardComposerVoiceDrop,
   isComposerVoiceActive,
-  warmupComposerVoice,
   messagesVoiceDropBubbleHtml,
   formatDmVoiceInboxPreview,
   handleVoiceDropBubbleClick,
@@ -40594,7 +40593,6 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   syncMessagesThreadViewportLayout();
   scheduleMessagesThreadScrollToBottom({ force: true });
   beginMessagesThreadEnterTransition();
-  warmupComposerVoice();
   if (tid) void markThreadReadQuiet(tid, { readDelayMs: DM_READ_MARK_DELAY_MS });
   startMessagesInboxRealtime();
   _chatPartnerPresence = { status: "idle" };

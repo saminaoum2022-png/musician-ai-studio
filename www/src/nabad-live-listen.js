@@ -13,9 +13,16 @@ import { NABAD_LIVE_LISTEN_PUBLIC_SHIPPED } from "./feature-flags.js";
 const TICK_MS = 2500;
 const HEARTBEAT_MS = 6000;
 const POLL_MS = 3200;
-const DRIFT_MS = 1800;
 const JOIN_WAIT_MS = 12000;
-const SEEK_COOLDOWN_MS = 900;
+const SEEK_COOLDOWN_MS = 2500;
+/** Guest sits this far behind estimated host time. Never allowed ahead of host. */
+const LAG_MS = 350;
+const DEAD_MS = 90;
+const RATE_FAST = 1.025;
+const RATE_SLOW = 0.97;
+const SEEK_BEHIND_MS = 2200;
+const SEEK_AHEAD_MS = 450;
+const EXTRAPOLATE_CAP_MS = 700;
 
 let bridge = {};
 
@@ -34,6 +41,8 @@ let _invitePollTimer = 0;
 let _lastSeekAt = 0;
 let _seekInFlight = false;
 let _cueCtx = null;
+let _lastGuestTick = null;
+let _alignTimer = 0;
 const _seenInviteIds = new Set();
 
 function clientLiveListenUiBaked() {
@@ -359,13 +368,32 @@ function openOverlay({ kicker, title, sub, art, actionsHtml, onAction }) {
   });
 }
 
-function targetMsFromTick(tick) {
+function hostNowMs(tick) {
   const pos = Math.max(0, Number(tick?.positionMs) || 0);
+  const playing = tick?.playing !== false && String(tick?.status || "live") === "live";
+  if (!playing) return pos;
   const sent = Number(tick?.hostSentAt) || 0;
   if (!sent) return pos;
   const delta = Date.now() - sent;
-  if (delta < 0 || delta > 1800) return pos;
-  return pos + delta;
+  if (delta <= 0) return pos;
+  return pos + Math.min(delta, EXTRAPOLATE_CAP_MS);
+}
+
+/** Guest target is always behind the host. Used for join + rare seeks. */
+function targetMsFromTick(tick) {
+  return Math.max(0, hostNowMs(tick) - LAG_MS);
+}
+
+function setGuestPlaybackRate(a, rate) {
+  if (!a) return;
+  const next = Math.max(0.9, Math.min(1.08, Number(rate) || 1));
+  try {
+    if (Math.abs((Number(a.playbackRate) || 1) - next) > 0.004) a.playbackRate = next;
+  } catch {}
+}
+
+function resetGuestPlaybackRate() {
+  setGuestPlaybackRate(playerEl(), 1);
 }
 
 async function waitForCanPlay(a, timeoutMs = JOIN_WAIT_MS) {
@@ -391,36 +419,69 @@ async function waitForCanPlay(a, timeoutMs = JOIN_WAIT_MS) {
   });
 }
 
-async function applyGuestTick(tick, { force = false } = {}) {
+async function applyGuestTick(tick, { force = false, ratesOnly = false } = {}) {
   if (!isLiveListenGuest()) return;
   if (!sessionMatchesPlayer(_state?.session, tick?.audioUrl || _state?.session?.songUrl, tick?.songId || _state?.session?.songId)) {
     return;
   }
   const a = playerEl();
   if (!a) return;
+  _lastGuestTick = tick;
   if (_seekInFlight && !force) return;
+  const playing = tick?.playing !== false && String(tick?.status || "live") === "live";
+  const hostNowSec = hostNowMs(tick) / 1000;
+  const targetSec = targetMsFromTick(tick) / 1000;
+  const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const aheadOfHostMs = (cur - hostNowSec) * 1000;
+  const behindTargetMs = (targetSec - cur) * 1000;
+
   _applyingRemote = true;
   try {
-    const playing = tick?.playing !== false && String(tick?.status || "live") === "live";
-    const targetSec = targetMsFromTick(tick) / 1000;
-    const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
-    const driftMs = Math.abs(cur - targetSec) * 1000;
-    const seekOk = force || (driftMs >= DRIFT_MS && Date.now() - _lastSeekAt >= SEEK_COOLDOWN_MS);
-    if (seekOk) {
-      _seekInFlight = true;
-      _lastSeekAt = Date.now();
-      try { a.currentTime = Math.max(0, targetSec); } catch {}
-      window.setTimeout(() => { _seekInFlight = false; }, 280);
-    }
-    if (playing) {
-      if (a.paused) {
-        try { await a.play(); } catch {}
+    if (!playing) {
+      resetGuestPlaybackRate();
+      if (!a.paused) {
+        try { a.pause(); } catch {}
       }
-    } else if (!a.paused) {
-      try { a.pause(); } catch {}
+      return;
     }
+    if (a.paused) {
+      try { await a.play(); } catch {}
+    }
+
+    // Never stay ahead of the host. Slow down first; seek back only if still leading.
+    if (aheadOfHostMs > DEAD_MS) {
+      setGuestPlaybackRate(a, RATE_SLOW);
+      if (!ratesOnly && aheadOfHostMs >= SEEK_AHEAD_MS && Date.now() - _lastSeekAt >= SEEK_COOLDOWN_MS) {
+        _seekInFlight = true;
+        _lastSeekAt = Date.now();
+        try { a.currentTime = Math.max(0, targetSec); } catch {}
+        setGuestPlaybackRate(a, 1);
+        window.setTimeout(() => { _seekInFlight = false; }, 320);
+      }
+      return;
+    }
+
+    if (behindTargetMs <= DEAD_MS) {
+      setGuestPlaybackRate(a, 1);
+      return;
+    }
+
+    if (behindTargetMs < SEEK_BEHIND_MS || ratesOnly) {
+      setGuestPlaybackRate(a, RATE_FAST);
+      return;
+    }
+
+    if (Date.now() - _lastSeekAt < SEEK_COOLDOWN_MS) {
+      setGuestPlaybackRate(a, RATE_FAST);
+      return;
+    }
+    _seekInFlight = true;
+    _lastSeekAt = Date.now();
+    try { a.currentTime = Math.max(0, targetSec); } catch {}
+    setGuestPlaybackRate(a, 1);
+    window.setTimeout(() => { _seekInFlight = false; }, 320);
   } finally {
-    window.setTimeout(() => { _applyingRemote = false; }, 80);
+    window.setTimeout(() => { _applyingRemote = false; }, 60);
   }
 }
 
@@ -506,9 +567,11 @@ function stopTimers() {
   if (_tickTimer) window.clearInterval(_tickTimer);
   if (_heartbeatTimer) window.clearInterval(_heartbeatTimer);
   if (_pollTimer) window.clearInterval(_pollTimer);
+  if (_alignTimer) window.clearInterval(_alignTimer);
   _tickTimer = 0;
   _heartbeatTimer = 0;
   _pollTimer = 0;
+  _alignTimer = 0;
 }
 
 function startHostTimers() {
@@ -536,10 +599,16 @@ function startGuestPoll() {
       } catch {}
     })();
   }, POLL_MS);
+  _alignTimer = window.setInterval(() => {
+    if (!isLiveListenGuest() || !_lastGuestTick) return;
+    void applyGuestTick(_lastGuestTick, { ratesOnly: true });
+  }, 500);
 }
 
 async function clearLocalSession({ keepRealtime = false } = {}) {
   stopTimers();
+  resetGuestPlaybackRate();
+  _lastGuestTick = null;
   if (!keepRealtime) {
     try {
       const mod = await bridge.loadRealtimeMod?.();
@@ -694,6 +763,7 @@ async function loadSessionAudio(session, { startAtMs, autoplay }) {
   const targetSec = Math.max(0, (Number(startAtMs) || 0) / 1000);
   _applyingRemote = true;
   try {
+    if (a) setGuestPlaybackRate(a, 1);
     if (a && targetSec > 0.25) {
       try { a.currentTime = targetSec; } catch {}
     }
@@ -703,6 +773,7 @@ async function loadSessionAudio(session, { startAtMs, autoplay }) {
       try { a.pause(); } catch {}
     }
   } finally {
+    _lastSeekAt = Date.now();
     window.setTimeout(() => { _applyingRemote = false; }, 80);
   }
 }
@@ -713,6 +784,7 @@ async function onHostLeft() {
   const name = partnerLabel(session);
   const a = playerEl();
   _applyingRemote = true;
+  resetGuestPlaybackRate();
   try { a?.pause?.(); } catch {}
   window.setTimeout(() => { _applyingRemote = false; }, 40);
   stopTimers();
@@ -727,6 +799,7 @@ async function onHostLeft() {
     onAction: (act) => {
       closeOverlay();
       if (act === "keep") {
+        resetGuestPlaybackRate();
         _state = { role: "guest", session, solo: true };
         setBodyRole();
         syncLiveListenChrome();
@@ -805,6 +878,7 @@ async function leaveGuestSession() {
   }
   const a = playerEl();
   _applyingRemote = true;
+  resetGuestPlaybackRate();
   try { a?.pause?.(); } catch {}
   window.setTimeout(() => { _applyingRemote = false; }, 40);
   await clearLocalSession();

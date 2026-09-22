@@ -45,14 +45,6 @@ if (/export\s+const\s+NABAD_SONG_EDIT_PUBLIC_SHIPPED\s*=\s*true/.test(text)) {
   failed = true;
 }
 
-if (/export\s+const\s+NABAD_LIVE_LISTEN_PUBLIC_SHIPPED\s*=\s*true/.test(text)) {
-  console.error(
-    "NABAD_LIVE_LISTEN_PUBLIC_SHIPPED is true — Live Listen would go live for users.",
-  );
-  console.error("Set it back to false in src/feature-flags.js before shipping to main.");
-  failed = true;
-}
-
 if (failed) process.exit(1);
 
-console.log("verify-no-producer-ship: OK (Producer + Vibe + Edit + Live Listen stay hidden — code in tree is fine)");
+console.log("verify-no-producer-ship: OK (Producer + Vibe + Edit stay hidden — Live Listen is launched)");

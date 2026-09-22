@@ -64960,10 +64960,22 @@ async function hydratePlayerSocialStats(songId) {
   }
 }
 
+function playerOwnSongIsUnpublished() {
+  if (String(miniSource?.type || "") !== "library") return false;
+  const track = findPlayerLibraryTrackRow() || currentPlayerTrackRef;
+  if (!track) return false;
+  return !track.publicOnProfile;
+}
+
 async function syncPlayerSocialRail() {
   const rail = els.playerSocialRail;
   const row = els.playerSocialActions;
   if (!rail || !row) return;
+  if (playerOwnSongIsUnpublished()) {
+    rail.hidden = true;
+    rail.closest(".playerArtWrap")?.classList.add("playerArtWrap--noSocialRail");
+    return;
+  }
   const target = playerSocialTargetFromRef();
   const reelMode = discoverReelChromeActive();
   const songId = String(
@@ -66595,11 +66607,17 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
     Boolean(opts.shareListen) ||
     Boolean(currentPlayerTrackRef?.fromSharedLink) ||
     Boolean(parseSharedTrackIdFromLocation());
-  const reelOpen = Boolean(opts.reelSwap || opts.coverImmediate || miniSource?.discoverReel || discoverReelChromeActive());
-  if (reelOpen) lockDiscoverReelFullBleedLayout();
+  const reelOpen = Boolean(opts.reelSwap || opts.discoverReel || miniSource?.discoverReel);
+  if (!reelOpen) {
+    unmarkDiscoverReelPlayerShell();
+    clearDiscoverReelOpeningLock();
+    try { clearDiscoverReelFullBleedLayout(); } catch {}
+  } else {
+    lockDiscoverReelFullBleedLayout();
+  }
   const metaOpts = {
-    coverImmediate: reelOpen,
-    skipCoverPaint: Boolean(opts.skipCoverPaint || miniSource?.discoverReel || discoverReelChromeActive()),
+    coverImmediate: Boolean(opts.coverImmediate) || reelOpen,
+    skipCoverPaint: Boolean(opts.skipCoverPaint || reelOpen),
     trackRef: opts.trackRef || null,
   };
   if (reelOpen || miniSource?.discoverReel) {

@@ -51,6 +51,7 @@ let _suppressHostEventsUntil = 0;
 let _hostWantsPlaying = false;
 let _hostAtEnd = false;
 let _guestEndShown = false;
+let _listenOpenToken = 0;
 let _hostEndSheetOpen = false;
 const _seenInviteIds = new Set();
 
@@ -1004,6 +1005,14 @@ async function loadSessionAudio(session, { startAtMs, autoplay }) {
   if (isLiveListenGuest()) armGuestEndHold(playerEl());
 }
 
+function finishGuestAfterHostLeft() {
+  const a = playerEl();
+  applyRemoteFlag(800);
+  try { a?.pause?.(); } catch {}
+  try { bridge.exitPlayer?.(); } catch {}
+  void clearLocalSession();
+}
+
 async function onHostLeft() {
   if (!isLiveListenGuest() || _guestEndShown) return;
   _guestEndShown = true;
@@ -1015,7 +1024,7 @@ async function onHostLeft() {
   try { a?.pause?.(); } catch {}
   window.setTimeout(() => { _applyingRemote = false; }, 40);
   stopTimers();
-  const finish = () => { void clearLocalSession(); };
+  const finish = () => { finishGuestAfterHostLeft(); };
   openOverlay({
     kicker: "Host left",
     title: session?.songTitle || "Listen together",
@@ -1210,29 +1219,75 @@ function showJoinPrompt(session) {
   });
 }
 
-export async function handleLiveListenDeepLink(sessionId) {
-  const sid = String(sessionId || "").trim();
-  if (!sid || !nabadLiveListenGuestEnabled()) return;
+function notificationPreviewSession(n) {
+  const meta = n?.metadata || {};
+  return {
+    id: String(n?.entity_id || meta.session_id || "").trim(),
+    songTitle: String(meta.song_title || "").trim(),
+    songCover: String(meta.song_cover || meta.song_art_url || "").trim(),
+    host: {
+      username: String(meta.actor_username || "").replace(/^@/, "").trim(),
+      displayName: String(meta.actor_display_name || meta.actor_username || "").replace(/^@/, "").trim(),
+    },
+  };
+}
+
+function showListenSheetPreview(preview) {
+  const name = displayName(preview?.host || {});
+  const token = _listenOpenToken;
+  openOverlay({
+    kicker: "Listen together",
+    title: preview?.songTitle || "Listen together",
+    sub: name && name !== "friend" ? `With ${name}` : "",
+    art: preview?.songCover,
+    actionsHtml: `
+      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="dismiss">OK</button>`,
+    onAction: () => {
+      if (token === _listenOpenToken) _listenOpenToken += 1;
+      closeOverlay();
+    },
+    onDismiss: () => {
+      if (token === _listenOpenToken) _listenOpenToken += 1;
+    },
+  });
+}
+
+export function openLiveListenFromNotification(n) {
+  const preview = notificationPreviewSession(n);
+  void handleLiveListenDeepLink(preview.id, preview);
+}
+
+export async function handleLiveListenDeepLink(sessionId, preview = null) {
+  const sid = String(sessionId || preview?.id || "").trim();
+  if (!sid || !nabadLiveListenGuestEnabled()) {
+    if (preview) showEndedFallback(preview);
+    return;
+  }
+  const token = ++_listenOpenToken;
+  if (preview) showListenSheetPreview(preview);
   try {
     const data = await api("get", { sessionId: sid });
+    if (token !== _listenOpenToken) return;
     const session = data?.session;
     if (!session) {
-      showEndedFallback(null);
+      showEndedFallback(preview);
       return;
     }
     if (session.role === "host") {
+      closeOverlay();
       await becomeHost(session);
       return;
     }
     if (session.status !== "live" && session.status !== "pending") {
-      showEndedFallback(session);
+      showEndedFallback(session.songTitle ? session : { ...preview, ...session });
       return;
     }
     showJoinPrompt(session);
   } catch (e) {
+    if (token !== _listenOpenToken) return;
     const msg = String(e?.message || "");
     if (/not found|ended|not in this session/i.test(msg)) {
-      showEndedFallback(null);
+      showEndedFallback(preview);
       return;
     }
     toast(msg || "Could not open live listen", { durationMs: 2800 });

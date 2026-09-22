@@ -48,6 +48,7 @@ import {
   openLiveListenInviteForTrack,
   nabadLiveListenEnabled,
   handleLiveListenDeepLink,
+  openLiveListenFromNotification,
   decorateNowPlayingPresenceActions,
   onLiveListenPlayerEvent,
   noteLiveListenHostScrub,
@@ -45912,6 +45913,10 @@ async function openActivityNotificationTarget(n) {
     location.hash = "#/singer-studio";
     return;
   }
+  if (t === "live_listen") {
+    openLiveListenFromNotification(n);
+    return;
+  }
   if (t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready") {
     try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
     _profileSongsSegment = "all";
@@ -78081,6 +78086,16 @@ try {
     formatTime,
     presenceHideTitles: () => presenceHideTitlesLocal(),
     refreshPresence: () => { try { presenceTick(); } catch {} },
+    exitPlayer: () => {
+      try { playerEl?.pause?.(); } catch {}
+      try { void clearLockScreenNowPlaying(); } catch {}
+      if ((document.body.getAttribute("data-route") || "") !== "player") return;
+      if (history.length > 1) {
+        history.back();
+        return;
+      }
+      location.hash = "#/discover";
+    },
     loadRealtimeMod: () => loadMessagesRealtimeModule(),
     getChatPartner: () => ({
       userId: String(_chatHeaderUser?.userId || "").trim(),

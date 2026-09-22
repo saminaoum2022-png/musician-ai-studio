@@ -78,10 +78,11 @@ function liveListenUiAvailable() {
   return clientLiveListenUiBaked() || isStagingPreviewHost();
 }
 
-/** Host invite / Listen together — admin-only until public launch. */
+/** Host invite / Listen together. Public launch: any signed-in user. Hidden: admin only. */
 export function nabadLiveListenEnabled() {
   try {
     if (!liveListenUiAvailable()) return false;
+    if (NABAD_LIVE_LISTEN_PUBLIC_SHIPPED) return true;
     return Boolean(typeof bridge.isAdmin === "function" && bridge.isAdmin());
   } catch {
     return false;

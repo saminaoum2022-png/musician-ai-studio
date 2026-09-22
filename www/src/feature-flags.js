@@ -21,9 +21,9 @@ export const NABAD_SONG_EDIT_PUBLIC_SHIPPED = false;
 
 /**
  * When true: Live Listen (host-owned one-song session) is live for users.
- * Keep false until explicit launch — staging bake uses nabadLiveListenUi + admin.
+ * Launched publicly — keep true. Staging bake is no longer required to see it.
  */
-export const NABAD_LIVE_LISTEN_PUBLIC_SHIPPED = false;
+export const NABAD_LIVE_LISTEN_PUBLIC_SHIPPED = true;
 
 /** When false: hide play counts on Discover cards, charts, and challenge heroes (sorting unchanged). */
 export const DISCOVER_SHOW_PLAY_COUNTS = false;

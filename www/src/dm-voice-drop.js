@@ -35,6 +35,8 @@ let _playingAudio = null;
 let _playingId = "";
 let _playingRaf = 0;
 const _voicePlayBlobCache = new Map();
+const _voiceAudioCache = new Map();
+const VOICE_AUDIO_CACHE_MAX = 8;
 let _nativeRec = false;
 let _sendInFlight = false;
 let _composerSendLock = false;
@@ -339,7 +341,33 @@ function voiceDropKeyFromUrl(url) {
   }
 }
 
+export function cacheVoiceDropPlayUrl(key, playUrl) {
+  const k = String(key || "").trim();
+  const u = String(playUrl || "").trim();
+  if (!k || !u) return;
+  _voicePlayBlobCache.set(k, u);
+}
+
+function isLocalVoicePlayUrl(url) {
+  const u = String(url || "").trim();
+  return u.startsWith("blob:") || u.startsWith("data:");
+}
+
+function isDirectVoiceStorageUrl(url) {
+  return /\/storage\/v1\/object\/public\/dm_voice\//i.test(String(url || ""));
+}
+
+function cachedVoicePlayUrl(...keys) {
+  for (const raw of keys) {
+    const k = String(raw || "").trim();
+    if (k && _voicePlayBlobCache.has(k)) return _voicePlayBlobCache.get(k);
+  }
+  return "";
+}
+
 function publicVoiceDropPlayUrl(url, key) {
+  const cached = cachedVoicePlayUrl(key, url, voiceDropKeyFromUrl(url));
+  if (cached) return cached;
   let pubUrl = String(url || "").trim();
   const k = String(key || "").trim() || voiceDropKeyFromUrl(pubUrl);
   if ((!pubUrl || !/^https?:\/\//i.test(pubUrl)) && k) {
@@ -349,29 +377,62 @@ function publicVoiceDropPlayUrl(url, key) {
     pubUrl = `${base}/storage/v1/object/public/dm_voice/${enc}`;
   }
   if (!pubUrl) return "";
-  if (pubUrl.startsWith("blob:") || pubUrl.startsWith("data:")) return pubUrl;
+  if (isLocalVoicePlayUrl(pubUrl)) return pubUrl;
   if (!/^https?:\/\//i.test(pubUrl)) return "";
+  // Public dm_voice files play directly — the Suno audio proxy adds ~2s before
+  // first audio. Proxy only as a fallback for non-storage URLs.
+  if (isDirectVoiceStorageUrl(pubUrl)) {
+    return d().normalizeAudioUrlForPlayback?.(pubUrl) || pubUrl;
+  }
   const proxied = d().toAudioProxyUrl?.(pubUrl) || pubUrl;
   return d().normalizeAudioUrlForPlayback?.(proxied) || proxied;
 }
 
-async function loadVoiceDropPlayUrl(url, key) {
+function loadVoiceDropPlayUrl(url, key) {
   const cacheKey = String(key || "").trim() || voiceDropKeyFromUrl(url) || url;
-  if (cacheKey && _voicePlayBlobCache.has(cacheKey)) {
-    return _voicePlayBlobCache.get(cacheKey);
-  }
-  // Same path as status voice feed: public storage URL → /api/suno/audio proxy.
-  // Audio elements cannot send Authorization headers, so do not pass voice_drop API URLs here.
-  const pub = publicVoiceDropPlayUrl(url, key);
-  return pub || "";
+  const cached = cachedVoicePlayUrl(cacheKey, url, key);
+  if (cached) return cached;
+  return publicVoiceDropPlayUrl(url, key) || "";
 }
 
 function createVoiceDropAudio(playUrl) {
-  const audio = new Audio(playUrl);
+  const audio = new Audio();
   audio.preload = "auto";
-  audio.crossOrigin = "anonymous";
   try { audio.setAttribute("playsinline", ""); } catch {}
+  if (!isLocalVoicePlayUrl(playUrl)) {
+    try { audio.crossOrigin = "anonymous"; } catch {}
+  }
+  audio.src = playUrl;
+  try { audio.load(); } catch {}
   return audio;
+}
+
+function getOrCreateVoiceDropAudio(playUrl) {
+  const u = String(playUrl || "").trim();
+  if (!u) return null;
+  let audio = _voiceAudioCache.get(u);
+  if (audio) return audio;
+  audio = createVoiceDropAudio(u);
+  _voiceAudioCache.set(u, audio);
+  while (_voiceAudioCache.size > VOICE_AUDIO_CACHE_MAX) {
+    const first = _voiceAudioCache.keys().next().value;
+    if (!first || first === u) break;
+    const old = _voiceAudioCache.get(first);
+    if (old && old === _playingAudio) break;
+    try {
+      old?.pause?.();
+      old?.removeAttribute?.("src");
+      old?.load?.();
+    } catch {}
+    _voiceAudioCache.delete(first);
+  }
+  return audio;
+}
+
+export function preloadVoiceDropAudio(url, key) {
+  const playUrl = loadVoiceDropPlayUrl(url, key);
+  if (!playUrl) return;
+  getOrCreateVoiceDropAudio(playUrl);
 }
 
 function minBytesForVoiceDrop(durationMs, blobSize = 0) {
@@ -743,12 +804,13 @@ export async function toggleVoiceDropPlayback(card) {
     return;
   }
   stopPreviewPlayback();
-  const playUrl = await loadVoiceDropPlayUrl(url, key);
+  const playUrl = loadVoiceDropPlayUrl(url, key);
   if (!playUrl) {
     d().showToast?.("Voice drop file missing.", { durationMs: 2600 });
     return;
   }
-  const audio = createVoiceDropAudio(playUrl);
+  const audio = getOrCreateVoiceDropAudio(playUrl);
+  if (!audio) return;
   _playingAudio = audio;
   _playingId = id;
   card.classList.add("is-playing");
@@ -761,6 +823,9 @@ export async function toggleVoiceDropPlayback(card) {
     stopPreviewPlayback();
     d().showToast?.("Could not play voice drop.", { durationMs: 2400 });
   };
+  try {
+    audio.currentTime = 0;
+  } catch {}
   try {
     await audio.play();
     animatePlayingBars(card);
@@ -851,25 +916,21 @@ function clearVoiceDropAfterSend(localPlayUrl) {
   _durationMs = 0;
   _peaks = [];
   _recState = "idle";
-  if (_blobUrl && _blobUrl !== localPlayUrl) {
-    try { URL.revokeObjectURL(_blobUrl); } catch {}
-  }
-  _blobUrl = localPlayUrl || "";
+  // Keep the object URL — in-thread playback uses it so play starts instantly.
+  _blobUrl = "";
   syncVoiceDropUi();
-  if (localPlayUrl) {
-    window.setTimeout(() => {
-      if (_blobUrl === localPlayUrl) {
-        try { URL.revokeObjectURL(localPlayUrl); } catch {}
-        if (_blobUrl === localPlayUrl) _blobUrl = "";
-      }
-    }, 120000);
-  }
+  if (localPlayUrl) preloadVoiceDropAudio(localPlayUrl, "");
 }
 
-async function sendVoiceDropInBackground({ clientMessageId, threadId, blob, durationMs, peaks }) {
+async function sendVoiceDropInBackground({ clientMessageId, threadId, blob, durationMs, peaks, localPlayUrl = "" }) {
   const cid = String(clientMessageId || "").trim();
   try {
     const { url, key } = await uploadDmVoiceBlob(blob, { durationMs });
+    if (localPlayUrl) {
+      cacheVoiceDropPlayUrl(cid, localPlayUrl);
+      cacheVoiceDropPlayUrl(key, localPlayUrl);
+      cacheVoiceDropPlayUrl(url, localPlayUrl);
+    }
     const body = buildDmVoicePayload({
       url,
       key,
@@ -939,10 +1000,15 @@ async function sendVoiceDrop() {
       body: optimisticBody,
       created_at: new Date().toISOString(),
       sendStatus: "sending",
+      localPlayUrl,
     };
 
     _sendInFlight = true;
     sendBtn?.setAttribute("aria-busy", "true");
+
+    cacheVoiceDropPlayUrl(clientMessageId, localPlayUrl);
+    cacheVoiceDropPlayUrl(localPlayUrl, localPlayUrl);
+    preloadVoiceDropAudio(localPlayUrl, clientMessageId);
 
     d().feedbackMessagesComposerSend?.();
     d().addOptimisticThreadMessage?.(optimistic);
@@ -962,6 +1028,7 @@ async function sendVoiceDrop() {
       blob,
       durationMs,
       peaks,
+      localPlayUrl,
     });
   } finally {
     sendBtn?.removeAttribute("aria-busy");

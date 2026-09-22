@@ -71,6 +71,8 @@ import {
   messagesVoiceDropBubbleHtml,
   formatDmVoiceInboxPreview,
   handleVoiceDropBubbleClick,
+  cacheVoiceDropPlayUrl,
+  preloadVoiceDropAudio,
   DM_VOICE_MARKER,
 } from "./dm-voice-drop.js";
 import { prepareNativeRecordingSession } from "./studio/native-mic-probe.js";
@@ -36040,6 +36042,7 @@ let _messagesPollInFlight = false;
 let _messagesHasMoreOlder = true;
 let _messagesLoadingOlder = false;
 const MESSAGES_THREAD_PAGE_SIZE = 80;
+const MSG_GROUP_GAP_MS = 5 * 60 * 1000;
 const MESSAGES_THREAD_LOAD_OLDER_THRESHOLD_PX = 120;
 /** Realtime is primary; slow REST poll heals rare missed inserts. */
 /** Safety poll when Realtime misses an insert (was 45s — too slow for chat). */
@@ -36705,7 +36708,15 @@ function saveThreadMessagesCache(threadId, { messages, lastFetchedAt, lastFetche
   _messagesThreadCache.set(tid, entry);
   try {
     const store = readMessagesThreadCacheStorage();
-    store[tid] = entry;
+    const persist = {
+      ...entry,
+      messages: entry.messages.map((m) => {
+        if (!m?.localPlayUrl) return m;
+        const { localPlayUrl: _drop, ...rest } = m;
+        return rest;
+      }),
+    };
+    store[tid] = persist;
     const keys = Object.keys(store).sort(
       (a, b) => Number(store[b]?.savedAt || 0) - Number(store[a]?.savedAt || 0),
     );
@@ -37471,6 +37482,150 @@ function pulseMessagesComposerSend() {
   window.setTimeout(() => btn.classList.remove("messagesComposerSend--pulse"), 420);
 }
 
+function cssAttrEscape(value) {
+  const v = String(value || "");
+  try {
+    if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(v);
+  } catch {}
+  return v.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function messagesThreadStackEl() {
+  const mount = document.getElementById("messagesThreadMount");
+  const stack = mount?.querySelector?.(".messagesBubbleStack");
+  if (!stack || stack.classList.contains("messagesBubbleStack--loading")) return null;
+  return stack;
+}
+
+function partnerTypingWrapEl(stack = messagesThreadStackEl()) {
+  return stack?.querySelector?.(".messagesBubble--partnerTyping")?.closest?.(".messagesBubbleWrap") || null;
+}
+
+function realBubbleWraps(stack = messagesThreadStackEl()) {
+  if (!stack) return [];
+  return [...stack.querySelectorAll(".messagesBubbleWrap")].filter(
+    (el) => !el.querySelector(".messagesBubble--partnerTyping") && !el.classList.contains("messagesBubbleWrap--skel"),
+  );
+}
+
+function stripBubbleTime(wrap) {
+  if (!wrap) return;
+  wrap.querySelector(".messagesBubbleTime")?.remove();
+  const meta = wrap.querySelector(".messagesBubbleMeta");
+  if (meta && !meta.textContent.trim()) meta.remove();
+}
+
+function shouldGroupMessageTime(prev, next) {
+  if (!prev || !next) return false;
+  if (String(prev.sender_id || "") !== String(next.sender_id || "")) return false;
+  const t1 = prev?.created_at ? new Date(prev.created_at).getTime() : 0;
+  const t2 = next?.created_at ? new Date(next.created_at).getTime() : 0;
+  return Number.isFinite(t1) && Number.isFinite(t2) && Math.abs(t2 - t1) <= MSG_GROUP_GAP_MS;
+}
+
+function findMessageWrapInMount(msg) {
+  const stack = messagesThreadStackEl();
+  if (!stack || !msg) return null;
+  const cid = String(msg.client_message_id || "").trim();
+  if (cid) {
+    const byCid = stack.querySelector(`[data-client-msg-id="${cssAttrEscape(cid)}"]`);
+    if (byCid) return byCid;
+  }
+  const id = String(msg.id || "").trim();
+  if (id) {
+    const byId = stack.querySelector(`[data-msg-id="${cssAttrEscape(id)}"]`);
+    if (byId) return byId;
+  }
+  return null;
+}
+
+function rememberLocalVoicePlayUrl(msg) {
+  const parsed = parseDmMessageBody(msg?.body);
+  if (parsed.type !== "voice") return;
+  const local = String(msg?.localPlayUrl || "").trim();
+  if (local) {
+    cacheVoiceDropPlayUrl(String(msg?.client_message_id || ""), local);
+    cacheVoiceDropPlayUrl(parsed.storageKey, local);
+    cacheVoiceDropPlayUrl(parsed.url, local);
+  }
+  preloadVoiceDropAudio(local || parsed.url, parsed.storageKey || msg?.client_message_id);
+}
+
+function voiceParsedForBubble(msg, parsed) {
+  const local = String(msg?.localPlayUrl || "").trim();
+  if (local && parsed?.type === "voice") return { ...parsed, url: local };
+  return parsed;
+}
+
+function ensureMessagesBubbleStack() {
+  const mount = document.getElementById("messagesThreadMount");
+  if (!mount) return null;
+  let stack = messagesThreadStackEl();
+  if (stack) return stack;
+  const liveCls = _messagesThreadReadTransitionsLive ? " messagesBubbleStack--live" : "";
+  mount.innerHTML = `<div class="messagesBubbleStack${liveCls}"></div><div class="messagesThreadScrollAnchor" aria-hidden="true"></div>`;
+  return messagesThreadStackEl();
+}
+
+function appendMessagesToMount(msgs) {
+  const rows = Array.isArray(msgs) ? msgs.filter(Boolean) : [];
+  if (!rows.length) return false;
+  const stack = ensureMessagesBubbleStack();
+  if (!stack) return false;
+  const viewerId = authSession?.user?.id || "";
+  const all = Array.isArray(_messagesList) ? _messagesList : [];
+  const prev = all.length > rows.length ? all[all.length - rows.length - 1] : null;
+  if (prev && shouldGroupMessageTime(prev, rows[0])) {
+    const wraps = realBubbleWraps(stack);
+    stripBubbleTime(wraps[wraps.length - 1]);
+  }
+  const html = rows.map((m, i) => {
+    const next = rows[i + 1] || null;
+    const showTime = !next || !shouldGroupMessageTime(m, next);
+    return messagesBubbleHtml(m, viewerId, { showTime });
+  }).join("");
+  const typingWrap = partnerTypingWrapEl(stack);
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  while (tmp.firstChild) {
+    if (typingWrap) stack.insertBefore(tmp.firstChild, typingWrap);
+    else stack.appendChild(tmp.firstChild);
+  }
+  rows.forEach((m) => rememberLocalVoicePlayUrl(m));
+  return true;
+}
+
+function patchMessageBubbleInMount(msg) {
+  const wrap = findMessageWrapInMount(msg);
+  if (!wrap) return false;
+  const viewerId = authSession?.user?.id || "";
+  const showTime = Boolean(wrap.querySelector(".messagesBubbleTime"));
+  const html = messagesBubbleHtml(msg, viewerId, { showTime });
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html.trim();
+  const next = tmp.firstElementChild;
+  if (!next) return false;
+  wrap.replaceWith(next);
+  rememberLocalVoicePlayUrl(msg);
+  return true;
+}
+
+function syncPartnerTypingBubbleInMount() {
+  const stack = messagesThreadStackEl();
+  if (!stack) {
+    renderMessagesMount({ scrollToBottom: true });
+    return;
+  }
+  const existing = partnerTypingWrapEl(stack);
+  const active = isPartnerTypingActive() && !isCoachThreadId(_conversationId);
+  if (active && !existing) {
+    stack.insertAdjacentHTML("beforeend", partnerTypingBubbleHtml());
+    if (shouldAutoScrollMessagesMount()) scheduleMessagesThreadScrollToBottom({ force: true });
+  } else if (!active && existing) {
+    existing.remove();
+  }
+}
+
 function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}) {
   const mount = document.getElementById("messagesThreadMount");
   const viewerId = authSession?.user?.id || "";
@@ -37506,17 +37661,10 @@ function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}
   const stackLiveCls = _messagesThreadReadTransitionsLive ? " messagesBubbleStack--live" : "";
   // Show a timestamp only at the end of a cluster (sender change or a gap),
   // instead of stamping every bubble — quieter, more like a native chat.
-  const MSG_GROUP_GAP_MS = 5 * 60 * 1000;
   mount.innerHTML = `${olderLoader}<div class="messagesBubbleStack${stackLiveCls}${threadReveal ? " messagesBubbleStack--revealing" : ""}">${msgs
     .map((m, i) => {
       const next = msgs[i + 1];
-      let showTime = true;
-      if (next) {
-        const sameSender = String(next.sender_id || "") === String(m.sender_id || "");
-        const t1 = m?.created_at ? new Date(m.created_at).getTime() : 0;
-        const t2 = next?.created_at ? new Date(next.created_at).getTime() : 0;
-        showTime = !sameSender || Math.abs(t2 - t1) > MSG_GROUP_GAP_MS;
-      }
+      const showTime = !next || !shouldGroupMessageTime(m, next);
       return messagesBubbleHtml(m, viewerId, { showTime, threadReveal, threadRevealIndex: i, threadRevealTotal: msgs.length });
     })
     .join("")}${typingBubble}</div><div class="messagesThreadScrollAnchor" aria-hidden="true"></div>`;
@@ -37525,6 +37673,7 @@ function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}
   }
   if (!threadReveal) scheduleMessagesThreadReadTransitionsLive();
   else window.setTimeout(() => scheduleMessagesThreadReadTransitionsLive(), 420);
+  msgs.slice(-4).forEach((m) => rememberLocalVoicePlayUrl(m));
 }
 
 function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
@@ -37532,6 +37681,8 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
   if (!rows.length) return false;
   let list = [...(Array.isArray(_messagesList) ? _messagesList : [])];
   let changed = false;
+  const added = [];
+  const patched = [];
   for (const m of rows) {
     const serverId = String(m?.id || "");
     if (!serverId || isPendingThreadMessageId(serverId)) continue;
@@ -37546,7 +37697,9 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
         sendStatus: "sent",
         sendError: "",
         ...deliveryFieldsFromServer(m),
+        localPlayUrl: String(prev.localPlayUrl || "").trim(),
       };
+      patched.push(list[optIdx]);
       changed = true;
       continue;
     }
@@ -37563,12 +37716,16 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
           ...prev,
           ...m,
           ...deliveryFieldsFromServer(m),
+          localPlayUrl: String(prev.localPlayUrl || "").trim(),
         };
+        patched.push(list[existingIdx]);
         changed = true;
       }
     } else {
-      list.push({ ...m, ...deliveryFieldsFromServer(m) });
-      markMessageBubbleEnter(m);
+      const next = { ...m, ...deliveryFieldsFromServer(m) };
+      list.push(next);
+      markMessageBubbleEnter(next);
+      added.push(next);
       changed = true;
     }
   }
@@ -37584,7 +37741,28 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
   );
   syncMessagesLastFetchedAtFromList();
-  renderMessagesMount({ scrollToBottom, forceScroll: scrollToBottom && (_messagesThreadNeedsInitialScroll || shouldAutoScrollMessagesMount()) });
+  const addedAtEnd = added.length > 0 && added.every((m) => {
+    const idx = _messagesList.findIndex((x) => String(x.id) === String(m.id));
+    return idx >= _messagesList.length - added.length;
+  });
+  const forceScroll = scrollToBottom && (_messagesThreadNeedsInitialScroll || shouldAutoScrollMessagesMount());
+  if (added.length && addedAtEnd && !patched.length && messagesThreadStackEl()) {
+    if (partnerRows.length) {
+      const typing = partnerTypingWrapEl();
+      typing?.remove();
+    }
+    if (!appendMessagesToMount(added)) {
+      renderMessagesMount({ scrollToBottom, forceScroll });
+    } else if (forceScroll) {
+      scheduleMessagesThreadScrollToBottom({ force: true });
+    }
+    return true;
+  }
+  if (!added.length && patched.length && messagesThreadStackEl()) {
+    const ok = patched.every((m) => patchMessageBubbleInMount(m));
+    if (ok) return true;
+  }
+  renderMessagesMount({ scrollToBottom, forceScroll });
   return true;
 }
 
@@ -37812,21 +37990,35 @@ function ensureDmReceiptHeartbeat() {
 function addOptimisticThreadMessage(msg) {
   markMessageBubbleEnter(msg);
   _messagesList = [...(Array.isArray(_messagesList) ? _messagesList : []), msg];
-  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  if (!appendMessagesToMount([msg])) {
+    renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  }
   updateMessagesComposerReserve();
   scheduleMessagesThreadScrollToBottom({ force: true });
+  window.requestAnimationFrame(() => {
+    updateMessagesComposerReserve();
+    scheduleMessagesThreadScrollToBottom({ force: true });
+  });
 }
 
 function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
   const cid = String(clientMessageId || "").trim();
   const idx = findOptimisticMessageIndex({ clientMessageId: cid, serverMsg });
+  const prev = idx >= 0 ? _messagesList[idx] : null;
   const next = {
     ...serverMsg,
     client_message_id: cid || String(serverMsg?.client_message_id || ""),
     sendStatus: "sent",
     sendError: "",
     ...deliveryFieldsFromServer(serverMsg),
+    localPlayUrl: String(prev?.localPlayUrl || "").trim(),
   };
+  if (next.localPlayUrl) {
+    const parsed = parseDmMessageBody(next.body);
+    cacheVoiceDropPlayUrl(cid, next.localPlayUrl);
+    cacheVoiceDropPlayUrl(parsed.storageKey, next.localPlayUrl);
+    cacheVoiceDropPlayUrl(parsed.url, next.localPlayUrl);
+  }
   if (idx >= 0) {
     const list = [..._messagesList];
     list[idx] = next;
@@ -37838,7 +38030,9 @@ function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
     return;
   }
   syncMessagesLastFetchedAtFromList();
-  renderMessagesMount({ scrollToBottom: true, forceScroll: shouldAutoScrollMessagesMount() });
+  if (!patchMessageBubbleInMount(next)) {
+    renderMessagesMount({ scrollToBottom: true, forceScroll: shouldAutoScrollMessagesMount() });
+  }
   scheduleMessagesThreadScrollToBottom({ force: shouldAutoScrollMessagesMount() });
   patchInboxFromOutgoingMessage({
     threadId: _conversationId,
@@ -37867,7 +38061,9 @@ function markOptimisticThreadMessageFailed(clientMessageId, err) {
     sendError: String(err?.message || "Send failed"),
   };
   _messagesList = list;
-  renderMessagesMount({ scrollToBottom: false });
+  if (!patchMessageBubbleInMount(list[idx])) {
+    renderMessagesMount({ scrollToBottom: false });
+  }
   try { showToast(String(err?.message || "Could not send message"), { icon: "💬", durationMs: 2800 }); } catch {}
 }
 
@@ -37878,7 +38074,9 @@ function updateOptimisticMessageStatus(clientMessageId, status) {
   const list = [..._messagesList];
   list[idx] = { ...list[idx], sendStatus: status };
   _messagesList = list;
-  renderMessagesMount({ scrollToBottom: false });
+  if (!patchMessageBubbleInMount(list[idx])) {
+    renderMessagesMount({ scrollToBottom: false });
+  }
 }
 
 async function sendThreadMessageInBackground({ clientMessageId, threadId, body }) {
@@ -38991,9 +39189,9 @@ function notePartnerTyping(userId) {
   if (_partnerTypingTimer) window.clearTimeout(_partnerTypingTimer);
   _partnerTypingTimer = window.setTimeout(() => {
     _partnerTypingTimer = 0;
-    renderMessagesMount({ scrollToBottom: true });
+    syncPartnerTypingBubbleInMount();
   }, DM_TYPING_LINGER_MS + 60);
-  renderMessagesMount({ scrollToBottom: true });
+  syncPartnerTypingBubbleInMount();
 }
 
 async function maybeSendDmTypingPulse() {
@@ -40049,10 +40247,11 @@ function messagesBubbleHtml(msg, viewerId, opts) {
       </div>`;
   }
   if (parsed.type === "voice") {
+    const voiceParsed = voiceParsedForBubble(msg, parsed);
     return `
       <div class="messagesBubbleWrap messagesBubbleWrap--voice${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${deliveredToPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
         <div class="messagesBubble messagesBubble--voice">
-          ${messagesVoiceDropBubbleHtml(parsed, { mine, msgId: msg?.id })}
+          ${messagesVoiceDropBubbleHtml(voiceParsed, { mine, msgId: msg?.id })}
           ${metaHtml}
         </div>
       </div>`;

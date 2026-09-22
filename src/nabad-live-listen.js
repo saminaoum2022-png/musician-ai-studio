@@ -4,7 +4,13 @@
  *
  * v1 rules (product, not edge cases):
  * - Host owns play, pause, seek. Guest follows volume + leave only.
- * - Late join at the host's current position.
+ * - Start together: invite resets the invited song to 0:00 and holds it.
+ *   The host may listen to something else while waiting. When the guest
+ *   accepts, the host drops that and both play the invited song from 0:00.
+ *   If they never accept, the host taps the chip and cancels.
+ * - After that, guest follows host play / pause / rewind only. A couple
+ *   of seconds of drift is fine. Buffering must not seek the guest.
+ * - Guest follows host play / pause / rewind as events — not a clock chase.
  * - If the host has left / session expired: never autoplay. Offer play from 0:00.
  */
 
@@ -14,11 +20,9 @@ const TICK_MS = 2500;
 const HEARTBEAT_MS = 6000;
 const POLL_MS = 4000;
 const JOIN_WAIT_MS = 12000;
-const SEEK_COOLDOWN_MS = 4000;
-/** Guest starts a bit behind. After that we let it play. */
-const LAG_MS = 400;
-/** Treat this as a host skip, not clock drift. */
-const SEEK_JUMP_MS = 4000;
+const SEEK_COOLDOWN_MS = 800;
+/** Host skip / rewind / scrub — guest follows this jump. */
+const SEEK_FOLLOW_MS = 400;
 
 let bridge = {};
 
@@ -39,6 +43,12 @@ let _seekInFlight = false;
 let _cueCtx = null;
 let _lastHostPosMs = 0;
 let _lastHostAt = 0;
+let _lastAppliedHostSentAt = 0;
+let _guestStarted = false;
+/** User scrub / skip only. Audio `seeked` from buffering must not move the guest. */
+let _hostScrubUntil = 0;
+let _suppressHostEventsUntil = 0;
+let _hostWantsPlaying = false;
 const _seenInviteIds = new Set();
 
 function clientLiveListenUiBaked() {
@@ -302,7 +312,7 @@ export function syncLiveListenChrome() {
   const waiting = hostAwaitingGuest() || _state.session?.status === "pending";
   const live = _state.session?.status === "live" && !waiting;
   const kicker = _state.role === "host"
-    ? (waiting ? `Waiting for @${name}` : (live ? `Live with @${name}` : "Live listen"))
+    ? (waiting ? `At the start · waiting for @${name}` : (live ? `Live with @${name}` : "Live listen"))
     : `Live with @${name}`;
   chip.innerHTML = `<span class="liveListenChipDot" aria-hidden="true"></span><span class="liveListenChipLabel">${escapeHtml(kicker)}</span>`;
   chip.setAttribute("aria-label", _state.role === "host"
@@ -368,9 +378,15 @@ function hostNowMs(tick) {
   return Math.max(0, Number(tick?.positionMs) || 0);
 }
 
-/** Join / rare resync point — behind the host, never ahead. */
-function targetMsFromTick(tick) {
-  return Math.max(0, hostNowMs(tick) - LAG_MS);
+function tickReason(tick) {
+  const r = String(tick?.reason || "clock").toLowerCase();
+  if (r === "seek" || r === "start" || r === "transport") return r;
+  return "clock";
+}
+
+function applyRemoteFlag(ms = 280) {
+  _applyingRemote = true;
+  window.setTimeout(() => { _applyingRemote = false; }, ms);
 }
 
 function resetGuestPlaybackRate() {
@@ -384,20 +400,6 @@ function resetGuestPlaybackRate() {
 function noteHostClock(tick) {
   _lastHostPosMs = hostNowMs(tick);
   _lastHostAt = Date.now();
-}
-
-function hostPositionJumped(tick) {
-  const pos = hostNowMs(tick);
-  if (!_lastHostAt) {
-    noteHostClock(tick);
-    return false;
-  }
-  const elapsed = Math.max(0, Date.now() - _lastHostAt);
-  const playing = tick?.playing !== false && String(tick?.status || "live") === "live";
-  const expected = _lastHostPosMs + (playing ? elapsed : 0);
-  const jump = Math.abs(pos - expected);
-  noteHostClock(tick);
-  return jump >= SEEK_JUMP_MS;
 }
 
 async function waitForCanPlay(a, timeoutMs = JOIN_WAIT_MS) {
@@ -423,47 +425,95 @@ async function waitForCanPlay(a, timeoutMs = JOIN_WAIT_MS) {
   });
 }
 
-async function applyGuestTick(tick, { force = false, allowSeek = true } = {}) {
+async function waitForSeeked(a, timeoutMs = 1800) {
+  if (!a) return false;
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      a.removeEventListener("seeked", onOk);
+      window.clearTimeout(timer);
+      resolve(ok);
+    };
+    const onOk = () => finish(true);
+    const timer = window.setTimeout(() => finish(a.readyState >= 2), timeoutMs);
+    a.addEventListener("seeked", onOk);
+  });
+}
+
+async function seekGuestToHost(tick) {
+  const a = playerEl();
+  if (!a) return;
+  const targetSec = hostNowMs(tick) / 1000;
+  const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  if (Math.abs(cur - targetSec) < 0.2) return;
+  _seekInFlight = true;
+  applyRemoteFlag(450);
+  try {
+    a.currentTime = Math.max(0, targetSec);
+    await waitForSeeked(a);
+  } catch {}
+  resetGuestPlaybackRate();
+  _lastSeekAt = Date.now();
+  window.setTimeout(() => { _seekInFlight = false; }, 250);
+}
+
+/**
+ * Guest follows host transport events (play / pause / rewind / start).
+ * Periodic clock ticks and DB polls must not toggle playback or seek —
+ * that is what made pause fight play, and yanked the guest every few seconds.
+ */
+async function applyGuestTick(tick, { force = false } = {}) {
   if (!isLiveListenGuest()) return;
   if (!sessionMatchesPlayer(_state?.session, tick?.audioUrl || _state?.session?.songUrl, tick?.songId || _state?.session?.songId)) {
     return;
   }
   const a = playerEl();
   if (!a) return;
-  if (_seekInFlight && !force) return;
-  const playing = tick?.playing !== false && String(tick?.status || "live") === "live";
+
+  const sentAt = Number(tick?.hostSentAt) || 0;
+  const reason = tickReason(tick);
+  if (!force && reason === "clock") return;
+  if (_seekInFlight && !force && reason !== "start") return;
+  if (sentAt && sentAt < _lastAppliedHostSentAt) return;
+  if (sentAt) _lastAppliedHostSentAt = sentAt;
+
+  const playing = tick?.playing === true && String(tick?.status || "live") === "live";
+  if (reason === "start") {
+    if (_guestStarted) return;
+    await seekGuestToHost({ ...tick, positionMs: 0 });
+    noteHostClock({ positionMs: 0, playing: true });
+    _guestStarted = true;
+    applyRemoteFlag(400);
+    try { await a.play(); } catch {}
+    return;
+  }
+  const shouldSeek = force || reason === "seek";
+
+  if (shouldSeek) {
+    await seekGuestToHost(tick);
+    noteHostClock(tick);
+    if (reason === "start") _guestStarted = true;
+  } else {
+    noteHostClock(tick);
+  }
+
+  if (reason === "seek") return;
 
   try {
     if (!playing) {
       resetGuestPlaybackRate();
       if (!a.paused) {
-        _applyingRemote = true;
+        applyRemoteFlag(280);
         try { a.pause(); } catch {}
-        window.setTimeout(() => { _applyingRemote = false; }, 60);
       }
       return;
     }
     if (a.paused) {
-      _applyingRemote = true;
+      applyRemoteFlag(280);
       try { await a.play(); } catch {}
-      window.setTimeout(() => { _applyingRemote = false; }, 60);
     }
-
-    if (!allowSeek && !force) return;
-    const skipped = force || hostPositionJumped(tick);
-    if (!skipped) return;
-    if (!force && Date.now() - _lastSeekAt < SEEK_COOLDOWN_MS) return;
-    const hostSec = hostNowMs(tick) / 1000;
-    const targetSec = targetMsFromTick(tick) / 1000;
-    _seekInFlight = true;
-    _lastSeekAt = Date.now();
-    _applyingRemote = true;
-    try { a.currentTime = Math.max(0, Math.min(targetSec, hostSec)); } catch {}
-    resetGuestPlaybackRate();
-    window.setTimeout(() => {
-      _seekInFlight = false;
-      _applyingRemote = false;
-    }, 400);
   } catch {
     _applyingRemote = false;
   }
@@ -479,7 +529,8 @@ function tickPayload() {
     playing: isPlayerPlaying(),
     positionMs: currentPositionMs(),
     hostSentAt: Date.now(),
-    status: "live",
+    status: hostAwaitingGuest() ? "pending" : "live",
+    reason: "clock",
   };
 }
 
@@ -572,8 +623,7 @@ function startGuestPoll() {
         const data = await api("get", { sessionId: _state.session.id });
         const session = data?.session;
         if (!session) return;
-        _state.session = session;
-        if (session.status !== "live") {
+        if (session.status !== "live" && session.status !== "pending") {
           await onHostLeft();
           return;
         }
@@ -581,10 +631,10 @@ function startGuestPoll() {
         _state.session = {
           ...prev,
           ...session,
+          playing: prev.playing,
           positionMs: prev.positionMs,
           hostSentAt: prev.hostSentAt,
         };
-        await applyGuestTick(session, { allowSeek: false });
         syncLiveListenChrome();
       } catch {}
     })();
@@ -596,6 +646,11 @@ async function clearLocalSession({ keepRealtime = false } = {}) {
   resetGuestPlaybackRate();
   _lastHostPosMs = 0;
   _lastHostAt = 0;
+  _lastAppliedHostSentAt = 0;
+  _guestStarted = false;
+  _hostScrubUntil = 0;
+  _suppressHostEventsUntil = 0;
+  _hostWantsPlaying = false;
   if (!keepRealtime) {
     try {
       const mod = await bridge.loadRealtimeMod?.();
@@ -608,13 +663,66 @@ async function clearLocalSession({ keepRealtime = false } = {}) {
   syncLiveListenChrome();
 }
 
+async function holdHostAtStart() {
+  const a = playerEl();
+  applyRemoteFlag(700);
+  try { a?.pause?.(); } catch {}
+  if (a && Number.isFinite(a.currentTime) && a.currentTime > 0.05) {
+    try { a.currentTime = 0; } catch {}
+    await waitForSeeked(a, 1500);
+  }
+  if (_state?.session) _state.session.positionMs = 0;
+}
+
+async function loadInvitedSongOnHost(session) {
+  const url = String(session?.songUrl || "").trim();
+  if (!url) return;
+  const a0 = playerEl();
+  const already = sessionMatchesPlayer(session, a0?.currentSrc || a0?.src, session.songId);
+  _suppressHostEventsUntil = Date.now() + 2500;
+  applyRemoteFlag(2200);
+  if (!already && typeof bridge.playUrlOnPlayer === "function") {
+    await bridge.playUrlOnPlayer(url, session.songTitle || "Song", session.songCover || "", {
+      songId: session.songId || "",
+      ownerUserId: session.songOwnerId || "",
+      openPlayer: true,
+      liveListenJoin: true,
+      forceReload: true,
+    });
+  }
+  const a = playerEl();
+  try { a?.pause?.(); } catch {}
+  await waitForCanPlay(a);
+  if (a && Number.isFinite(a.currentTime) && a.currentTime > 0.05) {
+    try { a.currentTime = 0; } catch {}
+    await waitForSeeked(a, 1500);
+  }
+  try { await a?.play?.(); } catch {}
+}
+
+async function startTogetherAsHost() {
+  if (!isLiveListenHost() || !_state?.session) return;
+  _hostWantsPlaying = true;
+  _suppressHostEventsUntil = Date.now() + 2000;
+  await loadInvitedSongOnHost(_state.session);
+  if (!_hostWantsPlaying) {
+    try { playerEl()?.pause?.(); } catch {}
+    void broadcastTick({ playing: false, positionMs: 0, reason: "transport" });
+    return;
+  }
+  if (_state?.session) _state.session.positionMs = 0;
+  void broadcastTick({ playing: true, positionMs: 0, reason: "start" });
+  void persistHeartbeat();
+}
+
 async function becomeHost(session, { awaitingGuest = true } = {}) {
   _state = { role: "host", session, awaitingGuest: awaitingGuest && session?.guestJoined !== true && session?.status !== "ended" };
   if (session?.status === "live" && session?.guestJoined === true) _state.awaitingGuest = false;
   if (session?.status === "pending" || session?.guestJoined === false) _state.awaitingGuest = true;
+  if (_state.awaitingGuest) await holdHostAtStart();
   await subscribeSession(session.id);
   startHostTimers();
-  void broadcastTick();
+  void broadcastTick({ playing: false, reason: "clock" });
   void persistHeartbeat();
   void sendInviteToGuest(session);
   syncLiveListenChrome();
@@ -630,7 +738,8 @@ function markGuestAccepted() {
   haptic("success");
   playListenCue("joined");
   const name = partnerLabel(_state.session);
-  toast(`@${name} joined live listen`, { icon: "🎧", durationMs: 2800 });
+  toast(`@${name} joined — starting together`, { icon: "🎧", durationMs: 2800 });
+  void startTogetherAsHost();
 }
 
 function applyHostSessionUpdate(session) {
@@ -714,17 +823,24 @@ export function startLiveListenGuestInbox() {
 
 async function becomeGuest(session) {
   _state = { role: "guest", session: { ...session, status: "live", guestJoined: true }, solo: false };
+  _seekInFlight = true;
+  _guestStarted = false;
   await subscribeSession(session.id);
   startGuestPoll();
   syncLiveListenChrome();
   haptic("success");
   playListenCue("joined");
+}
+
+async function announceGuestJoined() {
+  const sid = _state?.session?.id;
+  if (!sid) return;
   try {
     const mod = await bridge.loadRealtimeMod?.();
     await mod?.sendListenSessionBroadcast?.({
-      sessionId: session.id,
+      sessionId: sid,
       event: "ll_join",
-      payload: { sessionId: session.id, status: "live" },
+      payload: { sessionId: sid, status: "live" },
     });
   } catch {}
 }
@@ -743,18 +859,22 @@ async function loadSessionAudio(session, { startAtMs, autoplay }) {
       ownerUserId,
       openPlayer: true,
       liveListenJoin: true,
+      liveListenHold: autoplay !== true,
     });
   }
   const a = playerEl();
+  _seekInFlight = true;
+  applyRemoteFlag(800);
+  try { a?.pause?.(); } catch {}
   await waitForCanPlay(a);
   const targetSec = Math.max(0, (Number(startAtMs) || 0) / 1000);
-  _applyingRemote = true;
   try {
     if (a) {
       try { a.playbackRate = 1; } catch {}
     }
-    if (a && targetSec > 0.25) {
+    if (a && Number.isFinite(targetSec) && Math.abs((a.currentTime || 0) - targetSec) > 0.15) {
       try { a.currentTime = targetSec; } catch {}
+      await waitForSeeked(a);
     }
     if (autoplay && a) {
       try { await a.play(); } catch {}
@@ -763,8 +883,9 @@ async function loadSessionAudio(session, { startAtMs, autoplay }) {
     }
   } finally {
     _lastSeekAt = Date.now();
-    noteHostClock({ positionMs: Number(startAtMs) || 0, playing: autoplay });
-    window.setTimeout(() => { _applyingRemote = false; }, 80);
+    _seekInFlight = false;
+    noteHostClock({ positionMs: Number(startAtMs) || 0, playing: false });
+    window.setTimeout(() => { _applyingRemote = false; }, 280);
   }
 }
 
@@ -808,7 +929,9 @@ async function confirmHostEnd() {
   openOverlay({
     kicker: waiting ? "Invite sent" : "Live listen",
     title: _state?.session?.songTitle || "Song",
-    sub: waiting ? `Cancel invite to @${name}?` : `End live listen with @${name}?`,
+    sub: waiting
+      ? `The song stays at the start until @${name} joins. Cancel if you want to play it yourself.`
+      : `End live listen with @${name}?`,
     art: _state?.session?.songCover,
     actionsHtml: `
       <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="cancel">${waiting ? "Keep waiting" : "Keep going"}</button>
@@ -837,6 +960,7 @@ async function confirmGuestLeave() {
 }
 
 async function endHostSession() {
+  const wasWaiting = hostAwaitingGuest();
   const sid = _state?.session?.id;
   if (sid) {
     try {
@@ -850,7 +974,7 @@ async function endHostSession() {
     try { await api("post", { action: "end", sessionId: sid }); } catch {}
   }
   await clearLocalSession();
-  toast("Live listen ended");
+  toast(wasWaiting ? "Invite canceled — press play whenever you want" : "Live listen ended");
 }
 
 async function leaveGuestSession() {
@@ -900,19 +1024,17 @@ function showEndedFallback(session) {
 
 function showJoinPrompt(session) {
   const name = displayName(session?.host || {});
-  const target = targetMsFromTick(session);
-  const clock = formatTime(target / 1000);
   const title = String(session.songTitle || "").trim() || "Now Playing";
   haptic("impact");
   playListenCue("invite");
   openOverlay({
     kicker: "Live listen",
     title,
-    sub: `Join ${name} at ${clock}?`,
+    sub: `Start from the beginning with ${name}`,
     art: session.songCover,
     actionsHtml: `
       <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="dismiss">Not now</button>
-      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="join">Join live</button>`,
+      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="join">Start together</button>`,
     onAction: async (act, btn) => {
       if (act !== "join") {
         closeOverlay();
@@ -935,12 +1057,13 @@ function showJoinPrompt(session) {
         closeOverlay();
         await becomeGuest(next);
         await loadSessionAudio(next, {
-          startAtMs: targetMsFromTick(next),
-          autoplay: next.playing !== false,
+          startAtMs: 0,
+          autoplay: false,
         });
+        await announceGuestJoined();
       } catch (e) {
         toast(String(e?.message || "Could not join"), { durationMs: 2800 });
-        btn.textContent = "Join live";
+        btn.textContent = "Start together";
         btn.disabled = false;
       } finally {
         _joinBusy = false;
@@ -995,6 +1118,7 @@ async function createSessionForGuest(guest, track, rowBtn) {
   }
   setOverlayStatus(`Inviting @${handle}…`);
   try {
+    await holdHostAtStart();
     let shareUrl = url;
     try {
       if (typeof bridge.resolveShareableAudioUrl === "function") {
@@ -1010,8 +1134,8 @@ async function createSessionForGuest(guest, track, rowBtn) {
       songCover: track.artUrl || track.art || "",
       songUrl: shareUrl,
       songOwnerId: track.ownerUserId || "",
-      positionMs: currentPositionMs(),
-      playing: isPlayerPlaying(),
+      positionMs: 0,
+      playing: false,
       durationMs: currentDurationMs(),
       hideTitles,
       threadId: guest.threadId || "",
@@ -1020,7 +1144,7 @@ async function createSessionForGuest(guest, track, rowBtn) {
     if (!session?.id) throw new Error("Could not start live listen");
     closeOverlay();
     await becomeHost(session);
-    toast(`Waiting for @${handle} to join`, { icon: "🎧", durationMs: 2600 });
+    toast(`Back to the start. Plays when @${handle} joins — tap the chip to cancel.`, { icon: "🎧", durationMs: 3400 });
   } catch (e) {
     const raw = String(e?.message || "Could not start live listen");
     const msg = /not set up|table_missing/i.test(raw)
@@ -1137,28 +1261,77 @@ export function decorateNowPlayingPresenceActions(overlay, presence) {
   actions.appendChild(btn);
 }
 
+export function noteLiveListenHostScrub() {
+  if (!isLiveListenHost() || hostAwaitingGuest()) return;
+  _hostScrubUntil = Date.now() + 2000;
+}
+
+export function noteLiveListenHostTransport(wantPlaying) {
+  if (!isLiveListenHost() || hostAwaitingGuest()) return;
+  _hostWantsPlaying = Boolean(wantPlaying);
+}
+
 export function onLiveListenPlayerEvent(type) {
-  if (_applyingRemote) return;
   if (!isLiveListenHost()) return;
+  if (type === "pause") {
+    if (hostAwaitingGuest()) return;
+    _hostWantsPlaying = false;
+    void broadcastTick({ playing: false, positionMs: currentPositionMs(), reason: "transport" });
+    return;
+  }
+  if (_applyingRemote) return;
   if (type === "ended") {
+    if (hostAwaitingGuest()) return;
+    const ended = playerEl();
+    if (!sessionMatchesPlayer(_state?.session, ended?.currentSrc || ended?.src, _state?.session?.songId)) return;
     void endHostSession();
     return;
   }
-  if (type === "play" || type === "pause") {
-    void broadcastTick({ playing: type !== "pause" && isPlayerPlaying() });
+  if (hostAwaitingGuest()) {
+    const a = playerEl();
+    const onInvited = sessionMatchesPlayer(_state.session, a?.currentSrc || a?.src, _state.session?.songId);
+    if (!onInvited) return;
+    applyRemoteFlag(500);
+    try { a?.pause?.(); } catch {}
+    if (a && Number.isFinite(a.currentTime) && a.currentTime > 0.15) {
+      try { a.currentTime = 0; } catch {}
+    }
+    if (_state?.session) _state.session.positionMs = 0;
+    if (type === "play") {
+      toast("It starts when they join. Tap the chip to cancel.", { durationMs: 2200 });
+    }
+    return;
+  }
+  if (type === "play") {
+    if (!_hostWantsPlaying) {
+      applyRemoteFlag(250);
+      try { playerEl()?.pause?.(); } catch {}
+      void broadcastTick({ playing: false, positionMs: currentPositionMs(), reason: "transport" });
+      return;
+    }
+    if (Date.now() < _suppressHostEventsUntil) return;
+    void broadcastTick({ playing: true, positionMs: currentPositionMs(), reason: "transport" });
     return;
   }
   if (type === "seeked") {
+    if (Date.now() < _suppressHostEventsUntil) return;
+    if (Date.now() > _hostScrubUntil) return;
     const pos = currentPositionMs();
     const last = Number(_state?.session?.positionMs);
-    if (Number.isFinite(last) && Math.abs(pos - last) < 1500) return;
-    void broadcastTick({ playing: isPlayerPlaying() });
+    if (Number.isFinite(last) && Math.abs(pos - last) < SEEK_FOLLOW_MS) return;
+    _hostScrubUntil = 0;
+    void broadcastTick({
+      playing: _hostWantsPlaying && isPlayerPlaying(),
+      positionMs: pos,
+      reason: "seek",
+    });
   }
 }
 
 export function interceptLiveListenSongChange(nextUrl, opts = {}) {
   if (!isLiveListenActive()) return false;
   if (opts?.liveListenJoin) return false;
+  if (hostAwaitingGuest()) return false;
   const next = String(nextUrl || "").trim();
   const songId = String(opts?.songId || opts?.playSource?.songId || "").trim();
   if (sessionMatchesPlayer(_state?.session, next, songId)) return false;

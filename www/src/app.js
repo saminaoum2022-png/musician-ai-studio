@@ -48,6 +48,8 @@ import {
   handleLiveListenDeepLink,
   decorateNowPlayingPresenceActions,
   onLiveListenPlayerEvent,
+  noteLiveListenHostScrub,
+  noteLiveListenHostTransport,
   interceptLiveListenTransport,
   interceptLiveListenSongChange,
   isLiveListenTransportLocked,
@@ -25319,31 +25321,59 @@ function feedHookAtTarget(audio, hookSec) {
   return cur >= hook - 0.15 && cur <= hook + 0.45;
 }
 
+let _feedHookGen = 0;
+
+function cancelPendingFeedHook() {
+  _feedHookGen += 1;
+  try {
+    if (playerEl && playerEl.volume <= 0.01) playerEl.volume = 1;
+  } catch {}
+}
+
 async function applyFeedHookAfterPlayStart(audio, source, trackRef) {
   if (!audio || !shouldApplyFeedHook(source) || source?.applyFeedHook === false) return;
+  if (isLiveListenActive()) {
+    try { if (audio.volume <= 0.01) audio.volume = 1; } catch {}
+    return;
+  }
   const hook = feedHookStartFromContext(source, trackRef);
   if (hook <= 0) {
     try { if (audio.volume <= 0.01) audio.volume = 1; } catch {}
     return;
   }
 
+  const gen = _feedHookGen;
+  const stale = () => gen !== _feedHookGen || isLiveListenActive();
   const curVol = Number.isFinite(audio.volume) ? audio.volume : 1;
   const prevVol = curVol > 0.01 ? curVol : 1;
   let hookApplied = false;
   try { audio.volume = 0; } catch {}
 
   const finishHookStart = async () => {
-    if (hookApplied) return;
+    if (hookApplied || stale()) {
+      if (stale()) {
+        try { if (audio.volume <= 0.01) audio.volume = prevVol; } catch {}
+      }
+      return;
+    }
     hookApplied = true;
     maybeShowFeedHookStartHint(hook, source);
     await feedHookVolumeFadeIn(audio, FEED_HOOK_FADE_MS, prevVol);
+    if (stale()) return;
     try { syncGlobalFeedHookMarkers(); } catch {}
     try { syncPlayerUI(); } catch {}
   };
 
-  const seekToHook = () => applyFeedHookToAudio(audio, hook);
+  const seekToHook = () => {
+    if (stale()) return false;
+    return applyFeedHookToAudio(audio, hook);
+  };
 
   seekToHook();
+  if (stale()) {
+    try { if (audio.volume <= 0.01) audio.volume = prevVol; } catch {}
+    return;
+  }
   if (feedHookAtTarget(audio, hook)) {
     await finishHookStart();
     return;
@@ -25360,6 +25390,10 @@ async function applyFeedHookAfterPlayStart(audio, source, trackRef) {
       resolve();
     };
     const onReady = () => {
+      if (stale()) {
+        finish();
+        return;
+      }
       seekToHook();
       if (feedHookAtTarget(audio, hook)) finish();
     };
@@ -25371,6 +25405,10 @@ async function applyFeedHookAfterPlayStart(audio, source, trackRef) {
     window.setTimeout(finish, isNativeShell() ? 2200 : 1400);
   });
 
+  if (stale()) {
+    try { if (audio.volume <= 0.01) audio.volume = prevVol; } catch {}
+    return;
+  }
   seekToHook();
   if (feedHookAtTarget(audio, hook)) {
     await finishHookStart();
@@ -25400,6 +25438,7 @@ function syncFeedHookMarkerOnWrap(wrap, hookSec, dur) {
 }
 
 function activeFeedHookForPlayback(source, trackRef) {
+  if (isLiveListenActive()) return 0;
   if (!shouldApplyFeedHook(source) || source?.applyFeedHook === false) return 0;
   return feedHookStartFromContext(source, trackRef || currentPlayerTrackRef);
 }
@@ -53232,6 +53271,17 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     ? Number(opts.feedHookSec)
     : feedHookStartFromTrack(publicTrackMeta || { meta: currentPlayerTrackRef.meta, url: playableRaw });
   if (pinnedHook > 0) publicSource.feedHookSec = pinnedHook;
+  if (opts?.liveListenJoin || isLiveListenActive()) {
+    publicSource.applyFeedHook = false;
+    delete publicSource.feedHookSec;
+    cancelPendingFeedHook();
+    if (currentPlayerTrackRef?.meta) {
+      currentPlayerTrackRef = {
+        ...currentPlayerTrackRef,
+        meta: { ...currentPlayerTrackRef.meta, hookStartSec: 0, hookSource: "beginning" },
+      };
+    }
+  }
   miniSource = publicSource;
   resetPublicPlayTracking(miniSource);
   libraryNowPlayingId = null;
@@ -53284,7 +53334,12 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     songId: currentPlayerTrackRef.songId,
     ownerUserId: currentPlayerTrackRef.ownerUserId,
   };
-  if (!openPlayer) {
+  if (opts.liveListenHold) {
+    await playOnPlayerPage(prox, title || "Song", meta, {
+      trackRef: currentPlayerTrackRef,
+      liveListenHold: true,
+    });
+  } else if (!openPlayer) {
     setPlayerMeta(meta, {
       trackRef: currentPlayerTrackRef,
       coverImmediate: Boolean(opts.reelSwap || opts.discoverReel),
@@ -53305,6 +53360,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
       coverImmediate: Boolean(opts.discoverReel || opts.reelSwap),
       skipCoverPaint: Boolean(opts.skipCoverPaint),
       trackRef: currentPlayerTrackRef,
+      liveListenHold: Boolean(opts.liveListenHold),
     });
   }
 }
@@ -65149,6 +65205,7 @@ function skipPlayerBySeconds(delta) {
     try { interceptLiveListenTransport(); } catch {}
     return;
   }
+  try { noteLiveListenHostScrub(); } catch {}
   const a = ensurePlayer();
   const dur = getPlayerDuration();
   if (!(dur > 0)) return;
@@ -66482,6 +66539,18 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
   }
   const a = ensurePlayer();
   const playUrl = normalizeAudioUrlForPlayback(url);
+  if (opts.liveListenHold) {
+    cancelPendingFeedHook();
+    try { a.muted = false; } catch {}
+    try { a.pause(); } catch {}
+    await waitForAudioCanPlay(a, 12000);
+    try { a.currentTime = 0; } catch {}
+    try { a.pause(); } catch {}
+    try { if (a.volume <= 0.01) a.volume = 1; } catch {}
+    try { syncGlobalFeedHookMarkers(); } catch {}
+    try { syncPlayerUI(); } catch {}
+    return;
+  }
   const startPlayback = async () => {
     try { a.muted = false; } catch {}
     try {
@@ -74767,6 +74836,7 @@ if (els.btnProofCopyFp) els.btnProofCopyFp.addEventListener("click", copyProofFi
 if (els.btnPlayerPlay) {
   els.btnPlayerPlay.addEventListener("click", async () => {
     const a = ensurePlayer();
+    try { noteLiveListenHostTransport(true); } catch {}
     try {
       await a.play();
       els.btnPlayerPlay.disabled = true;
@@ -74780,6 +74850,7 @@ if (els.btnPlayerPlay) {
 if (els.btnPlayerPause) {
   els.btnPlayerPause.addEventListener("click", () => {
     if (!playerEl) return;
+    try { noteLiveListenHostTransport(false); } catch {}
     playerEl.pause();
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
     els.btnPlayerPause.disabled = true;
@@ -75099,6 +75170,7 @@ if (els.playerSeek) {
       try { interceptLiveListenTransport(); } catch {}
       return;
     }
+    try { noteLiveListenHostScrub(); } catch {}
     playerSeekDragging = true;
   });
   els.playerSeek.addEventListener("pointerup", () => {

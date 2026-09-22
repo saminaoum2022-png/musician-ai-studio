@@ -15,7 +15,7 @@ const {
   readJsonBody,
   callRpc,
 } = require("../_lib/credits-auth");
-const { queuePrivacySafePush } = require("../_lib/onesignal-push");
+const { sendPrivacySafePush } = require("../_lib/onesignal-push");
 const { nabadLiveListenEnabled } = require("../_lib/nabad-live-listen-lib");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
@@ -233,6 +233,29 @@ module.exports = async function handler(req, res) {
 
     if (req.method === "GET") {
       const url = new URL(req.url, "http://localhost");
+      const incoming = String(url.searchParams.get("incoming") || "").trim() === "1";
+      const me = cleanUserId(user.userId);
+      if (incoming) {
+        const nowIso = encodeURIComponent(new Date().toISOString());
+        const r = await svcFetch(
+          `listen_sessions?guest_user_id=eq.${encodeURIComponent(me)}` +
+            `&status=eq.live&expires_at=gt.${nowIso}` +
+            `&select=*&order=started_at.desc&limit=5`,
+        );
+        if (isTableMissing(r)) {
+          return sendJson(res, 503, { error: "Live listen is not set up yet", code: "table_missing" });
+        }
+        if (!r.ok) return sendJson(res, 500, { error: "Could not load invites" });
+        const rows = Array.isArray(r.data) ? r.data : [];
+        const liveRows = rows.filter((row) => isSessionLive(row));
+        const profiles = await profilesByUserIds(
+          liveRows.flatMap((row) => [row.host_user_id, row.guest_user_id]),
+        );
+        return sendJson(res, 200, {
+          ok: true,
+          sessions: liveRows.map((row) => serializeSession(row, { viewerId: me, profiles })),
+        });
+      }
       const sessionId = String(url.searchParams.get("sessionId") || "").trim();
       const loaded = await loadSession(sessionId);
       if (!loaded.ok) {
@@ -240,7 +263,6 @@ module.exports = async function handler(req, res) {
       }
       const hostId = cleanUserId(loaded.row.host_user_id);
       const guestId = cleanUserId(loaded.row.guest_user_id);
-      const me = cleanUserId(user.userId);
       if (me !== hostId && me !== guestId) {
         return sendJson(res, 403, { error: "Not in this session" });
       }
@@ -310,12 +332,16 @@ module.exports = async function handler(req, res) {
       if (!created?.id) return sendJson(res, 500, { error: "Could not start live listen" });
       const profiles = await fetchProfilesForRow(created);
       const host = publicUser(profiles, me);
-      queuePrivacySafePush({
-        userId: guestUserId,
-        type: "live_listen",
-        entityId: created.id,
-        actorDisplayName: host.displayName || host.username || "Someone",
-      });
+      try {
+        await sendPrivacySafePush({
+          userId: guestUserId,
+          type: "live_listen",
+          entityId: created.id,
+          actorDisplayName: host.displayName || host.username || "Someone",
+        });
+      } catch (e) {
+        console.warn("[live-listen] push failed", e?.message || e);
+      }
       return sendJson(res, 200, {
         ok: true,
         session: serializeSession(created, { viewerId: me, profiles }),

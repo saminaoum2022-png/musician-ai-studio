@@ -20,6 +20,7 @@ create table if not exists public.listen_sessions (
   expires_at timestamptz not null,
   status text not null default 'live'
     check (status in ('live', 'ended')),
+  guest_joined boolean not null default false,
   hide_titles boolean not null default false,
   thread_id uuid,
   created_at timestamptz not null default now(),

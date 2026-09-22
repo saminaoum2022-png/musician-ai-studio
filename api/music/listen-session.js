@@ -135,10 +135,30 @@ function computeExpiresAt({ durationMs, positionMs }) {
   return new Date(Date.now() + ttl).toISOString();
 }
 
+function isSessionExpired(row) {
+  const exp = row?.expires_at ? Date.parse(row.expires_at) : 0;
+  return Boolean(exp && exp <= Date.now());
+}
+
 function isSessionLive(row) {
   if (!row || String(row.status || "") !== "live") return false;
-  const exp = row.expires_at ? Date.parse(row.expires_at) : 0;
-  return !exp || exp > Date.now();
+  return !isSessionExpired(row);
+}
+
+function rowGuestJoined(row) {
+  const v = row?.guest_joined;
+  if (v === true || v === "t" || v === "true") return true;
+  if (v === false || v === "f" || v === "false") return false;
+  return null;
+}
+
+function isGuestJoinedColumnMissing(result) {
+  const text = String(result?.text || result?.error || "");
+  const data = result?.data;
+  const msg = typeof data === "object" && data
+    ? String(data.message || data.hint || data.details || "")
+    : "";
+  return /guest_joined/i.test(text + msg) && /column|schema cache/i.test(text + msg);
 }
 
 function publicUser(map, userId) {
@@ -156,12 +176,15 @@ function serializeSession(row, { viewerId, profiles } = {}) {
   const hostId = cleanUserId(row.host_user_id);
   const guestId = cleanUserId(row.guest_user_id);
   const live = isSessionLive(row);
+  const joined = rowGuestJoined(row);
   const title = hideTitles && viewer && viewer !== hostId
     ? ""
     : String(row.song_title || "");
   let role = null;
   if (viewer && viewer === hostId) role = "host";
   else if (viewer && viewer === guestId) role = "guest";
+  let status = "ended";
+  if (live) status = joined === false ? "pending" : "live";
   return {
     id: String(row.id),
     hostUserId: hostId,
@@ -176,7 +199,8 @@ function serializeSession(row, { viewerId, profiles } = {}) {
     hostSentAt: Number(row.host_sent_at) || Date.parse(row.updated_at || row.started_at) || Date.now(),
     startedAt: row.started_at || null,
     expiresAt: row.expires_at || null,
-    status: live ? "live" : "ended",
+    status,
+    guestJoined: joined,
     hideTitles,
     durationMs: Math.max(0, Number(row.duration_ms) || 0),
     host: publicUser(profiles || new Map(), hostId),
@@ -313,15 +337,25 @@ module.exports = async function handler(req, res) {
         duration_ms: durationMs || null,
         expires_at: computeExpiresAt({ durationMs, positionMs }),
         status: "live",
+        guest_joined: false,
         hide_titles: hideTitles,
         thread_id: UUID_RE.test(String(body.threadId || "")) ? String(body.threadId).trim() : null,
         updated_at: new Date().toISOString(),
       };
-      const ins = await svcFetch("listen_sessions", {
+      let ins = await svcFetch("listen_sessions", {
         method: "POST",
         headers: { Prefer: "return=representation" },
         body: JSON.stringify(row),
       });
+      if (!ins.ok && isGuestJoinedColumnMissing(ins)) {
+        const fallback = { ...row };
+        delete fallback.guest_joined;
+        ins = await svcFetch("listen_sessions", {
+          method: "POST",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify(fallback),
+        });
+      }
       if (isTableMissing(ins)) {
         return sendJson(res, 503, { error: "Live listen is not set up yet", code: "table_missing" });
       }
@@ -332,6 +366,27 @@ module.exports = async function handler(req, res) {
       if (!created?.id) return sendJson(res, 500, { error: "Could not start live listen" });
       const profiles = await fetchProfilesForRow(created);
       const host = publicUser(profiles, me);
+      try {
+        await svcFetch("social_notifications", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            user_id: guestUserId,
+            type: "live_listen",
+            actor_user_id: me,
+            entity_id: String(created.id),
+            metadata: {
+              actor_username: host.username || host.displayName || "",
+              actor_avatar: host.avatar || "",
+              song_title: String(created.song_title || "").trim(),
+              song_cover: String(created.song_cover || "").trim(),
+              session_id: String(created.id),
+            },
+          }),
+        });
+      } catch (e) {
+        console.warn("[live-listen] activity insert failed", e?.message || e);
+      }
       try {
         await sendPrivacySafePush({
           userId: guestUserId,
@@ -362,12 +417,40 @@ module.exports = async function handler(req, res) {
 
       if (action === "join") {
         if (me !== guestId) return sendJson(res, 403, { error: "Only the guest can join" });
-        const live = isSessionLive(row);
-        const profiles = await fetchProfilesForRow(row);
+        if (!isSessionLive(row)) {
+          const profiles = await fetchProfilesForRow(row);
+          return sendJson(res, 200, {
+            ok: true,
+            live: false,
+            session: serializeSession({ ...row, status: "ended", playing: false }, { viewerId: me, profiles }),
+          });
+        }
+        let next = row;
+        if (rowGuestJoined(row) !== true) {
+          const upd = await svcFetch(
+            `listen_sessions?id=eq.${encodeURIComponent(row.id)}`,
+            {
+              method: "PATCH",
+              headers: { Prefer: "return=representation" },
+              body: JSON.stringify({
+                guest_joined: true,
+                updated_at: new Date().toISOString(),
+              }),
+            },
+          );
+          if (upd.ok) {
+            next = Array.isArray(upd.data) ? upd.data[0] : (upd.data || { ...row, guest_joined: true });
+          } else if (!isGuestJoinedColumnMissing(upd)) {
+            next = { ...row, guest_joined: true };
+          } else {
+            next = { ...row, guest_joined: true };
+          }
+        }
+        const profiles = await fetchProfilesForRow(next);
         return sendJson(res, 200, {
           ok: true,
-          session: serializeSession(row, { viewerId: me, profiles }),
-          live,
+          session: serializeSession({ ...next, guest_joined: true }, { viewerId: me, profiles }),
+          live: true,
         });
       }
 
@@ -434,11 +517,24 @@ module.exports = async function handler(req, res) {
 
       if (action === "leave") {
         if (me !== guestId) return sendJson(res, 403, { error: "Only the guest can leave" });
-        const profiles = await fetchProfilesForRow(row);
+        const upd = await svcFetch(
+          `listen_sessions?id=eq.${encodeURIComponent(row.id)}`,
+          {
+            method: "PATCH",
+            headers: { Prefer: "return=representation" },
+            body: JSON.stringify({
+              status: "ended",
+              playing: false,
+              updated_at: new Date().toISOString(),
+            }),
+          },
+        );
+        const next = Array.isArray(upd.data) ? upd.data[0] : { ...row, status: "ended", playing: false };
+        const profiles = await fetchProfilesForRow(next);
         return sendJson(res, 200, {
           ok: true,
           left: true,
-          session: serializeSession(row, { viewerId: me, profiles }),
+          session: serializeSession(next, { viewerId: me, profiles }),
         });
       }
     }

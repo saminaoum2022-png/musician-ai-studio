@@ -49,7 +49,9 @@ import {
   decorateNowPlayingPresenceActions,
   onLiveListenPlayerEvent,
   interceptLiveListenTransport,
+  interceptLiveListenSongChange,
   isLiveListenTransportLocked,
+  isLiveListenActive,
 } from "./nabad-live-listen.js";
 import { prepareAudioForVibeRead } from "./vibe-audio-prep.js";
 import { prepareAudioForSongEdit } from "./song-edit-audio-prep.js";
@@ -44758,6 +44760,7 @@ function notificationIconForType(type) {
   if (t === "social_mention") return "@";
   if (t === "social_repost") return "↻";
   if (t === "gift_received") return "🎁";
+  if (t === "live_listen") return "🎧";
   if (t === "play_milestone") return "▶";
   if (t === "chart_rank") return "★";
   if (t === "public_song") return "P";
@@ -44797,6 +44800,9 @@ function activityTypeBadgeSvg(type) {
       + '<path fill="currentColor" d="M9.5 4.5a2 2 0 1 0 .01 4 2 2 0 0 0-.01-4Z"/>'
       + '<path fill="currentColor" d="M14.5 4.5a2 2 0 1 0 .01 4 2 2 0 0 0-.01-4Z"/>',
     );
+  }
+  if (t === "live_listen") {
+    return svg('<path fill="currentColor" d="M4 10a8 8 0 0 1 16 0v6a2 2 0 0 1-2 2h-2v-8h4a6 6 0 0 0-12 0h4v8H6a2 2 0 0 1-2-2v-6Z"/>');
   }
   if (t === "remix") {
     return svg('<path fill="currentColor" d="M9 18V6l10-2v10"/><circle cx="6" cy="18" r="2.5" fill="currentColor"/><circle cx="17" cy="16" r="2.5" fill="currentColor"/>');
@@ -44848,6 +44854,14 @@ function notificationMessage(n) {
       title: FAN_COPY.notifFollowTitle(username),
       body: FAN_COPY.notifFollowBody,
       action: username ? "View profile" : "",
+    };
+  }
+  if (n?.type === "live_listen") {
+    const song = String(n?.metadata?.song_title || "").trim();
+    return {
+      title: username ? `@${username} wants to listen live` : "Someone wants to listen live",
+      body: song || "Join to hear the same song together",
+      action: "Join live",
     };
   }
   if (n?.type === "remix") {
@@ -45211,7 +45225,7 @@ function activityNotificationMatchesFilter(n, tab = _activityFilterTab) {
   const t = String(n?.type || "").trim();
   if (tab === "achievements") return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_failed";
   if (tab === "social") {
-    return ["follow", "remix", "social_like", "social_reply", "social_repost", "social_mention", "public_song", "song_feedback", "gift_received"].includes(t);
+    return ["follow", "remix", "social_like", "social_reply", "social_repost", "social_mention", "public_song", "song_feedback", "gift_received", "live_listen"].includes(t);
   }
   return true;
 }
@@ -45245,6 +45259,7 @@ const ACTIVITY_ACTOR_TYPES = new Set([
   "public_song",
   "remix",
   "song_feedback",
+  "live_listen",
 ]);
 
 function activityNotificationHasActor(n) {
@@ -45436,6 +45451,7 @@ function activitySongIdForNotification(n) {
 function activityNotificationHasSongCover(n) {
   const t = String(n?.type || "").trim();
   if (t === "follow") return false;
+  if (t === "live_listen") return Boolean(String(n?.metadata?.song_cover || n?.metadata?.song_art_url || "").trim());
   if (t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention" || t === "gift_received") {
     return String(n?.metadata?.target_kind || "") === "song";
   }
@@ -45460,7 +45476,7 @@ function activitySongArtFromLocalPools(songId) {
 
 function activitySongCoverUrl(n) {
   const meta = n?.metadata || {};
-  const fromMeta = String(meta.song_art_url || meta.target_art_url || meta.art_url || "").trim();
+  const fromMeta = String(meta.song_art_url || meta.target_art_url || meta.art_url || meta.song_cover || "").trim();
   if (fromMeta && /^https?:\/\//i.test(fromMeta)) return fromMeta;
   return activitySongArtFromLocalPools(activitySongIdForNotification(n));
 }
@@ -45651,6 +45667,10 @@ function notificationActivityHref(n) {
     return "#/profile?seg=all";
   }
   if (t === "singer_approved" || t === "singer_assigned") return "#/singer-studio";
+  if (t === "live_listen") {
+    const sid = String(n?.entity_id || meta.session_id || "").trim();
+    if (sid) return `#/live-listen?session=${encodeURIComponent(sid)}`;
+  }
   if (t === "song_feedback" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "remix") {
     const remixSongId = String(meta.remix_song_id || meta.song_id || "").trim();
@@ -45913,7 +45933,7 @@ function activityRowArtworkHtml(n) {
   if (preferSong && songUrl) {
     return `<img class="activityRowArt" src="${escapeHtml(songUrl)}" alt="" loading="lazy" decoding="async" />`;
   }
-  if (t === "follow" || t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention" || t === "gift_received" || t === "public_song" || t === "remix") {
+  if (t === "follow" || t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention" || t === "gift_received" || t === "public_song" || t === "remix" || t === "live_listen") {
     const actorArt = String(n?.metadata?.actor_avatar || "").trim();
     if (isRealUserAvatarUrl(actorArt)) {
       return `<img class="activityRowArt activityRowArt--avatar" src="${escapeHtml(normalizeProfileAvatarForImg(actorArt))}" alt="" loading="lazy" decoding="async" />`;
@@ -46062,6 +46082,14 @@ function activityItemDisplayParts(n, msg) {
       category: FAN_COPY.activityCategory,
       title: username ? `${username} became your fan` : "Someone became your fan",
       description: "",
+    };
+  }
+  if (t === "live_listen") {
+    const songTitle = String(meta.song_title || "").trim();
+    return {
+      category: "Live listen",
+      title: username ? `${username} wants to listen live` : "Someone wants to listen live",
+      description: songTitle,
     };
   }
   if (t === "remix") {
@@ -53105,6 +53133,9 @@ async function renamePrivateLibraryTrack(trackId) {
 async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   const raw = String(rawUrl || "").trim();
   if (!raw) return;
+  if (isLiveListenActive() && interceptLiveListenSongChange(raw, opts || {})) {
+    return;
+  }
   if (isLiveListenTransportLocked() && !opts?.liveListenJoin) {
     try { interceptLiveListenTransport(); } catch {}
     return;

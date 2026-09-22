@@ -13,12 +13,13 @@ import { NABAD_LIVE_LISTEN_PUBLIC_SHIPPED } from "./feature-flags.js";
 const TICK_MS = 2500;
 const HEARTBEAT_MS = 6000;
 const POLL_MS = 3200;
-const DRIFT_MS = 250;
+const DRIFT_MS = 1800;
 const JOIN_WAIT_MS = 12000;
+const SEEK_COOLDOWN_MS = 900;
 
 let bridge = {};
 
-/** @type {null | { role: 'host'|'guest', session: object, solo?: boolean }} */
+/** @type {null | { role: 'host'|'guest', session: object, solo?: boolean, awaitingGuest?: boolean }} */
 let _state = null;
 let _applyingRemote = false;
 let _tickTimer = 0;
@@ -30,6 +31,9 @@ let _inviteBusy = false;
 let _joinBusy = false;
 let _lastTickSentAt = 0;
 let _invitePollTimer = 0;
+let _lastSeekAt = 0;
+let _seekInFlight = false;
+let _cueCtx = null;
 const _seenInviteIds = new Set();
 
 function clientLiveListenUiBaked() {
@@ -94,8 +98,16 @@ export function isLiveListenHost() {
   return _state?.role === "host";
 }
 
+export function isLiveListenActive() {
+  return Boolean(_state?.role) && !_state?.solo;
+}
+
 export function isLiveListenTransportLocked() {
   return isLiveListenGuest();
+}
+
+function hostAwaitingGuest() {
+  return isLiveListenHost() && Boolean(_state?.awaitingGuest);
 }
 
 function escapeHtml(s) {
@@ -134,8 +146,58 @@ function toast(msg, opts) {
   try { bridge.showToast?.(msg, opts); } catch {}
 }
 
-function haptic() {
-  try { bridge.haptic?.("light"); } catch {}
+function haptic(kind = "light") {
+  try { bridge.haptic?.(kind); } catch {}
+}
+
+function playListenCue(kind = "invite") {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!_cueCtx) _cueCtx = new Ctx();
+    const ctx = _cueCtx;
+    if (ctx.state === "suspended") void ctx.resume();
+    const now = ctx.currentTime;
+    const notes = kind === "joined" ? [523.25, 659.25, 783.99] : [392, 523.25];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const start = now + i * 0.08;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.06, start + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.18);
+    });
+  } catch {}
+}
+
+function normalizeListenUrl(url) {
+  const s = String(url || "").trim();
+  if (!s) return "";
+  try {
+    const u = new URL(s);
+    return `${u.origin}${u.pathname}`.replace(/\/+$/, "");
+  } catch {
+    return s.split("?")[0].replace(/\/+$/, "");
+  }
+}
+
+function sessionMatchesPlayer(session, nextUrl, nextSongId) {
+  const sid = String(session?.songId || "").trim();
+  const nid = String(nextSongId || "").trim();
+  if (sid && nid && sid === nid) return true;
+  const locked = normalizeListenUrl(session?.songUrl);
+  const incoming = normalizeListenUrl(nextUrl);
+  if (locked && incoming && locked === incoming) return true;
+  const a = playerEl();
+  const src = normalizeListenUrl(a?.currentSrc || a?.src);
+  if (locked && src && locked === src) return true;
+  return false;
 }
 
 function playerEl() {
@@ -232,12 +294,15 @@ export function syncLiveListenChrome() {
     return;
   }
   const name = partnerLabel(_state.session);
-  const live = _state.session?.status === "live";
+  const waiting = hostAwaitingGuest() || _state.session?.status === "pending";
+  const live = _state.session?.status === "live" && !waiting;
   const kicker = _state.role === "host"
-    ? (live ? `Live with @${name}` : "Live listen")
+    ? (waiting ? `Waiting for @${name}` : (live ? `Live with @${name}` : "Live listen"))
     : `Live with @${name}`;
   chip.innerHTML = `<span class="liveListenChipDot" aria-hidden="true"></span><span class="liveListenChipLabel">${escapeHtml(kicker)}</span>`;
-  chip.setAttribute("aria-label", _state.role === "host" ? "End live listen" : "Leave live listen");
+  chip.setAttribute("aria-label", _state.role === "host"
+    ? (waiting ? "Cancel live listen invite" : "End live listen")
+    : "Leave live listen");
   setBodyRole();
   syncShareChooserButton();
 }
@@ -299,7 +364,8 @@ function targetMsFromTick(tick) {
   const sent = Number(tick?.hostSentAt) || 0;
   if (!sent) return pos;
   const delta = Date.now() - sent;
-  return pos + Math.max(0, delta);
+  if (delta < 0 || delta > 1800) return pos;
+  return pos + delta;
 }
 
 async function waitForCanPlay(a, timeoutMs = JOIN_WAIT_MS) {
@@ -327,16 +393,24 @@ async function waitForCanPlay(a, timeoutMs = JOIN_WAIT_MS) {
 
 async function applyGuestTick(tick, { force = false } = {}) {
   if (!isLiveListenGuest()) return;
+  if (!sessionMatchesPlayer(_state?.session, tick?.audioUrl || _state?.session?.songUrl, tick?.songId || _state?.session?.songId)) {
+    return;
+  }
   const a = playerEl();
   if (!a) return;
+  if (_seekInFlight && !force) return;
   _applyingRemote = true;
   try {
     const playing = tick?.playing !== false && String(tick?.status || "live") === "live";
     const targetSec = targetMsFromTick(tick) / 1000;
     const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
     const driftMs = Math.abs(cur - targetSec) * 1000;
-    if (force || driftMs >= DRIFT_MS) {
+    const seekOk = force || (driftMs >= DRIFT_MS && Date.now() - _lastSeekAt >= SEEK_COOLDOWN_MS);
+    if (seekOk) {
+      _seekInFlight = true;
+      _lastSeekAt = Date.now();
       try { a.currentTime = Math.max(0, targetSec); } catch {}
+      window.setTimeout(() => { _seekInFlight = false; }, 280);
     }
     if (playing) {
       if (a.paused) {
@@ -346,7 +420,7 @@ async function applyGuestTick(tick, { force = false } = {}) {
       try { a.pause(); } catch {}
     }
   } finally {
-    window.setTimeout(() => { _applyingRemote = false; }, 40);
+    window.setTimeout(() => { _applyingRemote = false; }, 80);
   }
 }
 
@@ -391,8 +465,7 @@ async function persistHeartbeat() {
       durationMs: currentDurationMs(),
     });
     if (data?.session) {
-      _state.session = { ..._state.session, ...data.session };
-      syncLiveListenChrome();
+      applyHostSessionUpdate(data.session);
     }
   } catch {}
 }
@@ -415,6 +488,13 @@ async function subscribeSession(sessionId) {
       },
       onEnd: () => {
         if (isLiveListenGuest()) void onHostLeft();
+        else if (isLiveListenHost()) {
+          toast("They left live listen");
+          void clearLocalSession();
+        }
+      },
+      onJoin: () => {
+        if (isLiveListenHost()) markGuestAccepted();
       },
     });
   } catch (e) {
@@ -472,13 +552,43 @@ async function clearLocalSession({ keepRealtime = false } = {}) {
   syncLiveListenChrome();
 }
 
-async function becomeHost(session) {
-  _state = { role: "host", session };
+async function becomeHost(session, { awaitingGuest = true } = {}) {
+  _state = { role: "host", session, awaitingGuest: awaitingGuest && session?.guestJoined !== true && session?.status !== "ended" };
+  if (session?.status === "live" && session?.guestJoined === true) _state.awaitingGuest = false;
+  if (session?.status === "pending" || session?.guestJoined === false) _state.awaitingGuest = true;
   await subscribeSession(session.id);
   startHostTimers();
   void broadcastTick();
   void persistHeartbeat();
   void sendInviteToGuest(session);
+  syncLiveListenChrome();
+}
+
+function markGuestAccepted() {
+  if (!isLiveListenHost() || !_state) return;
+  const wasWaiting = _state.awaitingGuest || _state.session?.status === "pending";
+  _state.awaitingGuest = false;
+  _state.session = { ..._state.session, status: "live", guestJoined: true };
+  syncLiveListenChrome();
+  if (!wasWaiting) return;
+  haptic("success");
+  playListenCue("joined");
+  const name = partnerLabel(_state.session);
+  toast(`@${name} joined live listen`, { icon: "🎧", durationMs: 2800 });
+}
+
+function applyHostSessionUpdate(session) {
+  if (!isLiveListenHost() || !session) return;
+  if (session.status === "ended") {
+    void clearLocalSession();
+    toast("Live listen ended");
+    return;
+  }
+  const joined = session.guestJoined === true;
+  const stillWaiting = session.guestJoined === false || session.status === "pending";
+  _state.session = { ..._state.session, ...session };
+  if (joined) markGuestAccepted();
+  else if (stillWaiting) _state.awaitingGuest = true;
   syncLiveListenChrome();
 }
 
@@ -502,7 +612,7 @@ async function sendInviteToGuest(session) {
 function offerIncomingSession(session) {
   const sid = String(session?.id || "").trim();
   if (!sid || !nabadLiveListenGuestEnabled()) return;
-  if (session.status && session.status !== "live") return;
+  if (session.status && session.status !== "live" && session.status !== "pending") return;
   if (_state?.role === "host") return;
   if (_state?.role === "guest" && String(_state.session?.id || "") === sid) return;
   if (_seenInviteIds.has(sid)) return;
@@ -517,7 +627,7 @@ async function pollIncomingInvites() {
   try {
     const data = await api("get", { incoming: true });
     const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
-    const next = sessions.find((s) => s?.id && s.status === "live");
+    const next = sessions.find((s) => s?.id && (s.status === "live" || s.status === "pending"));
     if (next) offerIncomingSession(next);
   } catch {}
 }
@@ -547,10 +657,20 @@ export function startLiveListenGuestInbox() {
 }
 
 async function becomeGuest(session) {
-  _state = { role: "guest", session, solo: false };
+  _state = { role: "guest", session: { ...session, status: "live", guestJoined: true }, solo: false };
   await subscribeSession(session.id);
   startGuestPoll();
   syncLiveListenChrome();
+  haptic("success");
+  playListenCue("joined");
+  try {
+    const mod = await bridge.loadRealtimeMod?.();
+    await mod?.sendListenSessionBroadcast?.({
+      sessionId: session.id,
+      event: "ll_join",
+      payload: { sessionId: session.id, status: "live" },
+    });
+  } catch {}
 }
 
 async function loadSessionAudio(session, { startAtMs, autoplay }) {
@@ -621,14 +741,15 @@ async function onHostLeft() {
 
 async function confirmHostEnd() {
   const name = partnerLabel(_state?.session);
+  const waiting = hostAwaitingGuest();
   openOverlay({
-    kicker: "Live listen",
+    kicker: waiting ? "Invite sent" : "Live listen",
     title: _state?.session?.songTitle || "Song",
-    sub: `End live listen with @${name}?`,
+    sub: waiting ? `Cancel invite to @${name}?` : `End live listen with @${name}?`,
     art: _state?.session?.songCover,
     actionsHtml: `
-      <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="cancel">Keep going</button>
-      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="end">End</button>`,
+      <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="cancel">${waiting ? "Keep waiting" : "Keep going"}</button>
+      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="end">${waiting ? "Cancel invite" : "End"}</button>`,
     onAction: (act) => {
       closeOverlay();
       if (act === "end") void endHostSession();
@@ -672,6 +793,14 @@ async function endHostSession() {
 async function leaveGuestSession() {
   const sid = _state?.session?.id;
   if (sid) {
+    try {
+      const mod = await bridge.loadRealtimeMod?.();
+      await mod?.sendListenSessionBroadcast?.({
+        sessionId: sid,
+        event: "ll_end",
+        payload: { sessionId: sid, status: "ended" },
+      });
+    } catch {}
     try { await api("post", { action: "leave", sessionId: sid }); } catch {}
   }
   const a = playerEl();
@@ -710,6 +839,8 @@ function showJoinPrompt(session) {
   const target = targetMsFromTick(session);
   const clock = formatTime(target / 1000);
   const title = String(session.songTitle || "").trim() || "Now Playing";
+  haptic("impact");
+  playListenCue("invite");
   openOverlay({
     kicker: "Live listen",
     title,
@@ -768,7 +899,7 @@ export async function handleLiveListenDeepLink(sessionId) {
       await becomeHost(session);
       return;
     }
-    if (session.status !== "live") {
+    if (session.status !== "live" && session.status !== "pending") {
       showEndedFallback(session);
       return;
     }
@@ -825,7 +956,7 @@ async function createSessionForGuest(guest, track, rowBtn) {
     if (!session?.id) throw new Error("Could not start live listen");
     closeOverlay();
     await becomeHost(session);
-    toast(`Invited @${handle} to listen live`, { icon: "🎧", durationMs: 2600 });
+    toast(`Waiting for @${handle} to join`, { icon: "🎧", durationMs: 2600 });
   } catch (e) {
     const raw = String(e?.message || "Could not start live listen");
     const msg = /not set up|table_missing/i.test(raw)
@@ -953,6 +1084,17 @@ export function onLiveListenPlayerEvent(type) {
       void broadcastTick({ playing: type === "pause" ? false : isPlayerPlaying() });
     }
   }
+}
+
+export function interceptLiveListenSongChange(nextUrl, opts = {}) {
+  if (!isLiveListenActive()) return false;
+  if (opts?.liveListenJoin) return false;
+  const next = String(nextUrl || "").trim();
+  const songId = String(opts?.songId || opts?.playSource?.songId || "").trim();
+  if (sessionMatchesPlayer(_state?.session, next, songId)) return false;
+  haptic("impact");
+  toast("Stay on this song until you leave live listen", { durationMs: 2400 });
+  return true;
 }
 
 export function interceptLiveListenTransport() {

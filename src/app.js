@@ -32013,6 +32013,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     try { syncNabadClipCreateUi(); } catch {}
     try { syncCreateHintForSelectedEngine(); } catch {}
     try { syncCreateGenerateDock(); } catch {}
+    try { startLiveListenGuestInbox(); } catch {}
   }
   return creditsState;
 }

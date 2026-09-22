@@ -333,6 +333,7 @@ export async function disconnectDmRealtime() {
   await stopDmThreadRealtime();
   await stopDmInboxRealtime();
   await stopListenSessionRealtime();
+  await stopListenInviteRealtime();
   if (_client) {
     try {
       _client.realtime.disconnect();
@@ -440,4 +441,114 @@ export async function subscribeListenSession({
   _listenChannel = channel;
   _listenSessionId = sid;
   return true;
+}
+
+let _inviteChannel = null;
+let _inviteUserId = "";
+let _inviteChannelReady = false;
+let _onListenInviteHandler = null;
+
+export async function stopListenInviteRealtime() {
+  const client = _client;
+  const channel = _inviteChannel;
+  _inviteChannel = null;
+  _inviteUserId = "";
+  _inviteChannelReady = false;
+  _onListenInviteHandler = null;
+  if (!client || !channel) return;
+  try {
+    await client.removeChannel(channel);
+  } catch (e) {
+    console.warn("[live-listen] invite unsubscribe failed", e);
+  }
+}
+
+export async function subscribeListenInvites({
+  supabaseUrl,
+  supabaseAnonKey,
+  accessToken,
+  userId,
+  onInvite,
+} = {}) {
+  const uid = String(userId || "").trim();
+  const token = String(accessToken || "").trim();
+  if (!uid || !token) return false;
+  const client = getOrCreateClient(supabaseUrl, supabaseAnonKey);
+  if (!client) return false;
+  if (_inviteUserId === uid && _inviteChannel) {
+    _onListenInviteHandler = onInvite;
+    await refreshDmThreadRealtimeAuth(token);
+    return true;
+  }
+  await stopListenInviteRealtime();
+  _onListenInviteHandler = onInvite;
+  try {
+    client.realtime.setAuth(token);
+  } catch (e) {
+    console.warn("[live-listen] invite setAuth failed", e);
+    return false;
+  }
+  const channel = client
+    .channel(`listen-invite:${uid}`, {
+      config: { broadcast: { self: false } },
+    })
+    .on("broadcast", { event: "ll_invite" }, (payload) => {
+      const data = payload?.payload;
+      if (!data || typeof data !== "object") return;
+      try { _onListenInviteHandler?.(data); } catch (e) { console.warn("[live-listen] onInvite", e); }
+    })
+    .subscribe((status) => {
+      _inviteChannelReady = status === "SUBSCRIBED";
+    });
+  _inviteChannel = channel;
+  _inviteUserId = uid;
+  return true;
+}
+
+export async function sendListenInviteBroadcast({
+  supabaseUrl,
+  supabaseAnonKey,
+  accessToken,
+  guestUserId,
+  payload,
+} = {}) {
+  const uid = String(guestUserId || "").trim();
+  const token = String(accessToken || "").trim();
+  if (!uid || !token) return false;
+  const client = getOrCreateClient(supabaseUrl, supabaseAnonKey);
+  if (!client) return false;
+  try {
+    client.realtime.setAuth(token);
+  } catch {
+    return false;
+  }
+  const channel = client.channel(`listen-invite:${uid}`, {
+    config: { broadcast: { self: false, ack: true } },
+  });
+  const ready = await new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), 2500);
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        clearTimeout(timer);
+        resolve(true);
+      }
+    });
+  });
+  if (!ready) {
+    try { await client.removeChannel(channel); } catch {}
+    return false;
+  }
+  try {
+    const status = await channel.send({
+      type: "broadcast",
+      event: "ll_invite",
+      payload: payload && typeof payload === "object" ? payload : {},
+    });
+    return status === "ok";
+  } catch (e) {
+    console.warn("[live-listen] invite send failed", e);
+    return false;
+  } finally {
+    try { await client.removeChannel(channel); } catch {}
+  }
 }

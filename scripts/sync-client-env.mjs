@@ -28,11 +28,23 @@ if (!vercelProtectionBypass) {
   );
 }
 
-const body = `window.__NABAD_CLIENT_ENV__ = ${JSON.stringify(
-  { supabaseUrl, supabaseAnonKey, apiBase, vercelProtectionBypass },
-  null,
-  2,
-)};\n`;
+const vercelEnv = String(process.env.VERCEL_ENV || "").trim().toLowerCase();
+const isPreview = vercelEnv === "preview";
+const liveListenUi =
+  isPreview
+  || String(process.env.NABAD_LIVE_LISTEN_UI || "").trim() === "1"
+  || /^(1|true|yes)$/i.test(String(process.env.NABAD_LIVE_LISTEN_UI || "").trim());
+
+const payload = {
+  supabaseUrl,
+  supabaseAnonKey,
+  apiBase,
+  vercelProtectionBypass,
+  environment: isPreview ? "staging" : (vercelEnv === "production" ? "production" : vercelEnv),
+  nabadLiveListenUi: liveListenUi,
+};
+
+const body = `window.__NABAD_CLIENT_ENV__ = ${JSON.stringify(payload, null, 2)};\n`;
 
 const root = process.cwd();
 for (const rel of ["env.client.js", "www/env.client.js"]) {

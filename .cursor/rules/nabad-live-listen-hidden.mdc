@@ -15,7 +15,7 @@ v1 is a **host-owned one-song session** (not a playlist). Host owns play/pause/s
 |---|---|
 | `NABAD_LIVE_LISTEN_PUBLIC_SHIPPED` in `src/feature-flags.js` | **`false`** — must stay false until explicit launch |
 | Phone/simulator bake | `nabadLiveListenUi: true` on **staging** env; `false` on production |
-| Who sees UI when hidden | **Admin only** (UI flag + `isAdmin()`) |
+| Who sees UI when hidden | **Host invite:** admin + UI flag. **Join sheet:** anyone invited on staging / Vercel preview (guest does not need to be admin). |
 | Production API | `NABAD_LIVE_LISTEN_ENABLED` **off** on nabadai.com |
 | Staging API | on by default on Vercel Preview (`NABAD_LIVE_LISTEN_ENABLED`) |
 

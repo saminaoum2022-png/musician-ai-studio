@@ -42,6 +42,7 @@ import {
 import {
   configureNabadLiveListen,
   syncLiveListenChrome,
+  startLiveListenGuestInbox,
   openLiveListenInviteFromChat,
   openLiveListenInviteFromPlayer,
   handleLiveListenDeepLink,
@@ -31995,6 +31996,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     try { syncNabadVibeCreateTab(); } catch {}
     try { syncNabadSongEditCreateTab(); } catch {}
     try { syncLiveListenChrome(); } catch {}
+    try { startLiveListenGuestInbox(); } catch {}
     try { syncPhotoSoloChallengeCreateUi(); } catch {}
     if (document.body.getAttribute("data-route") === "first-song") {
       try { onFirstSongRouteActive(); } catch {}
@@ -32011,6 +32013,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     try { syncNabadClipCreateUi(); } catch {}
     try { syncCreateHintForSelectedEngine(); } catch {}
     try { syncCreateGenerateDock(); } catch {}
+    try { startLiveListenGuestInbox(); } catch {}
   }
   return creditsState;
 }
@@ -77909,6 +77912,7 @@ try {
     getChatPartnerPresence: () => _chatPartnerPresence,
   });
   syncLiveListenChrome();
+  startLiveListenGuestInbox();
 } catch (e) { console.warn("[live-listen] init", e); }
 
 // Resolve the backing instrumental ("AI Guide") for a song. V1 prefers an

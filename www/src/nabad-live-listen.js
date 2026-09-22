@@ -29,6 +29,8 @@ let _overlayEl = null;
 let _inviteBusy = false;
 let _joinBusy = false;
 let _lastTickSentAt = 0;
+let _invitePollTimer = 0;
+const _seenInviteIds = new Set();
 
 function clientLiveListenUiBaked() {
   try {
@@ -38,16 +40,39 @@ function clientLiveListenUiBaked() {
   }
 }
 
+function isStagingPreviewHost() {
+  try {
+    const env = String(window.__NABAD_CLIENT_ENV__?.environment || "").toLowerCase();
+    if (env === "staging") return true;
+  } catch {}
+  try {
+    const host = String(location.hostname || "").toLowerCase();
+    return host.endsWith(".vercel.app") && host.includes("-git-staging-");
+  } catch {
+    return false;
+  }
+}
+
+/** Staging iOS bake, Vercel staging preview, or public launch. */
+function liveListenUiAvailable() {
+  if (NABAD_LIVE_LISTEN_PUBLIC_SHIPPED) return true;
+  return clientLiveListenUiBaked() || isStagingPreviewHost();
+}
+
+/** Host invite / Listen together — admin-only until public launch. */
 export function nabadLiveListenEnabled() {
   try {
-    if (NABAD_LIVE_LISTEN_PUBLIC_SHIPPED) {
-      return Boolean(typeof bridge.isAdmin === "function" && bridge.isAdmin());
-    }
-    return Boolean(
-      clientLiveListenUiBaked()
-      && typeof bridge.isAdmin === "function"
-      && bridge.isAdmin(),
-    );
+    if (!liveListenUiAvailable()) return false;
+    return Boolean(typeof bridge.isAdmin === "function" && bridge.isAdmin());
+  } catch {
+    return false;
+  }
+}
+
+/** Invited guest can see Join on staging web even if that account is not admin. */
+export function nabadLiveListenGuestEnabled() {
+  try {
+    return liveListenUiAvailable();
   } catch {
     return false;
   }
@@ -153,6 +178,9 @@ function setBodyRole() {
 async function api(actionOrGet, body) {
   if (typeof bridge.messagesApi !== "function") throw new Error("Not ready");
   if (actionOrGet === "get") {
+    if (body?.incoming) {
+      return bridge.messagesApi("/api/music/listen-session?incoming=1", { timeoutMs: 8000 });
+    }
     const id = encodeURIComponent(String(body?.sessionId || ""));
     return bridge.messagesApi(`/api/music/listen-session?sessionId=${id}`, { timeoutMs: 10000 });
   }
@@ -450,7 +478,72 @@ async function becomeHost(session) {
   startHostTimers();
   void broadcastTick();
   void persistHeartbeat();
+  void sendInviteToGuest(session);
   syncLiveListenChrome();
+}
+
+async function sendInviteToGuest(session) {
+  const guestId = String(session?.guestUserId || "").trim();
+  if (!guestId) return;
+  try {
+    const mod = await bridge.loadRealtimeMod?.();
+    await mod?.sendListenInviteBroadcast?.({
+      supabaseUrl: bridge.getSupabaseUrl?.() || "",
+      supabaseAnonKey: bridge.getSupabaseAnonKey?.() || "",
+      accessToken: bridge.getAuthToken?.() || "",
+      guestUserId: guestId,
+      payload: session,
+    });
+  } catch (e) {
+    console.warn("[live-listen] invite broadcast", e);
+  }
+}
+
+function offerIncomingSession(session) {
+  const sid = String(session?.id || "").trim();
+  if (!sid || !nabadLiveListenGuestEnabled()) return;
+  if (session.status && session.status !== "live") return;
+  if (_state?.role === "host") return;
+  if (_state?.role === "guest" && String(_state.session?.id || "") === sid) return;
+  if (_seenInviteIds.has(sid)) return;
+  const overlay = document.getElementById("liveListenOverlay");
+  if (overlay?.classList.contains("is-open")) return;
+  _seenInviteIds.add(sid);
+  showJoinPrompt(session);
+}
+
+async function pollIncomingInvites() {
+  if (!nabadLiveListenGuestEnabled() || isLiveListenHost() || isLiveListenGuest()) return;
+  try {
+    const data = await api("get", { incoming: true });
+    const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
+    const next = sessions.find((s) => s?.id && s.status === "live");
+    if (next) offerIncomingSession(next);
+  } catch {}
+}
+
+export function startLiveListenGuestInbox() {
+  if (!nabadLiveListenGuestEnabled()) return;
+  if (_invitePollTimer) window.clearInterval(_invitePollTimer);
+  _invitePollTimer = window.setInterval(() => { void pollIncomingInvites(); }, 4000);
+  void pollIncomingInvites();
+  void (async () => {
+    try {
+      const mod = await bridge.loadRealtimeMod?.();
+      await mod?.subscribeListenInvites?.({
+        supabaseUrl: bridge.getSupabaseUrl?.() || "",
+        supabaseAnonKey: bridge.getSupabaseAnonKey?.() || "",
+        accessToken: bridge.getAuthToken?.() || "",
+        userId: bridge.getUserId?.() || "",
+        onInvite: (payload) => {
+          const session = payload?.id ? payload : payload?.session;
+          if (session) offerIncomingSession(session);
+        },
+      });
+    } catch (e) {
+      console.warn("[live-listen] invite inbox", e);
+    }
+  })();
 }
 
 async function becomeGuest(session) {
@@ -663,7 +756,7 @@ function showJoinPrompt(session) {
 
 export async function handleLiveListenDeepLink(sessionId) {
   const sid = String(sessionId || "").trim();
-  if (!sid || !nabadLiveListenEnabled()) return;
+  if (!sid || !nabadLiveListenGuestEnabled()) return;
   try {
     const data = await api("get", { sessionId: sid });
     const session = data?.session;

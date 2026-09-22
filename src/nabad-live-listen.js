@@ -40,16 +40,39 @@ function clientLiveListenUiBaked() {
   }
 }
 
+function isStagingPreviewHost() {
+  try {
+    const env = String(window.__NABAD_CLIENT_ENV__?.environment || "").toLowerCase();
+    if (env === "staging") return true;
+  } catch {}
+  try {
+    const host = String(location.hostname || "").toLowerCase();
+    return host.endsWith(".vercel.app") && host.includes("-git-staging-");
+  } catch {
+    return false;
+  }
+}
+
+/** Staging iOS bake, Vercel staging preview, or public launch. */
+function liveListenUiAvailable() {
+  if (NABAD_LIVE_LISTEN_PUBLIC_SHIPPED) return true;
+  return clientLiveListenUiBaked() || isStagingPreviewHost();
+}
+
+/** Host invite / Listen together — admin-only until public launch. */
 export function nabadLiveListenEnabled() {
   try {
-    if (NABAD_LIVE_LISTEN_PUBLIC_SHIPPED) {
-      return Boolean(typeof bridge.isAdmin === "function" && bridge.isAdmin());
-    }
-    return Boolean(
-      clientLiveListenUiBaked()
-      && typeof bridge.isAdmin === "function"
-      && bridge.isAdmin(),
-    );
+    if (!liveListenUiAvailable()) return false;
+    return Boolean(typeof bridge.isAdmin === "function" && bridge.isAdmin());
+  } catch {
+    return false;
+  }
+}
+
+/** Invited guest can see Join on staging web even if that account is not admin. */
+export function nabadLiveListenGuestEnabled() {
+  try {
+    return liveListenUiAvailable();
   } catch {
     return false;
   }
@@ -478,7 +501,7 @@ async function sendInviteToGuest(session) {
 
 function offerIncomingSession(session) {
   const sid = String(session?.id || "").trim();
-  if (!sid || !nabadLiveListenEnabled()) return;
+  if (!sid || !nabadLiveListenGuestEnabled()) return;
   if (session.status && session.status !== "live") return;
   if (_state?.role === "host") return;
   if (_state?.role === "guest" && String(_state.session?.id || "") === sid) return;
@@ -490,7 +513,7 @@ function offerIncomingSession(session) {
 }
 
 async function pollIncomingInvites() {
-  if (!nabadLiveListenEnabled() || isLiveListenHost() || isLiveListenGuest()) return;
+  if (!nabadLiveListenGuestEnabled() || isLiveListenHost() || isLiveListenGuest()) return;
   try {
     const data = await api("get", { incoming: true });
     const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
@@ -500,7 +523,7 @@ async function pollIncomingInvites() {
 }
 
 export function startLiveListenGuestInbox() {
-  if (!nabadLiveListenEnabled()) return;
+  if (!nabadLiveListenGuestEnabled()) return;
   if (_invitePollTimer) window.clearInterval(_invitePollTimer);
   _invitePollTimer = window.setInterval(() => { void pollIncomingInvites(); }, 4000);
   void pollIncomingInvites();
@@ -733,7 +756,7 @@ function showJoinPrompt(session) {
 
 export async function handleLiveListenDeepLink(sessionId) {
   const sid = String(sessionId || "").trim();
-  if (!sid || !nabadLiveListenEnabled()) return;
+  if (!sid || !nabadLiveListenGuestEnabled()) return;
   try {
     const data = await api("get", { sessionId: sid });
     const session = data?.session;

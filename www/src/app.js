@@ -46230,6 +46230,7 @@ function activityRowSecondaryForIg(n, parts) {
     if (t === "social_reply" || t === "social_mention" || t === "song_feedback") return desc;
     if (t === "gift_received") return desc;
     if (t === "social_like" || t === "social_repost") return desc;
+    if (t === "live_listen") return desc;
     return "";
   }
   return desc;
@@ -46285,6 +46286,23 @@ function activityItemHtml(n) {
   const leadWrapClass = activityRowLeadWrapClass(n);
   const leadInner = `${activityRowLeadHtml(n)}${activityNotificationShowTypeBadge(n) ? activityTypeBadgeHtml(notifType) : ""}`;
   const rowSelfClass = isSelfRow ? " activityRow--self" : "";
+  if (notifType === "live_listen" && href) {
+    const avatar = profileHref
+      ? `<button type="button" class="${leadWrapClass} activityRowProfileTap" data-activity-profile-href="${escapeHtml(profileHref)}" aria-label="View profile">${leadInner}</button>`
+      : `<div class="${leadWrapClass}">${leadInner}</div>`;
+    const cover = thumbInner ? `<div class="activityRowThumb">${thumbInner}</div>` : "";
+    return `
+    <article class="activityRow activityRow--live_listen activityRow--split${unread ? " isUnread" : ""}" data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}>
+      ${avatar}
+      <div class="activityRowBody">
+        <p class="activityRowText">${titleHtml}</p>
+        ${secondaryHtml}
+        <span class="activityRowTime">${escapeHtml(time)}</span>
+      </div>
+      ${cover}
+      ${unreadDot}
+    </article>`;
+  }
   if (splitTap) {
     return `
     <article class="activityRow activityRow--${escapeHtml(notifType)} activityRow--split${unread ? " isUnread" : ""}${rowSelfClass}" data-activity-href="${escapeHtml(profileHref)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}>

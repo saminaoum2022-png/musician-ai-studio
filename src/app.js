@@ -45,6 +45,8 @@ import {
   startLiveListenGuestInbox,
   openLiveListenInviteFromChat,
   openLiveListenInviteFromPlayer,
+  openLiveListenInviteForTrack,
+  nabadLiveListenEnabled,
   handleLiveListenDeepLink,
   decorateNowPlayingPresenceActions,
   onLiveListenPlayerEvent,
@@ -54,6 +56,8 @@ import {
   interceptLiveListenSongChange,
   isLiveListenTransportLocked,
   isLiveListenActive,
+  isLiveListenGuest,
+  isLiveListenHost,
 } from "./nabad-live-listen.js";
 import { prepareAudioForVibeRead } from "./vibe-audio-prep.js";
 import { prepareAudioForSongEdit } from "./song-edit-audio-prep.js";
@@ -39118,11 +39122,29 @@ function myPlayerIsPlaying() {
   try { return Boolean(playerEl && !playerEl.paused && !playerEl.ended && playerEl.currentTime >= 0 && playerEl.readyState > 0 && playerEl.duration !== 0); } catch { return false; }
 }
 
+/** Listen together stays off contacts' presence for the guest, and for the host
+ *  while the song is still private. A published song can show as normal now playing. */
+function liveListenMayBroadcastPresence() {
+  try {
+    if (isLiveListenGuest()) return false;
+    if (!isLiveListenHost()) return true;
+    const row = findPlayerLibraryTrackRow();
+    if (row) return Boolean(row.publicOnProfile);
+    return isShareUuid(currentPlayerTrackRef?.songId);
+  } catch {
+    return true;
+  }
+}
+
 /** Resolve the current user's top-priority presence (recording > creating > now_playing > idle). */
 function computeMyPresenceStatus() {
   if (!presenceEnabledLocal()) return { status: "idle" };
   if (appIsRecordingNow()) return { status: "recording" };
   try { if (createSessionIsGenerating()) return { status: "creating" }; } catch {}
+  if (!liveListenMayBroadcastPresence()) {
+    _myPresenceLastPlayingAt = 0;
+    return { status: "idle" };
+  }
   const playing = myPlayerIsPlaying();
   if (playing) _myPresenceLastPlayingAt = Date.now();
   const lingering = Date.now() - _myPresenceLastPlayingAt < PRESENCE_NOWPLAYING_LINGER_MS;
@@ -48301,11 +48323,18 @@ function renderTrackSheetLibrary(track) {
   const quickMashup = mashupEligible
     ? `<button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_mashup">Mashup</button>`
     : "";
+  const quickShare = profilePublic
+    ? `<button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_share">Share</button>`
+    : "";
+  const quickListen = !profilePublic && nabadLiveListenEnabled() && String(track?.url || "").trim()
+    ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--live" data-track-sheet-action="library_listen"><span class="discoverTrackSheetLiveDot" aria-hidden="true"></span><span>Listen together</span></button>`
+    : "";
   const pinLabel = isFeaturedOnProfile(track) ? "Remove featured track" : "Feature on profile";
   q.innerHTML = `
     ${quickRemix}
     ${quickMashup}
-    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_share">Share</button>
+    ${quickListen}
+    ${quickShare}
   `;
   // Instrumentals are great to sing over, so they're eligible too (the Studio
   // source chooser adapts — no "separate vocals" step for an instrumental).
@@ -48388,6 +48417,14 @@ function renderTrackSheetProfileHub(p) {
   `;
 }
 
+function syncTrackSheetQuickColumns() {
+  const q = document.getElementById("trackSheetQuickMount");
+  if (!q) return;
+  const n = q.querySelectorAll(".discoverTrackSheetQuickBtn").length;
+  if (n > 0 && n < 3) q.dataset.quickCount = String(n);
+  else q.removeAttribute("data-quick-count");
+}
+
 function openTrackSheetShell(payload) {
   const sheet = document.getElementById("discoverTrackSheet");
   const artEl = document.getElementById("discoverTrackSheetArt");
@@ -48399,6 +48436,7 @@ function openTrackSheetShell(payload) {
   }
   if (tEl) tEl.textContent = payload.title || "Song";
   if (sEl) sEl.textContent = payload.sub || "";
+  syncTrackSheetQuickColumns();
   if (!sheet) return;
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
@@ -48419,7 +48457,10 @@ function closeTrackOptionsSheet() {
     const q = document.getElementById("trackSheetQuickMount");
     const l = document.getElementById("trackSheetListMount");
     const d = document.getElementById("trackSheetDangerMount");
-    if (q) q.innerHTML = "";
+    if (q) {
+      q.innerHTML = "";
+      q.removeAttribute("data-quick-count");
+    }
     if (l) l.innerHTML = "";
     if (d) d.innerHTML = "";
   }, 260);
@@ -48447,6 +48488,7 @@ function openDiscoverTrackSheetFromEl(el) {
 }
 
 function openPlayerTrackOptionsSheet() {
+  if (isLiveListenGuest()) return;
   const libRow = findPlayerLibraryTrackRow();
   const libraryId = libRow?.id ? String(libRow.id).trim() : "";
   if (libraryId) {
@@ -49069,6 +49111,14 @@ function runTrackSheetAction(action, sourceEl) {
     if (action === "library_player") {
       shut();
       void playLibraryListRowById(t.id, { openPlayer: true });
+      return;
+    }
+    if (action === "library_listen") {
+      shut();
+      const ref = trackRefFromLibraryTrack(t);
+      window.setTimeout(() => {
+        void openLiveListenInviteForTrack(ref);
+      }, 220);
       return;
     }
     if (action === "library_share") {
@@ -74965,6 +75015,7 @@ if (els.btnPlayerMenu) {
   els.btnPlayerMenu.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isLiveListenGuest()) return;
     try { haptic("light"); } catch {}
     openPlayerTrackOptionsSheet();
   });
@@ -78004,6 +78055,24 @@ try {
     messagesApi,
     formatTime,
     presenceHideTitles: () => presenceHideTitlesLocal(),
+    refreshPresence: () => { try { presenceTick(); } catch {} },
+    reportLiveListen: (session) => {
+      const note = window.prompt("What should we know? (optional)", "");
+      if (note === null) return;
+      const hostName = String(session?.host?.username || session?.host?.displayName || "").replace(/^@/, "").trim();
+      try {
+        window.location.href = nabadaiReportContentMailtoHref({
+          title: session?.songTitle || "",
+          songId: session?.songId || "",
+          url: session?.songUrl || "",
+          handle: hostName,
+          by: hostName ? `@${hostName}` : "",
+        }, note || "Reported during Listen together");
+        showToast("Opening your email to send this report…", { icon: "✉", durationMs: 3200 });
+      } catch {
+        showToast("Could not open email. Reach us at support@nabadai.com", { icon: "!", durationMs: 4200 });
+      }
+    },
     loadRealtimeMod: () => loadMessagesRealtimeModule(),
     getChatPartner: () => ({
       userId: String(_chatHeaderUser?.userId || "").trim(),

@@ -306,7 +306,9 @@ export function syncLiveListenChrome() {
   chip.hidden = !active;
   if (!active) {
     setBodyRole();
+    syncGuestPlayerBar(false, "");
     syncShareChooserButton();
+    try { bridge.refreshPresence?.(); } catch {}
     return;
   }
   const name = partnerLabel(_state.session);
@@ -314,13 +316,37 @@ export function syncLiveListenChrome() {
   const live = _state.session?.status === "live" && !waiting;
   const kicker = _state.role === "host"
     ? (waiting ? `At the start · waiting for @${name}` : (live ? `Live with @${name}` : "Live listen"))
-    : `Live with @${name}`;
+    : `Listening with @${name}`;
   chip.innerHTML = `<span class="liveListenChipDot" aria-hidden="true"></span><span class="liveListenChipLabel">${escapeHtml(kicker)}</span>`;
   chip.setAttribute("aria-label", _state.role === "host"
     ? (waiting ? "Cancel live listen invite" : "End live listen")
     : "Leave live listen");
   setBodyRole();
+  syncGuestPlayerBar(isLiveListenGuest(), name);
   syncShareChooserButton();
+  try { bridge.refreshPresence?.(); } catch {}
+}
+
+function syncGuestPlayerBar(guest, name) {
+  const bar = document.getElementById("liveListenGuestBar");
+  if (!bar) return;
+  wireGuestPlayerBarOnce(bar);
+  bar.hidden = !guest;
+  const text = bar.querySelector("[data-ll-guest-status]");
+  if (text && guest) text.textContent = `Listening with @${name}`;
+}
+
+function wireGuestPlayerBarOnce(bar) {
+  if (bar.dataset.wired === "1") return;
+  bar.dataset.wired = "1";
+  bar.querySelector("#liveListenGuestLeave")?.addEventListener("click", () => {
+    haptic();
+    void confirmGuestLeave();
+  });
+  bar.querySelector("#liveListenGuestReport")?.addEventListener("click", () => {
+    haptic();
+    try { bridge.reportLiveListen?.(_state?.session || null); } catch {}
+  });
 }
 
 function closeOverlay() {
@@ -1102,6 +1128,26 @@ export async function handleLiveListenDeepLink(sessionId) {
   }
 }
 
+async function ensureHostTrackLoaded(track) {
+  const url = String(track?.url || "").trim();
+  if (!url || typeof bridge.playUrlOnPlayer !== "function") return;
+  const current = bridge.getTrackRef?.();
+  if (sessionMatchesPlayer(
+    { songUrl: url, songId: String(track?.songId || "") },
+    current?.url,
+    current?.songId,
+  )) return;
+  try { bridge.primePlayerInGesture?.(); } catch {}
+  await bridge.playUrlOnPlayer(url, track.title || "Song", track.artUrl || track.art || "", {
+    songId: track.songId || "",
+    ownerUserId: track.ownerUserId || "",
+    openPlayer: true,
+    liveListenJoin: true,
+    liveListenHold: true,
+    forceReload: true,
+  });
+}
+
 async function createSessionForGuest(guest, track, rowBtn) {
   if (_inviteBusy) return;
   const url = String(track?.url || "").trim();
@@ -1119,6 +1165,7 @@ async function createSessionForGuest(guest, track, rowBtn) {
   }
   setOverlayStatus(`Inviting @${handle}…`);
   try {
+    await ensureHostTrackLoaded(track);
     await holdHostAtStart();
     let shareUrl = url;
     try {
@@ -1237,6 +1284,26 @@ export async function openLiveListenInviteFromPlayer() {
   const track = bridge.getTrackRef?.();
   if (!track?.url) {
     toast("Play a song first, then invite.");
+    return;
+  }
+  let friends = [];
+  try {
+    friends = await bridge.fetchMutualFriendsForShare?.() || [];
+  } catch {
+    friends = [];
+  }
+  renderInviteList(friends, track);
+}
+
+export async function openLiveListenInviteForTrack(track) {
+  if (!nabadLiveListenEnabled()) return;
+  if (!String(bridge.getUserId?.() || "").trim()) {
+    toast("Sign in to listen together.");
+    return;
+  }
+  const url = String(track?.url || "").trim();
+  if (!url) {
+    toast("This song has no audio yet.");
     return;
   }
   let friends = [];

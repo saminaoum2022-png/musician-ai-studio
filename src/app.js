@@ -36079,6 +36079,7 @@ let _messagesInboxHasLoadedOnce = false;
 let _messagesInboxFetchInFlight = null;
 let _messagesInboxScrollY = 0;
 let _messagesInboxPollTimer = 0;
+let _messagesInboxPaintSig = "";
 let _dmReceiptHeartbeatTimer = 0;
 let _messagesMarkReadTimer = 0;
 let _messagesMarkReadPendingTid = "";
@@ -39100,14 +39101,69 @@ async function sendMyPresence(p) {
   }
 }
 
+function messagesInboxPresencePaintSig(view = messagesInboxPresenceView()) {
+  const avatar = String(activeProfile?.avatar || "").trim();
+  return [
+    view?.status || "",
+    view?.line || "",
+    view?.detail || "",
+    view?.cover || "",
+    view?.live ? "1" : "0",
+    avatar,
+  ].join("|");
+}
+
+function messagesInboxAvatarPaintKey() {
+  const raw = String(activeProfile?.avatar || "").trim();
+  if (isRealUserAvatarUrl(raw)) return `img:${normalizeProfileAvatarForImg(raw)}`;
+  const handle = String(activeProfile?.username || activeProfile?.displayName || "").replace(/^@/, "").trim();
+  return `letter:${(handle.slice(0, 1) || "?").toUpperCase()}`;
+}
+
 function syncMessagesInboxPresenceCard() {
   const mount = document.getElementById("messagesInboxMount");
   const existing = mount?.querySelector?.(".messagesInboxPresence");
   if (!existing) return;
-  const wrap = document.createElement("div");
-  wrap.innerHTML = messagesInboxMeHeaderHtml().trim();
-  const next = wrap.firstElementChild;
-  if (next) existing.replaceWith(next);
+  const view = messagesInboxPresenceView();
+  const sig = messagesInboxPresencePaintSig(view);
+  if (existing.dataset.presencePaint === sig) return;
+  existing.dataset.presencePaint = sig;
+
+  const card = existing.querySelector(".messagesInboxPresenceCard");
+  if (!card) return;
+  const status = String(view.status || "idle");
+  if (status) card.dataset.presenceStatus = status;
+  else delete card.dataset.presenceStatus;
+  const cover = String(view.cover || "").trim();
+  const art = cssUrlIfHttp(cover);
+  if (art) card.style.setProperty("--pulse-art", art);
+  else card.style.removeProperty("--pulse-art");
+
+  const wrapEl = existing.querySelector(".messagesInboxPresenceAvatarWrap");
+  wrapEl?.classList.toggle("is-online", Boolean(view.live));
+  const avatarKey = messagesInboxAvatarPaintKey();
+  if (wrapEl && wrapEl.dataset.avatarKey !== avatarKey) {
+    const username = String(activeProfile?.username || "").replace(/^@/, "").trim();
+    const name = String(activeProfile?.displayName || "").trim() || (username ? `@${username}` : "You");
+    wrapEl.innerHTML = messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar");
+    wrapEl.dataset.avatarKey = avatarKey;
+  }
+
+  const lineEl = existing.querySelector(".messagesInboxPresenceLine");
+  if (lineEl) lineEl.textContent = String(view.line || "");
+  const copy = existing.querySelector(".messagesInboxPresenceCopy");
+  let detailEl = existing.querySelector(".messagesInboxPresenceDetail");
+  const detail = String(view.detail || "");
+  if (detail) {
+    if (!detailEl && copy) {
+      detailEl = document.createElement("span");
+      detailEl.className = "messagesInboxPresenceDetail";
+      copy.appendChild(detailEl);
+    }
+    if (detailEl) detailEl.textContent = detail;
+  } else if (detailEl) {
+    detailEl.remove();
+  }
 }
 
 function presenceTick() {
@@ -39643,7 +39699,7 @@ function messagesAvatarHtml(avatarUrl, username, cls = "messagesRowAvatar") {
   const raw = String(avatarUrl || "").trim();
   const handle = String(username || "").trim();
   if (isRealUserAvatarUrl(raw)) {
-    return `<img class="${cls}" src="${escapeHtml(normalizeProfileAvatarForImg(raw))}" alt="" loading="lazy" decoding="async" />`;
+    return `<img class="${cls}" src="${escapeHtml(normalizeProfileAvatarForImg(raw))}" alt="" decoding="async" />`;
   }
   const letter = handle.replace(/^@/, "").slice(0, 1).toUpperCase() || "?";
   return `<span class="${cls} messagesAvatarFallback" aria-hidden="true">${escapeHtml(letter)}</span>`;
@@ -39841,6 +39897,7 @@ function renderMessagesInbox() {
   const statusEl = document.getElementById("messagesStatus");
   if (!mount) return;
   if (_messagesInboxLoading && !messagesInboxHasCachedData()) {
+    _messagesInboxPaintSig = "";
     mount.innerHTML = `<div class="messagesInboxList">${messagesInboxSkeletonHtml()}</div>`;
     if (statusEl) statusEl.hidden = true;
     return;
@@ -39852,7 +39909,6 @@ function renderMessagesInbox() {
   const visibleThreads = threads.filter((t) => inboxMatchesQuery(t?.partnerUsername, t?.lastMessage));
   const visibleSent = sentRequests.filter((req) => inboxMatchesQuery(req?.toUsername, req?.body, "waiting"));
   const showCoach = inboxMatchesQuery("nabadai coach", "coach", "nabad");
-  const meHtml = messagesInboxMeHeaderHtml();
   const coachRow = showCoach ? coachInboxRowHtml() : "";
 
   const requestsHtml = visibleRequests.length
@@ -39887,7 +39943,18 @@ function renderMessagesInbox() {
           <p class="messagesEmptyLead">When you and another creator follow each other, you can chat here.</p>
         </div>`);
 
-  mount.innerHTML = meHtml + requestsHtml + sentHtml + threadsHtml;
+  const listHtml = requestsHtml + sentHtml + threadsHtml;
+  if (
+    listHtml === _messagesInboxPaintSig
+    && mount.querySelector(".messagesInboxPresence, .messagesInboxList, .messagesEmpty")
+  ) {
+    syncMessagesInboxPresenceCard();
+    if (statusEl) statusEl.hidden = true;
+    return;
+  }
+  _messagesInboxPaintSig = listHtml;
+  const meHtml = messagesInboxMeHeaderHtml();
+  mount.innerHTML = meHtml + listHtml;
   if (statusEl) statusEl.hidden = true;
 }
 
@@ -43564,10 +43631,12 @@ function messagesInboxMeHeaderHtml() {
   const cover = String(view.cover || "").trim();
   const style = cover ? ` style="--pulse-art: url('${escapeHtml(cover)}')"` : "";
   const wrapClass = view.live ? " is-online" : "";
+  const paint = escapeHtml(messagesInboxPresencePaintSig(view));
+  const avatarKey = escapeHtml(messagesInboxAvatarPaintKey());
   return `
-    <section class="messagesInboxPresence">
+    <section class="messagesInboxPresence" data-presence-paint="${paint}">
       <button type="button" class="messagesInboxPresenceCard" data-messages-me-header data-presence-status="${escapeHtml(view.status)}"${style}>
-        <span class="messagesInboxPresenceAvatarWrap${wrapClass}">${messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar")}</span>
+        <span class="messagesInboxPresenceAvatarWrap${wrapClass}" data-avatar-key="${avatarKey}">${messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar")}</span>
         <span class="messagesInboxPresenceCopy">
           <span class="messagesInboxPresenceKicker">Your presence</span>
           <strong class="messagesInboxPresenceLine">${escapeHtml(view.line)}</strong>

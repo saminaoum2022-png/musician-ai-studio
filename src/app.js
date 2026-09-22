@@ -22190,6 +22190,7 @@ function bindDiscoveryDiscoverControls() {
           by,
           playSource: publicPlaySourceFromEl(challengePlay),
           el: challengePlay,
+          opts: { openPlayer: discoverSurfaceOpensPlayer(challengePlay) },
         });
         return;
       }
@@ -22206,20 +22207,20 @@ function bindDiscoveryDiscoverControls() {
         const pl = cardWrap.querySelector("[data-user-lib-play]");
         if (pl) {
           e.preventDefault();
-          playDiscoverTarget(pl);
+          playDiscoverTarget(pl, { openPlayer: discoverSurfaceOpensPlayer(pl) });
           return;
         }
       }
       const inline = e.target.closest("[data-discovery-inline-play]");
       if (inline && dPane.contains(inline)) {
         e.preventDefault();
-        playDiscoverTarget(inline);
+        playDiscoverTarget(inline, { openPlayer: discoverSurfaceOpensPlayer(inline) });
         return;
       }
       const pl = e.target.closest("[data-user-lib-play]");
       if (!pl || !dPane.contains(pl)) return;
       e.preventDefault();
-      playDiscoverTarget(pl);
+      playDiscoverTarget(pl, { openPlayer: discoverSurfaceOpensPlayer(pl) });
     });
   }
 }
@@ -25987,7 +25988,7 @@ async function toggleProfileFeaturedTrackPlayback(track, mode = "own") {
       return;
     }
     if (inLib) {
-      void playLibraryListRowById(id, { openPlayer: false });
+      void playLibraryListRowById(id);
       return;
     }
   }
@@ -25996,7 +25997,6 @@ async function toggleProfileFeaturedTrackPlayback(track, mode = "own") {
   if (mode === "own") {
     void playLibraryUrlOnPlayer(url, track.title || "Song", track.artUrl || "", {
       discoverFeed: false,
-      openPlayer: false,
       playSource: {
         songId: id,
         ownerUserId: String(authSession?.user?.id || activeProfile?.id || ""),
@@ -26014,7 +26014,6 @@ async function toggleProfileFeaturedTrackPlayback(track, mode = "own") {
   }
   void playLibraryUrlOnPlayer(url, track.title || "Song", track.artUrl || "", {
     discoverFeed: false,
-    openPlayer: false,
     playSource: {
       songId: String(track.id || track.songId || ""),
       ownerUserId: String(track.userId || track.ownerUserId || ""),
@@ -48609,6 +48608,22 @@ function openProfileHubPostSheet(sid) {
   });
 }
 
+/** Phone taps open the full player. Feed posts and auto-advance pass openPlayer: false. Desktop stays in the shell. */
+function openPlayerUnlessFeedOrDesk(opts) {
+  if (opts?.openPlayer === false) return false;
+  try {
+    if (isDeskWebLayout()) return false;
+  } catch {}
+  return true;
+}
+
+/** Discover Following posts stay in the post. Every other Discover tap opens the player. */
+function discoverSurfaceOpensPlayer(el) {
+  const following = document.getElementById("discoveryFollowingList");
+  if (el && following && following.contains(el)) return false;
+  return true;
+}
+
 async function playLibraryListRowById(id, opts) {
   let t = loadLibrary().find((x) => x.id === id);
   if (!t) return;
@@ -48643,6 +48658,7 @@ async function playLibraryListRowById(id, opts) {
     } catch {}
   }
   const playSource = libraryPlaybackUrl(t);
+  const openPlayer = openPlayerUnlessFeedOrDesk(opts);
   if (!isArchivedSongStorageUrl(t.url)) queueArchiveLibraryTrack(t);
   // Never block tap-to-play on Suno refresh — iOS rejects play() once the
   // gesture goes stale. Refresh in the background and retry only if stuck.
@@ -48669,7 +48685,7 @@ async function playLibraryListRowById(id, opts) {
         releaseCaption: releaseCaptionForTrack(updated),
         remixOf: remixAttributionForTrack(updated),
       };
-      if (opts?.openPlayer === true) {
+      if (openPlayer) {
         await playOnPlayerPage(newProx, "Full song", meta, { trackRef: updated, coverImmediate: true });
       } else {
         await playInline(newProx, "Full song", { type: "library", id });
@@ -48688,7 +48704,6 @@ async function playLibraryListRowById(id, opts) {
   miniSource = { type: "library", id };
   libraryNowPlayingId = id;
   refreshOwnSongsUi();
-  const openPlayer = opts?.openPlayer === true;
   if (openPlayer) {
     await playOnPlayerPage(playSource, "Full song", meta, { trackRef: t, coverImmediate: true });
   } else {
@@ -51618,7 +51633,7 @@ async function playDiscoverPlaylistFromIndex(slug, index, opts = {}) {
     discoverPlaylist: true,
     playlistSlug: pl.slug,
     playlistIndex: idx,
-    openPlayer: opts.openPlayer === true,
+    openPlayer: opts.openPlayer !== false,
     discoverBy: pick.byLine,
     playSource: pick.songId && pick.ownerUserId
       ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId, taskId: pick.taskId, audioId: pick.audioId }
@@ -51935,7 +51950,7 @@ async function playUserPlaylistTrackAt(playlistId, index, opts = {}) {
     userPlaylist: true,
     playlistId,
     playlistIndex: idx,
-    openPlayer: opts.openPlayer === true,
+    openPlayer: opts.openPlayer !== false,
     discoverBy: item.byLine || pl.title || "Playlist",
     playSource: item.songId && item.ownerUserId
       ? { type: "public_song", songId: item.songId, ownerUserId: item.ownerUserId, taskId: item.taskId, audioId: item.audioId }
@@ -57851,8 +57866,7 @@ async function setHubPostProfileVisibility(postId, wantPublic) {
   return { ok: true };
 }
 
-/** Profile → "Songs on Hub" rows: tap plays in mini player; sheet
- *  "Player" opens full Player. CDN-first URL + proxy fallback. */
+/** Profile song rows open the full player. Sheet "Player" does the same. CDN-first URL + proxy fallback. */
 async function playHubPostFromProfile(postId, opts) {
   const pid = String(postId || "").trim();
   if (!pid) return;
@@ -57869,7 +57883,7 @@ async function playHubPostFromProfile(postId, opts) {
   const rawUrl = String(p.url || "").trim();
   let src = hubPlaybackSrcForPost(pid, p);
   if (!src) return;
-  const wantFullPlayer = opts?.openPlayer === true;
+  const wantFullPlayer = openPlayerUnlessFeedOrDesk(opts);
 
   currentPlayerTrackRef = {
     id: pid,
@@ -58349,7 +58363,7 @@ async function playVocalById(id, opts = {}) {
     libraryNowPlayingId = null;
     setPlayerMeta(meta);
 
-    const openPlayer = opts?.openPlayer === true;
+    const openPlayer = openPlayerUnlessFeedOrDesk(opts);
     if (openPlayer) {
       await playOnPlayerPage(_vocalsBlobUrl, "Studio song", meta);
     } else {
@@ -58579,7 +58593,7 @@ function renderProfileLibraryPublicOnLinkSection() {
       const tr = loadLibrary().find((x) => String(x.id) === id);
       if (!tr?.url) return;
       closeTrackOptionsSheet();
-      void playLibraryListRowById(id, { openPlayer: false });
+      void playLibraryListRowById(id);
     });
   });
   els.profileHubSharedList.querySelectorAll("[data-profile-lib-menu]").forEach((b) => {
@@ -78087,8 +78101,7 @@ try {
     presenceHideTitles: () => presenceHideTitlesLocal(),
     refreshPresence: () => { try { presenceTick(); } catch {} },
     exitPlayer: () => {
-      try { playerEl?.pause?.(); } catch {}
-      try { void clearLockScreenNowPlaying(); } catch {}
+      try { dismissMiniPlayer(); } catch {}
       if ((document.body.getAttribute("data-route") || "") !== "player") return;
       if (history.length > 1) {
         history.back();

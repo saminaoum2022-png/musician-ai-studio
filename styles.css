@@ -41544,6 +41544,10 @@ body.coachComposerMode .messagesComposerSheetListDm{
 }
 .shareChooserPrimary,
 .shareChooserSecondary{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   width: 100%;
   min-height: 46px;
   border-radius: 16px;

@@ -1147,11 +1147,9 @@ async function leaveGuestSession() {
     } catch {}
     try { await api("post", { action: "leave", sessionId: sid }); } catch {}
   }
-  const a = playerEl();
   _applyingRemote = true;
   resetGuestPlaybackRate();
-  try { a?.pause?.(); } catch {}
-  window.setTimeout(() => { _applyingRemote = false; }, 40);
+  try { bridge.exitPlayer?.(); } catch {}
   await clearLocalSession();
 }
 

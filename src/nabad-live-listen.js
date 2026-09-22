@@ -287,27 +287,44 @@ function syncShareChooserButton() {
 
 function ensureChip() {
   if (_chipEl && document.body.contains(_chipEl)) return _chipEl;
+  const row = document.createElement("div");
+  row.id = "liveListenChipRow";
+  row.className = "liveListenChipRow";
+  row.hidden = true;
   const el = document.createElement("button");
   el.type = "button";
   el.id = "liveListenChip";
   el.className = "liveListenChip";
-  el.hidden = true;
   el.addEventListener("click", () => {
     haptic();
-    if (isLiveListenHost()) {
-      if (_hostAtEnd) showHostSongEnded();
-      else void confirmHostEnd();
-    } else if (isLiveListenGuest()) void confirmGuestLeave();
+    if (!isLiveListenHost()) return;
+    if (_hostAtEnd) showHostSongEnded();
+    else void confirmHostEnd();
   });
-  document.body.appendChild(el);
+  const leave = document.createElement("button");
+  leave.type = "button";
+  leave.id = "liveListenChipLeave";
+  leave.className = "liveListenChipLeave";
+  leave.textContent = "Leave";
+  leave.hidden = true;
+  leave.addEventListener("click", () => {
+    haptic();
+    void confirmGuestLeave();
+  });
+  row.append(el, leave);
+  document.body.appendChild(row);
   _chipEl = el;
   return el;
 }
 
 export function syncLiveListenChrome() {
   const chip = ensureChip();
+  const row = document.getElementById("liveListenChipRow");
+  const leave = document.getElementById("liveListenChipLeave");
   const active = Boolean(_state?.role) && !_state?.solo;
-  chip.hidden = !active;
+  const guest = active && isLiveListenGuest();
+  if (row) row.hidden = !active;
+  if (leave) leave.hidden = !guest;
   if (!active) {
     setBodyRole();
     syncGuestPlayerBar(false, "");
@@ -322,11 +339,12 @@ export function syncLiveListenChrome() {
     ? (waiting ? `At the start · waiting for @${name}` : (live ? `Live with @${name}` : "Live listen"))
     : `Listening with @${name}`;
   chip.innerHTML = `<span class="liveListenChipDot" aria-hidden="true"></span><span class="liveListenChipLabel">${escapeHtml(kicker)}</span>`;
+  chip.classList.toggle("is-status", guest);
   chip.setAttribute("aria-label", _state.role === "host"
     ? (waiting ? "Cancel live listen invite" : "End live listen")
-    : "Leave live listen");
+    : `Listening with @${name}`);
   setBodyRole();
-  syncGuestPlayerBar(isLiveListenGuest(), name);
+  syncGuestPlayerBar(false, "");
   syncShareChooserButton();
   try { bridge.refreshPresence?.(); } catch {}
 }
@@ -470,12 +488,12 @@ async function waitForSeeked(a, timeoutMs = 1800) {
   });
 }
 
-async function seekGuestToHost(tick) {
+async function seekGuestToHost(tick, { force = false } = {}) {
   const a = playerEl();
   if (!a) return;
   const targetSec = hostNowMs(tick) / 1000;
   const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
-  if (Math.abs(cur - targetSec) < 0.2) return;
+  if (!force && !a.ended && Math.abs(cur - targetSec) < 0.2) return;
   _seekInFlight = true;
   applyRemoteFlag(450);
   try {
@@ -485,6 +503,76 @@ async function seekGuestToHost(tick) {
   resetGuestPlaybackRate();
   _lastSeekAt = Date.now();
   window.setTimeout(() => { _seekInFlight = false; }, 250);
+}
+
+async function playGuestFromStart(a) {
+  if (!a) return;
+  applyRemoteFlag(900);
+  const started = await tryPlayGuestFromZero(a);
+  if (started) return;
+  const retried = await tryPlayGuestFromZero(a);
+  if (!retried) showGuestReplayTap();
+}
+
+async function tryPlayGuestFromZero(a) {
+  if (!a) return false;
+  try { a.pause(); } catch {}
+  try { a.currentTime = 0; } catch {}
+  await waitForSeeked(a, 1200);
+  if (a.ended || (Number.isFinite(a.currentTime) && a.currentTime > 0.35)) {
+    try { a.currentTime = 0; } catch {}
+    await waitForSeeked(a, 800);
+  }
+  try {
+    await a.play();
+    return !a.paused && !a.ended;
+  } catch {
+    return false;
+  }
+}
+
+function showGuestReplayTap() {
+  if (!isLiveListenGuest()) return;
+  const name = partnerLabel(_state?.session);
+  openOverlay({
+    kicker: "Play again",
+    title: _state?.session?.songTitle || "Listen together",
+    sub: name ? `@${name} started the song over. Tap play to join them.` : "Tap play to start the song over.",
+    art: _state?.session?.songCover,
+    actionsHtml: `
+      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="resume">Play</button>`,
+    onAction: async () => {
+      closeOverlay();
+      const a = playerEl();
+      try { bridge.primePlayerInGesture?.(); } catch {}
+      await tryPlayGuestFromZero(a);
+    },
+  });
+}
+
+function armGuestEndHold(a) {
+  if (!a || a.dataset.llEndHold === "1") return;
+  a.dataset.llEndHold = "1";
+  a.addEventListener("timeupdate", () => {
+    if (!isLiveListenGuest() || a.paused) return;
+    const dur = Number(a.duration);
+    if (!Number.isFinite(dur) || dur < 1) return;
+    if (a.currentTime < dur - 0.35) return;
+    holdGuestBeforeEnd(a);
+  });
+}
+
+function holdGuestBeforeEnd(a) {
+  if (!a) return;
+  const dur = Number(a.duration);
+  applyRemoteFlag(500);
+  if (Number.isFinite(dur) && dur > 0.6) {
+    const hold = Math.max(0, dur - 0.3);
+    if (!Number.isFinite(a.currentTime) || a.ended || a.currentTime > hold) {
+      try { a.currentTime = hold; } catch {}
+    }
+  }
+  try { a.pause(); } catch {}
 }
 
 /**
@@ -509,14 +597,18 @@ async function applyGuestTick(tick, { force = false } = {}) {
 
   const playing = tick?.playing === true && String(tick?.status || "live") === "live";
   if (reason === "start" || reason === "ended") {
-    await seekGuestToHost({ ...tick, positionMs: reason === "start" ? 0 : tick?.positionMs });
-    noteHostClock({ positionMs: reason === "start" ? 0 : tick?.positionMs, playing: reason === "start" });
-    if (reason === "start") _guestStarted = true;
-    applyRemoteFlag(400);
-    try {
-      if (reason === "start") await a.play();
-      else a.pause();
-    } catch {}
+    if (reason === "start") {
+      await seekGuestToHost({ ...tick, positionMs: 0 }, { force: true });
+      noteHostClock({ positionMs: 0, playing: true });
+      _guestStarted = true;
+      await playGuestFromStart(a);
+      return;
+    }
+    const endMs = Math.max(0, Number(tick?.positionMs) || 0);
+    const holdMs = endMs > 500 ? endMs - 300 : 0;
+    await seekGuestToHost({ ...tick, positionMs: holdMs }, { force: true });
+    noteHostClock({ positionMs: holdMs, playing: false });
+    holdGuestBeforeEnd(a);
     return;
   }
   const shouldSeek = force || reason === "seek";
@@ -732,7 +824,7 @@ async function loadInvitedSongOnHost(session) {
   try { await a?.play?.(); } catch {}
 }
 
-async function startTogetherAsHost() {
+async function startTogetherAsHost({ replay = false } = {}) {
   if (!isLiveListenHost() || !_state?.session) return;
   _hostAtEnd = false;
   _hostEndSheetOpen = false;
@@ -746,6 +838,12 @@ async function startTogetherAsHost() {
   }
   if (_state?.session) _state.session.positionMs = 0;
   void broadcastTick({ playing: true, positionMs: 0, reason: "start" });
+  if (replay) {
+    window.setTimeout(() => {
+      if (!isLiveListenHost() || _hostAtEnd || !_hostWantsPlaying) return;
+      void broadcastTick({ playing: true, positionMs: 0, reason: "start" });
+    }, 700);
+  }
   void persistHeartbeat();
 }
 
@@ -921,6 +1019,7 @@ async function loadSessionAudio(session, { startAtMs, autoplay }) {
     noteHostClock({ positionMs: Number(startAtMs) || 0, playing: false });
     window.setTimeout(() => { _applyingRemote = false; }, 280);
   }
+  if (isLiveListenGuest()) armGuestEndHold(playerEl());
 }
 
 async function onHostLeft() {
@@ -974,7 +1073,7 @@ function showHostSongEnded() {
       closeOverlay();
       if (act === "replay") {
         _hostAtEnd = false;
-        void startTogetherAsHost();
+        void startTogetherAsHost({ replay: true });
         return;
       }
       if (act === "done") {
@@ -1062,26 +1161,16 @@ async function leaveGuestSession() {
 }
 
 function showEndedFallback(session) {
-  const title = String(session?.songTitle || "").trim() || "this song";
+  const title = String(session?.songTitle || "").trim() || "Listen together";
   const name = displayName(session?.host || {});
   openOverlay({
-    kicker: "Live listen ended",
+    kicker: "Invite expired",
     title,
-    sub: name ? `${name} is no longer live` : "The live moment has ended",
+    sub: name ? `This listen with ${name} has ended.` : "This listen together has ended.",
     art: session?.songCover,
     actionsHtml: `
-      <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="dismiss">Not now</button>
-      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="play"${session?.songUrl ? "" : " disabled"}>Play this song</button>`,
-    onAction: (act) => {
-      closeOverlay();
-      if (act !== "play" || !session?.songUrl) return;
-      try { bridge.primePlayerInGesture?.(); } catch {}
-      void bridge.playUrlOnPlayer?.(session.songUrl, session.songTitle || "Song", session.songCover, {
-        songId: session.songId,
-        ownerUserId: session.songOwnerId,
-        openPlayer: true,
-      });
-    },
+      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="dismiss">OK</button>`,
+    onAction: () => closeOverlay(),
   });
 }
 
@@ -1142,7 +1231,7 @@ export async function handleLiveListenDeepLink(sessionId) {
     const data = await api("get", { sessionId: sid });
     const session = data?.session;
     if (!session) {
-      toast("Live listen ended");
+      toast("This invite has expired");
       return;
     }
     if (session.role === "host") {
@@ -1157,7 +1246,7 @@ export async function handleLiveListenDeepLink(sessionId) {
   } catch (e) {
     const msg = String(e?.message || "");
     if (/not found|ended|not in this session/i.test(msg)) {
-      toast("Live listen ended");
+      toast("This invite has expired");
       return;
     }
     toast(msg || "Could not open live listen", { durationMs: 2800 });
@@ -1376,6 +1465,10 @@ export function noteLiveListenHostTransport(wantPlaying) {
 }
 
 export function onLiveListenPlayerEvent(type) {
+  if (isLiveListenGuest()) {
+    if (type === "ended") holdGuestBeforeEnd(playerEl());
+    return;
+  }
   if (!isLiveListenHost()) return;
   if (type === "pause") {
     if (hostAwaitingGuest()) return;
@@ -1414,7 +1507,7 @@ export function onLiveListenPlayerEvent(type) {
       _hostAtEnd = false;
       _hostEndSheetOpen = false;
       closeOverlay();
-      void startTogetherAsHost();
+      void startTogetherAsHost({ replay: true });
       return;
     }
     if (!_hostWantsPlaying) {

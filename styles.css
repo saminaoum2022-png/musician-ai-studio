@@ -40214,7 +40214,7 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
   flex: 1 1 100%;
 }
 
-.liveListenChip{
+.liveListenChipRow{
   position: fixed;
   left: 50%;
   bottom: calc(72px + env(safe-area-inset-bottom, 0px));
@@ -40223,7 +40223,14 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  max-width: min(86vw, 340px);
+  max-width: min(92vw, 420px);
+}
+.liveListenChipRow[hidden]{ display: none !important; }
+.liveListenChip{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(68vw, 280px);
   padding: 8px 14px;
   border: 1px solid rgba(124,92,255,0.38);
   border-radius: 999px;
@@ -40238,7 +40245,27 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
           backdrop-filter: blur(18px);
   -webkit-tap-highlight-color: transparent;
 }
+.liveListenChipLeave{
+  appearance: none;
+  flex: 0 0 auto;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #2ee6c7;
+  color: #06241e;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  box-shadow: 0 8px 20px rgba(46,230,199,0.28);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.liveListenChipLeave[hidden]{ display: none !important; }
+.liveListenChipLeave:active{ transform: scale(0.97); }
 .liveListenChip[hidden]{ display: none !important; }
+.liveListenChip.is-status{ cursor: default; }
 .liveListenChipDot{
   width: 8px;
   height: 8px;
@@ -40257,11 +40284,11 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-body[data-route="player"] .liveListenChip{
+body[data-route="player"] .liveListenChipRow{
   top: calc(env(safe-area-inset-top, 0px) + 56px);
   bottom: auto;
 }
-body[data-route="messages-thread"] .liveListenChip{
+body[data-route="messages-thread"] .liveListenChipRow{
   bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 body.liveListenGuest .playerSeekWrap,
@@ -40275,9 +40302,6 @@ body.liveListenGuest #playerCoverToolsRail,
 body.liveListenGuest #playerChallengeAttribution,
 body.liveListenGuest #playerTemplateAttribution,
 body.liveListenGuest #playerPlaysCount{
-  display: none !important;
-}
-body.liveListenGuest[data-route="player"] #liveListenChip{
   display: none !important;
 }
 .liveListenGuestBar{

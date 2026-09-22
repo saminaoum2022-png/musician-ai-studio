@@ -1,6 +1,6 @@
 /**
  * Live Listen — host-owned one-song session.
- * Staging-first: NABAD_LIVE_LISTEN_ENABLED=1 on Vercel Preview (default on).
+ * On for Vercel production and preview unless NABAD_LIVE_LISTEN_ENABLED is explicitly off.
  */
 
 function envFlagEnabled(name, { defaultOn = false } = {}) {
@@ -10,8 +10,9 @@ function envFlagEnabled(name, { defaultOn = false } = {}) {
 }
 
 function nabadLiveListenEnabled() {
-  const isPreview = String(process.env.VERCEL_ENV || "").trim().toLowerCase() === "preview";
-  return envFlagEnabled("NABAD_LIVE_LISTEN_ENABLED", { defaultOn: isPreview });
+  const vercelEnv = String(process.env.VERCEL_ENV || "").trim().toLowerCase();
+  const defaultOn = vercelEnv === "preview" || vercelEnv === "production";
+  return envFlagEnabled("NABAD_LIVE_LISTEN_ENABLED", { defaultOn });
 }
 
 module.exports = { nabadLiveListenEnabled };

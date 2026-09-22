@@ -1151,7 +1151,7 @@ async function createSessionForGuest(guest, track, rowBtn) {
     const msg = /not set up|table_missing/i.test(raw)
       ? "Database table missing — run listen_sessions.sql, then push staging"
       : /not found|404/i.test(raw)
-        ? "Staging API doesn’t have Live Listen yet — push the staging branch"
+        ? "Live Listen isn’t available right now. Try again in a minute."
         : raw;
     setOverlayStatus(msg);
     toast(msg, { durationMs: 4200 });

@@ -45126,16 +45126,19 @@ function renderNotificationRows(list) {
     const profileHref = notificationActorProfileHref(n);
     const splitTap = activityNotificationSplitTap(n);
     const songHref = splitTap ? notificationActivityHref(n) : "";
+    const liveHref = String(n?.type || "") === "live_listen" ? notificationActivityHref(n) : "";
     const notifId = String(n?.id || "").trim();
-    const actionHtml = profileHref && !splitTap
+    const actionHtml = liveHref
+      ? `<a class="notificationsItemAction" href="${liveHref}" data-notifications-close="1">${escapeHtml(msg.action || "Join live")}</a>`
+      : profileHref && !splitTap
       ? `<a class="notificationsItemAction" href="${profileHref}" data-notifications-close="1">${escapeHtml(msg.action || "Open")}</a>`
       : "";
     const avatarTap = profileHref
       ? `<button type="button" class="notificationsItemAvatarWrap notificationsItemProfileTap" data-activity-profile-href="${escapeHtml(profileHref)}" aria-label="View ${escapeHtml(username ? `@${username}` : "profile")}">`
       : `<div class="notificationsItemAvatarWrap">`;
     const avatarTapClose = profileHref ? "</button>" : "</div>";
-    const bodyTapAttrs = splitTap && songHref
-      ? ` class="notificationsItemBody notificationsItemTargetTap" role="button" tabindex="0" data-notification-id="${escapeHtml(notifId)}" data-activity-href="${escapeHtml(songHref)}" aria-label="Open song"`
+    const bodyTapAttrs = (splitTap && songHref) || liveHref
+      ? ` class="notificationsItemBody notificationsItemTargetTap" role="button" tabindex="0" data-notification-id="${escapeHtml(notifId)}" data-activity-href="${escapeHtml(songHref || liveHref)}" aria-label="${liveHref ? "Open listen together" : "Open song"}"`
       : ` class="notificationsItemBody"`;
     const titleHtml = splitTap
       ? activityRowTitleHtml(n, msg.title, { splitTap: true })
@@ -46260,11 +46263,11 @@ function activityItemHtml(n) {
   const href = unavailable ? "" : notificationActivityHref(n);
   const profileHref = unavailable ? "" : notificationActorProfileHref(n);
   const songHref = !unavailable && activityNotificationHasSongCover(n) ? href : "";
-  const splitTap = Boolean(profileHref && songHref);
+  const splitTap = Boolean(profileHref && songHref) && String(n?.type || "") !== "live_listen";
   const notifType = String(n?.type || "").trim() || "default";
   const notifId = String(n?.id || "").trim();
   const secondary = activityRowSecondaryForIg(n, parts);
-  const titleHtml = profileHref
+  const titleHtml = profileHref && String(n?.type || "") !== "live_listen"
     ? activityRowTitleHtml(n, parts.title, { splitTap: true })
     : escapeHtml(parts.title);
   const secondaryHtml = secondary
@@ -78056,23 +78059,6 @@ try {
     formatTime,
     presenceHideTitles: () => presenceHideTitlesLocal(),
     refreshPresence: () => { try { presenceTick(); } catch {} },
-    reportLiveListen: (session) => {
-      const note = window.prompt("What should we know? (optional)", "");
-      if (note === null) return;
-      const hostName = String(session?.host?.username || session?.host?.displayName || "").replace(/^@/, "").trim();
-      try {
-        window.location.href = nabadaiReportContentMailtoHref({
-          title: session?.songTitle || "",
-          songId: session?.songId || "",
-          url: session?.songUrl || "",
-          handle: hostName,
-          by: hostName ? `@${hostName}` : "",
-        }, note || "Reported during Listen together");
-        showToast("Opening your email to send this report…", { icon: "✉", durationMs: 3200 });
-      } catch {
-        showToast("Could not open email. Reach us at support@nabadai.com", { icon: "!", durationMs: 4200 });
-      }
-    },
     loadRealtimeMod: () => loadMessagesRealtimeModule(),
     getChatPartner: () => ({
       userId: String(_chatHeaderUser?.userId || "").trim(),

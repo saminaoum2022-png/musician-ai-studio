@@ -49,6 +49,8 @@ let _guestStarted = false;
 let _hostScrubUntil = 0;
 let _suppressHostEventsUntil = 0;
 let _hostWantsPlaying = false;
+let _hostAtEnd = false;
+let _hostEndSheetOpen = false;
 const _seenInviteIds = new Set();
 
 function clientLiveListenUiBaked() {
@@ -292,8 +294,10 @@ function ensureChip() {
   el.hidden = true;
   el.addEventListener("click", () => {
     haptic();
-    if (isLiveListenHost()) void confirmHostEnd();
-    else if (isLiveListenGuest()) void confirmGuestLeave();
+    if (isLiveListenHost()) {
+      if (_hostAtEnd) showHostSongEnded();
+      else void confirmHostEnd();
+    } else if (isLiveListenGuest()) void confirmGuestLeave();
   });
   document.body.appendChild(el);
   _chipEl = el;
@@ -343,10 +347,6 @@ function wireGuestPlayerBarOnce(bar) {
     haptic();
     void confirmGuestLeave();
   });
-  bar.querySelector("#liveListenGuestReport")?.addEventListener("click", () => {
-    haptic();
-    try { bridge.reportLiveListen?.(_state?.session || null); } catch {}
-  });
 }
 
 function closeOverlay() {
@@ -364,7 +364,7 @@ function setOverlayStatus(text) {
   if (el) el.textContent = String(text || "");
 }
 
-function openOverlay({ kicker, title, sub, art, actionsHtml, onAction }) {
+function openOverlay({ kicker, title, sub, art, actionsHtml, onAction, onDismiss }) {
   closeOverlay();
   const overlay = document.createElement("div");
   overlay.id = "liveListenOverlay";
@@ -392,6 +392,7 @@ function openOverlay({ kicker, title, sub, art, actionsHtml, onAction }) {
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) {
       closeOverlay();
+      try { onDismiss?.(); } catch {}
       return;
     }
     const btn = e.target.closest("[data-ll-act]");
@@ -407,7 +408,7 @@ function hostNowMs(tick) {
 
 function tickReason(tick) {
   const r = String(tick?.reason || "clock").toLowerCase();
-  if (r === "seek" || r === "start" || r === "transport") return r;
+  if (r === "seek" || r === "start" || r === "transport" || r === "ended") return r;
   return "clock";
 }
 
@@ -502,18 +503,20 @@ async function applyGuestTick(tick, { force = false } = {}) {
   const sentAt = Number(tick?.hostSentAt) || 0;
   const reason = tickReason(tick);
   if (!force && reason === "clock") return;
-  if (_seekInFlight && !force && reason !== "start") return;
+  if (_seekInFlight && !force && reason !== "start" && reason !== "ended") return;
   if (sentAt && sentAt < _lastAppliedHostSentAt) return;
   if (sentAt) _lastAppliedHostSentAt = sentAt;
 
   const playing = tick?.playing === true && String(tick?.status || "live") === "live";
-  if (reason === "start") {
-    if (_guestStarted) return;
-    await seekGuestToHost({ ...tick, positionMs: 0 });
-    noteHostClock({ positionMs: 0, playing: true });
-    _guestStarted = true;
+  if (reason === "start" || reason === "ended") {
+    await seekGuestToHost({ ...tick, positionMs: reason === "start" ? 0 : tick?.positionMs });
+    noteHostClock({ positionMs: reason === "start" ? 0 : tick?.positionMs, playing: reason === "start" });
+    if (reason === "start") _guestStarted = true;
     applyRemoteFlag(400);
-    try { await a.play(); } catch {}
+    try {
+      if (reason === "start") await a.play();
+      else a.pause();
+    } catch {}
     return;
   }
   const shouldSeek = force || reason === "seek";
@@ -675,6 +678,8 @@ async function clearLocalSession({ keepRealtime = false } = {}) {
   _lastHostAt = 0;
   _lastAppliedHostSentAt = 0;
   _guestStarted = false;
+  _hostAtEnd = false;
+  _hostEndSheetOpen = false;
   _hostScrubUntil = 0;
   _suppressHostEventsUntil = 0;
   _hostWantsPlaying = false;
@@ -729,6 +734,8 @@ async function loadInvitedSongOnHost(session) {
 
 async function startTogetherAsHost() {
   if (!isLiveListenHost() || !_state?.session) return;
+  _hostAtEnd = false;
+  _hostEndSheetOpen = false;
   _hostWantsPlaying = true;
   _suppressHostEventsUntil = Date.now() + 2000;
   await loadInvitedSongOnHost(_state.session);
@@ -947,6 +954,35 @@ async function onHostLeft() {
       }
       void clearLocalSession();
     },
+  });
+}
+
+function showHostSongEnded() {
+  if (!isLiveListenHost() || !_hostAtEnd || _hostEndSheetOpen) return;
+  _hostEndSheetOpen = true;
+  const name = partnerLabel(_state?.session);
+  openOverlay({
+    kicker: "Song finished",
+    title: _state?.session?.songTitle || "Song",
+    sub: name ? `Play it again with @${name}, or end the listen.` : "Play it again, or end the listen.",
+    art: _state?.session?.songCover,
+    actionsHtml: `
+      <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="done">Done</button>
+      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="replay">Play again</button>`,
+    onAction: (act) => {
+      _hostEndSheetOpen = false;
+      closeOverlay();
+      if (act === "replay") {
+        _hostAtEnd = false;
+        void startTogetherAsHost();
+        return;
+      }
+      if (act === "done") {
+        _hostAtEnd = false;
+        void endHostSession();
+      }
+    },
+    onDismiss: () => { _hostEndSheetOpen = false; },
   });
 }
 
@@ -1347,14 +1383,17 @@ export function onLiveListenPlayerEvent(type) {
     void broadcastTick({ playing: false, positionMs: currentPositionMs(), reason: "transport" });
     return;
   }
-  if (_applyingRemote) return;
   if (type === "ended") {
-    if (hostAwaitingGuest()) return;
+    if (hostAwaitingGuest() || Date.now() < _suppressHostEventsUntil) return;
     const ended = playerEl();
     if (!sessionMatchesPlayer(_state?.session, ended?.currentSrc || ended?.src, _state?.session?.songId)) return;
-    void endHostSession();
+    _hostAtEnd = true;
+    _hostWantsPlaying = false;
+    void broadcastTick({ playing: false, positionMs: currentDurationMs(), reason: "ended" });
+    showHostSongEnded();
     return;
   }
+  if (_applyingRemote) return;
   if (hostAwaitingGuest()) {
     const a = playerEl();
     const onInvited = sessionMatchesPlayer(_state.session, a?.currentSrc || a?.src, _state.session?.songId);
@@ -1371,6 +1410,13 @@ export function onLiveListenPlayerEvent(type) {
     return;
   }
   if (type === "play") {
+    if (_hostAtEnd) {
+      _hostAtEnd = false;
+      _hostEndSheetOpen = false;
+      closeOverlay();
+      void startTogetherAsHost();
+      return;
+    }
     if (!_hostWantsPlaying) {
       applyRemoteFlag(250);
       try { playerEl()?.pause?.(); } catch {}

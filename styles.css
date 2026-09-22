@@ -40282,57 +40282,35 @@ body.liveListenGuest[data-route="player"] #liveListenChip{
 }
 .liveListenGuestBar{
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  margin-top: 18px;
+  justify-content: center;
+  margin-top: 14px;
 }
 .liveListenGuestBar[hidden]{ display: none !important; }
 .liveListenGuestStatus{
+  appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  max-width: min(86vw, 320px);
   margin: 0;
-  max-width: 100%;
+  padding: 8px 14px;
+  border: 1px solid rgba(124,92,255,0.38);
+  border-radius: 999px;
+  background: rgba(18, 14, 32, 0.72);
   color: #f4f0ff;
-  font-size: 15px;
+  font: inherit;
+  font-size: 14px;
   font-weight: 750;
   letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 .liveListenGuestStatus [data-ll-guest-status]{
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.liveListenGuestLeave{
-  appearance: none;
-  min-width: 148px;
-  height: 46px;
-  padding: 0 22px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.16);
-  background: rgba(255,255,255,0.08);
-  color: #fff;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 750;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.liveListenGuestLeave:active{ transform: scale(0.98); }
-.liveListenGuestReport{
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: rgba(232,238,247,0.55);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 650;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
+.liveListenGuestStatus:active{ transform: scale(0.98); }
 .liveListenInviteList{
   width: 100%;
   max-height: 46vh;
@@ -40365,15 +40343,9 @@ html[data-theme="light"] .liveListenChip{
   border-color: rgba(124,92,255,0.28);
 }
 html[data-theme="light"] .liveListenGuestStatus{
+  background: rgba(255,255,255,0.92);
   color: #1b1630;
-}
-html[data-theme="light"] .liveListenGuestLeave{
-  border-color: rgba(27,22,48,0.14);
-  background: rgba(27,22,48,0.06);
-  color: #1b1630;
-}
-html[data-theme="light"] .liveListenGuestReport{
-  color: rgba(27,22,48,0.55);
+  border-color: rgba(124,92,255,0.28);
 }
 .messagesThreadAvatar{
   flex: 0 0 46px;

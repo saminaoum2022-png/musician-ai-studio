@@ -15,10 +15,10 @@ const HEARTBEAT_MS = 6000;
 const POLL_MS = 4000;
 const JOIN_WAIT_MS = 12000;
 const SEEK_COOLDOWN_MS = 4000;
-/** Guest starts a bit behind. After that we let it play — no per-second nudges. */
+/** Guest starts a bit behind. After that we let it play. */
 const LAG_MS = 400;
-/** Only yank the playhead on a real skip / huge desync. Smaller drift is silent. */
-const SEEK_JUMP_MS = 3500;
+/** Treat this as a host skip, not clock drift. */
+const SEEK_JUMP_MS = 4000;
 
 let bridge = {};
 
@@ -37,6 +37,8 @@ let _invitePollTimer = 0;
 let _lastSeekAt = 0;
 let _seekInFlight = false;
 let _cueCtx = null;
+let _lastHostPosMs = 0;
+let _lastHostAt = 0;
 const _seenInviteIds = new Set();
 
 function clientLiveListenUiBaked() {
@@ -379,6 +381,25 @@ function resetGuestPlaybackRate() {
   } catch {}
 }
 
+function noteHostClock(tick) {
+  _lastHostPosMs = hostNowMs(tick);
+  _lastHostAt = Date.now();
+}
+
+function hostPositionJumped(tick) {
+  const pos = hostNowMs(tick);
+  if (!_lastHostAt) {
+    noteHostClock(tick);
+    return false;
+  }
+  const elapsed = Math.max(0, Date.now() - _lastHostAt);
+  const playing = tick?.playing !== false && String(tick?.status || "live") === "live";
+  const expected = _lastHostPosMs + (playing ? elapsed : 0);
+  const jump = Math.abs(pos - expected);
+  noteHostClock(tick);
+  return jump >= SEEK_JUMP_MS;
+}
+
 async function waitForCanPlay(a, timeoutMs = JOIN_WAIT_MS) {
   if (!a) return false;
   if (a.readyState >= 3) return true;
@@ -402,7 +423,7 @@ async function waitForCanPlay(a, timeoutMs = JOIN_WAIT_MS) {
   });
 }
 
-async function applyGuestTick(tick, { force = false } = {}) {
+async function applyGuestTick(tick, { force = false, allowSeek = true } = {}) {
   if (!isLiveListenGuest()) return;
   if (!sessionMatchesPlayer(_state?.session, tick?.audioUrl || _state?.session?.songUrl, tick?.songId || _state?.session?.songId)) {
     return;
@@ -411,10 +432,6 @@ async function applyGuestTick(tick, { force = false } = {}) {
   if (!a) return;
   if (_seekInFlight && !force) return;
   const playing = tick?.playing !== false && String(tick?.status || "live") === "live";
-  const hostSec = hostNowMs(tick) / 1000;
-  const targetSec = targetMsFromTick(tick) / 1000;
-  const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
-  const deltaMs = Math.abs(cur - hostSec) * 1000;
 
   try {
     if (!playing) {
@@ -432,8 +449,12 @@ async function applyGuestTick(tick, { force = false } = {}) {
       window.setTimeout(() => { _applyingRemote = false; }, 60);
     }
 
-    const shouldSeek = force || (deltaMs >= SEEK_JUMP_MS && Date.now() - _lastSeekAt >= SEEK_COOLDOWN_MS);
-    if (!shouldSeek) return;
+    if (!allowSeek && !force) return;
+    const skipped = force || hostPositionJumped(tick);
+    if (!skipped) return;
+    if (!force && Date.now() - _lastSeekAt < SEEK_COOLDOWN_MS) return;
+    const hostSec = hostNowMs(tick) / 1000;
+    const targetSec = targetMsFromTick(tick) / 1000;
     _seekInFlight = true;
     _lastSeekAt = Date.now();
     _applyingRemote = true;
@@ -556,7 +577,14 @@ function startGuestPoll() {
           await onHostLeft();
           return;
         }
-        await applyGuestTick(session);
+        const prev = _state.session || {};
+        _state.session = {
+          ...prev,
+          ...session,
+          positionMs: prev.positionMs,
+          hostSentAt: prev.hostSentAt,
+        };
+        await applyGuestTick(session, { allowSeek: false });
         syncLiveListenChrome();
       } catch {}
     })();
@@ -566,6 +594,8 @@ function startGuestPoll() {
 async function clearLocalSession({ keepRealtime = false } = {}) {
   stopTimers();
   resetGuestPlaybackRate();
+  _lastHostPosMs = 0;
+  _lastHostAt = 0;
   if (!keepRealtime) {
     try {
       const mod = await bridge.loadRealtimeMod?.();
@@ -733,6 +763,7 @@ async function loadSessionAudio(session, { startAtMs, autoplay }) {
     }
   } finally {
     _lastSeekAt = Date.now();
+    noteHostClock({ positionMs: Number(startAtMs) || 0, playing: autoplay });
     window.setTimeout(() => { _applyingRemote = false; }, 80);
   }
 }

@@ -40189,6 +40189,103 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
   background: linear-gradient(135deg, #7c5cff, #9a6bff);
   color: #fff;
 }
+.npPresenceActions:has([data-np-act="listen"]){
+  flex-wrap: wrap;
+}
+.npPresenceActions [data-np-act="listen"]{
+  flex: 1 1 100%;
+}
+
+.liveListenChip{
+  position: fixed;
+  left: 50%;
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 90;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(86vw, 340px);
+  padding: 8px 14px;
+  border: 1px solid rgba(124,92,255,0.38);
+  border-radius: 999px;
+  background: rgba(18, 14, 32, 0.88);
+  color: #f4f0ff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+  -webkit-backdrop-filter: blur(18px);
+          backdrop-filter: blur(18px);
+  -webkit-tap-highlight-color: transparent;
+}
+.liveListenChip[hidden]{ display: none !important; }
+.liveListenChipDot{
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #5ef0d4;
+  box-shadow: 0 0 0 0 rgba(94,240,212,0.7);
+  animation: liveListenPulse 1.6s ease-out infinite;
+}
+@keyframes liveListenPulse{
+  0%{ box-shadow: 0 0 0 0 rgba(94,240,212,0.55); }
+  70%{ box-shadow: 0 0 0 8px rgba(94,240,212,0); }
+  100%{ box-shadow: 0 0 0 0 rgba(94,240,212,0); }
+}
+.liveListenChipLabel{
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body[data-route="player"] .liveListenChip{
+  top: calc(env(safe-area-inset-top, 0px) + 56px);
+  bottom: auto;
+}
+body[data-route="messages-thread"] .liveListenChip{
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+body.liveListenGuest .playerSeekWrap,
+body.liveListenGuest #playerSeek{
+  pointer-events: none;
+}
+body.liveListenGuest .playerToggleBtn,
+body.liveListenGuest .playerSkipBtn,
+body.liveListenGuest .playerAuxBtn{
+  opacity: 0.4;
+}
+.liveListenInviteList{
+  width: 100%;
+  max-height: 46vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.liveListenOverlay .npPresenceActions:has(.liveListenInviteList){
+  display: block;
+  margin-top: 14px;
+}
+.liveListenOverlay.is-open ~ .toast,
+body:has(.liveListenOverlay.is-open) .toast{
+  z-index: 5000;
+}
+.liveListenAvatarPh{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(124,92,255,0.22);
+  color: #efe8ff;
+  font-weight: 800;
+}
+
+html[data-theme="light"] .liveListenChip{
+  background: rgba(255,255,255,0.9);
+  color: #1b1630;
+  border-color: rgba(124,92,255,0.28);
+}
 .messagesThreadAvatar{
   flex: 0 0 46px;
   align-self: center;

@@ -38,6 +38,7 @@ const PUSH_TEMPLATES = {
   singer_approved: { route: "singer-studio" },
   singer_rejected: { route: "activity" },
   singer_assigned: { route: "singer-studio" },
+  live_listen: { route: "live-listen" },
 };
 
 function pushEnabled() {
@@ -92,6 +93,7 @@ function composePushCopy({ type, actorDisplayName, metadata }) {
       return { body: `${actor} sent you a gift${suffix}` };
     }
     if (type === "challenge_update") return { body: `${actor} joined your challenge` };
+    if (type === "live_listen") return { body: `${actor} wants to listen live` };
   }
   if (type === "chart_rank") return { body: "Top 10 update" };
   if (type === "dm_message") return { body: "New message from someone" };

@@ -1,0 +1,44 @@
+---
+description: Live Listen stays hidden — admin-only like Vibe/Edit until explicit launch
+alwaysApply: true
+---
+
+# Live Listen — hidden in code, admin-only like Vibe
+
+Live Listen **lives on `staging` and `main`** (UI + API) but is **invisible** until launched.
+
+v1 is a **host-owned one-song session** (not a playlist). Host owns play/pause/seek. Guests follow the host clock. If the host has left, never autoplay — offer play from the start as a normal listen.
+
+## Hidden by default (safe for TestFlight / main)
+
+| Gate | Default |
+|---|---|
+| `NABAD_LIVE_LISTEN_PUBLIC_SHIPPED` in `src/feature-flags.js` | **`false`** — must stay false until explicit launch |
+| Phone/simulator bake | `nabadLiveListenUi: true` on **staging** env; `false` on production |
+| Who sees UI when hidden | **Admin only** (UI flag + `isAdmin()`) |
+| Production API | `NABAD_LIVE_LISTEN_ENABLED` **off** on nabadai.com |
+| Staging API | on by default on Vercel Preview (`NABAD_LIVE_LISTEN_ENABLED`) |
+
+Before **every push to `main`**: `npm run verify:no-producer-ship` (checks Producer + Vibe + Edit + Live Listen flags).
+
+## Daily workflow
+
+| Task | Command |
+|---|---|
+| Normal fixes (simulator) | `git checkout staging` → `npm run sim` |
+| Sami's phone — staging (Producer + Vibe + Edit + Live Listen) | `npm run run:ios:staging` |
+
+**Staging phone:** `npm run run:ios:staging` bakes **Producer + Vibe + Edit + Live Listen** UI flags (admin-only at runtime).
+
+## When Sami is ready to launch Live Listen publicly
+
+1. Set `NABAD_LIVE_LISTEN_PUBLIC_SHIPPED = true` in `src/feature-flags.js`
+2. Enable `NABAD_LIVE_LISTEN_ENABLED=1` on **production** Vercel
+3. Ship to main + TestFlight with explicit approval (user must say by name: ship feature Live Listen)
+4. Run `supabase/listen_sessions.sql` on the production Supabase project if it is not already applied
+
+## Agent rules
+
+- **Do not** remove Live Listen code from staging/main to "hide" it — use the flag.
+- **Do not** set `NABAD_LIVE_LISTEN_PUBLIC_SHIPPED = true` without explicit user approval.
+- **Do not** start with live playlists / shared queues — keep v1 one song, one host.

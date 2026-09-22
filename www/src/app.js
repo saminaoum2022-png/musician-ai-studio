@@ -39,6 +39,17 @@ import {
   syncNabadSongEditCreateTab,
   nabadSongEditEnabled,
 } from "./nabad-song-edit.js";
+import {
+  configureNabadLiveListen,
+  syncLiveListenChrome,
+  openLiveListenInviteFromChat,
+  openLiveListenInviteFromPlayer,
+  handleLiveListenDeepLink,
+  decorateNowPlayingPresenceActions,
+  onLiveListenPlayerEvent,
+  interceptLiveListenTransport,
+  isLiveListenTransportLocked,
+} from "./nabad-live-listen.js";
 import { prepareAudioForVibeRead } from "./vibe-audio-prep.js";
 import { prepareAudioForSongEdit } from "./song-edit-audio-prep.js";
 import {
@@ -5653,6 +5664,21 @@ function applyRoute({ passGen } = {}) {
     } catch {
       pendingMessagesThreadId = "";
       pendingMessagesThreadUserId = "";
+    }
+  }
+  if (route === "live-listen") {
+    let liveSessionId = "";
+    try {
+      liveSessionId = String(new URLSearchParams(rawRouteQuery).get("session") || "").trim();
+    } catch {
+      liveSessionId = "";
+    }
+    try { history.replaceState(null, "", "#/player"); } catch {}
+    route = "player";
+    if (liveSessionId) {
+      window.setTimeout(() => {
+        try { void handleLiveListenDeepLink(liveSessionId); } catch {}
+      }, 40);
     }
   }
   const allowedRoutes = new Set([
@@ -31968,6 +31994,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     try { syncNabadProducerHomeCard(); } catch {}
     try { syncNabadVibeCreateTab(); } catch {}
     try { syncNabadSongEditCreateTab(); } catch {}
+    try { syncLiveListenChrome(); } catch {}
     try { syncPhotoSoloChallengeCreateUi(); } catch {}
     if (document.body.getAttribute("data-route") === "first-song") {
       try { onFirstSongRouteActive(); } catch {}
@@ -38848,6 +38875,7 @@ async function openShareChooserForTrack(ref) {
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
   document.body.classList.add("shareChooserOpen");
+  try { syncLiveListenChrome(); } catch {}
   try { haptic("light"); } catch {}
 }
 
@@ -38860,6 +38888,10 @@ function wireInAppShareSheetsOnce() {
   document.getElementById("sendToFriendSheetBackdrop")?.addEventListener("click", closeSendToFriendSheet);
   document.getElementById("shareChooserSendFriend")?.addEventListener("click", () => {
     void openSendToFriendSheet(_pendingInAppShareRef);
+  });
+  document.getElementById("shareChooserListenTogether")?.addEventListener("click", () => {
+    closeShareChooserSheet();
+    void openLiveListenInviteFromPlayer();
   });
   document.getElementById("shareChooserShareLink")?.addEventListener("click", () => {
     void shareTrackLinkExternally(_pendingInAppShareRef);
@@ -39475,6 +39507,7 @@ function openNowPlayingPresencePanel() {
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  try { decorateNowPlayingPresenceActions(overlay, p); } catch {}
   requestAnimationFrame(() => overlay.classList.add("is-open"));
 
   const close = () => {
@@ -39492,6 +39525,10 @@ function openNowPlayingPresencePanel() {
       try { playLibraryUrlOnPlayer(url, title, cover, { songId, ownerUserId: ownerId }); } catch {}
       close();
       try { location.hash = "#/player"; } catch {}
+      return;
+    } else if (act === "listen") {
+      close();
+      void openLiveListenInviteFromChat();
       return;
     }
   });
@@ -53065,6 +53102,10 @@ async function renamePrivateLibraryTrack(trackId) {
 async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   const raw = String(rawUrl || "").trim();
   if (!raw) return;
+  if (isLiveListenTransportLocked() && !opts?.liveListenJoin) {
+    try { interceptLiveListenTransport(); } catch {}
+    return;
+  }
   if (!opts?.forceReload && toggleLoadedPlayerIfSameUrl(raw)) return;
   primeGlobalPlayerInGesture();
   const fromDiscover = Boolean(opts && opts.discoverFeed);
@@ -63288,7 +63329,10 @@ function ensurePlayer() {
     try { maybeAdvanceDiscoverPlaylistFromProgress(playerEl); } catch {}
     try { maybeAdvanceUserPlaylistFromProgress(playerEl); } catch {}
   });
-  playerEl.addEventListener("seeked", syncPlayerUI);
+  playerEl.addEventListener("seeked", () => {
+    syncPlayerUI();
+    try { onLiveListenPlayerEvent("seeked"); } catch {}
+  });
   playerEl.addEventListener("loadedmetadata", syncPlayerUI);
   // iOS Safari often reports `duration === Infinity` on Suno-proxied audio
   // until enough is buffered. `durationchange` and `canplay` are the events
@@ -63300,11 +63344,13 @@ function ensurePlayer() {
     syncPlayerUI();
     syncLockScreenNowPlaying({ force: true });
     try { presenceTick(); } catch {}
+    try { onLiveListenPlayerEvent("play"); } catch {}
   });
   playerEl.addEventListener("pause", () => {
     syncPlayerUI();
     syncLockScreenNowPlaying({ force: true });
     try { presenceTick(); } catch {}
+    try { onLiveListenPlayerEvent("pause"); } catch {}
   });
   playerEl.addEventListener("play", () => { try { setProfileAuraAudioState(true); } catch {} });
   playerEl.addEventListener("pause", () => { try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {} });
@@ -63312,6 +63358,10 @@ function ensurePlayer() {
     const elSeq = Number(playerEl?.dataset?.playerSeq || 0);
     if (elSeq !== _playerPlaybackSeq) return;
     hidePlayerKaraokeStrip();
+    if (isLiveListenTransportLocked()) {
+      try { syncPlayerUI(); } catch {}
+      return;
+    }
     if (playerRepeatEnabled && playerEl && currentPlayerTrackRef?.url) {
       try {
         playerEl.currentTime = 0;
@@ -63319,6 +63369,7 @@ function ensurePlayer() {
         return;
       } catch {}
     }
+    try { onLiveListenPlayerEvent("ended"); } catch {}
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = true;
     try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {}
@@ -65060,6 +65111,10 @@ async function handlePlayerShuffle() {
 }
 
 function skipPlayerBySeconds(delta) {
+  if (isLiveListenTransportLocked()) {
+    try { interceptLiveListenTransport(); } catch {}
+    return;
+  }
   const a = ensurePlayer();
   const dur = getPlayerDuration();
   if (!(dur > 0)) return;
@@ -65072,10 +65127,11 @@ function skipPlayerBySeconds(delta) {
 function syncPlayerSkipButtons() {
   const a = playerEl;
   const hasSrc = Boolean(a && (a.src || a.currentSrc));
-  const enabled = hasSrc && getPlayerDuration() > 0;
+  const guestLocked = isLiveListenTransportLocked();
+  const enabled = hasSrc && getPlayerDuration() > 0 && !guestLocked;
   if (els.btnPlayerRewind) els.btnPlayerRewind.disabled = !enabled;
   if (els.btnPlayerForward) els.btnPlayerForward.disabled = !enabled;
-  if (els.btnPlayerShuffle) els.btnPlayerShuffle.disabled = !hasSrc;
+  if (els.btnPlayerShuffle) els.btnPlayerShuffle.disabled = !hasSrc || guestLocked;
 }
 
 function setPlayerSource(url, label) {
@@ -74235,6 +74291,10 @@ if (els.hubNowExpand && !els.hubNowExpand.dataset.boundHubExp) {
       e.preventDefault();
       e.stopPropagation();
     } catch {}
+    if (isLiveListenTransportLocked()) {
+      try { interceptLiveListenTransport(); } catch {}
+      return;
+    }
     haptic("light");
     if (miniSource?.type === "discover_playlist" && _discoverPlaylistQueue.length) {
       void playNextDiscoverPlaylistTrack(currentPlayerTrackRef?.url, { manual: true });
@@ -74736,17 +74796,29 @@ if (els.btnPlayerForward) {
 }
 if (els.btnPlayerShuffle) {
   els.btnPlayerShuffle.addEventListener("click", () => {
+    if (isLiveListenTransportLocked()) {
+      try { interceptLiveListenTransport(); } catch {}
+      return;
+    }
     void handlePlayerShuffle();
   });
 }
 if (els.btnPlayerRepeat) {
   els.btnPlayerRepeat.addEventListener("click", () => {
+    if (isLiveListenTransportLocked()) {
+      try { interceptLiveListenTransport(); } catch {}
+      return;
+    }
     togglePlayerRepeat();
   });
 }
 if (els.btnPlayerToggle) {
   els.btnPlayerToggle.addEventListener("click", () => {
     if (!playerEl) return;
+    if (isLiveListenTransportLocked()) {
+      try { interceptLiveListenTransport(); } catch {}
+      return;
+    }
     haptic("light");
     if (playerEl.paused) {
       els.btnPlayerPlay?.click();
@@ -74987,16 +75059,25 @@ if (els.playerCoverUpload) {
   });
 }
 if (els.playerSeek) {
-  els.playerSeek.addEventListener("pointerdown", () => (playerSeekDragging = true));
+  els.playerSeek.addEventListener("pointerdown", (e) => {
+    if (isLiveListenTransportLocked()) {
+      e.preventDefault();
+      try { interceptLiveListenTransport(); } catch {}
+      return;
+    }
+    playerSeekDragging = true;
+  });
   els.playerSeek.addEventListener("pointerup", () => {
     playerSeekDragging = false;
     if (!playerEl) return;
+    if (isLiveListenTransportLocked()) return;
     const dur = getPlayerDuration();
     const max = Number(els.playerSeek.max || 1000);
     const v = Number(els.playerSeek.value || 0);
     if (dur > 0) playerEl.currentTime = (v / max) * dur;
   });
   els.playerSeek.addEventListener("input", () => {
+    if (isLiveListenTransportLocked()) return;
     if (!playerSeekDragging || !playerEl) return;
     const dur = getPlayerDuration();
     const max = Number(els.playerSeek.max || 1000);
@@ -77795,6 +77876,40 @@ try {
   });
   syncNabadSongEditCreateTab();
 } catch (e) { console.warn("[nabad-song-edit] init", e); }
+
+try {
+  configureNabadLiveListen({
+    isAdmin: () => Boolean(creditsState.isAdmin),
+    getAuthToken: () => getSupabaseAuthToken(),
+    getUserId: () => String(authSession?.user?.id || "").trim(),
+    getSupabaseUrl: () => SUPABASE_URL,
+    getSupabaseAnonKey: () => SUPABASE_ANON_KEY,
+    ensurePlayer: () => ensurePlayer(),
+    primePlayerInGesture: () => primeGlobalPlayerInGesture(),
+    playUrlOnPlayer: (url, title, art, opts) => playLibraryUrlOnPlayer(url, title, art, opts),
+    getTrackRef: () => trackRefFromCurrentPlayer(),
+    getPlayerDuration: () => getPlayerDuration(),
+    showToast,
+    haptic,
+    escapeHtml,
+    messagesAvatarHtml,
+    fetchMutualFriendsForShare,
+    resolveShareableAudioUrl,
+    messagesApi,
+    formatTime,
+    presenceHideTitles: () => presenceHideTitlesLocal(),
+    loadRealtimeMod: () => loadMessagesRealtimeModule(),
+    getChatPartner: () => ({
+      userId: String(_chatHeaderUser?.userId || "").trim(),
+      username: _chatHeaderUser?.username || "",
+      displayName: _chatHeaderUser?.displayName || _chatHeaderUser?.username || "",
+      avatarUrl: _chatHeaderUser?.avatarUrl || "",
+      threadId: String(_conversationId || "").trim(),
+    }),
+    getChatPartnerPresence: () => _chatPartnerPresence,
+  });
+  syncLiveListenChrome();
+} catch (e) { console.warn("[live-listen] init", e); }
 
 // Resolve the backing instrumental ("AI Guide") for a song. V1 prefers an
 // existing instrumental already in the library; otherwise it falls back to the

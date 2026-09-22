@@ -332,10 +332,112 @@ export async function subscribeDmInbox({
 export async function disconnectDmRealtime() {
   await stopDmThreadRealtime();
   await stopDmInboxRealtime();
+  await stopListenSessionRealtime();
   if (_client) {
     try {
       _client.realtime.disconnect();
     } catch {}
   }
   _client = null;
+}
+
+let _listenChannel = null;
+let _listenSessionId = "";
+let _listenChannelReady = false;
+let _onListenTickHandler = null;
+let _onListenEndHandler = null;
+
+export function isListenSessionChannelReady() {
+  return Boolean(_listenChannelReady && _listenChannel && _listenSessionId);
+}
+
+export async function sendListenSessionBroadcast({ sessionId, event = "ll_tick", payload } = {}) {
+  const sid = String(sessionId || _listenSessionId || "").trim();
+  if (!_listenChannel || !sid || !_listenChannelReady) return false;
+  try {
+    const status = await _listenChannel.send({
+      type: "broadcast",
+      event: String(event || "ll_tick"),
+      payload: payload && typeof payload === "object" ? payload : {},
+    });
+    return status === "ok";
+  } catch (e) {
+    console.warn("[live-listen] broadcast failed", e);
+    return false;
+  }
+}
+
+export async function stopListenSessionRealtime() {
+  const client = _client;
+  const channel = _listenChannel;
+  _listenChannel = null;
+  _listenSessionId = "";
+  _listenChannelReady = false;
+  _onListenTickHandler = null;
+  _onListenEndHandler = null;
+  if (!client || !channel) return;
+  try {
+    await client.removeChannel(channel);
+  } catch (e) {
+    console.warn("[live-listen] unsubscribe failed", e);
+  }
+}
+
+export async function subscribeListenSession({
+  supabaseUrl,
+  supabaseAnonKey,
+  accessToken,
+  sessionId,
+  onTick,
+  onEnd,
+  onStatus,
+} = {}) {
+  const sid = String(sessionId || "").trim();
+  const token = String(accessToken || "").trim();
+  if (!sid || !token) return false;
+
+  const client = getOrCreateClient(supabaseUrl, supabaseAnonKey);
+  if (!client) return false;
+
+  if (_listenSessionId === sid && _listenChannel) {
+    _onListenTickHandler = onTick;
+    _onListenEndHandler = onEnd;
+    await refreshDmThreadRealtimeAuth(token);
+    return true;
+  }
+
+  await stopListenSessionRealtime();
+  _onListenTickHandler = onTick;
+  _onListenEndHandler = onEnd;
+
+  try {
+    client.realtime.setAuth(token);
+  } catch (e) {
+    console.warn("[live-listen] setAuth failed", e);
+    return false;
+  }
+
+  const channel = client
+    .channel(`listen-session:${sid}`, {
+      config: { broadcast: { self: false } },
+    })
+    .on("broadcast", { event: "ll_tick" }, (payload) => {
+      const data = payload?.payload;
+      if (!data || typeof data !== "object") return;
+      try { _onListenTickHandler?.(data); } catch (e) { console.warn("[live-listen] onTick", e); }
+    })
+    .on("broadcast", { event: "ll_end" }, (payload) => {
+      const data = payload?.payload;
+      try { _onListenEndHandler?.(data && typeof data === "object" ? data : {}); } catch (e) {
+        console.warn("[live-listen] onEnd", e);
+      }
+    })
+    .subscribe((status, err) => {
+      _listenChannelReady = status === "SUBSCRIBED";
+      try { onStatus?.(status, err); } catch {}
+    });
+
+  _listenChannel = channel;
+  _listenSessionId = sid;
+  return true;
 }

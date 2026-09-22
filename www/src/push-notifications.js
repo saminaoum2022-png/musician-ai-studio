@@ -99,6 +99,12 @@ export function resolvePushHashPath(payload = {}) {
   if (category === "dm_message" && entityId) {
     return `messages-thread?thread=${encodeURIComponent(entityId)}`;
   }
+  if (category === "live_listen" && entityId) {
+    return `live-listen?session=${encodeURIComponent(entityId)}`;
+  }
+  if (route === "live-listen" && entityId) {
+    return `live-listen?session=${encodeURIComponent(entityId)}`;
+  }
   if (route) return route;
   return "";
 }

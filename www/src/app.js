@@ -58,6 +58,7 @@ import {
   isLiveListenActive,
   isLiveListenGuest,
   isLiveListenHost,
+  endLiveListenBecauseHostClosedPlayer,
 } from "./nabad-live-listen.js";
 import { prepareAudioForVibeRead } from "./vibe-audio-prep.js";
 import { prepareAudioForSongEdit } from "./song-edit-audio-prep.js";
@@ -5682,8 +5683,8 @@ function applyRoute({ passGen } = {}) {
     } catch {
       liveSessionId = "";
     }
-    try { history.replaceState(null, "", "#/player"); } catch {}
-    route = "player";
+    try { history.replaceState(null, "", "#/activity"); } catch {}
+    route = "activity";
     if (liveSessionId) {
       window.setTimeout(() => {
         try { void handleLiveListenDeepLink(liveSessionId); } catch {}
@@ -75002,6 +75003,9 @@ if (els.btnPlayerBack) {
       closeDiscoverReelOverlay();
       try { syncRoutePanelVisibility("discover"); } catch {}
       return;
+    }
+    if (isLiveListenHost()) {
+      void endLiveListenBecauseHostClosedPlayer();
     }
     // The mobile tab bar is hidden on /player (full-screen Now Playing),
     // so the back chevron is the user's only way out. If we have history

@@ -50,6 +50,7 @@ let _hostScrubUntil = 0;
 let _suppressHostEventsUntil = 0;
 let _hostWantsPlaying = false;
 let _hostAtEnd = false;
+let _guestEndShown = false;
 let _hostEndSheetOpen = false;
 const _seenInviteIds = new Set();
 
@@ -510,8 +511,7 @@ async function playGuestFromStart(a) {
   applyRemoteFlag(900);
   const started = await tryPlayGuestFromZero(a);
   if (started) return;
-  const retried = await tryPlayGuestFromZero(a);
-  if (!retried) showGuestReplayTap();
+  await tryPlayGuestFromZero(a);
 }
 
 async function tryPlayGuestFromZero(a) {
@@ -529,25 +529,6 @@ async function tryPlayGuestFromZero(a) {
   } catch {
     return false;
   }
-}
-
-function showGuestReplayTap() {
-  if (!isLiveListenGuest()) return;
-  const name = partnerLabel(_state?.session);
-  openOverlay({
-    kicker: "Play again",
-    title: _state?.session?.songTitle || "Listen together",
-    sub: name ? `@${name} started the song over. Tap play to join them.` : "Tap play to start the song over.",
-    art: _state?.session?.songCover,
-    actionsHtml: `
-      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="resume">Play</button>`,
-    onAction: async () => {
-      closeOverlay();
-      const a = playerEl();
-      try { bridge.primePlayerInGesture?.(); } catch {}
-      await tryPlayGuestFromZero(a);
-    },
-  });
 }
 
 function armGuestEndHold(a) {
@@ -772,6 +753,7 @@ async function clearLocalSession({ keepRealtime = false } = {}) {
   _guestStarted = false;
   _hostAtEnd = false;
   _hostEndSheetOpen = false;
+  _guestEndShown = false;
   _hostScrubUntil = 0;
   _suppressHostEventsUntil = 0;
   _hostWantsPlaying = false;
@@ -1023,7 +1005,8 @@ async function loadSessionAudio(session, { startAtMs, autoplay }) {
 }
 
 async function onHostLeft() {
-  if (!isLiveListenGuest()) return;
+  if (!isLiveListenGuest() || _guestEndShown) return;
+  _guestEndShown = true;
   const session = _state.session;
   const name = partnerLabel(session);
   const a = playerEl();
@@ -1032,27 +1015,19 @@ async function onHostLeft() {
   try { a?.pause?.(); } catch {}
   window.setTimeout(() => { _applyingRemote = false; }, 40);
   stopTimers();
+  const finish = () => { void clearLocalSession(); };
   openOverlay({
-    kicker: "Live listen ended",
-    title: session?.songTitle || "Song",
-    sub: `${name} left — keep listening?`,
+    kicker: "Host left",
+    title: session?.songTitle || "Listen together",
+    sub: name ? `@${name} left. This listen has ended.` : "The host left. This listen has ended.",
     art: session?.songCover,
     actionsHtml: `
-      <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="stop">Stop</button>
-      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="keep">Keep listening</button>`,
-    onAction: (act) => {
+      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="ok">OK</button>`,
+    onAction: () => {
       closeOverlay();
-      if (act === "keep") {
-        resetGuestPlaybackRate();
-        _state = { role: "guest", session, solo: true };
-        setBodyRole();
-        syncLiveListenChrome();
-        void playerEl()?.play?.().catch(() => {});
-        void clearLocalSession();
-        return;
-      }
-      void clearLocalSession();
+      finish();
     },
+    onDismiss: finish,
   });
 }
 
@@ -1124,6 +1099,9 @@ async function confirmGuestLeave() {
 async function endHostSession() {
   const wasWaiting = hostAwaitingGuest();
   const sid = _state?.session?.id;
+  closeOverlay();
+  _hostAtEnd = false;
+  _hostEndSheetOpen = false;
   if (sid) {
     try {
       const mod = await bridge.loadRealtimeMod?.();
@@ -1137,6 +1115,14 @@ async function endHostSession() {
   }
   await clearLocalSession();
   toast(wasWaiting ? "Invite canceled — press play whenever you want" : "Live listen ended");
+}
+
+export async function endLiveListenBecauseHostClosedPlayer() {
+  if (!isLiveListenHost()) return;
+  const a = playerEl();
+  applyRemoteFlag(800);
+  try { a?.pause?.(); } catch {}
+  await endHostSession();
 }
 
 async function leaveGuestSession() {
@@ -1231,7 +1217,7 @@ export async function handleLiveListenDeepLink(sessionId) {
     const data = await api("get", { sessionId: sid });
     const session = data?.session;
     if (!session) {
-      toast("This invite has expired");
+      showEndedFallback(null);
       return;
     }
     if (session.role === "host") {
@@ -1246,7 +1232,7 @@ export async function handleLiveListenDeepLink(sessionId) {
   } catch (e) {
     const msg = String(e?.message || "");
     if (/not found|ended|not in this session/i.test(msg)) {
-      toast("This invite has expired");
+      showEndedFallback(null);
       return;
     }
     toast(msg || "Could not open live listen", { durationMs: 2800 });
@@ -1471,7 +1457,7 @@ export function onLiveListenPlayerEvent(type) {
   }
   if (!isLiveListenHost()) return;
   if (type === "pause") {
-    if (hostAwaitingGuest()) return;
+    if (_applyingRemote || hostAwaitingGuest()) return;
     _hostWantsPlaying = false;
     void broadcastTick({ playing: false, positionMs: currentPositionMs(), reason: "transport" });
     return;

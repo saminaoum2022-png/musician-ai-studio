@@ -1155,13 +1155,38 @@ async function leaveGuestSession() {
   await clearLocalSession();
 }
 
-function showEndedFallback(session) {
+function expiredListenCopy(session) {
   const title = String(session?.songTitle || "").trim() || "Listen together";
   const name = displayName(session?.host || {});
-  openOverlay({
+  const named = name && name !== "friend";
+  return {
     kicker: "Invite expired",
     title,
-    sub: name ? `This listen with ${name} has ended.` : "This listen together has ended.",
+    sub: named ? `This listen with ${name} has ended.` : "This listen together has ended.",
+  };
+}
+
+function revealExpiredListen(session) {
+  const copy = expiredListenCopy(session);
+  const root = _overlayEl;
+  if (root?.classList.contains("is-open")) {
+    const kicker = root.querySelector(".npPresenceKicker");
+    const title = root.querySelector(".npPresenceTitle");
+    const sub = root.querySelector(".npPresenceArtist");
+    if (kicker) kicker.textContent = copy.kicker;
+    if (title) title.textContent = copy.title;
+    if (sub) sub.textContent = copy.sub;
+    return;
+  }
+  showEndedFallback(session);
+}
+
+function showEndedFallback(session) {
+  const copy = expiredListenCopy(session);
+  openOverlay({
+    kicker: copy.kicker,
+    title: copy.title,
+    sub: copy.sub,
     art: session?.songCover,
     actionsHtml: `
       <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="dismiss">OK</button>`,
@@ -1270,7 +1295,7 @@ export async function handleLiveListenDeepLink(sessionId, preview = null) {
     if (token !== _listenOpenToken) return;
     const session = data?.session;
     if (!session) {
-      showEndedFallback(preview);
+      revealExpiredListen(preview);
       return;
     }
     if (session.role === "host") {
@@ -1279,7 +1304,7 @@ export async function handleLiveListenDeepLink(sessionId, preview = null) {
       return;
     }
     if (session.status !== "live" && session.status !== "pending") {
-      showEndedFallback(session.songTitle ? session : { ...preview, ...session });
+      revealExpiredListen(session.songTitle ? session : { ...preview, ...session });
       return;
     }
     showJoinPrompt(session);
@@ -1287,7 +1312,7 @@ export async function handleLiveListenDeepLink(sessionId, preview = null) {
     if (token !== _listenOpenToken) return;
     const msg = String(e?.message || "");
     if (/not found|ended|not in this session/i.test(msg)) {
-      showEndedFallback(preview);
+      revealExpiredListen(preview);
       return;
     }
     toast(msg || "Could not open live listen", { durationMs: 2800 });

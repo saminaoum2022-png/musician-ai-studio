@@ -40103,7 +40103,11 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
   transition: background 220ms ease;
   padding: 0 0 calc(env(safe-area-inset-bottom, 0px));
 }
-.npPresenceOverlay.is-open{ background: rgba(6,8,16,0.55); }
+.npPresenceOverlay.is-open{
+  background: var(--nabad-sheet-scrim);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+          backdrop-filter: blur(18px) saturate(120%);
+}
 .npPresenceSheet{
   width: 100%;
   max-width: 520px;
@@ -40202,14 +40206,21 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
 }
 .npPresenceBtn:active{ transform: scale(0.97); }
 .npPresenceBtn[disabled]{ opacity: 0.4; pointer-events: none; }
-.npPresenceBtn--ghost{
-  background: rgba(255,255,255,0.08);
-  color: #eef2ff;
-  border: 1px solid rgba(255,255,255,0.1);
+.npPresenceBtn--ghost,
+.npPresenceBtn--primary{
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  color: var(--nabad-glass-color);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
 }
 .npPresenceBtn--primary{
-  background: linear-gradient(135deg, #7c5cff, #9a6bff);
-  color: #fff;
+  border-color: var(--nabad-glass-border-hover);
+  background: var(--nabad-glass-bg-hover);
+  color: var(--nabad-glass-color-hover);
 }
 .npPresenceActions:has([data-np-act="listen"]){
   flex-wrap: wrap;
@@ -41531,34 +41542,33 @@ body.coachComposerMode .messagesComposerSheetListDm{
   gap: 8px;
   margin-top: 4px;
 }
-.shareChooserPrimary{
-  width: 100%;
-  min-height: 46px;
-  border-radius: 14px;
-  border: 1px solid rgba(124,92,255,0.32);
-  background: rgba(124,92,255,0.16);
-  color: rgba(236, 228, 255, 0.96);
-  font: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(124,92,255,0.14);
-  -webkit-tap-highlight-color: transparent;
-}
+.shareChooserPrimary,
 .shareChooserSecondary{
   width: 100%;
   min-height: 46px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.05);
-  color: rgba(232,238,247,0.88);
+  border-radius: 16px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  color: var(--nabad-glass-color);
   font: inherit;
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
-  -webkit-backdrop-filter: blur(14px);
-          backdrop-filter: blur(14px);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
   -webkit-tap-highlight-color: transparent;
+}
+.shareChooserPrimary{
+  border-color: var(--nabad-glass-border-hover);
+  background: var(--nabad-glass-bg-hover);
+  color: var(--nabad-glass-color-hover);
+}
+.shareChooserPrimary:active,
+.shareChooserSecondary:active{
+  transform: scale(0.98);
 }
 .sendToFriendPreview{
   display: flex;
@@ -41566,9 +41576,12 @@ body.coachComposerMode .messagesComposerSheetListDm{
   gap: 10px;
   margin: 0 0 10px;
   padding: 8px;
-  border-radius: 12px;
-  border: 1px solid rgba(124,92,255,0.14);
-  background: rgba(124,92,255,0.08);
+  border-radius: 16px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 .sendToFriendPreview[hidden]{
   display: none !important;
@@ -59018,6 +59031,7 @@ html[data-theme="light"] .musicPrefsGrid .profileEditGenreChip.isSelected{
 .coachSongPlanSheetCard,
 .proSingerSheetCard,
 .userActionSheetPanel,
+.npPresenceSheet,
 .photoMoodSheet .imageMoodCard.modalCard,
 .imageMoodSheet .imageMoodCard.modalCard{
   isolation: isolate;
@@ -59028,6 +59042,9 @@ html[data-theme="light"] .musicPrefsGrid .profileEditGenreChip.isSelected{
   -webkit-backdrop-filter: blur(var(--nabad-sheet-blur)) saturate(var(--nabad-sheet-saturate));
           backdrop-filter: blur(var(--nabad-sheet-blur)) saturate(var(--nabad-sheet-saturate));
   box-shadow: var(--nabad-sheet-shadow);
+}
+.npPresenceSheet{
+  border-radius: 24px 24px 0 0;
 }
 .feedReplySheetBackdrop,
 .messagesShareSheetBackdrop,
@@ -60184,16 +60201,19 @@ html[data-theme="light"] .messagesShareConfirmSend{
 html[data-theme="light"] .messagesShareConfirmSend:active{
   background: linear-gradient(135deg, #0f766e, #0d9488);
 }
-html[data-theme="light"] .shareChooserPrimary{
-  border-color: var(--accent-teal-border);
-  background: var(--accent-teal-soft);
-  color: #0d9488;
-  box-shadow: none;
-}
+html[data-theme="light"] .shareChooserPrimary,
 html[data-theme="light"] .shareChooserSecondary{
-  border-color: var(--border);
-  background: var(--card);
-  color: var(--text-primary);
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  color: var(--nabad-glass-color);
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+html[data-theme="light"] .shareChooserPrimary{
+  border-color: var(--nabad-glass-border-hover);
+  background: var(--nabad-glass-bg-hover);
+  color: var(--nabad-glass-color-hover);
 }
 html[data-theme="light"] .sendToFriendPreview{
   border-color: var(--border);
@@ -60521,12 +60541,12 @@ html[data-theme="light"] .friendsWtfTitle{
   color: var(--text-primary);
 }
 html[data-theme="light"] .npPresenceOverlay.is-open{
-  background: rgba(242,242,247,0.72);
+  background: var(--nabad-sheet-scrim);
 }
 html[data-theme="light"] .npPresenceSheet{
-  border-color: var(--border);
-  background: var(--card);
-  box-shadow: var(--elev-2);
+  border-color: var(--nabad-sheet-border);
+  background: var(--nabad-sheet-bg);
+  box-shadow: var(--nabad-sheet-shadow);
 }
 html[data-theme="light"] .npPresenceGrab{
   background: rgba(15,23,40,0.14);
@@ -60537,10 +60557,16 @@ html[data-theme="light"] .npPresenceTitle{
 html[data-theme="light"] .npPresenceArtist{
   color: var(--text-secondary);
 }
-html[data-theme="light"] .npPresenceBtn--ghost{
-  border-color: var(--border);
-  background: var(--surface-secondary);
-  color: var(--text-primary);
+html[data-theme="light"] .npPresenceBtn--ghost,
+html[data-theme="light"] .npPresenceBtn--primary{
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  color: var(--nabad-glass-color);
+}
+html[data-theme="light"] .npPresenceBtn--primary{
+  border-color: var(--nabad-glass-border-hover);
+  background: var(--nabad-glass-bg-hover);
+  color: var(--nabad-glass-color-hover);
 }
 html[data-theme="light"] .npPresenceArt{
   border-color: var(--border);

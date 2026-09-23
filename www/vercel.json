@@ -31,6 +31,10 @@
     },
     "api/music/generate.js": {
       "maxDuration": 300
+    },
+    "api/music/mix-voice-band.js": {
+      "includeFiles": "node_modules/ffmpeg-static/**",
+      "maxDuration": 90
     }
   },
   "crons": [

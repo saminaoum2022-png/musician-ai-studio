@@ -24242,30 +24242,22 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
 }
 
 async function mixChatVoiceOverBand(vocalUrl, bandUrl) {
-  const wavBlob = await mixStemsToWav([
-    { name: "band", url: bandUrl, gain: 0.7 },
-    { name: "vocal", url: vocalUrl, gain: 1.18 },
-  ]);
-  const shrunk = await prepareMixBlobForProMasterUpload(wavBlob, 8 * 1024 * 1024);
-  const file = new File([shrunk], "drop-remix-mix.wav", { type: "audio/wav" });
-  const tempUrl = await uploadAudioFileForSuno(file);
-  const token = getSupabaseAuthToken();
-  if (!token) return tempUrl;
-  try {
-    const r = await apiFetch("/api/songs/archive", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ sourceUrl: tempUrl }),
-      nativeReadTimeoutMs: 90000,
-    });
-    const d = await r.json().catch(() => ({}));
-    return String(d?.permanentUrl || tempUrl).trim();
-  } catch {
-    return tempUrl;
+  const authToken = getSupabaseAuthToken();
+  const r = await apiFetch("/api/music/mix-voice-band", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
+    body: JSON.stringify({ vocalUrl, bandUrl }),
+    nativeReadTimeoutMs: 90000,
+  });
+  const d = await r.json().catch(() => ({}));
+  const url = String(d?.url || "").trim();
+  if (!r.ok || !url) {
+    throw new Error(d?.error || "Couldn't put your voice on the band.");
   }
+  return url;
 }
 
 async function maybeShareReadyVoiceClip(entries, taskId) {
@@ -24275,21 +24267,19 @@ async function maybeShareReadyVoiceClip(entries, taskId) {
   if (_chatVoiceRemixShareSentTask && _chatVoiceRemixShareSentTask === tid) return;
   const track = (Array.isArray(entries) ? entries : []).find((e) => String(e?.url || "").trim());
   if (!track?.url) return;
+  const vocalUrl = String(pending.audioUrl || "").trim();
+  const bandUrl = String(track.url || "").trim();
+  if (!vocalUrl) {
+    showToast("Missing the original drop — remix again.", { icon: "!", durationMs: 4200 });
+    return;
+  }
   _chatVoiceRemixShareSentTask = tid;
-  persistPendingVoiceClipShare(null);
-  removeChatVoiceRemixBrewing();
-  resetChatVoiceRemixDock();
   try {
-    let shareUrl = String(track.url || "").trim();
-    const vocalUrl = String(pending.audioUrl || "").trim();
-    if (vocalUrl && shareUrl) {
-      try {
-        showToast("Laying your voice on the band…", { icon: "♪", durationMs: 4200 });
-        shareUrl = await mixChatVoiceOverBand(vocalUrl, shareUrl);
-      } catch (mixErr) {
-        try { console.warn("[chat-voice-remix] mix failed", mixErr?.message || mixErr); } catch {}
-      }
-    }
+    showToast("Laying your voice on the band…", { icon: "♪", durationMs: 5200 });
+    const shareUrl = await mixChatVoiceOverBand(vocalUrl, bandUrl);
+    persistPendingVoiceClipShare(null);
+    removeChatVoiceRemixBrewing();
+    resetChatVoiceRemixDock();
     await sendDmSongShare({
       ...track,
       url: shareUrl,
@@ -24301,7 +24291,7 @@ async function maybeShareReadyVoiceClip(entries, taskId) {
     _chatVoiceRemixShareSentTask = "";
     persistPendingVoiceClipShare(pending);
     syncChatVoiceRemixBrewing({ scroll: true });
-    showToast(e?.message || "Could not drop the remix in chat.", { icon: "!", durationMs: 4200 });
+    showToast(e?.message || "Couldn't put your voice on the band.", { icon: "!", durationMs: 4200 });
   }
 }
 

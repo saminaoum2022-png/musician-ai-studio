@@ -516,9 +516,12 @@ module.exports = async function handler(req, res) {
       // descriptors only. Anything that looks like an instruction is
       // dropped. If style is empty we fall back to a single neutral
       // style word so the field is never empty (it's required).
-      const instModel = ["V4_5PLUS", "V5", "V5_5", "V6", "V6_WILD", "V6_MINI"].includes(safeModel)
+      // V6 add-instrumental parses a lyrics/extend field and 531s when it
+      // is empty ("extending lyrics are empty, too short, or malformed").
+      // Chat drops have no lyrics — keep the voice by staying on V5.5.
+      const instModel = ["V4_5PLUS", "V5", "V5_5"].includes(safeModel)
         ? safeModel
-        : DEFAULT_SUNO_MODEL;
+        : "V5_5";
       const styleClean = String(style || "")
         .replace(/&/g, " ")
         .replace(/\s+/g, " ")
@@ -549,9 +552,6 @@ module.exports = async function handler(req, res) {
         negativeTags: cleanNegative,
         callBackUrl,
         model: instModel,
-        ...(audioWeight !== null ? { audioWeight } : {}),
-        ...(styleWeight !== null ? { styleWeight } : {}),
-        ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
       };
       try {
         console.log("[suno/stems] add-instrumental payload", {

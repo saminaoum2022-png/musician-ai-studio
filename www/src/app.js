@@ -23969,11 +23969,12 @@ const CHAT_VOICE_REMIX_BREW_LINES = [
 ];
 
 const VOICE_CLIP_MOODS = {
-  soft: "soft pop, warm pads, intimate",
-  night: "late night rnb, dark bass, neon",
-  arabic: "modern arabic pop, oud, darbuka",
+  soft: "Soft Pop, Warm Pads",
+  night: "Late Night, Dark Bass",
+  arabic: "Arabic Pop, Oud",
 };
-const VOICE_CLIP_NEGATIVE_TAGS = "harsh, noisy";
+const VOICE_CLIP_NEGATIVE_TAGS = "Harsh, Noisy";
+const VOICE_CLIP_SUNO_MODEL = "V5_5";
 
 function chatVoiceNoteRemixStyle(mood) {
   return VOICE_CLIP_MOODS[mood] || VOICE_CLIP_MOODS.soft;
@@ -24163,9 +24164,7 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
       fd.append("style", remixStyle);
       fd.append("negativeTags", VOICE_CLIP_NEGATIVE_TAGS);
       fd.append("title", title);
-      fd.append("model", LATEST_SUNO_MODEL);
-      fd.append("audioWeight", "0.95");
-      fd.append("styleWeight", "0.22");
+      fd.append("model", VOICE_CLIP_SUNO_MODEL);
       const r = await fetch(apiUrl("/api/suno/stems"), {
         method: "POST",
         headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
@@ -24293,7 +24292,7 @@ function pushLocalGenerationReadyActivity(entries, { taskId = "" } = {}) {
 }
 
 /** Short user-facing copy — never expose raw Suno error text in UI. */
-function sunoFailureUserCopy(kind, { isRemix = false } = {}) {
+function sunoFailureUserCopy(kind, { isRemix = false, chatRemix = false } = {}) {
   const k = String(kind || "generic");
   if (k === "copyright") {
     return {
@@ -24336,9 +24335,13 @@ function sunoFailureUserCopy(kind, { isRemix = false } = {}) {
   }
   if (k === "needsLyricsOrInstrumental") {
     return {
-      toast: "Add lyrics or switch to Add Instrumental for hum-only takes.",
+      toast: chatRemix
+        ? "Couldn't add a band around this drop — try again."
+        : "Add lyrics or switch to Add Instrumental for hum-only takes.",
       activityTitle: "Generation didn't finish",
-      activityBody: "Wrong mode for this recording — add lyrics or use Add Instrumental.",
+      activityBody: chatRemix
+        ? "Couldn't add a band around this voice drop."
+        : "Wrong mode for this recording — add lyrics or use Add Instrumental.",
     };
   }
   if (k === "artistReference") {
@@ -24362,10 +24365,12 @@ function sunoFailureUserCopy(kind, { isRemix = false } = {}) {
   };
 }
 
-function providerFailureToast(info, rawState, taskId) {
+function providerFailureToast(info, rawState, taskId, { chatRemix = false } = {}) {
   const userCopy = sunoFailureUserCopy(info?.kind, {
-    isRemix: Boolean(currentRemixSource?.originalUrl || currentRemixSource?.url || vocalRefOrigin === "remix"),
+    isRemix: Boolean(currentRemixSource?.originalUrl || currentRemixSource?.url || vocalRefOrigin === "remix" || chatRemix),
+    chatRemix,
   });
+  if (chatRemix) return userCopy.toast;
   const upstream = String(
     rawState?.errorMessage || info?.detail || info?.headline || "",
   ).trim();
@@ -24541,8 +24546,7 @@ function interpretSunoFailure(raw) {
       headline: "Wrong mode for hum-only — add lyrics or use Add Instrumental",
       detail:
         "Full song mode needs lyrics in the Lyrics box. "
-        + "For a melody-only recording, tap Add Instrumental on the Hum tab (no lyrics needed)."
-        + (msg ? `\n\nDetails: ${msg}` : ""),
+        + "For a melody-only recording, tap Add Instrumental on the Hum tab (no lyrics needed).",
     };
   }
   const looksAudioVerify =
@@ -70477,6 +70481,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   };
 
   const handleGenerationFailure = (failureInfo, rawState) => {
+    const chatRemix = Boolean(
+      loadPendingVoiceClipShare()
+      || getGenerationPending()?.source === "chat_voice_remix"
+      || lastGenerationMeta?.chatVoiceClip
+    );
     stopGeneratePoll();
     setGenerateBtn("Generate song", false, "generate");
     savePendingBackendTask("");
@@ -70492,9 +70501,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     setProgress(0);
     try { failPendingChatVoiceRemix(); } catch {}
     const info = failureInfo || { kind: "generic", headline: "Generation failed", detail: "" };
-    const isRemix = Boolean(currentRemixSource?.originalUrl || currentRemixSource?.url || vocalRefOrigin === "remix");
-    const toastText = providerFailureToast(info, rawState, sunoTaskId || loadPendingBackendTask() || "");
-    const userCopy = sunoFailureUserCopy(info.kind, { isRemix });
+    const isRemix = Boolean(currentRemixSource?.originalUrl || currentRemixSource?.url || vocalRefOrigin === "remix" || chatRemix);
+    const toastText = providerFailureToast(info, rawState, sunoTaskId || loadPendingBackendTask() || "", { chatRemix });
+    const userCopy = sunoFailureUserCopy(info.kind, { isRemix, chatRemix });
     try {
       console.warn("[generate] failure", {
         kind: info.kind,

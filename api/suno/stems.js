@@ -528,12 +528,12 @@ module.exports = async function handler(req, res) {
       // descriptors only. Anything that looks like an instruction is
       // dropped. If style is empty we fall back to a single neutral
       // style word so the field is never empty (it's required).
-      // V6 add-instrumental parses a lyrics/extend field and 531s when it
-      // is empty ("extending lyrics are empty, too short, or malformed").
-      // Chat drops have no lyrics — keep the voice by staying on V5.5.
-      const instModel = ["V4_5PLUS", "V5", "V5_5"].includes(safeModel)
+      // Official add-instrumental (sunoapi.org + kie): V6 is current.
+      // Required: uploadUrl, title, tags, negativeTags, callBackUrl.
+      // Do not send lyrics — the upload is the vocal.
+      const instModel = ["V4_5PLUS", "V5", "V5_5", "V6", "V6_WILD", "V6_MINI"].includes(safeModel)
         ? safeModel
-        : "V5_5";
+        : "V6";
       const styleClean = String(style || "")
         .replace(/&/g, " ")
         .replace(/\s+/g, " ")
@@ -564,6 +564,8 @@ module.exports = async function handler(req, res) {
         negativeTags: cleanNegative,
         callBackUrl,
         model: instModel,
+        ...(audioWeight !== null ? { audioWeight } : {}),
+        ...(styleWeight !== null ? { styleWeight } : {}),
       };
       try {
         console.log("[suno/stems] add-instrumental payload", {

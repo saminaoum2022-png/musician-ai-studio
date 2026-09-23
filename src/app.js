@@ -23968,19 +23968,14 @@ const CHAT_VOICE_REMIX_BREW_LINES = [
   "Almost in the air…",
 ];
 
-const VOICE_NOTE_CHALLENGE_STYLE =
-  "Voice-note remix, intimate intro, modern Arabic pop, warm drums, emotional hook, 96 bpm";
-const VOICE_NOTE_CHALLENGE_PROMPT =
-  "Start with a spoken line or hummed idea.\nTurn it into a repeating hook.\nKeep the first verse personal and close.\nMake the chorus simple enough to sing back.";
 const VOICE_CLIP_MOODS = {
-  soft: "soft intimate pop, warm pads, tender close vocal",
-  night: "late-night rnb, dark bass, neon night atmosphere",
-  arabic: "modern arabic pop, oud shimmer, light darbuka, warm levantine vocal",
+  soft: "soft pop, warm pads",
+  night: "late night, dark bass",
+  arabic: "arabic pop, oud",
 };
 
 function chatVoiceNoteRemixStyle(mood) {
-  const extra = VOICE_CLIP_MOODS[mood] || VOICE_CLIP_MOODS.soft;
-  return `${VOICE_NOTE_CHALLENGE_STYLE}, ${extra}`;
+  return VOICE_CLIP_MOODS[mood] || VOICE_CLIP_MOODS.soft;
 }
 
 const CHAT_VOICE_REMIX_GO_LABEL = "Remix · 12 credits";
@@ -24155,7 +24150,7 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
     const authToken = getSupabaseAuthToken();
     const remixStyle = chatVoiceNoteRemixStyle(moodKey);
     const data = await trackCreditsAround("Remix chat voice drop", async () => {
-      // Same Hum tab path: upload-cover / vocal_full / V6 / 2-minute song.
+      // Official add-instrumental: upload is the vocal. No lyrics/prompt.
       const r = await apiFetch("/api/suno/stems", {
         method: "POST",
         headers: {
@@ -24164,13 +24159,14 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
         },
         body: JSON.stringify({
           action: "add_instrumental",
-          referenceMode: "vocal_full",
+          referenceMode: "humming_music",
           sourceAudioUrl: sourceUrl,
           style: remixStyle,
-          prompt: VOICE_NOTE_CHALLENGE_PROMPT,
+          negativeTags: "heavy metal, fast drums",
           title,
-          model: LATEST_SUNO_MODEL,
-          duration: 120,
+          model: "V6",
+          audioWeight: 0.95,
+          styleWeight: 0.22,
         }),
       });
       const d = await r.json().catch(() => ({}));
@@ -24214,13 +24210,13 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
     syncChatVoiceRemixBrewing({ scroll: true });
     lastSunoTitle = title;
     lastGenerationMeta = {
-      engine: "suno_upload_cover",
-      mode: "Chat hum",
+      engine: "suno_add_instrumental",
+      mode: "Chat add instrumental",
       styleInput: remixStyle,
       musicProvider: "suno",
       hasReference: true,
       vocalRefOrigin: "record",
-      referenceMode: "vocal_full",
+      referenceMode: "humming_music",
       chatVoiceClip: true,
     };
     try {

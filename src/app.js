@@ -5997,13 +5997,14 @@ function applyRoute({ passGen } = {}) {
       try { resetAuthEmailPanel(); } catch {}
     }
     const mount = document.getElementById("authBrandAnim");
-    if (!mount?.querySelector("svg")) {
+    if (!mount?.querySelector("svg") && !_authSplashHandoff && !_authSplashLanded) {
       _authBrandIntroPending = true;
       try { tryPlayAuthBrandIntro(); } catch {}
     }
   } else if (prevRoute === "auth" && wanted !== "auth") {
     try { resetAuthEmailPanel(); } catch {}
     try { stopAuthBrandIntro(); } catch {}
+    _authSplashLanded = false;
   }
   try {
     _appTourMod?.notifyAppRouteChanged?.(wanted);
@@ -33224,7 +33225,10 @@ function tryPlayAuthBrandIntro() {
   if (!isAuthBrandRoute()) return;
   const mount = document.getElementById("authBrandAnim");
   if (!mount) return;
-  if (!_authBrandIntroPending && mount.querySelector("svg")) return;
+  if (_authSplashLanded || mount.querySelector("svg")) {
+    _authBrandIntroPending = false;
+    return;
+  }
   _authBrandIntroPending = false;
   playAuthBrandIntro();
 }
@@ -33233,6 +33237,12 @@ function playAuthBrandIntro() {
   const mount = document.getElementById("authBrandAnim");
   const tag = document.getElementById("authTagline");
   document.body.classList.add("authEntrySettled");
+  if (_authSplashLanded || mount?.querySelector("svg")) {
+    if (!tag?.classList.contains("is-done") && !tag?.classList.contains("is-typing")) {
+      typeAuthTagline();
+    }
+    return;
+  }
   stopAuthTaglineType();
   tag?.classList.remove("is-typing", "is-done");
   paintAuthTaglineChars(0);
@@ -33283,6 +33293,7 @@ function hideBootSplashLayer() {
 function landSplashLockupOnAuth() {
   if (_authSplashLanded) return;
   _authSplashLanded = true;
+  _authBrandIntroPending = false;
   const splashAnim = document.getElementById("bootSplashAnim");
   const mount = document.getElementById("authBrandAnim");
   const svg = splashAnim?.querySelector("svg");

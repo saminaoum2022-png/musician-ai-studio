@@ -155,6 +155,15 @@ module.exports = async function handler(req, res) {
       let fileType = String(body?.fileType || "audio/webm").trim();
 
       const sourceAudioUrl = String(body?.sourceAudioUrl || body?.source_audio_url || "").trim();
+      // Keep humming_* as add-instrumental even when we fetch the drop
+      // server-side. Forcing song_remix here was rewriting the chat spark
+      // onto upload-cover (new singer).
+      const keepReferenceWithUrl = new Set([
+        "vocal_instrumental",
+        "song_cover",
+        "humming_music",
+        "humming_backing",
+      ]);
       if (!fileBytes && sourceAudioUrl) {
         const fetched = await fetchReferenceBytesFromUrl(sourceAudioUrl);
         if (!fetched.ok) {
@@ -197,8 +206,8 @@ module.exports = async function handler(req, res) {
       const style = sanitizeSunoStyleTags(String(body?.style || "").trim());
       const prompt = String(body?.prompt || "").trim();
       let referenceMode = String(body?.referenceMode || "").trim().toLowerCase();
-      // Server-fetched hub remix source ⇒ always tag as song_remix for logs + kind.
-      if (sourceAudioUrl && referenceMode !== "vocal_instrumental" && referenceMode !== "song_cover") {
+      // Server-fetched hub remix source ⇒ cover. Chat humming stays add-instrumental.
+      if (sourceAudioUrl && !keepReferenceWithUrl.has(referenceMode)) {
         referenceMode = "song_remix";
         try {
           body.referenceMode = "song_remix";
@@ -510,7 +519,10 @@ module.exports = async function handler(req, res) {
       const instModel = ["V4_5PLUS", "V5", "V5_5", "V6", "V6_WILD", "V6_MINI"].includes(safeModel)
         ? safeModel
         : DEFAULT_SUNO_MODEL;
-      const styleClean = String(style || "").replace(/\s+/g, " ").trim();
+      const styleClean = String(style || "")
+        .replace(/&/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
       // Build the addPayload to mirror the Suno OpenAPI example AS
       // CLOSELY AS POSSIBLE: short style words for `tags`, short
       // negative style words for `negativeTags`, nothing else. The
@@ -527,14 +539,16 @@ module.exports = async function handler(req, res) {
       let cleanTags = cleanTagsList.join(", ");
       if (!cleanTags) cleanTags = "ambient, instrumental";
       if (cleanTags.length > 180) cleanTags = cleanTags.slice(0, 177) + "...";
-      const cleanNegative = trimNegativeTags(negativeTags);
+      // Suno requires negativeTags on add-instrumental. Omitting it returns
+      // a generic 400/531 that the app maps to "Something went wrong".
+      const cleanNegative = trimNegativeTags(negativeTags) || "harsh, noisy";
       const addPayload = {
         uploadUrl,
-        title: title || "Reference instrumental",
+        title: (title || "Reference instrumental").slice(0, 80),
         tags: cleanTags,
+        negativeTags: cleanNegative,
         callBackUrl,
         model: instModel,
-        ...(cleanNegative ? { negativeTags: cleanNegative } : {}),
         ...(audioWeight !== null ? { audioWeight } : {}),
         ...(styleWeight !== null ? { styleWeight } : {}),
         ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),

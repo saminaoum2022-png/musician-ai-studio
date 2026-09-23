@@ -23969,10 +23969,11 @@ const CHAT_VOICE_REMIX_BREW_LINES = [
 ];
 
 const VOICE_CLIP_MOODS = {
-  soft: "soft pop, warm pads, intimate vocal",
-  night: "late-night r&b, dark bass, neon",
+  soft: "soft pop, warm pads, intimate",
+  night: "late night rnb, dark bass, neon",
   arabic: "modern arabic pop, oud, darbuka",
 };
+const VOICE_CLIP_NEGATIVE_TAGS = "harsh, noisy";
 
 function chatVoiceNoteRemixStyle(mood) {
   return VOICE_CLIP_MOODS[mood] || VOICE_CLIP_MOODS.soft;
@@ -24126,8 +24127,14 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
     return;
   }
   const moodKey = VOICE_CLIP_MOODS[mood] ? mood : "soft";
-  const partner = String(_chatHeaderUser?.displayName || _chatHeaderUser?.username || "").replace(/^@/, "").trim();
-  const title = partner ? `Remix of ${partner}'s drop` : "Remix of a drop";
+  const partner = String(_chatHeaderUser?.displayName || _chatHeaderUser?.username || "")
+    .replace(/^@/, "")
+    .replace(/['’].*$/, "")
+    .replace(/[^\w\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 28);
+  const title = partner ? `Drop remix ${partner}` : "Drop remix";
   const remixCost = FULL_SONG_CREDIT_COST;
   persistPendingVoiceClipShare({
     taskId: "",
@@ -24152,7 +24159,9 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
       fd.append("file", file, uniqueUploadName);
       fd.append("fileName", uniqueUploadName);
       fd.append("fileType", file.type);
+      fd.append("sourceAudioUrl", sourceUrl);
       fd.append("style", remixStyle);
+      fd.append("negativeTags", VOICE_CLIP_NEGATIVE_TAGS);
       fd.append("title", title);
       fd.append("model", LATEST_SUNO_MODEL);
       fd.append("audioWeight", "0.95");
@@ -24215,6 +24224,7 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
     if (typeof _startGeneratePolling === "function") _startGeneratePolling();
     else throw new Error("Could not start watching this remix.");
   } catch (e) {
+    try { console.warn("[chat-voice-remix]", e?._friendly || e?.message || e); } catch {}
     if (goBtn) {
       goBtn.disabled = false;
       goBtn.textContent = CHAT_VOICE_REMIX_GO_LABEL;

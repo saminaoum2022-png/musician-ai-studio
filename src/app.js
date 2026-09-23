@@ -23968,16 +23968,17 @@ const CHAT_VOICE_REMIX_BREW_LINES = [
   "Almost in the air…",
 ];
 
+const VOICE_NOTE_CHALLENGE_STYLE =
+  "Voice-note remix, intimate intro, modern Arabic pop, warm drums, emotional hook, 96 bpm";
 const VOICE_CLIP_MOODS = {
-  soft: "Soft Pop, Warm Pads",
-  night: "Late Night, Dark Bass",
-  arabic: "Arabic Pop, Oud",
+  soft: "soft intimate pop, warm pads, tender close vocal",
+  night: "late-night rnb, dark bass, neon night atmosphere",
+  arabic: "modern arabic pop, oud shimmer, light darbuka, warm levantine vocal",
 };
-const VOICE_CLIP_NEGATIVE_TAGS = "Harsh, Noisy";
-const VOICE_CLIP_SUNO_MODEL = "V5_5";
 
 function chatVoiceNoteRemixStyle(mood) {
-  return VOICE_CLIP_MOODS[mood] || VOICE_CLIP_MOODS.soft;
+  const extra = VOICE_CLIP_MOODS[mood] || VOICE_CLIP_MOODS.soft;
+  return `${VOICE_NOTE_CHALLENGE_STYLE}, ${extra}`;
 }
 
 const CHAT_VOICE_REMIX_GO_LABEL = "Remix · 12 credits";
@@ -24155,16 +24156,17 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
       const file = await fetchChatVoiceDropFile(sourceUrl);
       const fd = new FormData();
       const uniqueUploadName = `ref-${Date.now()}-${file.name}`;
+      const sendFp = await computeBytesFingerprint(file).catch(() => "");
+      // Same path as Discover → Remix a Voice Note: upload-cover / vocal_full.
       fd.append("action", "add_instrumental");
-      fd.append("referenceMode", "humming_music");
+      fd.append("referenceMode", "vocal_full");
       fd.append("file", file, uniqueUploadName);
       fd.append("fileName", uniqueUploadName);
       fd.append("fileType", file.type);
-      fd.append("sourceAudioUrl", sourceUrl);
+      if (sendFp) fd.append("clientFingerprint", sendFp);
       fd.append("style", remixStyle);
-      fd.append("negativeTags", VOICE_CLIP_NEGATIVE_TAGS);
       fd.append("title", title);
-      fd.append("model", VOICE_CLIP_SUNO_MODEL);
+      fd.append("model", LATEST_SUNO_MODEL);
       const r = await fetch(apiUrl("/api/suno/stems"), {
         method: "POST",
         headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
@@ -24205,13 +24207,13 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
     syncChatVoiceRemixBrewing({ scroll: true });
     lastSunoTitle = title;
     lastGenerationMeta = {
-      engine: "suno_add_instrumental",
-      mode: "Chat voice band",
+      engine: "suno_upload_cover",
+      mode: "Chat voice note",
       styleInput: remixStyle,
       musicProvider: "suno",
       hasReference: true,
       vocalRefOrigin: "record",
-      referenceMode: "humming_music",
+      referenceMode: "vocal_full",
       chatVoiceClip: true,
     };
     try {

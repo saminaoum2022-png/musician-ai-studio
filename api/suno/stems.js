@@ -161,10 +161,11 @@ module.exports = async function handler(req, res) {
       const keepReferenceWithUrl = new Set([
         "vocal_instrumental",
         "song_cover",
+        "vocal_full",
         "humming_music",
         "humming_backing",
       ]);
-      if (!fileBytes && sourceAudioUrl) {
+      if (sourceAudioUrl && (!fileBytes || !Buffer.isBuffer(fileBytes) || fileBytes.length < 8 * 1024)) {
         const fetched = await fetchReferenceBytesFromUrl(sourceAudioUrl);
         if (!fetched.ok) {
           await refund("source_fetch_failed");
@@ -202,6 +203,7 @@ module.exports = async function handler(req, res) {
       fileBytes = norm.bytes;
       fileName = norm.name;
       fileType = norm.mime;
+      const attachedBytes = Buffer.isBuffer(fileBytes) ? fileBytes.length : 0;
 
       const style = sanitizeSunoStyleTags(String(body?.style || "").trim());
       const prompt = String(body?.prompt || "").trim();
@@ -422,6 +424,7 @@ module.exports = async function handler(req, res) {
         return json(res, 200, {
           ...(coverData || { raw: coverText }),
           uploadUrl,
+          _attachedBytes: attachedBytes,
           _credits: { spent: isAdmin ? 0 : cost, balance: balanceAfterDebit, admin: isAdmin || undefined },
         });
       }
@@ -639,6 +642,7 @@ module.exports = async function handler(req, res) {
       return json(res, 200, {
         ...(addData || { raw: addText }),
         uploadUrl,
+        _attachedBytes: attachedBytes,
         _credits: { spent: isAdmin ? 0 : cost, balance: balanceAfterDebit, admin: isAdmin || undefined },
       });
     }

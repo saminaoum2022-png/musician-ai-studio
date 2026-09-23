@@ -23975,10 +23975,36 @@ const VOICE_CLIP_MOODS = {
   night: "late-night rnb, dark bass, neon night atmosphere",
   arabic: "modern arabic pop, oud shimmer, light darbuka, warm levantine vocal",
 };
+const VOICE_CLIP_BAND_TAGS = {
+  soft: "Soft Pop, Warm Pads",
+  night: "Late Night, Dark Bass",
+  arabic: "Arabic Pop, Oud",
+};
 
 function chatVoiceNoteRemixStyle(mood) {
   const extra = VOICE_CLIP_MOODS[mood] || VOICE_CLIP_MOODS.soft;
   return `${VOICE_NOTE_CHALLENGE_STYLE}, ${extra}`;
+}
+
+async function postChatVoiceStems({ sourceUrl, title, style, referenceMode, model, negativeTags, authToken }) {
+  const r = await fetch(apiUrl("/api/suno/stems"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
+    body: JSON.stringify({
+      action: "add_instrumental",
+      referenceMode,
+      sourceAudioUrl: sourceUrl,
+      style,
+      title,
+      model,
+      ...(negativeTags ? { negativeTags } : {}),
+    }),
+  });
+  const d = await r.json().catch(() => ({}));
+  return { r, d };
 }
 
 const CHAT_VOICE_REMIX_GO_LABEL = "Remix · 12 credits";
@@ -24152,37 +24178,50 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
     showToast("Something’s blooming from that drop…", { icon: "♪", durationMs: 4200 });
     const authToken = getSupabaseAuthToken();
     const remixStyle = chatVoiceNoteRemixStyle(moodKey);
+    let usedMode = "humming_music";
     const data = await trackCreditsAround("Remix chat voice drop", async () => {
-      const file = await fetchChatVoiceDropFile(sourceUrl);
-      const fd = new FormData();
-      const uniqueUploadName = `ref-${Date.now()}-${file.name}`;
-      const sendFp = await computeBytesFingerprint(file).catch(() => "");
-      // Same path as Discover → Remix a Voice Note: upload-cover / vocal_full.
-      fd.append("action", "add_instrumental");
-      fd.append("referenceMode", "vocal_full");
-      fd.append("file", file, uniqueUploadName);
-      fd.append("fileName", uniqueUploadName);
-      fd.append("fileType", file.type);
-      if (sendFp) fd.append("clientFingerprint", sendFp);
-      fd.append("style", remixStyle);
-      fd.append("title", title);
-      fd.append("model", LATEST_SUNO_MODEL);
-      const r = await fetch(apiUrl("/api/suno/stems"), {
-        method: "POST",
-        headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
-        body: fd,
-      });
-      const d = await r.json().catch(() => ({}));
-      if (r.status === 402 || d?.code === "insufficient_credits") {
+      const throwCredits = () => {
         const err = new Error(
           `Not enough credits (need ${formatCreditsAmount(remixCost)} for a remix).`,
         );
         err.code = "insufficient_credits";
         throw err;
+      };
+      // Server fetches the same public drop URL the player uses — no
+      // WKWebView FormData rewrap. Try keep-voice first, then Voice Note cover.
+      const band = await postChatVoiceStems({
+        sourceUrl,
+        title,
+        style: VOICE_CLIP_BAND_TAGS[moodKey] || VOICE_CLIP_BAND_TAGS.soft,
+        referenceMode: "humming_music",
+        model: "V5_5",
+        negativeTags: "Harsh, Noisy",
+        authToken,
+      });
+      if (band.r.status === 402 || band.d?.code === "insufficient_credits") throwCredits(band.d);
+      if (band.r.ok && extractTaskIdLoose(band.d)) {
+        usedMode = "humming_music";
+        return band.d;
       }
-      rejectSunoApiResponse(r, d);
-      return d;
+      const cover = await postChatVoiceStems({
+        sourceUrl,
+        title,
+        style: remixStyle,
+        referenceMode: "vocal_full",
+        model: LATEST_SUNO_MODEL,
+        authToken,
+      });
+      if (cover.r.status === 402 || cover.d?.code === "insufficient_credits") throwCredits(cover.d);
+      rejectSunoApiResponse(cover.r, cover.d);
+      usedMode = "vocal_full";
+      return cover.d;
     });
+    const attachedKb = Math.max(1, Math.round(Number(data?._attachedBytes || 0) / 1024));
+    if (Number(data?._attachedBytes) > 0) {
+      try {
+        showToast(`Got the drop · ${attachedKb} KB. Remixing…`, { icon: "♪", durationMs: 3200 });
+      } catch {}
+    }
     const taskId = extractTaskIdLoose(data);
     if (!taskId) throw new Error("Remix started but no task id came back.");
     sunoTaskId = taskId;
@@ -24207,13 +24246,13 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
     syncChatVoiceRemixBrewing({ scroll: true });
     lastSunoTitle = title;
     lastGenerationMeta = {
-      engine: "suno_upload_cover",
-      mode: "Chat voice note",
+      engine: usedMode === "humming_music" ? "suno_add_instrumental" : "suno_upload_cover",
+      mode: usedMode === "humming_music" ? "Chat voice band" : "Chat voice note",
       styleInput: remixStyle,
       musicProvider: "suno",
       hasReference: true,
       vocalRefOrigin: "record",
-      referenceMode: "vocal_full",
+      referenceMode: usedMode,
       chatVoiceClip: true,
     };
     try {

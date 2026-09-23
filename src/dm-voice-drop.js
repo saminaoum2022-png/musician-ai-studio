@@ -769,7 +769,7 @@ export function messagesVoiceDropBubbleHtml(parsed, { mine = false, msgId = "" }
         </button>
       </div>
       <div class="messagesVoiceClipDock" data-voice-clip-dock="${id}" hidden>
-        <p class="messagesVoiceClipLead">Turn this drop into a <b>song</b>.</p>
+        <p class="messagesVoiceClipLead">Keep <b>this voice</b>. Add the band.</p>
         <div class="messagesVoiceClipChips" role="group" aria-label="Remix mood">
           <button type="button" class="messagesVoiceClipChip is-on" data-voice-clip-mood="soft">Soft</button>
           <button type="button" class="messagesVoiceClipChip" data-voice-clip-mood="night">Night</button>

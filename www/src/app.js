@@ -24209,7 +24209,7 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
     if (!taskId) throw new Error("Remix started but no task id came back.");
     sunoTaskId = taskId;
     savePendingBackendTask(taskId);
-    saveRecoverableGenerationTask(taskId, title);
+    saveRecoverableGenerationTask(taskId, title, { source: "chat_voice_remix" });
     setGenerationPending({
       taskId,
       title,
@@ -24268,26 +24268,22 @@ function chatVoiceRemixMixForTask(taskId) {
   return String(_chatVoiceRemixMixByTask[String(taskId || "").trim()] || "").trim();
 }
 
-function applyChatVoiceRemixMixToPlayback(mixUrl, { taskId = "", audioId = "" } = {}) {
-  const url = String(mixUrl || "").trim();
-  if (!url) return;
-  lastSunoFullUrl = url;
-  lastSunoProxyUrl = url;
-  lastSunoCachedUrl = url;
-  lastPlayerHttpUrl = url;
-  rememberChatVoiceRemixMix(taskId, url);
-  try {
-    const items = loadLibrary();
-    const tid = String(taskId || "").trim();
-    const aid = String(audioId || "").trim();
-    for (const row of items) {
-      const match =
-        (aid && String(row.audioId || "") === aid) ||
-        (tid && String(row.taskId || "") === tid);
-      if (!match) continue;
-      patchLibraryRowWithRefreshedUrl(row.id, url, url, row);
-    }
-  } catch {}
+function isChatVoiceRemixJob(taskId = "") {
+  const tid = String(taskId || "").trim();
+  const clip = loadPendingVoiceClipShare();
+  if (clip && (!tid || String(clip.taskId || "") === tid)) return true;
+  const pending = getGenerationPending();
+  if (pending?.source === "chat_voice_remix" && (!tid || String(pending.taskId || "") === tid)) {
+    return true;
+  }
+  const rec = loadRecoverableGenerationTask();
+  if (rec?.source === "chat_voice_remix" && (!tid || String(rec.taskId || "") === tid)) return true;
+  if (lastGenerationMeta?.chatVoiceClip && (!tid || String(sunoTaskId || "") === tid)) return true;
+  return false;
+}
+
+function applyChatVoiceRemixMixToPlayback(mixUrl, { taskId = "" } = {}) {
+  rememberChatVoiceRemixMix(taskId, mixUrl);
 }
 
 async function mixChatVoiceOverBand(vocalUrl, bandUrl) {
@@ -24370,6 +24366,12 @@ function maybeShareChatVoiceRemixFromPoll(state) {
 }
 
 function pushLocalGenerationReadyActivity(entries, { taskId = "" } = {}) {
+  const tid = String(taskId || getGenerationPending()?.taskId || "").trim();
+  if (isChatVoiceRemixJob(tid)) {
+    try { finishCoachGenerationReady({ variantCount: 1 }); } catch {}
+    void maybeShareReadyVoiceClip(Array.isArray(entries) ? entries : [], tid);
+    return;
+  }
   const list = (Array.isArray(entries) ? entries : []).filter((e) => e && String(e.id || "").trim());
   if (!list.length) return;
   const titles = list.map((e) => String(e.title || "Generated song").trim());
@@ -24383,9 +24385,9 @@ function pushLocalGenerationReadyActivity(entries, { taskId = "" } = {}) {
   void maybeNotifyJobReadyPush({
     kind: "song",
     title: titles[0] || "Your song",
-    taskId: String(taskId || getGenerationPending()?.taskId || "").trim(),
+    taskId: tid,
   });
-  void maybeShareReadyVoiceClip(list.length ? list : entries, taskId || getGenerationPending()?.taskId);
+  void maybeShareReadyVoiceClip(list.length ? list : entries, tid);
 }
 
 /** Short user-facing copy — never expose raw Suno error text in UI. */
@@ -24795,7 +24797,8 @@ function syncGenerationPendingLibraryUi() {
 }
 
 function hasActiveProfileJobPending() {
-  if (getGenerationPending()?.taskId) return true;
+  const pending = getGenerationPending();
+  if (pending?.taskId && pending.source !== "chat_voice_remix") return true;
   const pri = getPriorityPending();
   return Boolean(
     pri?.kind
@@ -68011,6 +68014,7 @@ function createSessionHasResultVisible() {
 }
 
 function createSessionIsGenerating() {
+  if (isChatVoiceRemixJob(sunoTaskId || loadPendingBackendTask())) return false;
   if (generatePollTimer) return true;
   const tid = String(sunoTaskId || loadPendingBackendTask() || "").trim();
   if (!tid) return false;
@@ -68509,6 +68513,24 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
   }
   const kind = cat === "hum_track_ready" ? "instrumental" : "full";
   const rec = loadRecoverableGenerationTask();
+  if (isChatVoiceRemixJob(tid) || rec?.source === "chat_voice_remix") {
+    const clipUrl = String(parsed.first?.audioUrl || parsed.second?.audioUrl || "").trim();
+    if (clipUrl) {
+      void maybeShareReadyVoiceClip([{
+        id: String(parsed.first?.audioId || tid),
+        url: clipUrl,
+        title: rec?.titleHint || parsed.first?.title || "Drop remix",
+        taskId: tid,
+        durationSec: Number(parsed.first?.durationSec || parsed.first?.duration || 0) || 0,
+      }], tid);
+    }
+    finalizeRecoveredGenerationJob(tid, {
+      category: cat || "generation_ready",
+      silent: true,
+      entries: [],
+    });
+    return true;
+  }
   const savedEntries = addMissingSunoClipsToLibrary(tid, parsed, {
     metaBase,
     kind,
@@ -68588,7 +68610,7 @@ function finalizeRecoveredGenerationJob(taskId, { category = "", silent = true, 
 
   clearRecoverableGenerationTask();
   updateLibraryRecoverBanner();
-  markLibraryTabDot(true);
+  if (!isChatVoiceRemixJob(tid)) markLibraryTabDot(true);
 
   if (cat === "sound_ready") {
     clearPriorityPending(tid);
@@ -70866,7 +70888,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (state.status === "SUCCESS" && state.hasAudio && state.hasAllExpectedVariants) {
             stopGeneratePoll();
             setGenerateBtn("Regenerate", false, "generate");
-            showResultCard(true);
+            const chatRemixDone = isChatVoiceRemixJob(sunoTaskId);
+            if (!chatRemixDone) showResultCard(true);
             let genMeta = lastGenerationMeta;
             const photoCoverMeta = photoCoverMetaForGeneration();
             if (photoCoverMeta) {
@@ -70874,39 +70897,53 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 ? { ...genMeta, ...photoCoverMeta }
                 : photoCoverMeta;
             }
-            const variantAEntry = addToLibrary({
-              title: lastSunoTitle,
-              artUrl: "",
-              url: chatVoiceRemixMixForTask(sunoTaskId) || lastSunoFullUrl || lastSunoProxyUrl,
-              taskId: sunoTaskId || "",
-              audioId: sunoAudioId || "",
-              kind: "full",
-              meta: { ...genMeta, variant: "A" },
-            });
-            const savedEntries = [variantAEntry].filter(Boolean);
-            if (lastSunoProxyUrl2 || lastSunoFullUrl2) {
-              savedEntries.push(addToLibrary({
-                title: lastSunoTitle2 || "Generated song B",
-                artUrl: generationPhotoArtUrl("b"),
-                url: lastSunoFullUrl2 || lastSunoProxyUrl2,
+            const savedEntries = [];
+            if (!chatRemixDone) {
+              const variantAEntry = addToLibrary({
+                title: lastSunoTitle,
+                artUrl: "",
+                url: lastSunoFullUrl || lastSunoProxyUrl,
                 taskId: sunoTaskId || "",
-                audioId: lastSunoAudioId2 || "",
+                audioId: sunoAudioId || "",
                 kind: "full",
-                meta: { ...genMeta, variant: "B" },
-              }));
+                meta: { ...genMeta, variant: "A" },
+              });
+              if (variantAEntry) savedEntries.push(variantAEntry);
+              if (lastSunoProxyUrl2 || lastSunoFullUrl2) {
+                savedEntries.push(addToLibrary({
+                  title: lastSunoTitle2 || "Generated song B",
+                  artUrl: generationPhotoArtUrl("b"),
+                  url: lastSunoFullUrl2 || lastSunoProxyUrl2,
+                  taskId: sunoTaskId || "",
+                  audioId: lastSunoAudioId2 || "",
+                  kind: "full",
+                  meta: { ...genMeta, variant: "B" },
+                }));
+              }
             }
             cancelParallelCoverForTask(sunoTaskId || "");
             const genTaskId = sunoTaskId || "";
             clearGenerationPending(genTaskId);
             try {
-              pushLocalGenerationReadyActivity(savedEntries.filter(Boolean), { taskId: genTaskId });
+              if (chatRemixDone) {
+                void maybeShareReadyVoiceClip([{
+                  id: String(sunoAudioId || genTaskId || ""),
+                  url: chatVoiceRemixMixForTask(genTaskId) || lastSunoFullUrl || lastSunoProxyUrl,
+                  title: lastSunoTitle,
+                  taskId: genTaskId,
+                  durationSec: Number(state?.durationSec || 0) || 0,
+                }], genTaskId);
+                try { finishCoachGenerationReady({ variantCount: 1 }); } catch {}
+              } else {
+                pushLocalGenerationReadyActivity(savedEntries.filter(Boolean), { taskId: genTaskId });
+              }
             } catch {}
             syncGenerationPendingLibraryUi();
             clearPhotoCoverForGeneration();
             resetNabadLyricsDraftState();
             els.btnSunoStems.disabled = !(sunoAudioId);
             if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(sunoAudioId);
-            setStatus("Song is ready. Press Play full.");
+            setStatus(chatRemixDone ? "Voice mix is in the chat." : "Song is ready. Press Play full.");
             savePendingBackendTask("");
             try {
               const rec = loadRecoverableGenerationTask();
@@ -70921,7 +70958,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             // on a stale showResultCard reference, which left generateLocked on.
             setGenerateFieldsLocked(false);
             setProgress(0);
-            markGenerationReadyNotice();
+            if (!chatRemixDone) markGenerationReadyNotice();
+            else {
+              busyCount = 0;
+              setLoading(false);
+            }
             // Avoid stale vocal reference leaking into the next generation.
             clearVocalReferenceSelection();
             return "stop";

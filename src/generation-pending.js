@@ -64,6 +64,7 @@ function escapeHtmlLite(s) {
 export function libraryGeneratingRowsHtml(pending) {
   const p = pending || getGenerationPending();
   if (!p) return "";
+  if (String(p.source || "") === "chat_voice_remix") return "";
   const count = Math.max(1, Math.min(GENERATION_VARIANT_COUNT, Number(p.variantCount) || GENERATION_VARIANT_COUNT));
   const baseTitle = String(p.title || "New song").trim() || "New song";
   const rows = [];

@@ -1188,14 +1188,8 @@ html[data-theme="light"] .spinner{
   border-right-color: var(--primary2);
 }
 
-html[data-theme="light"] .toast{
-  border-color: var(--border);
-  background: var(--card);
-  color: var(--text);
-  box-shadow: var(--elev-2);
-}
-
 html[data-theme="light"] .toast .toastIcon{
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.16), rgba(109, 77, 245, 0.16));
   color: #0d9488;
 }
 
@@ -6625,36 +6619,34 @@ input.userTextBidi--rtl{
 .toast{
   position: fixed;
   left: 50%;
-  bottom: var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px)));
+  bottom: calc(var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 10px);
   transform: translate(-50%, 14px);
   z-index: 200;
   pointer-events: none;
   opacity: 0;
-  /* Generous max so long error messages (e.g. Suno's upstream
-   * verbatim) actually fit on a phone. Multi-line is allowed. */
-  max-width: min(560px, calc(100vw - 24px));
-  padding: 11px 16px;
-  /* 18px keeps a soft, modern look on multi-line copy. The previous
-   * 999px (pill) made tall multi-line cards look like a stretched
-   * lozenge, which is also why long text was clamped to a single line. */
-  border-radius: 18px;
-  border: 1px solid rgba(255,255,255,0.16);
-  background: linear-gradient(180deg, rgba(28,33,52,0.96), rgba(14,18,30,0.94));
-  color: #f0f4ff;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: min(560px, calc(100vw - 28px));
+  padding: 11px 14px;
+  border-radius: 22px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(22px) saturate(var(--nabad-glass-saturate));
+  color: var(--nabad-glass-color);
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: 0.1px;
   line-height: 1.42;
-  /* Wrap freely; preserve hard line breaks so we can format error
-   * details with newlines if needed. Long words / URLs break instead
-   * of pushing the layout off-screen. */
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
   text-align: left;
   box-shadow:
-    0 12px 36px -12px rgba(0,0,0,0.55),
-    0 0 0 1px rgba(124, 92, 255, 0.22) inset;
+    var(--nabad-glass-shadow),
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
   transition:
     opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -6663,20 +6655,34 @@ input.userTextBidi--rtl{
   opacity: 1;
   transform: translate(-50%, 0);
   pointer-events: auto;
-  /* Make it obvious it can be tapped to dismiss when long. */
   cursor: pointer;
 }
 .toast .toastIcon{
-  display:inline-block;
-  margin-right: 7px;
-  color: #b8a6ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin: 1px 0 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(94, 234, 212, 0.28), rgba(167, 139, 250, 0.28));
+  color: #efe8ff;
+  font-size: 12px;
+  line-height: 1;
 }
-/* Stay slim on short single-line content; extend gracefully when long. */
+.toast .toastCopy{
+  min-width: 0;
+  flex: 1 1 auto;
+  padding-top: 2px;
+}
 .toast.isLong{
-  padding: 12px 18px 14px;
+  padding: 12px 16px 14px;
   font-weight: 500;
   letter-spacing: 0.05px;
+}
+body[data-route="messages-thread"] .toast{
+  bottom: calc(var(--messages-composer-h, 72px) + 14px);
 }
 
 @media (prefers-reduced-motion: reduce){
@@ -41687,6 +41693,78 @@ body.coachComposerMode .messagesComposerSheetListDm{
 .messagesVoiceClipGo:disabled{
   opacity: 0.7;
 }
+.chatVoiceRemixBrew{
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 8px 12px;
+  pointer-events: none;
+}
+.chatVoiceRemixBrewCard{
+  width: min(82%, 280px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 16px 16px;
+  border-radius: 22px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(22px) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-shadow),
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+.chatVoiceRemixBrewOrb{
+  position: relative;
+  width: 78px;
+  height: 78px;
+}
+.chatVoiceRemixBrewCore{
+  position: absolute;
+  inset: 14px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255,255,255,0.7), transparent 42%),
+    conic-gradient(from 0deg, #5eead4, #7c5cff, #f0abfc, #5eead4);
+  box-shadow: 0 0 22px rgba(124, 92, 255, 0.35);
+  animation: chatVoiceRemixSpin 4.4s linear infinite;
+}
+.chatVoiceRemixBrewRing{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(94, 234, 212, 0.28);
+  animation: chatVoiceRemixPulse 2.4s ease-out infinite;
+}
+.chatVoiceRemixBrewRing--late{
+  animation-delay: 1.1s;
+  border-color: rgba(167, 139, 250, 0.32);
+}
+.chatVoiceRemixBrewLine{
+  margin: 0;
+  min-height: 1.35em;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--nabad-glass-color);
+  text-align: center;
+}
+@keyframes chatVoiceRemixSpin{
+  to { transform: rotate(360deg); }
+}
+@keyframes chatVoiceRemixPulse{
+  0%{ transform: scale(0.72); opacity: 0.55; }
+  70%{ transform: scale(1.18); opacity: 0; }
+  100%{ transform: scale(1.18); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce){
+  .chatVoiceRemixBrewCore,
+  .chatVoiceRemixBrewRing{
+    animation: none;
+  }
+}
 .messagesComposerInput{
   flex: 1 1 auto;
   min-height: 40px;
@@ -60619,6 +60697,9 @@ html[data-theme="light"] .messagesVoiceClipLead b{
 html[data-theme="light"] .messagesVoiceClipChip{
   border-color: rgba(15, 18, 28, 0.1);
   background: rgba(255,255,255,0.7);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .chatVoiceRemixBrewLine{
   color: var(--text-primary);
 }
 html[data-theme="light"] .messagesThreadEmptyTitle{

@@ -23957,61 +23957,215 @@ function markGenerationReadyNotice() {
 }
 
 let _pendingVoiceClipShare = null;
+let _chatVoiceRemixShareSentTask = "";
+let _chatVoiceRemixBrewTimer = 0;
+const CHAT_VOICE_REMIX_PENDING_KEY = "nabad_chat_voice_remix_pending_v1";
+const CHAT_VOICE_REMIX_BREW_LINES = [
+  "Catching the melody…",
+  "Warming the voice…",
+  "Painting the arrangement…",
+  "Letting it bloom…",
+  "Almost in the air…",
+];
 
 const VOICE_CLIP_MOODS = {
-  soft: "soft intimate pop clip, warm pads, gentle close vocal, tender and clean",
-  night: "late-night r&b clip, dark bass, neon night atmosphere, hushed vocal",
-  arabic: "modern arabic pop clip, oud shimmer, light darbuka, warm levantine vocal",
+  soft: "soft pop, warm pads, intimate vocal",
+  night: "late-night r&b, dark bass, neon",
+  arabic: "modern arabic pop, oud, darbuka",
 };
 
-async function startVoiceDropClipFromChat({ msgId, audioUrl, mood, goBtn, dock } = {}) {
-  if (!nabadClipEnabled()) {
-    showToast("Clips are not available on this build.", { icon: "!", durationMs: 3200 });
+function chatVoiceNoteRemixStyle(mood) {
+  return VOICE_CLIP_MOODS[mood] || VOICE_CLIP_MOODS.soft;
+}
+
+const CHAT_VOICE_REMIX_GO_LABEL = "Remix · 12 credits";
+
+function persistPendingVoiceClipShare(next) {
+  _pendingVoiceClipShare = next || null;
+  try {
+    if (next) sessionStorage.setItem(CHAT_VOICE_REMIX_PENDING_KEY, JSON.stringify(next));
+    else sessionStorage.removeItem(CHAT_VOICE_REMIX_PENDING_KEY);
+  } catch {}
+}
+
+function loadPendingVoiceClipShare() {
+  if (_pendingVoiceClipShare) return _pendingVoiceClipShare;
+  try {
+    const raw = sessionStorage.getItem(CHAT_VOICE_REMIX_PENDING_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed?.taskId && parsed?.threadId) _pendingVoiceClipShare = parsed;
+  } catch {
+    _pendingVoiceClipShare = null;
+  }
+  return _pendingVoiceClipShare;
+}
+
+function resetChatVoiceRemixDock() {
+  document.querySelectorAll(".messagesVoiceClipGo").forEach((btn) => {
+    btn.disabled = false;
+    btn.textContent = CHAT_VOICE_REMIX_GO_LABEL;
+  });
+  document.querySelectorAll(".messagesVoiceClipDock").forEach((el) => { el.hidden = true; });
+  document.querySelectorAll(".messagesVoiceClipSpark").forEach((el) => {
+    el.classList.remove("is-on");
+    el.setAttribute("aria-expanded", "false");
+  });
+}
+
+function stopChatVoiceRemixBrewLines() {
+  if (_chatVoiceRemixBrewTimer) {
+    try { window.clearInterval(_chatVoiceRemixBrewTimer); } catch {}
+    _chatVoiceRemixBrewTimer = 0;
+  }
+}
+
+function startChatVoiceRemixBrewLines(root) {
+  stopChatVoiceRemixBrewLines();
+  const line = root?.querySelector?.("[data-voice-remix-line]");
+  if (!line) return;
+  let i = 0;
+  line.textContent = CHAT_VOICE_REMIX_BREW_LINES[0];
+  _chatVoiceRemixBrewTimer = window.setInterval(() => {
+    i = (i + 1) % CHAT_VOICE_REMIX_BREW_LINES.length;
+    line.textContent = CHAT_VOICE_REMIX_BREW_LINES[i];
+  }, 2800);
+}
+
+function removeChatVoiceRemixBrewing() {
+  stopChatVoiceRemixBrewLines();
+  document.getElementById("chatVoiceRemixBrew")?.remove();
+}
+
+function syncChatVoiceRemixBrewing({ scroll = false } = {}) {
+  const pending = loadPendingVoiceClipShare();
+  const mount = document.getElementById("messagesThreadMount");
+  const onThread = Boolean(
+    pending
+    && !_chatVoiceRemixShareSentTask
+    && String(pending.threadId || "") === String(_conversationId || "").trim(),
+  );
+  if (!onThread || !mount) {
+    removeChatVoiceRemixBrewing();
     return;
   }
+  let el = document.getElementById("chatVoiceRemixBrew");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "chatVoiceRemixBrew";
+    el.className = "chatVoiceRemixBrew";
+    el.setAttribute("aria-live", "polite");
+    el.innerHTML = `
+      <div class="chatVoiceRemixBrewCard">
+        <div class="chatVoiceRemixBrewOrb" aria-hidden="true">
+          <span class="chatVoiceRemixBrewRing"></span>
+          <span class="chatVoiceRemixBrewRing chatVoiceRemixBrewRing--late"></span>
+          <span class="chatVoiceRemixBrewCore"></span>
+        </div>
+        <p class="chatVoiceRemixBrewLine" data-voice-remix-line>Catching the melody…</p>
+      </div>`;
+    const anchor = mount.querySelector(".messagesThreadScrollAnchor");
+    if (anchor) mount.insertBefore(el, anchor);
+    else mount.appendChild(el);
+    startChatVoiceRemixBrewLines(el);
+  }
+  if (scroll) {
+    const pin = () => {
+      const composer = document.querySelector(".messagesComposer");
+      const composerTop = composer?.getBoundingClientRect?.().top;
+      const rect = el.getBoundingClientRect();
+      const overflow = rect.bottom - ((Number.isFinite(composerTop) ? composerTop : rect.bottom) - 14);
+      if (overflow > 1) mount.scrollTop += overflow;
+    };
+    requestAnimationFrame(() => requestAnimationFrame(pin));
+  }
+}
+
+function failPendingChatVoiceRemix(message) {
+  persistPendingVoiceClipShare(null);
+  removeChatVoiceRemixBrewing();
+  resetChatVoiceRemixDock();
+  if (message) {
+    try { showToast(message, { icon: "!", durationMs: 4200 }); } catch {}
+  }
+}
+
+function resolveChatVoiceDropUrl(audioUrl, storageKey) {
+  const raw = unwrapInnermostHttpAudioUrl(audioUrl) || String(audioUrl || "").trim();
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const k = String(storageKey || "").trim();
+  const base = String(SUPABASE_URL || "").replace(/\/$/, "");
+  if (!k || !base) return "";
+  const enc = k.split("/").map((s) => encodeURIComponent(s)).join("/");
+  return `${base}/storage/v1/object/public/dm_voice/${enc}`;
+}
+
+async function fetchChatVoiceDropFile(sourceUrl) {
+  const r = await fetch(sourceUrl, { method: "GET" });
+  if (!r.ok) throw new Error("Could not load this voice drop.");
+  const blob = await r.blob();
+  if (!blob?.size || blob.size < 8 * 1024) throw new Error("This drop is empty.");
+  const type = String(blob.type || "audio/mp4").split(";")[0].trim() || "audio/mp4";
+  const ext = type.includes("webm") ? "webm" : type.includes("wav") ? "wav" : type.includes("mpeg") ? "mp3" : "m4a";
+  return new File([blob], `chat-voice-drop.${ext}`, { type });
+}
+
+async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, goBtn, dock } = {}) {
   const threadId = String(_conversationId || "").trim();
   if (!threadId) {
     showToast("Open a chat first.", { durationMs: 2600 });
     return;
   }
   if (!getSupabaseAuthToken()) {
-    showToast("Sign in to make a clip.", { icon: "!", durationMs: 3200 });
+    showToast("Sign in to remix this drop.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  const sourceUrl = resolveChatVoiceDropUrl(audioUrl, storageKey);
+  if (!sourceUrl) {
+    showToast("This drop has no audio to remix.", { icon: "!", durationMs: 3200 });
     return;
   }
   const moodKey = VOICE_CLIP_MOODS[mood] ? mood : "soft";
   const partner = String(_chatHeaderUser?.displayName || _chatHeaderUser?.username || "").replace(/^@/, "").trim();
-  const title = partner ? `Clip from ${partner}'s drop` : "Clip from a drop";
-  const clipCost = NABAD_CLIP_CREDIT_COST;
-  if (goBtn) {
-    goBtn.disabled = true;
-    goBtn.textContent = "Making clip…";
-  }
+  const title = partner ? `Remix of ${partner}'s drop` : "Remix of a drop";
+  const remixCost = FULL_SONG_CREDIT_COST;
+  persistPendingVoiceClipShare({
+    taskId: "",
+    threadId,
+    title,
+    mood: moodKey,
+    sourceMsgId: String(msgId || ""),
+    audioUrl: sourceUrl,
+  });
+  resetChatVoiceRemixDock();
+  syncChatVoiceRemixBrewing({ scroll: true });
   try {
-    showToast("Composing your clip… stay in chat, usually 1–2 minutes.", { icon: "♪", durationMs: 8000 });
+    showToast("Something’s blooming from that drop…", { icon: "♪", durationMs: 4200 });
     const authToken = getSupabaseAuthToken();
-    const payload = {
-      prompt: "",
-      style: VOICE_CLIP_MOODS[moodKey],
-      title,
-      lyriaModel: "clip",
-      nabadClip: "1",
-      watchKind: "clip",
-      ideaPrompt: true,
-      ideaBrief: "30 second original clip inspired by a hummed melody a friend sent in chat. Do not copy the voice.",
-    };
-    const data = await trackCreditsAround("Generate chat voice clip", async () => {
-      const r = await apiFetch(nabadClipGenerateApiPath(), {
+    const remixStyle = chatVoiceNoteRemixStyle(moodKey);
+    const data = await trackCreditsAround("Remix chat voice drop", async () => {
+      const file = await fetchChatVoiceDropFile(sourceUrl);
+      const fd = new FormData();
+      const uniqueUploadName = `ref-${Date.now()}-${file.name}`;
+      fd.append("action", "add_instrumental");
+      fd.append("referenceMode", "humming_music");
+      fd.append("file", file, uniqueUploadName);
+      fd.append("fileName", uniqueUploadName);
+      fd.append("fileType", file.type);
+      fd.append("style", remixStyle);
+      fd.append("title", title);
+      fd.append("model", LATEST_SUNO_MODEL);
+      fd.append("audioWeight", "0.95");
+      fd.append("styleWeight", "0.22");
+      const r = await fetch(apiUrl("/api/suno/stems"), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify(payload),
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+        body: fd,
       });
       const d = await r.json().catch(() => ({}));
       if (r.status === 402 || d?.code === "insufficient_credits") {
         const err = new Error(
-          `Not enough credits (need ${formatCreditsAmount(clipCost)} for a clip).`,
+          `Not enough credits (need ${formatCreditsAmount(remixCost)} for a remix).`,
         );
         err.code = "insufficient_credits";
         throw err;
@@ -24020,60 +24174,93 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, mood, goBtn, dock }
       return d;
     });
     const taskId = extractTaskIdLoose(data);
-    if (!taskId) throw new Error("Clip started but no task id came back.");
+    if (!taskId) throw new Error("Remix started but no task id came back.");
     sunoTaskId = taskId;
     savePendingBackendTask(taskId);
     saveRecoverableGenerationTask(taskId, title);
     setGenerationPending({
       taskId,
       title,
-      source: "clip",
-      variantCount: 1,
+      source: "chat_voice_remix",
+      variantCount: 2,
     });
-    _pendingVoiceClipShare = {
+    persistPendingVoiceClipShare({
       taskId,
       threadId,
       title,
       mood: moodKey,
       sourceMsgId: String(msgId || ""),
-      audioUrl: String(audioUrl || ""),
+      audioUrl: sourceUrl,
+    });
+    _chatVoiceRemixShareSentTask = "";
+    resetChatVoiceRemixDock();
+    syncChatVoiceRemixBrewing({ scroll: true });
+    lastSunoTitle = title;
+    lastGenerationMeta = {
+      engine: "suno_add_instrumental",
+      mode: "Chat voice band",
+      styleInput: remixStyle,
+      musicProvider: "suno",
+      hasReference: true,
+      vocalRefOrigin: "record",
+      referenceMode: "humming_music",
+      chatVoiceClip: true,
     };
-    startGeneratePolling();
-    if (goBtn) goBtn.textContent = "Making clip…";
+    try {
+      beginCoachGenerationStatus({
+        variantCount: 2,
+        pillText: "Catching the melody…",
+      });
+    } catch {}
+    if (typeof _startGeneratePolling === "function") _startGeneratePolling();
+    else throw new Error("Could not start watching this remix.");
   } catch (e) {
     if (goBtn) {
       goBtn.disabled = false;
-      goBtn.textContent = "Make clip · 10 credits";
+      goBtn.textContent = CHAT_VOICE_REMIX_GO_LABEL;
     }
-    showToast(e?.message || "Could not start this clip.", { icon: "!", durationMs: 4200 });
+    failPendingChatVoiceRemix(e?.message || "Could not start this remix.");
   }
 }
 
 async function maybeShareReadyVoiceClip(entries, taskId) {
-  const pending = _pendingVoiceClipShare;
-  const tid = String(taskId || "").trim();
+  const pending = loadPendingVoiceClipShare();
+  const tid = String(taskId || pending?.taskId || "").trim();
   if (!pending || !tid || String(pending.taskId) !== tid) return;
-  _pendingVoiceClipShare = null;
+  if (_chatVoiceRemixShareSentTask && _chatVoiceRemixShareSentTask === tid) return;
   const track = (Array.isArray(entries) ? entries : []).find((e) => String(e?.url || "").trim());
   if (!track?.url) return;
-  const threadId = String(pending.threadId || "").trim();
-  if (threadId && threadId === String(_conversationId || "").trim()) {
+  _chatVoiceRemixShareSentTask = tid;
+  persistPendingVoiceClipShare(null);
+  removeChatVoiceRemixBrewing();
+  resetChatVoiceRemixDock();
+  try {
     await sendDmSongShare({
       ...track,
-      title: pending.title || track.title || "Clip from a drop",
+      title: pending.title || track.title || "Remix of a drop",
       shareKind: "song",
-    });
-    document.querySelectorAll(".messagesVoiceClipGo").forEach((btn) => {
-      btn.disabled = false;
-      btn.textContent = "Make clip · 10 credits";
-    });
-    document.querySelectorAll(".messagesVoiceClipDock").forEach((el) => { el.hidden = true; });
-    document.querySelectorAll(".messagesVoiceClipSpark").forEach((el) => {
-      el.classList.remove("is-on");
-      el.setAttribute("aria-expanded", "false");
-    });
-    showToast("Clip sent in this chat.", { icon: "♪", durationMs: 3200 });
+    }, { threadId: pending.threadId });
+    showToast("Your remix just landed in chat.", { icon: "♪", durationMs: 3200 });
+  } catch (e) {
+    _chatVoiceRemixShareSentTask = "";
+    persistPendingVoiceClipShare(pending);
+    syncChatVoiceRemixBrewing({ scroll: true });
+    showToast(e?.message || "Could not drop the remix in chat.", { icon: "!", durationMs: 4200 });
   }
+}
+
+function maybeShareChatVoiceRemixFromPoll() {
+  const pending = loadPendingVoiceClipShare();
+  if (!pending) return;
+  const url = String(lastSunoFullUrl || lastSunoProxyUrl || "").trim();
+  if (!url) return;
+  void maybeShareReadyVoiceClip([{
+    id: String(sunoAudioId || pending.taskId || ""),
+    url,
+    title: pending.title || lastSunoTitle || "Remix of a drop",
+    taskId: pending.taskId,
+    artUrl: String(lastSunoArtUrl || "").trim(),
+  }], pending.taskId);
 }
 
 function pushLocalGenerationReadyActivity(entries, { taskId = "" } = {}) {
@@ -37960,6 +38147,7 @@ function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}
         <p class="messagesThreadEmptyLead">Share songs, remixes and ideas.</p>
       </div>
       <div class="messagesThreadScrollAnchor" aria-hidden="true"></div>`;
+    syncChatVoiceRemixBrewing();
     return;
   }
   if (!msgs.length && typingActive) {
@@ -37989,6 +38177,7 @@ function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}
   if (!threadReveal) scheduleMessagesThreadReadTransitionsLive();
   else window.setTimeout(() => scheduleMessagesThreadReadTransitionsLive(), 420);
   msgs.slice(-4).forEach((m) => rememberLocalVoicePlayUrl(m));
+  syncChatVoiceRemixBrewing();
 }
 
 function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
@@ -40054,8 +40243,8 @@ let _messagesShareAllTracks = [];
 let _messagesShareSearchQuery = "";
 let _messagesShareCandidates = [];
 
-async function sendDmSongShare(track) {
-  const threadId = String(_conversationId || "").trim();
+async function sendDmSongShare(track, opts = {}) {
+  const threadId = String(opts.threadId || _conversationId || "").trim();
   if (!threadId || !track) return;
   const shareUrl = await resolveShareableAudioUrl(track);
   const shareTrack = shareUrl && shareUrl !== track.url ? { ...track, url: shareUrl } : track;
@@ -40071,9 +40260,10 @@ async function sendDmSongShare(track) {
     });
     closeMessagesShareSheet();
     const msg = data?.message;
+    const viewing = threadId === String(_conversationId || "").trim();
     if (msg) {
-      appendThreadMessages([msg]);
-    } else {
+      if (viewing) appendThreadMessages([msg]);
+    } else if (viewing) {
       await pollNewThreadMessages(threadId);
     }
     try { syncDiscoveryPlayingHighlights(); } catch {}
@@ -66354,8 +66544,8 @@ function showToast(message, opts) {
   }
   const icon = String(opts?.icon || "").trim();
   el.innerHTML = icon
-    ? `<span class="toastIcon" aria-hidden="true">${escapeHtml(icon)}</span>${escapeHtml(text)}`
-    : escapeHtml(text);
+    ? `<span class="toastIcon" aria-hidden="true">${escapeHtml(icon)}</span><span class="toastCopy">${escapeHtml(text)}</span>`
+    : `<span class="toastCopy">${escapeHtml(text)}</span>`;
 
   // Long messages (e.g. upstream Suno error bodies) need extra room
   // and reading time. Anything past ~70 chars gets the multi-line
@@ -70290,6 +70480,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     setLoading(false);
     try { cancelCoachGenerationStatus(); } catch {}
     setProgress(0);
+    try { failPendingChatVoiceRemix(); } catch {}
     const info = failureInfo || { kind: "generic", headline: "Generation failed", detail: "" };
     const isRemix = Boolean(currentRemixSource?.originalUrl || currentRemixSource?.url || vocalRefOrigin === "remix");
     const toastText = providerFailureToast(info, rawState, sunoTaskId || loadPendingBackendTask() || "");
@@ -70336,6 +70527,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           const state = await fetchGenerationStatus();
           consecutiveFetchErrors = 0;
           if (!state) return "continue";
+          if (state.hasAudio) {
+            try { maybeShareChatVoiceRemixFromPoll(); } catch {}
+          }
           // Check for explicit upstream failure flags before status — Suno
           // sometimes keeps `status: PENDING` while signalling rejection via
           // successFlag / errorMessage (esp. for copyright fingerprinting on

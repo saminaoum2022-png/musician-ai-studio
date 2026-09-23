@@ -1184,7 +1184,7 @@ async function fetchReferenceBytesFromUrl(rawUrl) {
     if (!r.ok) return { ok: false, error: `upstream_${r.status}` };
     const ab = await r.arrayBuffer();
     const buffer = Buffer.from(ab);
-    if (buffer.length < 40 * 1024) return { ok: false, error: "source_too_short" };
+    if (buffer.length < 8 * 1024) return { ok: false, error: "source_too_short" };
     if (buffer.length > MAX_UPLOAD_BYTES) return { ok: false, error: "source_too_large" };
     const ct = String(r.headers.get("content-type") || "audio/mpeg").split(";")[0].trim();
     const mime = ct.includes("audio") ? ct : "audio/mpeg";

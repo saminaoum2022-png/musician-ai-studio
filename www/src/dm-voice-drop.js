@@ -764,18 +764,18 @@ export function messagesVoiceDropBubbleHtml(parsed, { mine = false, msgId = "" }
           <div class="messagesVoiceDropWave" aria-hidden="true">${waveBarsHtml(parsed?.peaks)}</div>
           <span class="messagesVoiceDropDur">${durLabel}</span>
         </div>
-        <button type="button" class="messagesVoiceClipSpark" data-voice-clip-open="${id}" aria-label="Make a clip from this drop" aria-expanded="false">
+        <button type="button" class="messagesVoiceClipSpark" data-voice-clip-open="${id}" aria-label="Remix this voice drop" aria-expanded="false">
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2.4l1.4 5.2L18.6 9 13.4 10.4 12 15.6l-1.4-5.2L5.4 9l5.2-1.4zM18.2 14.2l.8 2.8 2.8.8-2.8.8-.8 2.8-.8-2.8-2.8-.8 2.8-.8z"/></svg>
         </button>
       </div>
       <div class="messagesVoiceClipDock" data-voice-clip-dock="${id}" hidden>
-        <p class="messagesVoiceClipLead">Keep the melody. Make <b>your</b> clip.</p>
-        <div class="messagesVoiceClipChips" role="group" aria-label="Clip mood">
+        <p class="messagesVoiceClipLead">Keep <b>this voice</b>. Add the band.</p>
+        <div class="messagesVoiceClipChips" role="group" aria-label="Remix mood">
           <button type="button" class="messagesVoiceClipChip is-on" data-voice-clip-mood="soft">Soft</button>
           <button type="button" class="messagesVoiceClipChip" data-voice-clip-mood="night">Night</button>
           <button type="button" class="messagesVoiceClipChip" data-voice-clip-mood="arabic">Arabic</button>
         </div>
-        <button type="button" class="messagesVoiceClipGo" data-voice-clip-go="${id}">Make clip · 10 credits</button>
+        <button type="button" class="messagesVoiceClipGo" data-voice-clip-go="${id}">Remix · 12 credits</button>
       </div>
     </div>`;
 }
@@ -1125,6 +1125,7 @@ export function handleVoiceDropBubbleClick(target) {
     void d().startVoiceDropClipFromChat?.({
       msgId: String(go.getAttribute("data-voice-clip-go") || card?.getAttribute("data-voice-drop") || ""),
       audioUrl: String(card?.getAttribute("data-voice-url") || ""),
+      storageKey: String(card?.getAttribute("data-voice-key") || ""),
       mood,
       goBtn: go,
       dock,

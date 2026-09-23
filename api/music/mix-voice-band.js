@@ -100,7 +100,7 @@ async function mixVoiceOverBand(vocalBuf, vocalExt, bandBuf, bandExt) {
       "-i",
       vocalPath,
       "-filter_complex",
-      "[0:a]volume=0.72[b];[1:a]highpass=f=80,volume=1.08[v];[b][v]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[out]",
+      "[0:a]equalizer=f=90:t=q:w=0.9:g=-4,volume=0.56[b];[1:a]highpass=f=120,acompressor=threshold=-16dB:ratio=2.4:attack=8:release=120,volume=1.22[v];[b][v]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[out]",
       "-map",
       "[out]",
       "-ac",

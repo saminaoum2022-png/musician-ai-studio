@@ -23969,9 +23969,9 @@ const CHAT_VOICE_REMIX_BREW_LINES = [
 ];
 
 const VOICE_CLIP_MOODS = {
-  soft: "soft pop, warm pads",
-  night: "late night, dark bass",
-  arabic: "arabic pop, oud",
+  soft: "soft pop, warm vocal",
+  night: "late night, dark bass, warm vocal",
+  arabic: "arabic pop, oud, warm vocal",
 };
 
 function chatVoiceNoteRemixStyle(mood) {
@@ -24161,8 +24161,9 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
           action: "add_instrumental",
           referenceMode: "humming_music",
           sourceAudioUrl: sourceUrl,
+          tags: remixStyle,
           style: remixStyle,
-          negativeTags: "heavy metal, fast drums",
+          negativeTags: "instrumental only, heavy metal, fast drums",
           title,
           model: "V6",
           audioWeight: 0.95,

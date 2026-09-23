@@ -205,7 +205,7 @@ module.exports = async function handler(req, res) {
       fileType = norm.mime;
       const attachedBytes = Buffer.isBuffer(fileBytes) ? fileBytes.length : 0;
 
-      const style = sanitizeSunoStyleTags(String(body?.style || "").trim());
+      const style = sanitizeSunoStyleTags(String(body?.tags || body?.style || "").trim());
       const prompt = String(body?.prompt || "").trim();
       let referenceMode = String(body?.referenceMode || "").trim().toLowerCase();
       // Server-fetched hub remix source ⇒ cover. Chat humming stays add-instrumental.
@@ -552,14 +552,18 @@ module.exports = async function handler(req, res) {
         .map((s) => String(s || "").trim())
         .filter(Boolean);
       let cleanTags = cleanTagsList.join(", ");
-      if (!cleanTags) cleanTags = "ambient, instrumental";
+      // Never default to "instrumental" — that makes underpainting drop the vocal.
+      if (!cleanTags) cleanTags = "soft pop, warm vocal";
+      if (!/\bvocal|voice|singer|hum\b/i.test(cleanTags)) {
+        cleanTags = `${cleanTags}, warm vocal`;
+      }
       if (cleanTags.length > 180) cleanTags = cleanTags.slice(0, 177) + "...";
       // Suno requires negativeTags on add-instrumental. Omitting it returns
       // a generic 400/531 that the app maps to "Something went wrong".
-      const cleanNegative = trimNegativeTags(negativeTags) || "harsh, noisy";
+      const cleanNegative = trimNegativeTags(negativeTags) || "instrumental only, heavy metal";
       const addPayload = {
         uploadUrl,
-        title: (title || "Reference instrumental").slice(0, 80),
+        title: (title || "Voice drop remix").slice(0, 80),
         tags: cleanTags,
         negativeTags: cleanNegative,
         callBackUrl,

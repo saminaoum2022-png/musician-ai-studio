@@ -24241,6 +24241,40 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
   }
 }
 
+const _chatVoiceRemixMixByTask = Object.create(null);
+
+function rememberChatVoiceRemixMix(taskId, url) {
+  const tid = String(taskId || "").trim();
+  const mix = String(url || "").trim();
+  if (tid && mix) _chatVoiceRemixMixByTask[tid] = mix;
+}
+
+function chatVoiceRemixMixForTask(taskId) {
+  return String(_chatVoiceRemixMixByTask[String(taskId || "").trim()] || "").trim();
+}
+
+function applyChatVoiceRemixMixToPlayback(mixUrl, { taskId = "", audioId = "" } = {}) {
+  const url = String(mixUrl || "").trim();
+  if (!url) return;
+  lastSunoFullUrl = url;
+  lastSunoProxyUrl = url;
+  lastSunoCachedUrl = url;
+  lastPlayerHttpUrl = url;
+  rememberChatVoiceRemixMix(taskId, url);
+  try {
+    const items = loadLibrary();
+    const tid = String(taskId || "").trim();
+    const aid = String(audioId || "").trim();
+    for (const row of items) {
+      const match =
+        (aid && String(row.audioId || "") === aid) ||
+        (tid && String(row.taskId || "") === tid);
+      if (!match) continue;
+      patchLibraryRowWithRefreshedUrl(row.id, url, url, row);
+    }
+  } catch {}
+}
+
 async function mixChatVoiceOverBand(vocalUrl, bandUrl) {
   const authToken = getSupabaseAuthToken();
   const r = await apiFetch("/api/music/mix-voice-band", {
@@ -24277,13 +24311,17 @@ async function maybeShareReadyVoiceClip(entries, taskId) {
   try {
     showToast("Laying your voice on the band…", { icon: "♪", durationMs: 5200 });
     const shareUrl = await mixChatVoiceOverBand(vocalUrl, bandUrl);
+    applyChatVoiceRemixMixToPlayback(shareUrl, {
+      taskId: tid,
+      audioId: String(track.id || sunoAudioId || ""),
+    });
     persistPendingVoiceClipShare(null);
     removeChatVoiceRemixBrewing();
     resetChatVoiceRemixDock();
     await sendDmSongShare({
-      ...track,
       url: shareUrl,
       title: pending.title || track.title || "Remix of a drop",
+      artUrl: track.artUrl,
       shareKind: "song",
     }, { threadId: pending.threadId });
     showToast("Your remix just landed in chat.", { icon: "♪", durationMs: 3200 });
@@ -70654,7 +70692,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             const variantAEntry = addToLibrary({
               title: lastSunoTitle,
               artUrl: "",
-              url: lastSunoFullUrl || lastSunoProxyUrl,
+              url: chatVoiceRemixMixForTask(sunoTaskId) || lastSunoFullUrl || lastSunoProxyUrl,
               taskId: sunoTaskId || "",
               audioId: sunoAudioId || "",
               kind: "full",

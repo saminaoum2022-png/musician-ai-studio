@@ -221,7 +221,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260923-175443" />
+    <link rel="stylesheet" href="./styles.css?v=20260923-184008" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -3739,32 +3739,44 @@
             <h2 class="creditsTitle">Credits</h2>
           </header>
 
-          <div class="creditsWallet">
-            <div class="creditsWalletBalance">
-              <span class="creditsWalletValue" id="creditsBalanceBig">0</span>
-              <span class="creditsWalletLabel">credits available</span>
-            </div>
-            <div id="creditsBreakdown" class="creditsWalletChips" hidden>
-              <div class="creditsWalletChip" title="Purchased or charged — can gift and create.">
-                <span class="creditsWalletChipLabel">Paid</span>
-                <span class="creditsWalletChipValue" id="creditsPaidValue">0</span>
-              </div>
-              <div class="creditsWalletChip" title="Received from others — create only, not giftable.">
-                <span class="creditsWalletChipLabel">Gift</span>
-                <span class="creditsWalletChipValue" id="creditsGiftValue">0</span>
-              </div>
-              <div class="creditsWalletChip" title="From promo codes — can gift and create.">
-                <span class="creditsWalletChipLabel">Promo</span>
-                <span class="creditsWalletChipValue" id="creditsPromoValue">0</span>
-              </div>
-            </div>
+          <div class="creditsHeroBare">
+            <span class="creditsWalletValue" id="creditsBalanceBig">0</span>
+            <span class="creditsWalletLabel">available to create</span>
             <a href="#/pro" class="creditsWalletCta" data-route-link="pro">Get more credits</a>
             <p id="creditsHeroEmail" class="creditsWalletEmail" style="display:none" hidden></p>
           </div>
 
+          <section id="creditsBreakdown" class="creditsKinds" hidden aria-labelledby="creditsKindsKicker">
+            <h3 class="creditsSectionKicker" id="creditsKindsKicker">Where they come from</h3>
+            <p class="creditsKindsLead">Three kinds of credit. Gifts spend first, then promo, then paid.</p>
+            <div class="creditsKindsList">
+              <div class="creditsKind" title="Purchased or charged — can gift and create.">
+                <div class="creditsKindCopy">
+                  <strong>Paid</strong>
+                  <span>Yours to spend or gift</span>
+                </div>
+                <span class="creditsKindValue" id="creditsPaidValue">0</span>
+              </div>
+              <div class="creditsKind" title="Received from others — create only, not giftable.">
+                <div class="creditsKindCopy">
+                  <strong>Gifts</strong>
+                  <span>From friends · create only</span>
+                </div>
+                <span class="creditsKindValue" id="creditsGiftValue">0</span>
+              </div>
+              <div class="creditsKind" title="From promo codes — can gift and create.">
+                <div class="creditsKindCopy">
+                  <strong>Promo</strong>
+                  <span>From codes · you can gift these</span>
+                </div>
+                <span class="creditsKindValue" id="creditsPromoValue">0</span>
+              </div>
+            </div>
+          </section>
+
           <section class="creditsSection" aria-labelledby="creditsRedeemKicker">
-            <h3 class="creditsSectionKicker" id="creditsRedeemKicker">Redeem</h3>
-            <div class="creditsRedeemPanel">
+            <h3 class="creditsSectionKicker" id="creditsRedeemKicker">Redeem a code</h3>
+            <div class="creditsRedeemRow">
               <input
                 id="creditsRedeemInput"
                 class="creditsRedeemInput"
@@ -3775,7 +3787,7 @@
                 spellcheck="false"
                 aria-label="Promo code"
               />
-              <button id="btnCreditsRedeem" class="primary creditsRedeemBtn" type="button">Redeem</button>
+              <button id="btnCreditsRedeem" class="creditsRedeemBtn" type="button">Redeem</button>
             </div>
             <div id="creditsRedeemMsg" class="creditsRedeemMsg" style="display:none"></div>
           </section>
@@ -3807,9 +3819,9 @@
             <h3 class="creditsSectionKicker creditsSectionKicker--admin" id="creditsAdminKicker">Developer</h3>
             <div class="creditsAdminPanel">
               <p class="creditsAdminLead">Manual grant for testing — Pro and purchases add credits via billing.</p>
-              <div class="creditsRedeemPanel creditsRedeemPanel--admin">
+              <div class="creditsRedeemRow">
                 <input id="creditsGrantPaidInput" class="creditsRedeemInput" type="number" min="1" max="500" step="1" placeholder="Amount" inputmode="numeric" aria-label="Grant amount" />
-                <button type="button" id="btnCreditsGrantPaid" class="primary creditsRedeemBtn">Grant paid</button>
+                <button type="button" id="btnCreditsGrantPaid" class="creditsRedeemBtn">Grant paid</button>
               </div>
               <div id="creditsGrantPaidMsg" class="creditsRedeemMsg" style="display:none"></div>
               <div class="creditsAdminGrid">
@@ -5259,6 +5271,15 @@
               <span>Pick from your Library</span>
             </span>
           </button>
+          <button type="button" class="messagesComposerSheetRow" data-messages-composer-action="listen" role="menuitem">
+            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--listen" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M4 13a4 4 0 0 1 4-4h1l3-4v14l-3-4H8a4 4 0 0 1-4-4Z"/><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M16.2 8.8a5 5 0 0 1 0 6.4M18.5 6.6a8 8 0 0 1 0 10.8"/></svg>
+            </span>
+            <span class="messagesComposerSheetCopy">
+              <strong>Listen together</strong>
+              <span id="messagesComposerListenSub">Start a song together</span>
+            </span>
+          </button>
         </div>
         <div id="messagesComposerSheetListCoach" class="messagesComposerSheetList" role="menu" aria-label="Coach actions" hidden>
           <button type="button" class="messagesComposerSheetRow" data-messages-composer-action="coach-start-plan" role="menuitem">
@@ -5611,7 +5632,7 @@
         requestAnimationFrame(() => requestAnimationFrame(play));
       }
       // Dynamic import so the giant app module does not block the first dots.
-      import("./src/app.js?v=20260923-175443");
+      import("./src/app.js?v=20260923-184008");
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
   </body>

@@ -25768,7 +25768,7 @@ a.vwPrimary,
   min-width: 0;
   animation: sectionFadeIn 260ms ease;
 }
-.creditsPage--wallet{ gap: 30px; }
+.creditsPage--wallet{ gap: 22px; }
 .creditsPage *{ min-width: 0; }
 .creditsHeader{
   display: flex;
@@ -25785,32 +25785,20 @@ a.vwPrimary,
   letter-spacing: -0.01em;
 }
 
-/* Wallet balance */
-.creditsWallet{
+/* Wallet balance — no card, just the number */
+.creditsHeroBare{
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 28px 20px 22px;
-  border-radius: 22px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background:
-    radial-gradient(90% 70% at 50% -10%, rgba(124,92,255,0.22), transparent 55%),
-    linear-gradient(165deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
-  box-shadow: 0 18px 48px -28px rgba(0,0,0,0.85);
-}
-.creditsWalletBalance{
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding: 10px 8px 4px;
   text-align: center;
 }
 .creditsWalletValue{
-  font-size: clamp(48px, 14vw, 58px);
+  font-size: clamp(52px, 16vw, 64px);
   font-weight: 900;
-  line-height: 0.95;
-  letter-spacing: -0.03em;
+  line-height: 0.92;
+  letter-spacing: -0.04em;
   background: linear-gradient(180deg, #ffffff 0%, #d4cbff 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -25819,66 +25807,104 @@ a.vwPrimary,
 .creditsWalletLabel{
   font-size: 14px;
   font-weight: 600;
-  color: rgba(232,238,247,0.58);
+  color: rgba(232,238,247,0.52);
   letter-spacing: 0.01em;
-}
-.creditsWalletChips{
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  max-width: 340px;
-}
-.creditsWalletChip{
-  flex: 1 1 88px;
-  min-width: 88px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 10px 8px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(0,0,0,0.22);
-}
-.creditsWalletChipLabel{
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(232,238,247,0.48);
-}
-.creditsWalletChipValue{
-  font-size: 16px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: rgba(232,238,247,0.96);
 }
 .creditsWalletCta{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
-  padding: 0 18px;
-  border-radius: 999px;
+  min-height: 42px;
+  margin-top: 10px;
+  padding: 0 20px;
+  border-radius: var(--nabad-glass-radius-round);
   font-size: 14px;
   font-weight: 700;
-  color: #5eead4;
+  color: var(--nabad-glass-color);
   text-decoration: none;
-  border: 1px solid rgba(94,234,212,0.28);
-  background: rgba(94,234,212,0.08);
-  transition: background 160ms ease, border-color 160ms ease;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+  transition: var(--nabad-glass-transition);
 }
 .creditsWalletCta:active{
-  background: rgba(94,234,212,0.14);
-  border-color: rgba(94,234,212,0.42);
+  transform: scale(var(--nabad-glass-active-scale));
+  background: var(--nabad-glass-bg-hover);
+  border-color: var(--nabad-glass-border-hover);
+  color: var(--nabad-glass-color-hover);
 }
 .creditsWalletEmail{
   margin: 0;
   font-size: 12px;
   color: rgba(232,238,247,0.38);
   text-align: center;
+}
+
+.creditsKinds{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.creditsKindsLead{
+  margin: 0;
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: rgba(223,231,251,0.62);
+}
+.creditsKindsList{
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+  overflow: hidden;
+}
+.creditsKind{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.creditsKind:last-child{ border-bottom: 0; }
+.creditsKindCopy{
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+.creditsKindCopy strong{
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: #f8faff;
+}
+.creditsKindCopy span{
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: rgba(223,231,251,0.52);
+}
+.creditsKindValue{
+  flex: 0 0 auto;
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: #eef2ff;
 }
 
 /* Section groups */
@@ -25905,13 +25931,6 @@ a.vwPrimary,
   display: flex;
   gap: 10px;
   align-items: stretch;
-  padding: 6px;
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.025);
-}
-.creditsRedeemPanel--admin{
-  margin-top: 4px;
 }
 
 /* Legacy hero (unused) — keep for safety */
@@ -26481,14 +26500,19 @@ a.vwPrimary,
 }
 .creditsRedeemInput{
   flex: 1;
-  min-height: 44px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(8,12,20,0.35);
+  min-height: 46px;
+  padding: 0 16px;
+  border-radius: 16px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
   color: #fff;
   font-size: 16px;
   letter-spacing: 0.02em;
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 .creditsRedeemInput::placeholder{
   color: rgba(232,238,247,0.32);
@@ -26497,13 +26521,26 @@ a.vwPrimary,
 }
 .creditsRedeemInput:focus{
   outline: none;
-  border-color: rgba(124,92,255,0.55);
-  box-shadow: 0 0 0 3px rgba(124,92,255,0.18);
+  border-color: var(--nabad-glass-border-hover);
+  background: var(--nabad-glass-bg-hover);
 }
 .creditsRedeemBtn{
-  min-height: 42px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  min-height: 46px;
   padding: 0 16px;
-  border-radius: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--nabad-glass-border-hover);
+  background: var(--nabad-glass-bg-hover);
+  color: var(--nabad-glass-color-hover);
+  font-size: 14px;
+  font-weight: 700;
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
 }
 .creditsRedeemMsg{
   margin-top: 10px;
@@ -26543,10 +26580,21 @@ a.vwPrimary,
 }
 
 .creditsHowFold{
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.02);
-  padding: 0 14px;
+  border-radius: 20px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+  padding: 0 16px;
+}
+.creditsSection + .creditsHowFold{
+  margin-top: 14px;
+}
+.creditsHowFold + .creditsHowFold{
+  margin-top: 14px;
 }
 .creditsHowFoldSummary{
   display: flex;
@@ -26592,9 +26640,9 @@ a.vwPrimary,
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.02);
+  border-radius: 0;
+  border: 0;
+  background: transparent;
   overflow: hidden;
 }
 .creditsLedgerList--feed .creditsLedgerRow{
@@ -26615,10 +26663,9 @@ a.vwPrimary,
 
 .creditsAdminSection{ margin-top: 8px; }
 .creditsAdminPanel{
-  padding: 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(255,189,80,0.28);
-  background: linear-gradient(180deg, rgba(255,189,80,0.05), rgba(255,255,255,0.01));
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 .creditsAdminLead{
   margin: 0 0 12px;
@@ -26670,17 +26717,29 @@ a.vwPrimary,
   background: linear-gradient(180deg, rgba(255,189,80,0.06), rgba(255,255,255,0.012));
 }
 .creditsAdminGrid{
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin: 8px 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 12px 0 14px;
+  border-radius: 20px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  overflow: hidden;
 }
 .creditsAdminStat{
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.025);
-  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-radius: 0;
+  background: transparent;
+  padding: 12px 16px;
 }
+.creditsAdminStat:last-child{ border-bottom: 0; }
 .creditsAdminStatLabel{
   font-size: 13px;
   letter-spacing: 0.04em;
@@ -26747,10 +26806,6 @@ a.vwPrimary,
 .creditsAdminCodeMeta{
   flex: 0 0 auto;
   color: rgba(232,238,247,0.55);
-}
-
-@media (min-width: 720px){
-  .creditsAdminGrid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 .creditsProUpsell{
@@ -41219,6 +41274,10 @@ body.coachComposerMode .messagesComposerSheetListDm{
 .messagesComposerSheetIcon--create{
   background: rgba(124,92,255,0.18);
   color: rgba(215,198,255,0.98);
+}
+.messagesComposerSheetIcon--listen{
+  background: rgba(255, 196, 92, 0.16);
+  color: #ffd78a;
 }
 .messagesComposerSheetCopy{
   display: flex;
@@ -59808,6 +59867,42 @@ html[data-theme="light"] .creditsRedeemInput{
 html[data-theme="light"] .creditsTitle{
   color: var(--text-primary);
 }
+html[data-theme="light"] .creditsWalletValue{
+  background: linear-gradient(180deg, #15171c 8%, #6d4df5 92%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+}
+html[data-theme="light"] .creditsWalletLabel,
+html[data-theme="light"] .creditsKindsLead{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .creditsWalletCta,
+html[data-theme="light"] .creditsRedeemBtn{
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  color: var(--nabad-glass-color);
+}
+html[data-theme="light"] .creditsKindsList,
+html[data-theme="light"] .creditsHowFold,
+html[data-theme="light"] .creditsAdminGrid{
+  border-color: var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+}
+html[data-theme="light"] .creditsKind{
+  border-bottom-color: rgba(15,23,40,0.06);
+}
+html[data-theme="light"] .creditsKindCopy strong,
+html[data-theme="light"] .creditsKindValue,
+html[data-theme="light"] .creditsHowFoldLabel{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .creditsKindCopy span{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .creditsSectionKicker{
+  color: var(--text-muted);
+}
 html[data-theme="light"] .creditsHero{
   border-color: var(--accent-violet-border);
   background:
@@ -59902,8 +59997,9 @@ html[data-theme="light"] .creditsAdminGrantRow{
   border-bottom-color: var(--border);
 }
 html[data-theme="light"] .creditsAdminStat{
-  border-color: var(--border);
-  background: var(--surface-secondary);
+  border-color: transparent;
+  border-bottom-color: rgba(15,23,40,0.06);
+  background: transparent;
 }
 html[data-theme="light"] .creditsAdminStatLabel{
   color: var(--text-muted);
@@ -60219,6 +60315,10 @@ html[data-theme="light"] .messagesComposerSheetIcon--planList{
 html[data-theme="light"] .messagesComposerSheetIcon--create{
   background: var(--accent-violet-soft);
   color: #6d4df5;
+}
+html[data-theme="light"] .messagesComposerSheetIcon--listen{
+  background: rgba(217, 119, 6, 0.12);
+  color: #c2410c;
 }
 html[data-theme="light"] .messagesComposerSheetCopy strong{
   color: var(--text-primary);

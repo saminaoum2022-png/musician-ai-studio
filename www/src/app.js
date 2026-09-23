@@ -303,7 +303,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260923-175443";
+const APP_BUILD = "20260923-184008";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -39677,7 +39677,7 @@ function openNowPlayingPresencePanel() {
       return;
     } else if (act === "listen") {
       close();
-      void openLiveListenInviteFromChat();
+      void openLiveListenInviteFromChat({ prefer: "partner" });
       return;
     }
   });
@@ -39745,6 +39745,7 @@ function closeMessagesComposerSheet() {
 
 function openMessagesComposerSheet() {
   syncCoachComposerSheet();
+  syncChatListenComposerRow();
   closeMessagesThreadMoreSheet();
   const sheet = document.getElementById("messagesComposerSheet");
   if (!sheet) return;
@@ -39763,10 +39764,58 @@ function closeMessagesShareSheet() {
   resetMessagesShareSearch();
   _messagesShareAllTracks = [];
   _messagesShareCandidates = [];
+  _messagesShareMode = "share";
+  applyMessagesShareSheetCopy();
 }
 
 const MESSAGES_SHARE_LEAD_DEFAULT = "Pick a song, remix, or mashup from your Library.";
 let _messagesShareConfirmTrack = null;
+let _messagesShareMode = "share";
+
+function messagesShareSheetCopy() {
+  const handle = String(_chatHeaderUser?.username || "").replace(/^@/, "").trim();
+  if (_messagesShareMode === "listen") {
+    return {
+      title: "Listen together",
+      lead: handle ? `Pick a song to start with @${handle}.` : "Pick a song to start together.",
+      confirmLead: handle ? `Start this song with @${handle}?` : "Start this song together?",
+      confirmAction: "Invite",
+    };
+  }
+  return {
+    title: "Share a song",
+    lead: MESSAGES_SHARE_LEAD_DEFAULT,
+    confirmLead: handle ? `Send this song to @${handle}?` : "Send this song?",
+    confirmAction: "Send",
+  };
+}
+
+function applyMessagesShareSheetCopy() {
+  const copy = messagesShareSheetCopy();
+  const title = document.getElementById("messagesShareSheetTitle");
+  const lead = document.getElementById("messagesShareLead");
+  if (title) title.textContent = copy.title;
+  if (lead) lead.textContent = copy.lead;
+}
+
+function trackRefFromSharePick(track) {
+  if (!track) return null;
+  const url = String(track.url || "").trim();
+  if (!url) return null;
+  let art = "";
+  try { art = String(mashupCoverForTrack(track) || "").trim(); } catch {}
+  return {
+    url,
+    title: String(track.title || "").trim() || "Song",
+    artUrl: art || String(track.artUrl || track.art || "").trim(),
+    songId: String(track.songId || track.id || "").trim(),
+    ownerUserId: String(track.ownerUserId || authSession?.user?.id || activeProfile?.id || "").trim(),
+  };
+}
+
+function openMessagesListenPicker() {
+  void openMessagesShareSheet({ mode: "listen" });
+}
 
 // Step 2 of the share flow: after the user taps a song, show a simple confirm
 // card (cover + title) so they can double-check the exact song before it's sent.
@@ -39779,8 +39828,8 @@ function showMessagesShareConfirm(track) {
   const title = escapeHtml(String(track.title || "Song").trim() || "Song");
   const sub = escapeHtml(`${dmShareKindLabel(track.shareKind)} · ${mashupSlotSourceLabel(track)}`);
   const art = escapeHtml(mashupCoverForTrack(track));
-  const handle = String(_chatHeaderUser?.username || "").replace(/^@/, "").trim();
-  if (lead) lead.textContent = handle ? `Send this song to @${handle}?` : "Send this song?";
+  const copy = messagesShareSheetCopy();
+  if (lead) lead.textContent = copy.confirmLead;
   confirm.innerHTML = `
     <div class="messagesShareConfirmCard">
       <img class="messagesShareConfirmArt" src="${art}" alt="" decoding="async" />
@@ -39791,7 +39840,7 @@ function showMessagesShareConfirm(track) {
     </div>
     <div class="messagesShareConfirmActions">
       <button type="button" class="messagesShareConfirmBack" data-share-confirm-back>Choose another</button>
-      <button type="button" class="messagesShareConfirmSend" data-share-confirm-send>Send</button>
+      <button type="button" class="messagesShareConfirmSend" data-share-confirm-send>${escapeHtml(copy.confirmAction)}</button>
     </div>`;
   if (list) list.hidden = true;
   const searchWrap = document.getElementById("messagesShareSearchWrap");
@@ -39824,14 +39873,16 @@ function hideMessagesShareConfirm() {
     searchWrap.hidden = false;
     searchWrap.setAttribute("aria-hidden", "false");
   }
-  if (lead) lead.textContent = MESSAGES_SHARE_LEAD_DEFAULT;
+  if (lead) lead.textContent = messagesShareSheetCopy().lead;
   renderMessagesShareList(_messagesShareSearchQuery);
 }
 
-async function openMessagesShareSheet() {
+async function openMessagesShareSheet({ mode } = {}) {
   const sheet = document.getElementById("messagesShareSheet");
   const list = document.getElementById("messagesShareList");
   if (!sheet || !list) return;
+  _messagesShareMode = mode === "listen" ? "listen" : "share";
+  applyMessagesShareSheetCopy();
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
   document.body.classList.add("messagesShareSheetOpen");
@@ -43254,6 +43305,24 @@ function syncMessagesComposerForThread() {
   input.maxLength = coach ? COACH_MESSAGE_MAX : DM_MESSAGE_MAX;
   input.placeholder = coach ? "Ask NabadAi Coach…" : "Write a message…";
   syncCoachComposerSheet();
+  syncChatListenComposerRow();
+}
+
+function syncChatListenComposerRow() {
+  const row = document.querySelector('[data-messages-composer-action="listen"]');
+  if (!row) return;
+  const coach = isCoachThreadId(_conversationId);
+  const show = !coach && nabadLiveListenEnabled();
+  row.hidden = !show;
+  row.setAttribute("aria-hidden", show ? "false" : "true");
+  const sub = document.getElementById("messagesComposerListenSub");
+  if (!sub) return;
+  const handle = String(_chatHeaderUser?.username || "").replace(/^@/, "").trim();
+  const playing = Boolean(trackRefFromCurrentPlayer()?.url);
+  const theyPlaying = Boolean(String(_chatPartnerPresence?.songUrl || "").trim());
+  if (playing) sub.textContent = handle ? `Invite @${handle} to this song` : "Invite them to this song";
+  else if (theyPlaying) sub.textContent = handle ? `Join what @${handle} is playing` : "Join what they're playing";
+  else sub.textContent = handle ? `Pick a song with @${handle}` : "Pick a song to start together";
 }
 
 function syncCoachComposerSheet() {
@@ -44345,6 +44414,11 @@ function bindMessagesPageOnce() {
         closeMessagesComposerSheet();
         void openMessagesShareSheet();
       }
+      if (action === "listen" && !composerAction.disabled) {
+        try { haptic("light"); } catch {}
+        closeMessagesComposerSheet();
+        void openLiveListenInviteFromChat({ prefer: "self" });
+      }
       return;
     }
     const sharePick = e.target.closest("[data-messages-share-id]");
@@ -44370,6 +44444,18 @@ function bindMessagesPageOnce() {
       feedbackMessagesComposerSend();
       const track = _messagesShareConfirmTrack;
       if (track) {
+        if (_messagesShareMode === "listen") {
+          const listenTrack = trackRefFromSharePick(track);
+          if (!listenTrack) {
+            try { showToast("This song has no audio yet.", { durationMs: 2400 }); } catch {}
+            return;
+          }
+          shareSend.setAttribute("aria-busy", "true");
+          shareSend.textContent = "Inviting…";
+          closeMessagesShareSheet();
+          void openLiveListenInviteFromChat({ track: listenTrack });
+          return;
+        }
         shareSend.setAttribute("aria-busy", "true");
         shareSend.textContent = "Sending…";
         void sendDmSongShare(track);
@@ -48089,6 +48175,9 @@ function dismissDiscoverFeedPlayback() {
 }
 
 function dismissMiniPlayer({ muteHubAutoplay = true } = {}) {
+  if (isLiveListenActive()) {
+    void endLiveListenBecauseHostClosedPlayer();
+  }
   const srcType = miniSource?.type;
   const mutedHubId = hubAudioPostId;
 
@@ -75141,9 +75230,8 @@ if (els.btnPlayerBack) {
       try { syncRoutePanelVisibility("discover"); } catch {}
       return;
     }
-    if (isLiveListenHost()) {
-      void endLiveListenBecauseHostClosedPlayer();
-    }
+    // Minimize only — host live stays on the mini bar until they end from the chip
+    // or close the player. Guest already just follows on the mini player.
     // The mobile tab bar is hidden on /player (full-screen Now Playing),
     // so the back chevron is the user's only way out. If we have history
     // we honor it (preserves Library/Hub scroll position); otherwise we
@@ -78218,6 +78306,7 @@ try {
       threadId: String(_conversationId || "").trim(),
     }),
     getChatPartnerPresence: () => _chatPartnerPresence,
+    pickSongForChatListen: () => openMessagesListenPicker(),
   });
   syncLiveListenChrome();
   startLiveListenGuestInbox();

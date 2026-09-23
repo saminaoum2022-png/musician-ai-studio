@@ -1203,14 +1203,19 @@ async function endHostSession() {
 }
 
 export async function endLiveListenBecauseHostClosedPlayer() {
-  if (!isLiveListenHost()) return;
-  const a = playerEl();
-  applyRemoteFlag(800);
-  try { a?.pause?.(); } catch {}
-  await endHostSession();
+  if (isLiveListenHost()) {
+    const a = playerEl();
+    applyRemoteFlag(800);
+    try { a?.pause?.(); } catch {}
+    await endHostSession();
+    return;
+  }
+  if (isLiveListenGuest()) {
+    await leaveGuestSession({ skipExit: true });
+  }
 }
 
-async function leaveGuestSession() {
+async function leaveGuestSession({ skipExit = false } = {}) {
   const sid = _state?.session?.id;
   if (sid) {
     try {
@@ -1225,7 +1230,9 @@ async function leaveGuestSession() {
   }
   _applyingRemote = true;
   resetGuestPlaybackRate();
-  try { bridge.exitPlayer?.(); } catch {}
+  if (!skipExit) {
+    try { bridge.exitPlayer?.(); } catch {}
+  }
   await clearLocalSession();
 }
 
@@ -1502,45 +1509,61 @@ function renderInviteList(friends, track) {
   });
 }
 
-export async function openLiveListenInviteFromChat() {
-  if (!nabadLiveListenEnabled()) return;
-  const partner = bridge.getChatPartner?.();
-  const presence = bridge.getChatPartnerPresence?.();
-  if (!partner?.userId) {
-    toast("Open a chat first.");
-    return;
-  }
-  const track = {
-    url: String(presence?.songUrl || "").trim(),
-    title: presence?.songTitle || "Now Playing",
+function presenceSongTrack(presence) {
+  const url = String(presence?.songUrl || "").trim();
+  if (!url) return null;
+  return {
+    url,
+    title: presence?.songTitle || "A song",
     artUrl: presence?.songCover || "",
     songId: presence?.songId || "",
     ownerUserId: presence?.songOwnerId || "",
   };
-  if (!track.url) {
-    toast("They're not playing a song right now.");
+}
+
+function liveListenOtherUserId() {
+  if (!isLiveListenActive()) return "";
+  if (_state.role === "host") return String(_state.session?.guestUserId || "").trim();
+  return String(_state.session?.hostUserId || _state.session?.host?.userId || "").trim();
+}
+
+export async function openLiveListenInviteFromChat(opts = {}) {
+  if (!nabadLiveListenEnabled()) return;
+  const partner = bridge.getChatPartner?.();
+  if (!partner?.userId) {
+    toast("Open a chat first.");
+    return;
+  }
+  if (isLiveListenActive()) {
+    if (liveListenOtherUserId() === String(partner.userId)) {
+      toast("You're already listening with them.");
+      return;
+    }
+    toast("Leave the current listen first.");
+    return;
+  }
+  const prefer = opts.prefer === "partner" ? "partner" : "self";
+  const selfTrack = bridge.getTrackRef?.();
+  const partnerTrack = presenceSongTrack(bridge.getChatPartnerPresence?.());
+  const picked = opts.track && String(opts.track.url || "").trim() ? opts.track : null;
+  const track = picked
+    || (prefer === "partner" ? (partnerTrack || selfTrack) : (selfTrack || partnerTrack));
+  if (!String(track?.url || "").trim()) {
+    if (typeof bridge.pickSongForChatListen === "function") {
+      bridge.pickSongForChatListen();
+      return;
+    }
+    toast("Play a song first, then invite.");
     return;
   }
   try { bridge.primePlayerInGesture?.(); } catch {}
-  const selfTrack = bridge.getTrackRef?.();
-  const selfUrl = String(selfTrack?.url || "").trim();
-  if (!selfUrl || selfUrl !== track.url) {
-    try {
-      await bridge.playUrlOnPlayer?.(track.url, track.title, track.artUrl, {
-        songId: track.songId,
-        ownerUserId: track.ownerUserId,
-        openPlayer: false,
-        liveListenJoin: true,
-      });
-    } catch {}
-  }
   await createSessionForGuest({
     userId: partner.userId,
     username: partner.username || partner.displayName,
     displayName: partner.displayName || partner.username,
     avatar: partner.avatarUrl || partner.avatar,
     threadId: partner.threadId || "",
-  }, bridge.getTrackRef?.() || track);
+  }, track);
 }
 
 export async function openLiveListenInviteFromPlayer() {

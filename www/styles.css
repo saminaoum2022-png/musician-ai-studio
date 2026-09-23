@@ -40281,6 +40281,30 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
 .liveListenChipLeave:active{ transform: scale(0.97); }
 .liveListenChip[hidden]{ display: none !important; }
 .liveListenChip.is-status{ cursor: default; }
+.liveListenChip.is-waiting{
+  max-width: min(92vw, 380px);
+  border-color: rgba(255, 196, 92, 0.48);
+  background: rgba(36, 22, 10, 0.9);
+  color: #fff4e4;
+}
+.liveListenChip.is-waiting .liveListenChipLabel{
+  white-space: normal;
+  line-height: 1.25;
+}
+.liveListenChip.is-waiting .liveListenChipDot{
+  background: #ffc45c;
+  box-shadow: 0 0 0 0 rgba(255, 196, 92, 0.7);
+  animation-name: liveListenWaitPulse;
+}
+@keyframes liveListenWaitPulse{
+  0%{ box-shadow: 0 0 0 0 rgba(255, 196, 92, 0.55); }
+  70%{ box-shadow: 0 0 0 8px rgba(255, 196, 92, 0); }
+  100%{ box-shadow: 0 0 0 0 rgba(255, 196, 92, 0); }
+}
+.liveListenChip.is-ended{
+  border-color: rgba(255,255,255,0.22);
+  background: rgba(16, 16, 22, 0.9);
+}
 .liveListenChipDot{
   width: 8px;
   height: 8px;
@@ -40374,6 +40398,118 @@ body:has(.liveListenOverlay.is-open) .toast{
   background: rgba(124,92,255,0.22);
   color: #efe8ff;
   font-weight: 800;
+}
+.liveListenOverlay--invite .npPresenceSheet{
+  padding-top: 12px;
+}
+.liveListenOverlay--invite .npPresenceKicker{
+  display: block;
+  text-align: center;
+  margin-bottom: 18px;
+}
+.liveListenInviteHero{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 18px;
+}
+.liveListenInviteAvatar{
+  flex: 0 0 auto;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  object-fit: cover;
+  overflow: hidden;
+  background: rgba(124,92,255,0.22);
+  border: 2px solid rgba(255,255,255,0.16);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.32);
+}
+.liveListenInviteAvatar img,
+.liveListenInviteAvatar svg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.liveListenInviteAvatar.messagesAvatarFallback,
+.liveListenInviteAvatar.liveListenAvatarPh{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 800;
+  color: #efe8ff;
+}
+.liveListenInviteWho{
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.liveListenInviteName{
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #f8faff;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.liveListenInviteVerb{
+  font-size: 15px;
+  font-weight: 650;
+  color: rgba(223,231,251,0.78);
+  line-height: 1.25;
+}
+.liveListenInviteSong{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+.liveListenInviteSongArt{
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: rgba(255,255,255,0.06);
+}
+.liveListenInviteSongArt--ph{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(196,182,255,0.9);
+  font-size: 16px;
+}
+.liveListenInviteSongMeta{
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.liveListenInviteSongTitle{
+  font-size: 14px;
+  font-weight: 750;
+  color: #eef2ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.liveListenInviteSongSub{
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(223,231,251,0.52);
 }
 
 html[data-theme="light"] .liveListenChip{
@@ -60575,6 +60711,26 @@ html[data-theme="light"] .npPresenceBtn--primary{
 html[data-theme="light"] .npPresenceArt{
   border-color: var(--border);
   background: var(--surface-secondary);
+}
+html[data-theme="light"] .liveListenInviteName{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .liveListenInviteVerb{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .liveListenInviteAvatar{
+  border-color: rgba(15,23,40,0.08);
+  box-shadow: 0 8px 22px rgba(15,23,40,0.1);
+}
+html[data-theme="light"] .liveListenInviteSong{
+  background: var(--nabad-glass-bg);
+  border-color: var(--nabad-glass-border);
+}
+html[data-theme="light"] .liveListenInviteSongTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .liveListenInviteSongSub{
+  color: var(--text-secondary);
 }
 
 /* Discover header icon buttons (search refresh etc.) */

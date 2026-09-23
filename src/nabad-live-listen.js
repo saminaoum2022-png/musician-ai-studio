@@ -5,9 +5,8 @@
  * v1 rules (product, not edge cases):
  * - Host owns play, pause, seek. Guest follows volume + leave only.
  * - Start together: invite resets the invited song to 0:00 and holds it.
- *   The host may listen to something else while waiting. When the guest
- *   accepts, the host drops that and both play the invited song from 0:00.
- *   If they never accept, the host taps the chip and cancels.
+ *   Host stays on that song while waiting. When the guest accepts, both
+ *   play from 0:00. If they never accept, the host taps the chip and cancels.
  * - After that, guest follows host play / pause / rewind only. A couple
  *   of seconds of drift is fine. Buffering must not seek the guest.
  * - Guest follows host play / pause / rewind as events — not a clock chase.
@@ -53,6 +52,8 @@ let _hostAtEnd = false;
 let _guestEndShown = false;
 let _listenOpenToken = 0;
 let _hostEndSheetOpen = false;
+let _guestSongEnded = false;
+let _guestSongEndedSheetOpen = false;
 const _seenInviteIds = new Set();
 
 function clientLiveListenUiBaked() {
@@ -337,14 +338,19 @@ export function syncLiveListenChrome() {
   const name = partnerLabel(_state.session);
   const waiting = hostAwaitingGuest() || _state.session?.status === "pending";
   const live = _state.session?.status === "live" && !waiting;
+  const songEnded = (_state.role === "host" && _hostAtEnd) || (guest && _guestSongEnded);
   const kicker = _state.role === "host"
-    ? (waiting ? `At the start · waiting for @${name}` : (live ? `Live with @${name}` : "Live listen"))
-    : `Listening with @${name}`;
+    ? (waiting
+      ? `Waiting for @${name} — tap to cancel`
+      : (songEnded ? "Song finished · tap to replay" : (live ? `Live with @${name}` : "Live listen")))
+    : (songEnded ? "Song finished" : `Listening with @${name}`);
   chip.innerHTML = `<span class="liveListenChipDot" aria-hidden="true"></span><span class="liveListenChipLabel">${escapeHtml(kicker)}</span>`;
   chip.classList.toggle("is-status", guest);
+  chip.classList.toggle("is-waiting", Boolean(waiting && !guest));
+  chip.classList.toggle("is-ended", Boolean(songEnded));
   chip.setAttribute("aria-label", _state.role === "host"
-    ? (waiting ? "Cancel live listen invite" : "End live listen")
-    : `Listening with @${name}`);
+    ? (waiting ? `Waiting for @${name}. Tap to cancel the invite.` : (songEnded ? "Song finished. Tap to play again or end." : "End live listen"))
+    : (songEnded ? "Song finished" : `Listening with @${name}`));
   setBodyRole();
   syncGuestPlayerBar(false, "");
   syncShareChooserButton();
@@ -384,7 +390,32 @@ function setOverlayStatus(text) {
   if (el) el.textContent = String(text || "");
 }
 
-function openOverlay({ kicker, title, sub, art, actionsHtml, onAction, onDismiss }) {
+function inviteSheetBodyHtml({ kicker, host, songTitle, art }) {
+  const name = displayName(host || {});
+  const handle = name === "friend" ? "A friend" : `@${name}`;
+  const cover = String(art || "").trim();
+  const coverHtml = cover
+    ? `<img class="liveListenInviteSongArt" src="${escapeHtml(cover)}" alt="" />`
+    : `<span class="liveListenInviteSongArt liveListenInviteSongArt--ph" aria-hidden="true">♪</span>`;
+  return `
+    <span class="npPresenceKicker">${escapeHtml(kicker || "Listen together")}</span>
+    <div class="liveListenInviteHero">
+      ${avatarHtml(host, "liveListenInviteAvatar")}
+      <div class="liveListenInviteWho">
+        <strong class="liveListenInviteName">${escapeHtml(handle)}</strong>
+        <span class="liveListenInviteVerb">wants to listen with you</span>
+      </div>
+    </div>
+    <div class="liveListenInviteSong">
+      ${coverHtml}
+      <div class="liveListenInviteSongMeta">
+        <strong class="liveListenInviteSongTitle">${escapeHtml(songTitle || "A song")}</strong>
+        <span class="liveListenInviteSongSub">From the start</span>
+      </div>
+    </div>`;
+}
+
+function openOverlay({ kicker, title, sub, art, actionsHtml, onAction, onDismiss, inviteHost }) {
   closeOverlay();
   const overlay = document.createElement("div");
   overlay.id = "liveListenOverlay";
@@ -393,17 +424,21 @@ function openOverlay({ kicker, title, sub, art, actionsHtml, onAction, onDismiss
   const coverHtml = cover
     ? `<img class="npPresenceArt" src="${escapeHtml(cover)}" alt="" />`
     : `<span class="npPresenceArt npPresenceArt--ph" aria-hidden="true">♪</span>`;
-  overlay.innerHTML = `
-    <div class="npPresenceSheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(kicker || "Live listen")}">
-      <div class="npPresenceGrab" aria-hidden="true"></div>
-      <div class="npPresenceTop">
+  const topHtml = inviteHost
+    ? inviteSheetBodyHtml({ kicker, host: inviteHost, songTitle: title, art })
+    : `<div class="npPresenceTop">
         ${coverHtml}
         <div class="npPresenceMeta">
           <span class="npPresenceKicker">${escapeHtml(kicker || "Live listen")}</span>
           <strong class="npPresenceTitle">${escapeHtml(title || "Song")}</strong>
           <span class="npPresenceArtist">${escapeHtml(sub || "")}</span>
         </div>
-      </div>
+      </div>`;
+  if (inviteHost) overlay.classList.add("liveListenOverlay--invite");
+  overlay.innerHTML = `
+    <div class="npPresenceSheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(kicker || "Live listen")}">
+      <div class="npPresenceGrab" aria-hidden="true"></div>
+      ${topHtml}
       <div class="npPresenceActions">${actionsHtml}</div>
     </div>`;
   document.body.appendChild(overlay);
@@ -580,6 +615,7 @@ async function applyGuestTick(tick, { force = false } = {}) {
   const playing = tick?.playing === true && String(tick?.status || "live") === "live";
   if (reason === "start" || reason === "ended") {
     if (reason === "start") {
+      clearGuestSongEnded();
       await seekGuestToHost({ ...tick, positionMs: 0 }, { force: true });
       noteHostClock({ positionMs: 0, playing: true });
       _guestStarted = true;
@@ -591,6 +627,7 @@ async function applyGuestTick(tick, { force = false } = {}) {
     await seekGuestToHost({ ...tick, positionMs: holdMs }, { force: true });
     noteHostClock({ positionMs: holdMs, playing: false });
     holdGuestBeforeEnd(a);
+    showGuestSongEnded();
     return;
   }
   const shouldSeek = force || reason === "seek";
@@ -755,6 +792,8 @@ async function clearLocalSession({ keepRealtime = false } = {}) {
   _hostAtEnd = false;
   _hostEndSheetOpen = false;
   _guestEndShown = false;
+  _guestSongEnded = false;
+  _guestSongEndedSheetOpen = false;
   _hostScrubUntil = 0;
   _suppressHostEventsUntil = 0;
   _hostWantsPlaying = false;
@@ -812,6 +851,7 @@ async function startTogetherAsHost({ replay = false } = {}) {
   _hostAtEnd = false;
   _hostEndSheetOpen = false;
   _hostWantsPlaying = true;
+  syncLiveListenChrome();
   _suppressHostEventsUntil = Date.now() + 2000;
   await loadInvitedSongOnHost(_state.session);
   if (!_hostWantsPlaying) {
@@ -1040,6 +1080,42 @@ async function onHostLeft() {
   });
 }
 
+function clearGuestSongEnded() {
+  const wasOpen = _guestSongEndedSheetOpen;
+  _guestSongEnded = false;
+  _guestSongEndedSheetOpen = false;
+  if (wasOpen) {
+    try { closeOverlay(); } catch {}
+  }
+  syncLiveListenChrome();
+}
+
+function showGuestSongEnded() {
+  if (!isLiveListenGuest() || _guestEndShown) return;
+  _guestSongEnded = true;
+  syncLiveListenChrome();
+  if (_guestSongEndedSheetOpen) return;
+  _guestSongEndedSheetOpen = true;
+  const name = partnerLabel(_state?.session);
+  openOverlay({
+    kicker: "Song finished",
+    title: _state?.session?.songTitle || "Song",
+    sub: name
+      ? `@${name} can play it again from the start. You follow, or leave.`
+      : "The host can play it again from the start. You follow, or leave.",
+    art: _state?.session?.songCover,
+    actionsHtml: `
+      <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="leave">Leave</button>
+      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="ok">OK</button>`,
+    onAction: (act) => {
+      _guestSongEndedSheetOpen = false;
+      closeOverlay();
+      if (act === "leave") void leaveGuestSession();
+    },
+    onDismiss: () => { _guestSongEndedSheetOpen = false; },
+  });
+}
+
 function showHostSongEnded() {
   if (!isLiveListenHost() || !_hostAtEnd || _hostEndSheetOpen) return;
   _hostEndSheetOpen = true;
@@ -1076,7 +1152,7 @@ async function confirmHostEnd() {
     kicker: waiting ? "Invite sent" : "Live listen",
     title: _state?.session?.songTitle || "Song",
     sub: waiting
-      ? `The song stays at the start until @${name} joins. Cancel if you want to play it yourself.`
+      ? `Waiting on this song at the start until @${name} joins. Cancel if you want to play something else.`
       : `End live listen with @${name}?`,
     art: _state?.session?.songCover,
     actionsHtml: `
@@ -1193,15 +1269,14 @@ function showEndedFallback(session) {
 }
 
 function showJoinPrompt(session) {
-  const name = displayName(session?.host || {});
-  const title = String(session.songTitle || "").trim() || "Now Playing";
+  const title = String(session.songTitle || "").trim() || "A song";
   haptic("impact");
   playListenCue("invite");
   openOverlay({
-    kicker: "Live listen",
+    kicker: "Listen together",
     title,
-    sub: `Start from the beginning with ${name}`,
     art: session.songCover,
+    inviteHost: session.host || {},
     actionsHtml: `
       <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="dismiss">Not now</button>
       <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="join">Start together</button>`,
@@ -1251,18 +1326,18 @@ function notificationPreviewSession(n) {
     host: {
       username: String(meta.actor_username || "").replace(/^@/, "").trim(),
       displayName: String(meta.actor_display_name || meta.actor_username || "").replace(/^@/, "").trim(),
+      avatar: String(meta.actor_avatar || "").trim(),
     },
   };
 }
 
 function showListenSheetPreview(preview) {
-  const name = displayName(preview?.host || {});
   const token = _listenOpenToken;
   openOverlay({
     kicker: "Listen together",
-    title: preview?.songTitle || "Listen together",
-    sub: name && name !== "friend" ? `With ${name}` : "",
+    title: preview?.songTitle || "A song",
     art: preview?.songCover,
+    inviteHost: preview?.host || {},
     actionsHtml: `
       <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="dismiss">OK</button>`,
     onAction: () => {
@@ -1381,7 +1456,7 @@ async function createSessionForGuest(guest, track, rowBtn) {
     if (!session?.id) throw new Error("Could not start live listen");
     closeOverlay();
     await becomeHost(session);
-    toast(`Back to the start. Plays when @${handle} joins — tap the chip to cancel.`, { icon: "🎧", durationMs: 3400 });
+    toast(`Waiting on this song for @${handle} — tap the chip to cancel.`, { icon: "🎧", durationMs: 3400 });
   } catch (e) {
     const raw = String(e?.message || "Could not start live listen");
     const msg = /not set up|table_missing/i.test(raw)
@@ -1530,7 +1605,10 @@ export function noteLiveListenHostTransport(wantPlaying) {
 
 export function onLiveListenPlayerEvent(type) {
   if (isLiveListenGuest()) {
-    if (type === "ended") holdGuestBeforeEnd(playerEl());
+    if (type === "ended") {
+      holdGuestBeforeEnd(playerEl());
+      showGuestSongEnded();
+    }
     return;
   }
   if (!isLiveListenHost()) return;
@@ -1546,6 +1624,7 @@ export function onLiveListenPlayerEvent(type) {
     if (!sessionMatchesPlayer(_state?.session, ended?.currentSrc || ended?.src, _state?.session?.songId)) return;
     _hostAtEnd = true;
     _hostWantsPlaying = false;
+    syncLiveListenChrome();
     void broadcastTick({ playing: false, positionMs: currentDurationMs(), reason: "ended" });
     showHostSongEnded();
     return;
@@ -1602,11 +1681,14 @@ export function onLiveListenPlayerEvent(type) {
 export function interceptLiveListenSongChange(nextUrl, opts = {}) {
   if (!isLiveListenActive()) return false;
   if (opts?.liveListenJoin) return false;
-  if (hostAwaitingGuest()) return false;
   const next = String(nextUrl || "").trim();
   const songId = String(opts?.songId || opts?.playSource?.songId || "").trim();
   if (sessionMatchesPlayer(_state?.session, next, songId)) return false;
   haptic("impact");
+  if (hostAwaitingGuest()) {
+    toast("Stay on this song — it starts when they join. Tap the chip to cancel.", { durationMs: 2600 });
+    return true;
+  }
   toast("Stay on this song until you leave live listen", { durationMs: 2400 });
   return true;
 }

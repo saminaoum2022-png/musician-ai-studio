@@ -221,7 +221,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260923-184008" />
+    <link rel="stylesheet" href="./styles.css?v=20260923-184935" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -4407,68 +4407,57 @@
               </div>
             </section>
 
-            <section class="settingsSection" aria-labelledby="settingsCreatorTitle">
-              <h2 id="settingsCreatorTitle" class="settingsSectionLabel">Creator tools</h2>
-              <div class="settingsList">
-                <a href="#/mentor" class="settingsRow settingsRowLink" data-route-link="mentor">
-                  <span class="settingsRowIco" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M2.5 12h1.8M19.7 12H22"/><path d="M6 12c0-3.2 1.6-3.2 3.2 0s3.2 3.2 4.8 0 3.2-3.2 4.8 0"/></svg>
-                  </span>
-                  <span class="settingsRowBody">
-                    <span class="settingsRowTitle">Voice Lab</span>
-                    <span class="settingsRowSub">Voice scan and range labels</span>
-                  </span>
-                  <span class="settingsRowChev" aria-hidden="true">›</span>
-                </a>
-                <button type="button" class="settingsRow settingsRowLink" id="btnSettingsProSingerApply">
-                  <span class="settingsRowIco" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z" fill="currentColor" stroke="none"/><path d="M19 11a7 7 0 0 1-14 0" stroke-linecap="round"/><path d="M12 18v3" stroke-linecap="round"/></svg>
-                  </span>
-                  <span class="settingsRowBody">
-                    <span class="settingsRowTitle">Become a NabadAi Singer</span>
-                    <span class="settingsRowSub" id="settingsProSingerApplySub">Perform for creators worldwide</span>
-                  </span>
-                  <span class="settingsRowChev" aria-hidden="true">›</span>
-                </button>
-                <button type="button" class="settingsRow settingsRowLink" id="btnSettingsProSingerStudio" hidden>
-                  <span class="settingsRowIco" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 19V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14" stroke-linecap="round"/><path d="M8 17v-6l4-2 4 2v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </span>
-                  <span class="settingsRowBody">
-                    <span class="settingsRowTitle">NabadAi Singer Studio</span>
-                    <span class="settingsRowSub" id="settingsProSingerStudioSub">View assigned gigs</span>
-                  </span>
-                  <span class="settingsRowChev" aria-hidden="true">›</span>
-                </button>
-                <button type="button" class="settingsRow settingsRowLink" id="btnSettingsProSingerRequests">
-                  <span class="settingsRowIco" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M9 18V5l12-2v13" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" fill="currentColor" stroke="none"/><circle cx="18" cy="16" r="3" fill="currentColor" stroke="none"/></svg>
-                  </span>
-                  <span class="settingsRowBody">
-                    <span class="settingsRowTitle">My singer requests</span>
-                    <span class="settingsRowSub" id="settingsProSingerRequestsSub">Track your pro singer orders</span>
-                  </span>
-                  <span class="settingsRowChev" aria-hidden="true">›</span>
-                </button>
+            <section class="settingsSection settingsPersonaFeature" aria-labelledby="settingsVoicesManagerTitle">
+              <h2 id="settingsVoicesManagerTitle" class="settingsSectionLabel">Persona</h2>
+              <button id="btnSettingsPersonaRecord" type="button" class="settingsPersonaCard">
+                <span class="settingsPersonaCardMark" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z" fill="currentColor" stroke="none"/><path d="M19 11a7 7 0 0 1-14 0" stroke-linecap="round"/><path d="M12 18v3" stroke-linecap="round"/></svg>
+                </span>
+                <span class="settingsPersonaCardCopy">
+                  <strong>Your voice on every song</strong>
+                  <span>Record once. New songs can sing like you.</span>
+                </span>
+                <span class="settingsPersonaCardCta">Record</span>
+              </button>
+              <div class="settingsVoicesManager">
+                <p class="settingsVoicesManagerNote">Saved to your account. A recorded voice fades — re-record about once a week so songs keep sounding like you.</p>
+                <div id="settingsPersonaList" class="settingsVoicesList" role="list"></div>
+                <p id="settingsPersonaEmpty" class="settingsVoicesEmpty" hidden></p>
               </div>
             </section>
 
-            <section class="settingsSection" aria-labelledby="settingsVoicesManagerTitle">
-              <h2 id="settingsVoicesManagerTitle" class="settingsSectionLabel">Your voices</h2>
-              <div class="settingsList settingsVoicesManager">
-                <p class="settingsVoicesManagerNote">Voices are saved to your account and sync across your devices. A recorded voice fades over time — re-record it about once a week so songs keep sounding like you.</p>
-                <button id="btnSettingsPersonaRecord" type="button" class="settingsRow settingsRowLink">
-                  <span class="settingsRowIco" aria-hidden="true">
+            <section class="settingsSection settingsCreatorSection" aria-labelledby="settingsCreatorTitle">
+              <h2 id="settingsCreatorTitle" class="settingsSectionLabel">Creator studio</h2>
+              <p class="settingsCreatorLead">Voice scan and singer work.</p>
+              <div class="settingsCreatorGrid">
+                <a href="#/mentor" class="settingsCreatorTile" data-route-link="mentor">
+                  <span class="settingsCreatorTileIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M2.5 12h1.8M19.7 12H22"/><path d="M6 12c0-3.2 1.6-3.2 3.2 0s3.2 3.2 4.8 0 3.2-3.2 4.8 0"/></svg>
+                  </span>
+                  <strong>Voice Lab</strong>
+                  <span>Scan and label your range</span>
+                </a>
+                <button type="button" class="settingsCreatorTile" id="btnSettingsProSingerApply">
+                  <span class="settingsCreatorTileIco" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z" fill="currentColor" stroke="none"/><path d="M19 11a7 7 0 0 1-14 0" stroke-linecap="round"/><path d="M12 18v3" stroke-linecap="round"/></svg>
                   </span>
-                  <span class="settingsRowBody">
-                    <span class="settingsRowTitle">Record a new voice</span>
-                    <span class="settingsRowSub">Sing once — sounds like you on every song</span>
-                  </span>
-                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                  <strong>NabadAi Singer</strong>
+                  <span id="settingsProSingerApplySub">Perform for creators</span>
                 </button>
-                <div id="settingsPersonaList" class="settingsVoicesList" role="list"></div>
-                <p id="settingsPersonaEmpty" class="settingsVoicesEmpty" hidden></p>
+                <button type="button" class="settingsCreatorTile" id="btnSettingsProSingerStudio" hidden>
+                  <span class="settingsCreatorTileIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 19V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14" stroke-linecap="round"/><path d="M8 17v-6l4-2 4 2v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                  <strong>Singer Studio</strong>
+                  <span id="settingsProSingerStudioSub">View assigned gigs</span>
+                </button>
+                <button type="button" class="settingsCreatorTile" id="btnSettingsProSingerRequests">
+                  <span class="settingsCreatorTileIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M9 18V5l12-2v13" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" fill="currentColor" stroke="none"/><circle cx="18" cy="16" r="3" fill="currentColor" stroke="none"/></svg>
+                  </span>
+                  <strong>Singer requests</strong>
+                  <span id="settingsProSingerRequestsSub">Track your orders</span>
+                </button>
               </div>
             </section>
 
@@ -5632,7 +5621,7 @@
         requestAnimationFrame(() => requestAnimationFrame(play));
       }
       // Dynamic import so the giant app module does not block the first dots.
-      import("./src/app.js?v=20260923-184008");
+      import("./src/app.js?v=20260923-184935");
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
   </body>

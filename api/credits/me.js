@@ -40,7 +40,7 @@ module.exports = async function handler(req, res) {
   });
 
   const balanceRes = await selectFromTable(
-    `user_credits?select=balance,paid_balance,gift_balance,promo_balance,updated_at&user_id=eq.${encodeURIComponent(user.userId)}`
+    `user_credits?select=balance,paid_balance,gift_balance,promo_balance,trial_balance,updated_at&user_id=eq.${encodeURIComponent(user.userId)}`
   );
   const ledgerRes = await selectFromTable(
     `credit_ledger?select=delta,reason,ref,created_at&user_id=eq.${encodeURIComponent(
@@ -56,6 +56,7 @@ module.exports = async function handler(req, res) {
   const paidBalance = row && row.paid_balance != null ? Number(row.paid_balance || 0) : null;
   const giftBalance = row && row.gift_balance != null ? Number(row.gift_balance || 0) : null;
   const promoBalance = row && row.promo_balance != null ? Number(row.promo_balance || 0) : null;
+  const trialBalance = row && row.trial_balance != null ? Number(row.trial_balance || 0) : 0;
   const bucketsReady = paidBalance != null && giftBalance != null && promoBalance != null;
   const ledger = Array.isArray(ledgerRes.data) ? ledgerRes.data : [];
   const pro = await fetchProSubscriptionForUser(user.userId);
@@ -69,6 +70,7 @@ module.exports = async function handler(req, res) {
     paidBalance: bucketsReady ? paidBalance : balance,
     giftBalance: bucketsReady ? giftBalance : 0,
     promoBalance: bucketsReady ? promoBalance : 0,
+    trialBalance: bucketsReady ? trialBalance : 0,
     giftableBalance: bucketsReady ? paidBalance + promoBalance : 0,
     bucketsReady,
     ledger,

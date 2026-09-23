@@ -14,6 +14,7 @@ const {
   readJsonBody,
 } = require("../_lib/credits-auth");
 const { notifyGiftReceived } = require("../_lib/gift-notifications");
+const { remainingTrialCreditsToProtect } = require("../_lib/trial-credits");
 
 const ALLOWED = new Set([1, 3, 5]);
 
@@ -67,6 +68,22 @@ module.exports = async function handler(req, res) {
     }
   } else {
     return sendJson(res, 400, { error: "Invalid target kind." });
+  }
+
+  const trialProtect = await remainingTrialCreditsToProtect(user.userId);
+  if (trialProtect > 0) {
+    const balRes = await selectFromTable(
+      `user_credits?select=paid_balance,promo_balance&user_id=eq.${encodeURIComponent(user.userId)}&limit=1`,
+    );
+    const row = Array.isArray(balRes.data) && balRes.data[0] ? balRes.data[0] : null;
+    const giftable = Number(row?.paid_balance || 0) + Number(row?.promo_balance || 0);
+    if (giftable < amount) {
+      return sendJson(res, 402, {
+        error: "Trial credits can’t be gifted. Subscribe to keep leftover credits, or use paid credits.",
+        code: "insufficient_giftable",
+        giftable,
+      });
+    }
   }
 
   const rpc = await callRpc("send_gift", {

@@ -631,6 +631,7 @@ const SUPPORT_TEMPLATE_LABELS = Object.freeze({
   first_paid: "First paid — thank you",
   feedback_checkin: "Feedback check-in",
   cancel_confirm: "Cancel confirm",
+  trial_canceled: "Trial canceled",
   refund_confirm: "Refund confirm",
 });
 
@@ -4202,6 +4203,7 @@ function supportTemplateShortLabel(id) {
     first_paid: "First paid",
     feedback_checkin: "Feedback",
     cancel_confirm: "Cancel confirm",
+    trial_canceled: "Trial canceled",
     refund_confirm: "Refund",
     custom_compose: "Compose",
   };

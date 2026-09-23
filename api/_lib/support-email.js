@@ -26,7 +26,12 @@ const SUPPORT_TEMPLATES = Object.freeze([
   {
     id: "cancel_confirm",
     label: "Cancel confirm",
-    description: "User cancelled — confirms access until period end.",
+    description: "Paying member cancelled — confirms access until period end.",
+  },
+  {
+    id: "trial_canceled",
+    label: "Trial canceled",
+    description: "User canceled during the free trial — no charge, unused trial credits end with the trial.",
   },
   {
     id: "refund_confirm",
@@ -123,6 +128,8 @@ You're on a 7-day free trial with full Pro access — Studio, cover refresh, Coa
 Trial ends: ${trialEnd}
 After that, your plan renews at ${price}/${cadence} unless you cancel before the trial ends.
 
+Unused trial credits end if you don't subscribe. Welcome credits, bought packs, and gifts you already have stay.
+
 Manage or cancel anytime:
 Sign in with your subscription email → ${manage}
 
@@ -200,6 +207,25 @@ Pro access until: ${accessUntil}
 You won't be charged again after that unless you resubscribe.
 
 Changed your mind? Open Manage subscription in the app and you can turn renewal back on before ${accessUntil}.
+
+Web: ${manage}
+iPhone: ${ios}
+
+Thanks for trying NabadAi Pro. We'd love to have you back anytime.
+
+— NabadAi Support`,
+    },
+    trial_canceled: {
+      subject: "Your NabadAi Pro trial is set to end",
+      text: `Hi,
+
+This confirms you canceled NabadAi Pro during your free trial.
+
+You will not be charged.
+Pro access until: ${accessUntil}
+Unused trial credits end when the trial ends on ${accessUntil}. Welcome credits, bought packs, and gifts you already have stay.
+
+Changed your mind? Open Manage subscription before ${accessUntil} and you can turn the trial back on.
 
 Web: ${manage}
 iPhone: ${ios}
@@ -308,8 +334,9 @@ function suggestSupportEmailTemplate({ subscription, emailLogs, billingEvents } 
   const endMs = Date.parse(String(sub.currentPeriodEnd || sub.current_period_end || ""));
   const createdMs = Date.parse(String(sub.createdAt || sub.created_at || ""));
 
-  if (isPendingCancel(sub) && !sent.has("cancel_confirm")) {
-    return "cancel_confirm";
+  if (isPendingCancel(sub)) {
+    if (status === "trialing" && !sent.has("trial_canceled")) return "trial_canceled";
+    if (status !== "trialing" && !sent.has("cancel_confirm")) return "cancel_confirm";
   }
 
   if (status === "trialing") {

@@ -7,6 +7,12 @@ const {
   selectFromTable,
 } = require("./credits-auth");
 const {
+  isTrialGrant,
+  grantTrialCredits,
+  convertTrialCreditsToPaid,
+  expireUnusedTrialCredits,
+} = require("./trial-credits");
+const {
   planForProductId,
   creditsForPackProductId,
   creditsForSubscriptionGrant,
@@ -235,6 +241,8 @@ async function grantCreditsOnce({
   eventType,
   planId,
   productId,
+  bucket = "paid",
+  convertTrial = false,
 }) {
   const uid = cleanUserId(userId);
   const id = String(eventId || "").trim();
@@ -266,6 +274,23 @@ async function grantCreditsOnce({
     return { granted: 0, skipped: true, error: claim.error || "claim_failed" };
   } else {
     claimedViaRpc = true;
+  }
+
+  if (convertTrial) {
+    await convertTrialCreditsToPaid(uid, grantRef);
+  }
+
+  if (String(bucket || "paid") === "trial") {
+    const trial = await grantTrialCredits({ userId: uid, amount: credits, ref: grantRef });
+    if (trial.skipped && trial.error === "trial_credits_not_migrated") {
+      // SQL not applied yet — fall through to paid so the trial still grants.
+    } else {
+      if (claimedViaRpc) {
+        if (trial.duplicate || trial.granted > 0) await completeBillingEventGrant(id, trial.granted || 0);
+        else await releaseBillingEventClaim(id);
+      }
+      return trial;
+    }
   }
 
   const rpc = await callRpc("grant_paid_credits", {
@@ -374,7 +399,8 @@ async function applyRevenueCatEvent(event) {
       periodEndIso: periodEndIsoFromMs(expirationMs),
       providerSubscriptionId: transactionId,
     });
-    return { ok: true, kind: "expiration", userId, planId: plan.planId };
+    const expire = await expireUnusedTrialCredits(userId, `rc:${transactionId || eventId}`);
+    return { ok: true, kind: "expiration", userId, planId: plan.planId, expire };
   }
 
   const status = await resolveStatusForUpsert(
@@ -406,6 +432,11 @@ async function applyRevenueCatEvent(event) {
       eventType,
       subscriptionStatus: status,
     });
+    const trialGrant = isTrialGrant({
+      periodType,
+      eventType,
+      subscriptionStatus: status,
+    });
     grant = await grantCreditsOnce({
       eventId: transactionId || eventId,
       userId,
@@ -415,6 +446,8 @@ async function applyRevenueCatEvent(event) {
       eventType,
       planId: plan.planId,
       productId,
+      bucket: trialGrant ? "trial" : "paid",
+      convertTrial: !trialGrant,
     });
   }
 
@@ -507,6 +540,9 @@ async function syncRevenueCatSubscriber(userId) {
     periodEndIso: active.periodEndIso,
     providerSubscriptionId: active.storeTransactionId || null,
   });
+  if (status === "expired") {
+    await expireUnusedTrialCredits(uid, "rc:sync");
+  }
 
   return {
     ok: true,

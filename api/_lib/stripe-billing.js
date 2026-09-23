@@ -15,6 +15,7 @@ const {
   upsertProSubscription,
   grantCreditsOnce,
 } = require("./billing-subscription");
+const { expireUnusedTrialCredits } = require("./trial-credits");
 const { fetchProSubscriptionForUser } = require("./pro-subscription");
 const {
   hasUsedStripeTrial,
@@ -241,6 +242,9 @@ async function applyStripeSubscription(
   });
 
   await markStripeTrialStartedIfNeeded(stripe, target, { userId, planId, status });
+  if (!isProStripeStatus(status)) {
+    await expireUnusedTrialCredits(userId, `stripe:sync:${target.id}`);
+  }
 
   let grant = { granted: 0, skipped: true };
   if (grantCredits && CREDIT_GRANT_EVENT_TYPES.has("INITIAL_PURCHASE")) {
@@ -261,6 +265,8 @@ async function applyStripeSubscription(
           eventType,
           planId,
           productId: priceId,
+          bucket: status === "trialing" ? "trial" : "paid",
+          convertTrial: status !== "trialing",
         });
       }
     }
@@ -358,6 +364,8 @@ async function applyStripeInvoicePaid(invoice) {
     eventType,
     planId,
     productId: priceId,
+    bucket: status === "trialing" ? "trial" : "paid",
+    convertTrial: status !== "trialing",
   });
 
   return { ok: true, kind: "invoice", userId, planId, grant };
@@ -386,7 +394,8 @@ async function applyStripeEvent(event) {
       providerSubscriptionId: String(sub.id || ""),
       cancelAtPeriodEnd: false,
     });
-    return { ok: true, kind: "expiration", userId, planId };
+    const expire = await expireUnusedTrialCredits(userId, `stripe:${sub.id || "expired"}`);
+    return { ok: true, kind: "expiration", userId, planId, expire };
   }
 
   if (type === "customer.subscription.created" || type === "customer.subscription.updated") {
@@ -578,6 +587,8 @@ async function ensureStripeInitialCreditsGranted(sub) {
     eventType: "INITIAL_PURCHASE",
     planId,
     productId: priceId,
+    bucket: status === "trialing" ? "trial" : "paid",
+    convertTrial: status !== "trialing",
   });
 }
 

@@ -171,7 +171,7 @@ export const PRO_LAUNCH_COPY = Object.freeze({
   creditsFinePrint: [
     "1 full song = 12 credits (2 versions).",
     "Subscription credits and purchased credits are both giftable.",
-    "Credits never expire.",
+    "Paid credits never expire. Unused trial credits end if you don’t subscribe.",
   ],
   iapSoon: "Connect App Store + RevenueCat to enable purchases.",
   iosReady: "Subscribe with your Apple ID. Cancel anytime in iPhone Settings → Subscriptions.",

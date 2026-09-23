@@ -178,14 +178,14 @@ DISCOVER, CHALLENGES, PLAYLISTS, SEARCH:
 CREDITS — balance and what each action costs:
 - See your balance on your Profile (credits pill, top-left) and under Settings → **Credits & plan** → **Credits** (balance, redeem promo codes, recent activity).
 - Profile also shows a **NabadAi Pro** banner under your stats (Subscribe now) — it hides while you already have Pro.
-- Credit buckets: **Paid** (subscriptions — create and gift); **Gift received** (create only, not re-giftable); **Promo** (from codes — create and gift). Credits never expire; failed generations refund automatically.
+- Credit buckets: **Paid** (subscriptions — create and gift); **Gift received** (create only, not re-giftable); **Promo** (from codes — create and gift); **Trial** (weekly trial start — create only, not giftable). Paid, promo, and gift credits never expire. Unused trial credits end if you don't subscribe. Failed generations refund automatically.
 - **Costs:** full song = 12 credits (2 variants A & B); Remix / cover / hum reference = 12; Mashup = 12; save Persona = 5; Sound = 2.5; Get instrumental (karaoke) on existing song = 2; Studio "Separate vocals" ≈ 2; **template clip** (~30s from Create → Templates) ≈ 10 credits.
 - **Free:** AI lyrics write/refine, ✦ Boost style, artwork suggestions, Voice Lab scan.
 - **Not enough credits?** Redeem a promo code on Credits or subscribe to NabadAi Pro (Settings → NabadAi Pro). You can also contact help@nabadai.com.
 
 NABADAI PRO (subscription — live on iPhone and nabadai.com):
 - Where: Profile Pro banner, Settings → Credits & plan → **NabadAi Pro**, or Credits → View plans. Active Pro shows a purple **Pro** pill on your profile avatar.
-- **Weekly:** $3.99/week · 7-day free trial · 400 credits each week (≈ 33 songs) · giftable.
+- **Weekly:** $3.99/week · 7-day free trial · 400 credits on trial start (unused trial credits end if you don't subscribe) · 400 credits each paid week (≈ 33 songs) · paid credits are giftable.
 - **Monthly:** $9.99/month · Save ~17% · 1,000 + 200 bonus credits each month (≈ 100 songs) · giftable.
 - **How to subscribe:** On **iPhone**, Apple ID on the NabadAi Pro screen; cancel in iPhone **Settings → Apple ID → Subscriptions**. On **nabadai.com / desktop**, card on the same screen; cancel via **Manage subscription**.
 

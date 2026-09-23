@@ -58,7 +58,7 @@ CREDIT BUCKETS (Credits breakdown):
 - Paid credits: from subscriptions — you can create songs AND gift Mic/Pulse/Star.
 - Gift credits received: sent by other users — create songs only; cannot re-gift.
 - Promo credits: from promo codes — can create and gift during testing.
-- Credits never expire. If a generation fails, credits are refunded automatically.
+- Paid, promo, and gift credits never expire. Unused trial credits end if you don't subscribe after the free trial. If a generation fails, credits are refunded automatically.
 
 WHAT COSTS CREDITS:
 - Full song generation = ${FULL_SONG_CREDIT_COST} credits (you get 2 track variants A & B).
@@ -71,7 +71,7 @@ FREE (no credits): Idea → Generate, AI lyrics preview, Add vowel marks, ✦ Bo
 
 GIFTING CREDITS (on someone else's published song post):
 - Tap Gift on the post → Mic (${GIFT_TIERS[0].credits} cr), Pulse (${GIFT_TIERS[1].credits} cr), or Star (${GIFT_TIERS[2].credits} cr).
-- Only paid + promo credits are giftable; received gift credits cannot be re-gifted.
+- Only paid + promo credits are giftable; trial credits and received gift credits cannot be gifted.
 - Hold a tier ~0.5s to preview the animation without spending.
 
 NABADAI PRO SUBSCRIPTION (live — iPhone + nabadai.com):

@@ -303,7 +303,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260923-190253";
+const APP_BUILD = "20260923-191629";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -23744,7 +23744,11 @@ async function openSongEditFromLibraryTrack(track) {
     if (els.sunoTitle && title && !String(els.sunoTitle.value || "").trim()) {
       els.sunoTitle.value = title;
     }
-    await prepareSongEditFromFile(file);
+    let remoteUrl = libraryTrackCanonicalUrl(url) || url;
+    if (remoteUrl && !/^https?:\/\//i.test(remoteUrl) && remoteUrl.startsWith("/")) {
+      try { remoteUrl = new URL(remoteUrl, API_BASE || "https://www.nabadai.com").toString(); } catch {}
+    }
+    await prepareSongEditFromFile(file, { audioUrl: remoteUrl });
   } catch (e) {
     resetSongEditSession();
     const msg = String(e?.message || "Couldn't open Edit for this song.").trim();
@@ -23753,7 +23757,7 @@ async function openSongEditFromLibraryTrack(track) {
   }
 }
 
-async function prepareSongEditFromFile(file) {
+async function prepareSongEditFromFile(file, { audioUrl } = {}) {
   if (!nabadSongEditEnabled()) {
     showToast("Edit is admin-only on this build.", { icon: "!", durationMs: 3200 });
     return;
@@ -23774,7 +23778,11 @@ async function prepareSongEditFromFile(file) {
       els.songEditStatus.hidden = false;
       els.songEditStatus.textContent = "Uploading to ElevenLabs and splitting sections…";
     }
-    const prep = await prepareAudioForSongEdit(file);
+    const remoteUrl = String(audioUrl || "").trim();
+    const useRemote = /^https?:\/\//i.test(remoteUrl);
+    const prep = useRemote
+      ? { fileName: String(file.name || "song"), dataUrl: "" }
+      : await prepareAudioForSongEdit(file);
     const r = await apiFetch("/api/music/edit-prepare", {
       method: "POST",
       headers: {
@@ -23783,7 +23791,7 @@ async function prepareSongEditFromFile(file) {
       },
       nativeReadTimeoutMs: 120000,
       nativeConnectTimeoutMs: 30000,
-      body: JSON.stringify({ audio: prep.dataUrl }),
+      body: JSON.stringify(useRemote ? { audioUrl: remoteUrl } : { audio: prep.dataUrl }),
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d?.error || "Could not prepare this song for Edit.");

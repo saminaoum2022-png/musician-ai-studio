@@ -1879,6 +1879,7 @@ module.exports = {
   buildElevenSongCompositionPlan,
   buildElevenEditCompositionPlan,
   decodeReferenceAudioPayload,
+  unwrapProxyAudioUrl,
   estimateMpegAudioDurationMs,
   expectedInpaintDurationMs,
   extractUploadedEditPlan,

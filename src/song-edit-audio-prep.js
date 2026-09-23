@@ -1,6 +1,6 @@
 /**
- * Keep original audio when it fits Vercel’s ~4.5 MB JSON body.
- * Otherwise ask for a shorter / smaller MP3 — keep-sections need real quality.
+ * Device-file fallback only. Library songs send a URL (typical files are ~4 MB
+ * and will not fit Vercel’s ~4.5 MB JSON body once base64-encoded).
  */
 
 export const SONG_EDIT_MAX_DATAURL_CHARS = 3_900_000;
@@ -25,7 +25,7 @@ export async function prepareAudioForSongEdit(file) {
     throw new Error("Unsupported audio format — use MP3, M4A, or WAV.");
   }
   if (dataUrl.length > SONG_EDIT_MAX_DATAURL_CHARS) {
-    throw new Error("Track too large — use an MP3 under about 3 minutes (~3 MB) so Keep sections stay clean.");
+    throw new Error("This file is too large to upload from the device — open the song from your library instead.");
   }
   return {
     dataUrl,

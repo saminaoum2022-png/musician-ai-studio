@@ -303,7 +303,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260923-184935";
+const APP_BUILD = "20260923-190253";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -380,8 +380,34 @@ function fanRelationLabel(stats) {
 }
 const MESSAGES_FEATURE_ENABLED = true;
 
+function shouldShowFloatingBuildStamp() {
+  try {
+    if (isNativeShell()) return true;
+  } catch {}
+  try {
+    const env = String(window.__NABAD_CLIENT_ENV__?.environment || "").toLowerCase();
+    if (env && env !== "production") return true;
+  } catch {}
+  try {
+    const host = String(location.hostname || "").toLowerCase();
+    if (!host || host === "localhost" || host === "127.0.0.1") return true;
+    if (host.includes("-git-staging-") || host.endsWith(".vercel.app")) return true;
+  } catch {}
+  return false;
+}
+
 (() => {
   const f = document.getElementById("footerBuild");
+  const foot = f?.closest?.(".footer") || document.querySelector(".footer");
+  if (!shouldShowFloatingBuildStamp()) {
+    if (f) {
+      f.hidden = true;
+      f.textContent = "";
+    }
+    if (foot) foot.hidden = true;
+    try { document.documentElement.classList.add("hideFloatingBuild"); } catch {}
+    return;
+  }
   if (f) f.textContent = `Build ${APP_BUILD}`;
 })();
 try {
@@ -76842,7 +76868,7 @@ syncAuthTermsCheckbox();
     const targetId = String(currentUserPublicProfileId || "").trim();
     const email = "support@nabadai.com";
     const subject = "NabadAi Music — user report";
-    const build = String(document.getElementById("footerBuild")?.textContent || "").trim();
+    const build = String(document.getElementById("footerBuild")?.textContent || "").trim() || `Build ${APP_BUILD}`;
     const account =
       String(authSession?.user?.email || activeProfile?.email || "").trim() || "guest";
     const lines = ["I'd like to report this user:", ""];
@@ -77118,7 +77144,7 @@ function nabadaiSupportMailtoHref(kind) {
   const report = kind === "report";
   const email = report ? "support@nabadai.com" : "help@nabadai.com";
   const subject = report ? "NabadAi Music — problem report" : "NabadAi Music — help";
-  const build = String(document.getElementById("footerBuild")?.textContent || "").trim();
+  const build = String(document.getElementById("footerBuild")?.textContent || "").trim() || `Build ${APP_BUILD}`;
   const account =
     String(authSession?.user?.email || activeProfile?.email || "").trim() || "guest";
   const body = ["", "", "---", "App: NabadAi Music", build ? `Build: ${build}` : "", `Account: ${account}`]
@@ -77131,7 +77157,7 @@ function nabadaiSupportMailtoHref(kind) {
 function nabadaiReportContentMailtoHref(ctx, note) {
   const email = "support@nabadai.com";
   const subject = "NabadAi Music — content report";
-  const build = String(document.getElementById("footerBuild")?.textContent || "").trim();
+  const build = String(document.getElementById("footerBuild")?.textContent || "").trim() || `Build ${APP_BUILD}`;
   const account =
     String(authSession?.user?.email || activeProfile?.email || "").trim() || "guest";
   const handle = String(ctx?.handle || "").trim();
@@ -77150,7 +77176,7 @@ function nabadaiReportContentMailtoHref(ctx, note) {
 function nabadaiReportCommentMailtoHref({ replyId, handle, body, targetKind, targetId }) {
   const email = "support@nabadai.com";
   const subject = "NabadAi Music — comment report";
-  const build = String(document.getElementById("footerBuild")?.textContent || "").trim();
+  const build = String(document.getElementById("footerBuild")?.textContent || "").trim() || `Build ${APP_BUILD}`;
   const account =
     String(authSession?.user?.email || activeProfile?.email || "").trim() || "guest";
   const lines = ["I'd like to report this comment:", ""];

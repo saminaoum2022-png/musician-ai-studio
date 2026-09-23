@@ -20949,7 +20949,11 @@ input[type="range"]::-moz-range-thumb{
   box-shadow: 0 0 12px rgba(124,92,255,0.35);
 }
 
-/* Build stamp: fixed above chrome so it stays visible (flow footer sat under tab bar). */
+/* Build stamp: fixed above chrome so it stays visible (flow footer sat under tab bar).
+   Production web hides it — Settings still shows the build at the bottom. */
+html.hideFloatingBuild .footer{
+  display: none !important;
+}
 .footer{
   position: fixed;
   left: 0;

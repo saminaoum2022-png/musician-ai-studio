@@ -122,14 +122,39 @@
           "body.booting .app,body.booting main.grid>[data-route],body.booting .header,body.booting .mobileTabbar,body.booting .footer{display:none!important}";
         style.textContent = base + bootHide;
         document.head.appendChild(style);
+        function bootHasOAuthReturn() {
+          try {
+            var s = String(location.search || "") + String(location.hash || "");
+            return /(?:^|[?&#])code=/.test(s) || /(?:^|[?&#])error=/.test(s);
+          } catch (e) { return false; }
+        }
+        window.__nabadOAuthReturn = bootHasOAuthReturn;
+        document.addEventListener("DOMContentLoaded", function () {
+          try {
+            if (bootHasOAuthReturn()) document.body.classList.add("oauthReturn");
+          } catch (e) {}
+        });
+        // Normal cold boot: never leave the overlay stuck. Apple/Google return
+        // must keep this cover until app.js exchanges the code — do not reveal
+        // sign-in, and do not rewrite the URL from here.
         setTimeout(function () {
           try {
             if (!document.body.classList.contains("booting")) return;
+            if (document.body.classList.contains("oauthReturn") || bootHasOAuthReturn()) return;
             document.body.classList.remove("booting");
             var splash = document.getElementById("bootSplash");
             if (splash) splash.style.display = "none";
           } catch (e) {}
         }, 4000);
+        setTimeout(function () {
+          try {
+            if (!document.body.classList.contains("booting")) return;
+            if (!(document.body.classList.contains("oauthReturn") || bootHasOAuthReturn())) return;
+            document.body.classList.remove("booting", "oauthReturn");
+            var splash = document.getElementById("bootSplash");
+            if (splash) splash.style.display = "none";
+          } catch (e) {}
+        }, 22000);
       })();
     </script>
     <title>NabadAi — AI Music Generator &amp; Song Maker</title>
@@ -5516,6 +5541,17 @@
         } catch (e) {}
         var bootUid = bootSessionUserId();
         var needsOnboarding = bootUid ? !bootOnboardingDone() : !done;
+        var oauthReturn = false;
+        try {
+          oauthReturn = typeof window.__nabadOAuthReturn === "function"
+            ? window.__nabadOAuthReturn()
+            : /(?:^|[?&#])code=/.test(String(location.search || "") + String(location.hash || ""));
+        } catch (e) {}
+        if (oauthReturn) {
+          document.body.classList.add("oauthReturn");
+          document.body.classList.remove("isAuth", "isOnboarding", "isIntro", "isMusicPrefs", "isFirstSong");
+          return;
+        }
         if (!h) {
           if (bootUid && needsOnboarding) h = "onboarding";
           else h = hasSessionEarly ? "challenges" : (guestMode ? "challenges" : "auth");

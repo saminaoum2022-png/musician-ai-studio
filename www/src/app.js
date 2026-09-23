@@ -413,9 +413,40 @@ let _bootSplashPermanentlyDismissed = false;
 let _authSplashHandoff = false;
 let _authSplashLanded = false;
 
+function bootUrlLooksLikeOAuthReturn() {
+  try {
+    if (typeof window.__nabadOAuthReturn === "function" && window.__nabadOAuthReturn()) return true;
+    const s = `${location.search || ""}${location.hash || ""}`;
+    return /(?:^|[?&#])code=/.test(s) || /(?:^|[?&#])error=/.test(s);
+  } catch {
+    return false;
+  }
+}
+
+function isOAuthReturnPending() {
+  try {
+    if (typeof getOAuthCodeFromUrl === "function" && getOAuthCodeFromUrl()) return true;
+  } catch {}
+  return bootUrlLooksLikeOAuthReturn();
+}
+
+/** Keep the launch cover up while Apple/Google finishes. Never rewrite ?code=. */
+function shouldHoldSplashForOAuth() {
+  try {
+    if (document.body.classList.contains("oauthReturn")) return true;
+  } catch {}
+  return isOAuthReturnPending();
+}
+
+function replaceLoggedOutAuthHash() {
+  if (shouldHoldSplashForOAuth()) return;
+  try { history.replaceState(null, "", "#/auth"); } catch {}
+}
+
 /** Error / max-timeout path — never leave the overlay stuck. */
 function scheduleBootSplashFinish() {
   if (_bootSplashPermanentlyDismissed) return;
+  if (shouldHoldSplashForOAuth()) return;
   _bootSplashCanDismiss = true;
   _bootSplashAnimEnded = true;
   finishBootSplash();
@@ -451,6 +482,7 @@ function finishBootSplash() {
   try {
     if (_authSplashHandoff) return;
     if (_bootSplashPermanentlyDismissed) return;
+    if (shouldHoldSplashForOAuth()) return;
     if (shouldHandoffSplashToAuth()) {
       startAuthSplashHandoff();
       return;
@@ -477,7 +509,7 @@ function dismissBootSplashOverlay({ destroyMotion = true } = {}) {
       splash.classList.add("bootSplash--gone");
       splash.setAttribute("aria-hidden", "true");
     }
-    document.body.classList.remove("booting");
+    document.body.classList.remove("booting", "oauthReturn");
     try { tryPlayAuthBrandIntro(); } catch {}
     try { ensurePageScrollHealthy(); } catch {}
     reassertViewportScale();
@@ -5767,10 +5799,12 @@ function applyRoute({ passGen } = {}) {
         } catch {}
       }
     } else if (wanted !== "auth") {
-      wanted = "auth";
-      try {
-        history.replaceState(null, "", "#/auth");
-      } catch {}
+      if (shouldHoldSplashForOAuth()) {
+        // Apple/Google return — keep ?code= and stay on the splash.
+      } else {
+        wanted = "auth";
+        replaceLoggedOutAuthHash();
+      }
     }
   }
   // Keychain/session often loads after first paint — never keep a signed-in user on #/auth.
@@ -5783,29 +5817,35 @@ function applyRoute({ passGen } = {}) {
   }
   if (wanted === "intro") {
     wanted = isLoggedIn ? DEFAULT_LOGGED_IN_ROUTE : "auth";
-    try {
-      history.replaceState(null, "", `#/${wanted}`);
-    } catch {}
+    if (wanted === "auth") replaceLoggedOutAuthHash();
+    else {
+      try { history.replaceState(null, "", `#/${wanted}`); } catch {}
+    }
   }
   if (wanted === "onboarding" && !isLoggedIn && !hasAuthToken) {
-    wanted = "auth";
-    try {
-      history.replaceState(null, "", "#/auth");
-    } catch {}
+    if (!shouldHoldSplashForOAuth()) {
+      wanted = "auth";
+      replaceLoggedOutAuthHash();
+    }
   }
   if (shouldSkipIntroOrOnboardingRoute(authSession?.user?.id) && wanted === "onboarding") {
     wanted = isLoggedIn ? DEFAULT_LOGGED_IN_ROUTE : "auth";
-    try {
-      history.replaceState(null, "", `#/${wanted}`);
-    } catch {}
+    if (wanted === "auth") replaceLoggedOutAuthHash();
+    else {
+      try { history.replaceState(null, "", `#/${wanted}`); } catch {}
+    }
   }
   if (wanted === "music-preferences" && !isLoggedIn && !hasAuthToken) {
-    wanted = "auth";
-    try { history.replaceState(null, "", "#/auth"); } catch {}
+    if (!shouldHoldSplashForOAuth()) {
+      wanted = "auth";
+      replaceLoggedOutAuthHash();
+    }
   }
   if (wanted === "first-song" && !isLoggedIn && !hasAuthToken) {
-    wanted = "auth";
-    try { history.replaceState(null, "", "#/auth"); } catch {}
+    if (!shouldHoldSplashForOAuth()) {
+      wanted = "auth";
+      replaceLoggedOutAuthHash();
+    }
   }
   if (wanted === "first-song" && isLoggedIn && !creditsState.isAdmin) {
     wanted = DEFAULT_LOGGED_IN_ROUTE;
@@ -5814,15 +5854,17 @@ function applyRoute({ passGen } = {}) {
   }
   if (!HUB_FEATURE_ENABLED && normalized === "hub") {
     wanted = isLoggedIn ? DEFAULT_LOGGED_IN_ROUTE : "auth";
-    try {
-      history.replaceState(null, "", `#/${wanted}`);
-    } catch {}
+    if (wanted === "auth") replaceLoggedOutAuthHash();
+    else {
+      try { history.replaceState(null, "", `#/${wanted}`); } catch {}
+    }
   }
   if (!MESSAGES_FEATURE_ENABLED && (normalized === "messages" || normalized === "messages-thread")) {
     wanted = isLoggedIn ? "friends" : "auth";
-    try {
-      history.replaceState(null, "", `#/${wanted}`);
-    } catch {}
+    if (wanted === "auth") replaceLoggedOutAuthHash();
+    else {
+      try { history.replaceState(null, "", `#/${wanted}`); } catch {}
+    }
   }
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
@@ -5858,8 +5900,12 @@ function applyRoute({ passGen } = {}) {
         try {
           showToast(`Sign in to open ${tabLabels[wanted] || "this tab"}`, { icon: "👤", durationMs: 2800 });
         } catch {}
-        wanted = "auth";
-        try { history.replaceState(null, "", "#/auth"); } catch {}
+        if (shouldHoldSplashForOAuth()) {
+          // Keep the OAuth return cover; do not bounce to sign-in.
+        } else {
+          wanted = "auth";
+          replaceLoggedOutAuthHash();
+        }
       }
     }
   }
@@ -29767,6 +29813,9 @@ function isLoginSettling() {
 function beginLoginSettling(message = "Signing you in…") {
   _loginSettling = true;
   _loginSettlingStartedAt = Date.now();
+  if (isOAuthReturnPending()) {
+    try { document.body.classList.add("oauthReturn"); } catch {}
+  }
   setOAuthPendingUi(true);
   try {
     document.body.classList.add("loginSettling");
@@ -29777,7 +29826,25 @@ function beginLoginSettling(message = "Signing you in…") {
     overlay.setAttribute("aria-hidden", "false");
   }
   startLoginSettlingCarousel();
-  try { ensureLoginSettlingSplash()?.play?.(); } catch {}
+  const bootCoverUp = (() => {
+    try {
+      const splash = document.getElementById("bootSplash");
+      return document.body.classList.contains("booting")
+        && splash
+        && !splash.classList.contains("bootSplash--gone")
+        && splash.style.display !== "none";
+    } catch {
+      return false;
+    }
+  })();
+  if (bootCoverUp) {
+    if (overlay) {
+      overlay.hidden = true;
+      overlay.setAttribute("aria-hidden", "true");
+    }
+  } else {
+    try { ensureLoginSettlingSplash()?.play?.(); } catch {}
+  }
   if (_loginSettlingForceEndTimer) clearTimeout(_loginSettlingForceEndTimer);
   _loginSettlingForceEndTimer = window.setTimeout(() => {
     _loginSettlingForceEndTimer = 0;
@@ -29831,6 +29898,8 @@ function endLoginSettling(opts = {}) {
     try { _loginSettlingSplash.destroy(); } catch {}
     _loginSettlingSplash = null;
   }
+  try { document.body.classList.remove("oauthReturn"); } catch {}
+  try { dismissBootSplashOverlay({ destroyMotion: true }); } catch {}
   if (_applyRouteAfterLoginSettle) {
     _applyRouteAfterLoginSettle = false;
     scheduleApplyRoute();
@@ -33192,6 +33261,7 @@ function prefersAuthHandoffMotionReduce() {
 }
 
 function shouldHandoffSplashToAuth() {
+  if (shouldHoldSplashForOAuth()) return false;
   if (isAppLoggedIn() || getSupabaseAuthToken()) return false;
   const route = document.body.getAttribute("data-route") || "";
   const hash = String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] || "";
@@ -33244,6 +33314,7 @@ function revealAuthHandoffRest() {
 }
 
 function startAuthSplashHandoff() {
+  if (shouldHoldSplashForOAuth()) return;
   if (_authSplashHandoff) return;
   _authSplashHandoff = true;
   _bootSplashPermanentlyDismissed = true;
@@ -33263,7 +33334,7 @@ function startAuthSplashHandoff() {
   document.body.classList.add("authHandoff", "isAuth", "authEntrySettled");
   document.body.classList.remove("booting", "isOnboarding", "isIntro");
   document.body.setAttribute("data-route", "auth");
-  try { history.replaceState(null, "", "#/auth"); } catch {}
+  replaceLoggedOutAuthHash();
   try { ensurePageScrollHealthy(); } catch {}
   reassertViewportScale();
 

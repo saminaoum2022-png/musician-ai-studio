@@ -8512,6 +8512,7 @@ try {
     syncMessagesThreadComposerReady,
     updateMessagesComposerReserve,
     cancelMessagesComposerAutofocus: () => { _messagesComposerAutofocusToken += 1; },
+    startVoiceDropClipFromChat,
   });
 } catch {}
 try {
@@ -23955,6 +23956,126 @@ function markGenerationReadyNotice() {
   } catch {}
 }
 
+let _pendingVoiceClipShare = null;
+
+const VOICE_CLIP_MOODS = {
+  soft: "soft intimate pop clip, warm pads, gentle close vocal, tender and clean",
+  night: "late-night r&b clip, dark bass, neon night atmosphere, hushed vocal",
+  arabic: "modern arabic pop clip, oud shimmer, light darbuka, warm levantine vocal",
+};
+
+async function startVoiceDropClipFromChat({ msgId, audioUrl, mood, goBtn, dock } = {}) {
+  if (!nabadClipEnabled()) {
+    showToast("Clips are not available on this build.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  const threadId = String(_conversationId || "").trim();
+  if (!threadId) {
+    showToast("Open a chat first.", { durationMs: 2600 });
+    return;
+  }
+  if (!getSupabaseAuthToken()) {
+    showToast("Sign in to make a clip.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  const moodKey = VOICE_CLIP_MOODS[mood] ? mood : "soft";
+  const partner = String(_chatHeaderUser?.displayName || _chatHeaderUser?.username || "").replace(/^@/, "").trim();
+  const title = partner ? `Clip from ${partner}'s drop` : "Clip from a drop";
+  const clipCost = NABAD_CLIP_CREDIT_COST;
+  if (goBtn) {
+    goBtn.disabled = true;
+    goBtn.textContent = "Making clip…";
+  }
+  try {
+    showToast("Composing your clip… stay in chat, usually 1–2 minutes.", { icon: "♪", durationMs: 8000 });
+    const authToken = getSupabaseAuthToken();
+    const payload = {
+      prompt: "",
+      style: VOICE_CLIP_MOODS[moodKey],
+      title,
+      lyriaModel: "clip",
+      nabadClip: "1",
+      watchKind: "clip",
+      ideaPrompt: true,
+      ideaBrief: "30 second original clip inspired by a hummed melody a friend sent in chat. Do not copy the voice.",
+    };
+    const data = await trackCreditsAround("Generate chat voice clip", async () => {
+      const r = await apiFetch(nabadClipGenerateApiPath(), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 402 || d?.code === "insufficient_credits") {
+        const err = new Error(
+          `Not enough credits (need ${formatCreditsAmount(clipCost)} for a clip).`,
+        );
+        err.code = "insufficient_credits";
+        throw err;
+      }
+      rejectSunoApiResponse(r, d);
+      return d;
+    });
+    const taskId = extractTaskIdLoose(data);
+    if (!taskId) throw new Error("Clip started but no task id came back.");
+    sunoTaskId = taskId;
+    savePendingBackendTask(taskId);
+    saveRecoverableGenerationTask(taskId, title);
+    setGenerationPending({
+      taskId,
+      title,
+      source: "clip",
+      variantCount: 1,
+    });
+    _pendingVoiceClipShare = {
+      taskId,
+      threadId,
+      title,
+      mood: moodKey,
+      sourceMsgId: String(msgId || ""),
+      audioUrl: String(audioUrl || ""),
+    };
+    startGeneratePolling();
+    if (goBtn) goBtn.textContent = "Making clip…";
+  } catch (e) {
+    if (goBtn) {
+      goBtn.disabled = false;
+      goBtn.textContent = "Make clip · 10 credits";
+    }
+    showToast(e?.message || "Could not start this clip.", { icon: "!", durationMs: 4200 });
+  }
+}
+
+async function maybeShareReadyVoiceClip(entries, taskId) {
+  const pending = _pendingVoiceClipShare;
+  const tid = String(taskId || "").trim();
+  if (!pending || !tid || String(pending.taskId) !== tid) return;
+  _pendingVoiceClipShare = null;
+  const track = (Array.isArray(entries) ? entries : []).find((e) => String(e?.url || "").trim());
+  if (!track?.url) return;
+  const threadId = String(pending.threadId || "").trim();
+  if (threadId && threadId === String(_conversationId || "").trim()) {
+    await sendDmSongShare({
+      ...track,
+      title: pending.title || track.title || "Clip from a drop",
+      shareKind: "song",
+    });
+    document.querySelectorAll(".messagesVoiceClipGo").forEach((btn) => {
+      btn.disabled = false;
+      btn.textContent = "Make clip · 10 credits";
+    });
+    document.querySelectorAll(".messagesVoiceClipDock").forEach((el) => { el.hidden = true; });
+    document.querySelectorAll(".messagesVoiceClipSpark").forEach((el) => {
+      el.classList.remove("is-on");
+      el.setAttribute("aria-expanded", "false");
+    });
+    showToast("Clip sent in this chat.", { icon: "♪", durationMs: 3200 });
+  }
+}
+
 function pushLocalGenerationReadyActivity(entries, { taskId = "" } = {}) {
   const list = (Array.isArray(entries) ? entries : []).filter((e) => e && String(e.id || "").trim());
   if (!list.length) return;
@@ -23971,6 +24092,7 @@ function pushLocalGenerationReadyActivity(entries, { taskId = "" } = {}) {
     title: titles[0] || "Your song",
     taskId: String(taskId || getGenerationPending()?.taskId || "").trim(),
   });
+  void maybeShareReadyVoiceClip(list.length ? list : entries, taskId || getGenerationPending()?.taskId);
 }
 
 /** Short user-facing copy — never expose raw Suno error text in UI. */

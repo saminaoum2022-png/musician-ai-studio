@@ -752,15 +752,31 @@ export function messagesVoiceDropBubbleHtml(parsed, { mine = false, msgId = "" }
   const peaksJson = escapeAttr(JSON.stringify(normalizeVoicePeaks(parsed?.peaks, DM_VOICE_WAVE_BARS)));
   const id = escapeAttr(String(msgId || ""));
   return `
-    <div class="messagesVoiceDrop${mine ? " is-mine" : ""}" data-voice-drop="${id}" data-voice-url="${url}" data-voice-key="${storageKey}" data-voice-peaks="${peaksJson}" data-voice-dur="${dur}">
-      <button type="button" class="messagesVoiceDropPlay" aria-label="Play voice drop">
-        <span class="messagesVoiceDropPlayDisc" aria-hidden="true">
-          <svg class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--play" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M9 7.5v9l7.5-4.5z"/></svg>
-          <svg class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--pause" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7 6h3v12H7zm7 0h3v12h-3z"/></svg>
-        </span>
-      </button>
-      <div class="messagesVoiceDropWave" aria-hidden="true">${waveBarsHtml(parsed?.peaks)}</div>
-      <span class="messagesVoiceDropDur">${durLabel}</span>
+    <div class="messagesVoiceDropBlock${mine ? " is-mine" : ""}">
+      <div class="messagesVoiceDropRow">
+        <div class="messagesVoiceDrop${mine ? " is-mine" : ""}" data-voice-drop="${id}" data-voice-url="${url}" data-voice-key="${storageKey}" data-voice-peaks="${peaksJson}" data-voice-dur="${dur}">
+          <button type="button" class="messagesVoiceDropPlay" aria-label="Play voice drop">
+            <span class="messagesVoiceDropPlayDisc" aria-hidden="true">
+              <svg class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--play" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M9 7.5v9l7.5-4.5z"/></svg>
+              <svg class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--pause" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7 6h3v12H7zm7 0h3v12h-3z"/></svg>
+            </span>
+          </button>
+          <div class="messagesVoiceDropWave" aria-hidden="true">${waveBarsHtml(parsed?.peaks)}</div>
+          <span class="messagesVoiceDropDur">${durLabel}</span>
+        </div>
+        <button type="button" class="messagesVoiceClipSpark" data-voice-clip-open="${id}" aria-label="Make a clip from this drop" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2.4l1.4 5.2L18.6 9 13.4 10.4 12 15.6l-1.4-5.2L5.4 9l5.2-1.4zM18.2 14.2l.8 2.8 2.8.8-2.8.8-.8 2.8-.8-2.8-2.8-.8 2.8-.8z"/></svg>
+        </button>
+      </div>
+      <div class="messagesVoiceClipDock" data-voice-clip-dock="${id}" hidden>
+        <p class="messagesVoiceClipLead">Keep the melody. Make <b>your</b> clip.</p>
+        <div class="messagesVoiceClipChips" role="group" aria-label="Clip mood">
+          <button type="button" class="messagesVoiceClipChip is-on" data-voice-clip-mood="soft">Soft</button>
+          <button type="button" class="messagesVoiceClipChip" data-voice-clip-mood="night">Night</button>
+          <button type="button" class="messagesVoiceClipChip" data-voice-clip-mood="arabic">Arabic</button>
+        </div>
+        <button type="button" class="messagesVoiceClipGo" data-voice-clip-go="${id}">Make clip · 10 credits</button>
+      </div>
     </div>`;
 }
 
@@ -1042,12 +1058,78 @@ export function initDmVoiceDrop(deps = {}) {
   document.documentElement.dataset.dmVoiceDropWired = "1";
 }
 
+function closeAllVoiceClipDocks() {
+  document.querySelectorAll(".messagesVoiceClipDock").forEach((el) => {
+    el.hidden = true;
+  });
+  document.querySelectorAll(".messagesVoiceClipSpark").forEach((el) => {
+    el.classList.remove("is-on");
+    el.setAttribute("aria-expanded", "false");
+  });
+}
+
+function revealVoiceClipDockAboveComposer(dock) {
+  const mount = document.getElementById("messagesThreadMount");
+  if (!mount || !dock) return;
+  const pin = () => {
+    const composer = document.querySelector(".messagesComposer");
+    const composerTop = composer?.getBoundingClientRect?.().top;
+    const dockRect = dock.getBoundingClientRect();
+    const gap = 14;
+    const limit = Number.isFinite(composerTop)
+      ? composerTop - gap
+      : dockRect.bottom;
+    const overflow = dockRect.bottom - limit;
+    if (overflow > 1) mount.scrollTop += overflow;
+  };
+  requestAnimationFrame(() => requestAnimationFrame(pin));
+  window.setTimeout(pin, 80);
+}
+
 export function handleVoiceDropBubbleClick(target) {
   const composer = target?.closest?.("#messagesVoiceComposerPill");
   if (composer) {
     if (_recState === "recording" || _recState === "starting") stopRecording();
     else if (_recState === "ready" && _blobUrl) void togglePreviewPlayback();
     try { d().haptic?.("light"); } catch {}
+    return true;
+  }
+  const spark = target?.closest?.("[data-voice-clip-open]");
+  if (spark) {
+    const id = String(spark.getAttribute("data-voice-clip-open") || "");
+    const dock = document.querySelector(`[data-voice-clip-dock="${id}"]`);
+    const open = Boolean(dock && dock.hidden);
+    closeAllVoiceClipDocks();
+    if (dock && open) {
+      dock.hidden = false;
+      spark.classList.add("is-on");
+      spark.setAttribute("aria-expanded", "true");
+      revealVoiceClipDockAboveComposer(dock);
+    }
+    try { d().haptic?.("light"); } catch {}
+    return true;
+  }
+  const chip = target?.closest?.("[data-voice-clip-mood]");
+  if (chip) {
+    const dock = chip.closest(".messagesVoiceClipDock");
+    dock?.querySelectorAll("[data-voice-clip-mood]").forEach((el) => el.classList.toggle("is-on", el === chip));
+    try { d().haptic?.("light"); } catch {}
+    return true;
+  }
+  const go = target?.closest?.("[data-voice-clip-go]");
+  if (go) {
+    const dock = go.closest(".messagesVoiceClipDock");
+    const wrap = go.closest(".messagesVoiceDropBlock");
+    const card = wrap?.querySelector?.(".messagesVoiceDrop");
+    const mood = String(dock?.querySelector?.("[data-voice-clip-mood].is-on")?.getAttribute("data-voice-clip-mood") || "soft");
+    void d().startVoiceDropClipFromChat?.({
+      msgId: String(go.getAttribute("data-voice-clip-go") || card?.getAttribute("data-voice-drop") || ""),
+      audioUrl: String(card?.getAttribute("data-voice-url") || ""),
+      mood,
+      goBtn: go,
+      dock,
+    });
+    try { d().haptic?.("medium"); } catch {}
     return true;
   }
   const card = target?.closest?.(".messagesVoiceDrop");

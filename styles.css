@@ -41587,6 +41587,106 @@ body.coachComposerMode .messagesComposerSheetListDm{
   color: var(--nabad-glass-color);
   opacity: 0.82;
 }
+.messagesVoiceDropBlock{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
+}
+.messagesVoiceDropBlock.is-mine,
+.messagesBubbleWrap.is-mine .messagesVoiceDropBlock{
+  align-items: flex-end;
+}
+.messagesVoiceDropRow{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+.messagesVoiceClipSpark{
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  color: #c4b5fd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.messagesVoiceClipSpark.is-on{
+  border-color: color-mix(in srgb, #5eead4 42%, var(--nabad-glass-border));
+  color: #5eead4;
+}
+.messagesVoiceClipDock{
+  width: min(100%, 280px);
+  padding: 10px 12px 12px;
+  scroll-margin-bottom: calc(var(--messages-composer-h, 72px) + 16px);
+  border-radius: 18px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow:
+    var(--nabad-glass-inset-top),
+    var(--nabad-glass-inset-bottom);
+}
+.messagesVoiceClipLead{
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(223,231,251,0.62);
+}
+.messagesVoiceClipLead b{
+  color: var(--nabad-glass-color);
+  font-weight: 650;
+}
+.messagesVoiceClipChips{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.messagesVoiceClipChip{
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: var(--nabad-glass-color);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.messagesVoiceClipChip.is-on{
+  background: linear-gradient(135deg, rgba(94,234,212,0.28), rgba(124,92,255,0.28));
+  border-color: rgba(94,234,212,0.35);
+}
+.messagesVoiceClipGo{
+  width: 100%;
+  margin-top: 10px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  color: #081018;
+  font-size: 14px;
+  font-weight: 750;
+  background: linear-gradient(135deg, #5eead4, #a78bfa);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.messagesVoiceClipGo:disabled{
+  opacity: 0.7;
+}
 .messagesComposerInput{
   flex: 1 1 auto;
   min-height: 40px;
@@ -60508,6 +60608,17 @@ html[data-theme="light"] .messagesVoiceDrop{
   color: var(--nabad-glass-color);
 }
 html[data-theme="light"] .messagesVoiceDropDur{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesVoiceClipLead{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesVoiceClipLead b{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesVoiceClipChip{
+  border-color: rgba(15, 18, 28, 0.1);
+  background: rgba(255,255,255,0.7);
   color: var(--text-primary);
 }
 html[data-theme="light"] .messagesThreadEmptyTitle{

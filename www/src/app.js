@@ -23969,9 +23969,9 @@ const CHAT_VOICE_REMIX_BREW_LINES = [
 ];
 
 const VOICE_CLIP_MOODS = {
-  soft: "soft pop, warm vocal",
-  night: "late night, dark bass, warm vocal",
-  arabic: "arabic pop, oud, warm vocal",
+  soft: "soft pop",
+  night: "late night, dark bass",
+  arabic: "arabic pop, oud",
 };
 
 function chatVoiceNoteRemixStyle(mood) {
@@ -24149,26 +24149,29 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
     showToast("Something’s blooming from that drop…", { icon: "♪", durationMs: 4200 });
     const authToken = getSupabaseAuthToken();
     const remixStyle = chatVoiceNoteRemixStyle(moodKey);
+    const sendFile = await fetchChatVoiceDropFile(sourceUrl);
     const data = await trackCreditsAround("Remix chat voice drop", async () => {
-      // Official add-instrumental: upload is the vocal. No lyrics/prompt.
-      const r = await apiFetch("/api/suno/stems", {
+      // Same path as Hum: send the real file. URL-only fetch was reaching
+      // Suno as a weak/stripped clip, so underpainting returned band-only.
+      const fd = new FormData();
+      const uniqueUploadName = `ref-${Date.now()}-${sendFile.name || "chat-voice-drop.m4a"}`;
+      fd.append("action", "add_instrumental");
+      fd.append("referenceMode", "humming_music");
+      fd.append("file", sendFile, uniqueUploadName);
+      fd.append("fileName", uniqueUploadName);
+      fd.append("fileType", sendFile.type || "audio/mp4");
+      fd.append("sourceAudioUrl", sourceUrl);
+      fd.append("tags", remixStyle);
+      fd.append("style", remixStyle);
+      fd.append("negativeTags", "instrumental only, heavy metal, fast drums");
+      fd.append("title", title);
+      fd.append("model", "V6");
+      fd.append("audioWeight", "0.95");
+      fd.append("styleWeight", "0.22");
+      const r = await fetch(apiUrl("/api/suno/stems"), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify({
-          action: "add_instrumental",
-          referenceMode: "humming_music",
-          sourceAudioUrl: sourceUrl,
-          tags: remixStyle,
-          style: remixStyle,
-          negativeTags: "instrumental only, heavy metal, fast drums",
-          title,
-          model: "V6",
-          audioWeight: 0.95,
-          styleWeight: 0.22,
-        }),
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+        body: fd,
       });
       const d = await r.json().catch(() => ({}));
       if (r.status === 402 || d?.code === "insufficient_credits") {
@@ -24238,6 +24241,33 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
   }
 }
 
+async function mixChatVoiceOverBand(vocalUrl, bandUrl) {
+  const wavBlob = await mixStemsToWav([
+    { name: "band", url: bandUrl, gain: 0.7 },
+    { name: "vocal", url: vocalUrl, gain: 1.18 },
+  ]);
+  const shrunk = await prepareMixBlobForProMasterUpload(wavBlob, 8 * 1024 * 1024);
+  const file = new File([shrunk], "drop-remix-mix.wav", { type: "audio/wav" });
+  const tempUrl = await uploadAudioFileForSuno(file);
+  const token = getSupabaseAuthToken();
+  if (!token) return tempUrl;
+  try {
+    const r = await apiFetch("/api/songs/archive", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ sourceUrl: tempUrl }),
+      nativeReadTimeoutMs: 90000,
+    });
+    const d = await r.json().catch(() => ({}));
+    return String(d?.permanentUrl || tempUrl).trim();
+  } catch {
+    return tempUrl;
+  }
+}
+
 async function maybeShareReadyVoiceClip(entries, taskId) {
   const pending = loadPendingVoiceClipShare();
   const tid = String(taskId || pending?.taskId || "").trim();
@@ -24250,8 +24280,19 @@ async function maybeShareReadyVoiceClip(entries, taskId) {
   removeChatVoiceRemixBrewing();
   resetChatVoiceRemixDock();
   try {
+    let shareUrl = String(track.url || "").trim();
+    const vocalUrl = String(pending.audioUrl || "").trim();
+    if (vocalUrl && shareUrl) {
+      try {
+        showToast("Laying your voice on the band…", { icon: "♪", durationMs: 4200 });
+        shareUrl = await mixChatVoiceOverBand(vocalUrl, shareUrl);
+      } catch (mixErr) {
+        try { console.warn("[chat-voice-remix] mix failed", mixErr?.message || mixErr); } catch {}
+      }
+    }
     await sendDmSongShare({
       ...track,
+      url: shareUrl,
       title: pending.title || track.title || "Remix of a drop",
       shareKind: "song",
     }, { threadId: pending.threadId });

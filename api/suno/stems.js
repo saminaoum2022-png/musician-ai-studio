@@ -15,9 +15,9 @@
  *      `continueAt` onward. The original recording is preserved.
  *
  *  - referenceMode = "humming_music" | "humming_backing" | "" (default)
- *      -> /api/v1/generate/add-instrumental
- *      Suno keeps the original vocal/hum and writes a backing band around it.
- *      No new vocals are generated.
+ *      -> /api/v1/generate/add-instrumental (Suno dashboard: underpainting)
+ *      Official output is a backing track from the upload. Chat remix lays
+ *      the original drop back on that band after the job finishes.
  *
  * Stems action (default when no `action` is "add_instrumental"):
  *  - { taskId, audioId, type: "separate_vocal" | "split_stem" }
@@ -184,6 +184,7 @@ module.exports = async function handler(req, res) {
             bytes: fileBytes?.length || 0,
             fileName,
             fileType,
+            looksLikeAudio: looksLikeAudioBuffer(fileBytes),
           });
         } catch {}
       }
@@ -196,18 +197,38 @@ module.exports = async function handler(req, res) {
         await refund("file_too_large");
         return json(res, 413, { error: "Audio reference is too large. Max 25 MB." });
       }
-
-      // Convert webm/opus and other non-standard formats to MP3 so Suno
-      // reliably accepts the upload and can analyse pitch/melody.
-      const norm = await maybeTranscodeToMp3({ bytes: fileBytes, mime: fileType, name: fileName });
-      fileBytes = norm.bytes;
-      fileName = norm.name;
-      fileType = norm.mime;
-      const attachedBytes = Buffer.isBuffer(fileBytes) ? fileBytes.length : 0;
+      if (!looksLikeAudioBuffer(fileBytes)) {
+        await refund("source_not_audio");
+        return json(res, 502, {
+          error: "That drop didn't look like audio — try again.",
+          code: "source_not_audio",
+        });
+      }
 
       const style = sanitizeSunoStyleTags(String(body?.tags || body?.style || "").trim());
       const prompt = String(body?.prompt || "").trim();
       let referenceMode = String(body?.referenceMode || "").trim().toLowerCase();
+      const skipVocalEnhance = referenceMode === "humming_music" || referenceMode === "humming_backing";
+      // Convert webm/opus and other non-standard formats to MP3 so Suno
+      // reliably accepts the upload. Chat / humming drops skip silence-strip
+      // so a quiet voice memo is not eaten before it reaches Suno.
+      const norm = await maybeTranscodeToMp3({
+        bytes: fileBytes,
+        mime: fileType,
+        name: fileName,
+        enhance: !skipVocalEnhance,
+      });
+      fileBytes = norm.bytes;
+      fileName = norm.name;
+      fileType = norm.mime;
+      const attachedBytes = Buffer.isBuffer(fileBytes) ? fileBytes.length : 0;
+      if (attachedBytes < 16 * 1024) {
+        await refund("source_too_short");
+        return json(res, 502, {
+          error: "That drop is too short after upload — record a longer take.",
+          code: "source_too_short",
+        });
+      }
       // Server-fetched hub remix source ⇒ cover. Chat humming stays add-instrumental.
       if (sourceAudioUrl && !keepReferenceWithUrl.has(referenceMode)) {
         referenceMode = "song_remix";
@@ -552,11 +573,9 @@ module.exports = async function handler(req, res) {
         .map((s) => String(s || "").trim())
         .filter(Boolean);
       let cleanTags = cleanTagsList.join(", ");
-      // Never default to "instrumental" — that makes underpainting drop the vocal.
-      if (!cleanTags) cleanTags = "soft pop, warm vocal";
-      if (!/\bvocal|voice|singer|hum\b/i.test(cleanTags)) {
-        cleanTags = `${cleanTags}, warm vocal`;
-      }
+      // Official tags describe the BAND, not the singer. Chat lays the
+      // original drop back on the instrumental after generation.
+      if (!cleanTags) cleanTags = "soft pop";
       if (cleanTags.length > 180) cleanTags = cleanTags.slice(0, 177) + "...";
       // Suno requires negativeTags on add-instrumental. Omitting it returns
       // a generic 400/531 that the app maps to "Something went wrong".
@@ -950,7 +969,19 @@ function runFfmpeg(ffmpegPath, args) {
   });
 }
 
-async function maybeTranscodeToMp3({ bytes, mime, name }) {
+function looksLikeAudioBuffer(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 12) return false;
+  if (buf.slice(0, 3).toString("ascii") === "ID3") return true;
+  if (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0) return true;
+  if (buf.slice(4, 8).toString("ascii") === "ftyp") return true;
+  if (buf.slice(0, 4).toString("ascii") === "RIFF") return true;
+  if (buf.slice(0, 4).toString("ascii") === "OggS") return true;
+  if (buf.slice(0, 4).toString("ascii") === "fLaC") return true;
+  if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return true;
+  return false;
+}
+
+async function maybeTranscodeToMp3({ bytes, mime, name, enhance = true }) {
   let ffmpegPath = null;
   try {
     ffmpegPath = require("ffmpeg-static");
@@ -1008,6 +1039,15 @@ async function maybeTranscodeToMp3({ bytes, mime, name }) {
 
   try {
     fs.writeFileSync(inPath, buf);
+
+    if (!enhance) {
+      await encodePlain();
+      const plain = fs.readFileSync(outPath);
+      if (plain && plain.length >= 2048) {
+        return { bytes: plain, mime: "audio/mpeg", name: mp3Name };
+      }
+      throw new Error("plain transcode too short");
+    }
 
     // 1) Full chain: HP + trim + perturbation + loudnorm
     try {
@@ -1219,9 +1259,10 @@ async function fetchReferenceBytesFromUrl(rawUrl) {
     const buffer = Buffer.from(ab);
     if (buffer.length < 8 * 1024) return { ok: false, error: "source_too_short" };
     if (buffer.length > MAX_UPLOAD_BYTES) return { ok: false, error: "source_too_large" };
+    if (!looksLikeAudioBuffer(buffer)) return { ok: false, error: "source_not_audio" };
     const ct = String(r.headers.get("content-type") || "audio/mpeg").split(";")[0].trim();
     const mime = ct.includes("audio") ? ct : "audio/mpeg";
-    const ext = mime.includes("wav") ? "wav" : mime.includes("webm") ? "webm" : "mp3";
+    const ext = mime.includes("wav") ? "wav" : mime.includes("webm") ? "webm" : mime.includes("mp4") ? "m4a" : "mp3";
     return { ok: true, buffer, mime, fileName: `remix-source.${ext}` };
   } catch (e) {
     return { ok: false, error: e?.message || String(e) };

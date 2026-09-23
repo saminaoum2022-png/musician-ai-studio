@@ -24180,39 +24180,51 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
     const remixStyle = chatVoiceNoteRemixStyle(moodKey);
     let usedMode = "humming_music";
     const data = await trackCreditsAround("Remix chat voice drop", async () => {
-      const throwCredits = () => {
+      const file = await fetchChatVoiceDropFile(sourceUrl).catch(() => null);
+      let r;
+      let d = {};
+      if (file) {
+        const fd = new FormData();
+        const uniqueUploadName = `ref-${Date.now()}-${file.name}`;
+        fd.append("action", "add_instrumental");
+        fd.append("referenceMode", "humming_music");
+        fd.append("file", file, uniqueUploadName);
+        fd.append("fileName", uniqueUploadName);
+        fd.append("fileType", file.type);
+        fd.append("sourceAudioUrl", sourceUrl);
+        fd.append("style", VOICE_CLIP_BAND_TAGS[moodKey] || VOICE_CLIP_BAND_TAGS.soft);
+        fd.append("negativeTags", "Harsh, Noisy");
+        fd.append("title", title);
+        fd.append("model", "V5_5");
+        r = await fetch(apiUrl("/api/suno/stems"), {
+          method: "POST",
+          headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+          body: fd,
+        });
+        d = await r.json().catch(() => ({}));
+      } else {
+        const posted = await postChatVoiceStems({
+          sourceUrl,
+          title,
+          style: VOICE_CLIP_BAND_TAGS[moodKey] || VOICE_CLIP_BAND_TAGS.soft,
+          referenceMode: "humming_music",
+          model: "V5_5",
+          negativeTags: "Harsh, Noisy",
+          authToken,
+        });
+        r = posted.r;
+        d = posted.d;
+      }
+      if (r.status === 402 || d?.code === "insufficient_credits") {
         const err = new Error(
           `Not enough credits (need ${formatCreditsAmount(remixCost)} for a remix).`,
         );
         err.code = "insufficient_credits";
         throw err;
-      };
-      const band = await postChatVoiceStems({
-        sourceUrl,
-        title,
-        style: VOICE_CLIP_BAND_TAGS[moodKey] || VOICE_CLIP_BAND_TAGS.soft,
-        referenceMode: "humming_music",
-        model: "V5_5",
-        negativeTags: "Harsh, Noisy",
-        authToken,
-      });
-      if (band.r.status === 402 || band.d?.code === "insufficient_credits") throwCredits();
-      if (band.r.ok && extractTaskIdLoose(band.d)) {
-        usedMode = "humming_music";
-        return band.d;
       }
-      const cover = await postChatVoiceStems({
-        sourceUrl,
-        title,
-        style: remixStyle,
-        referenceMode: "vocal_full",
-        model: LATEST_SUNO_MODEL,
-        authToken,
-      });
-      if (cover.r.status === 402 || cover.d?.code === "insufficient_credits") throwCredits();
-      rejectSunoApiResponse(cover.r, cover.d);
-      usedMode = "vocal_full";
-      return cover.d;
+      rejectSunoApiResponse(r, d);
+      usedMode = "humming_music";
+      return d;
     });
     const attachedKb = Math.max(1, Math.round(Number(data?._attachedBytes || 0) / 1024));
     if (Number(data?._attachedBytes) > 0) {
@@ -24297,11 +24309,15 @@ async function maybeShareReadyVoiceClip(entries, taskId) {
   }
 }
 
-function maybeShareChatVoiceRemixFromPoll() {
+function maybeShareChatVoiceRemixFromPoll(state) {
   const pending = loadPendingVoiceClipShare();
   if (!pending) return;
-  const url = String(lastSunoFullUrl || lastSunoProxyUrl || "").trim();
-  if (!url) return;
+  const status = String(state?.status || "").toUpperCase();
+  if (status !== "SUCCESS" && status !== "FIRST_SUCCESS") return;
+  const url = String(state?.finishedAudioUrl || lastSunoFullUrl || lastSunoProxyUrl || "").trim();
+  if (!url || isSunoStreamPreviewUrl(url)) return;
+  const dur = Number(state?.durationSec || 0);
+  if (dur > 0 && dur < 40 && status !== "SUCCESS") return;
   void maybeShareReadyVoiceClip([{
     id: String(sunoAudioId || pending.taskId || ""),
     url,
@@ -32728,6 +32744,20 @@ function pickSunoClipAudioUrl(clip) {
     if (s.startsWith("http")) return s;
   }
   return "";
+}
+
+function pickSunoFinishedAudioUrl(clip) {
+  if (!clip || typeof clip !== "object") return "";
+  for (const key of ["audioUrl", "audio_url", "sourceAudioUrl", "source_audio_url"]) {
+    const s = String(clip[key] || "").trim();
+    if (s.startsWith("http")) return s;
+  }
+  return "";
+}
+
+function isSunoStreamPreviewUrl(url) {
+  const raw = String(unwrapInnermostHttpAudioUrl(url) || url || "").toLowerCase();
+  return !raw || raw.includes("stream") || raw.includes(".m3u8");
 }
 
 function isLikelySunoOriginCdnUrl(url) {
@@ -70516,6 +70546,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       successFlag,
       errorCode,
       errorMessage,
+      finishedAudioUrl: pickSunoFinishedAudioUrl(first),
+      durationSec: Number(first?.duration || first?.durationSec || first?.duration_sec || 0) || 0,
     };
   };
 
@@ -70586,7 +70618,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           consecutiveFetchErrors = 0;
           if (!state) return "continue";
           if (state.hasAudio) {
-            try { maybeShareChatVoiceRemixFromPoll(); } catch {}
+            try { maybeShareChatVoiceRemixFromPoll(state); } catch {}
           }
           // Check for explicit upstream failure flags before status — Suno
           // sometimes keeps `status: PENDING` while signalling rejection via

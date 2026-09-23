@@ -91,11 +91,16 @@ import {
   discardComposerVoiceDrop,
   isComposerVoiceActive,
   messagesVoiceDropBubbleHtml,
+  messagesVoiceMixCapsuleHtml,
+  messagesVoiceMixThreadHtml,
   formatDmVoiceInboxPreview,
+  formatDmVoiceMixInboxPreview,
+  buildDmVoiceMixPayload,
   handleVoiceDropBubbleClick,
   cacheVoiceDropPlayUrl,
   preloadVoiceDropAudio,
   DM_VOICE_MARKER,
+  DM_VOICE_MIX_MARKER,
 } from "./dm-voice-drop.js";
 import { prepareNativeRecordingSession } from "./studio/native-mic-probe.js";
 import { initHumTrack, bindHumTrackHomeCard, openHumTrackFlow, humTrackReadyForGenerate, humTrackIsGenerating, triggerHumTrackGenerate, kickHumTrackGenerationPoll } from "./hum-track.js";
@@ -24050,6 +24055,10 @@ function syncChatVoiceRemixBrewing({ scroll = false } = {}) {
     return;
   }
   let el = document.getElementById("chatVoiceRemixBrew");
+  const sourceId = String(pending.sourceMsgId || "");
+  const voiceBlock = sourceId
+    ? document.querySelector(`[data-voice-drop="${cssAttrEscape(sourceId)}"]`)?.closest(".messagesVoiceDropBlock")
+    : null;
   if (!el) {
     el = document.createElement("div");
     el.id = "chatVoiceRemixBrew";
@@ -24064,10 +24073,16 @@ function syncChatVoiceRemixBrewing({ scroll = false } = {}) {
         </div>
         <p class="chatVoiceRemixBrewLine" data-voice-remix-line>Catching the melody…</p>
       </div>`;
+    startChatVoiceRemixBrewLines(el);
+  }
+  if (voiceBlock) {
+    el.classList.add("chatVoiceRemixBrew--thread");
+    voiceBlock.appendChild(el);
+  } else if (!el.parentElement) {
+    el.classList.remove("chatVoiceRemixBrew--thread");
     const anchor = mount.querySelector(".messagesThreadScrollAnchor");
     if (anchor) mount.insertBefore(el, anchor);
     else mount.appendChild(el);
-    startChatVoiceRemixBrewLines(el);
   }
   if (scroll) {
     const pin = () => {
@@ -24318,13 +24333,14 @@ async function maybeShareReadyVoiceClip(entries, taskId) {
     persistPendingVoiceClipShare(null);
     removeChatVoiceRemixBrewing();
     resetChatVoiceRemixDock();
-    await sendDmSongShare({
+    await sendDmVoiceMixShare({
       url: shareUrl,
-      title: pending.title || track.title || "Remix of a drop",
-      artUrl: track.artUrl,
-      shareKind: "song",
-    }, { threadId: pending.threadId });
-    showToast("Your remix just landed in chat.", { icon: "♪", durationMs: 3200 });
+      sourceMsgId: pending.sourceMsgId,
+      mood: pending.mood,
+      durationSec: pending.durationSec || track.durationSec || 0,
+      threadId: pending.threadId,
+    });
+    showToast("Voice mix landed on that drop.", { icon: "♪", durationMs: 3200 });
   } catch (e) {
     _chatVoiceRemixShareSentTask = "";
     persistPendingVoiceClipShare(pending);
@@ -24342,12 +24358,14 @@ function maybeShareChatVoiceRemixFromPoll(state) {
   if (!url || isSunoStreamPreviewUrl(url)) return;
   const dur = Number(state?.durationSec || 0);
   if (dur > 0 && dur < 45) return;
+  persistPendingVoiceClipShare({ ...pending, durationSec: dur || pending.durationSec || 0 });
   void maybeShareReadyVoiceClip([{
     id: String(sunoAudioId || pending.taskId || ""),
     url,
     title: pending.title || lastSunoTitle || "Remix of a drop",
     taskId: pending.taskId,
     artUrl: String(lastSunoArtUrl || "").trim(),
+    durationSec: dur || pending.durationSec || 0,
   }], pending.taskId);
 }
 
@@ -38188,10 +38206,15 @@ function appendMessagesToMount(msgs) {
     const wraps = realBubbleWraps(stack);
     stripBubbleTime(wraps[wraps.length - 1]);
   }
+  const allForMix = Array.isArray(_messagesList) ? _messagesList : rows;
   const html = rows.map((m, i) => {
+    if (shouldSkipVoiceMixBubble(m, allForMix)) return "";
     const next = rows[i + 1] || null;
     const showTime = !next || !shouldGroupMessageTime(m, next);
-    return messagesBubbleHtml(m, viewerId, { showTime });
+    return messagesBubbleHtml(m, viewerId, {
+      showTime,
+      childMixes: voiceMixesForParent(m, allForMix),
+    });
   }).join("");
   const typingWrap = partnerTypingWrapEl(stack);
   const tmp = document.createElement("div");
@@ -38201,6 +38224,12 @@ function appendMessagesToMount(msgs) {
     else stack.appendChild(tmp.firstChild);
   }
   rows.forEach((m) => rememberLocalVoicePlayUrl(m));
+  rows.forEach((m) => {
+    if (!shouldSkipVoiceMixBubble(m, allForMix)) return;
+    const of = voiceMixParentId(resolvedVoiceMixForMessage(m, allForMix));
+    const parent = allForMix.find((x) => String(x?.id || "") === of || String(x?.client_message_id || "") === of);
+    if (parent) patchMessageBubbleInMount(parent);
+  });
   return true;
 }
 
@@ -38209,7 +38238,10 @@ function patchMessageBubbleInMount(msg) {
   if (!wrap) return false;
   const viewerId = authSession?.user?.id || "";
   const showTime = Boolean(wrap.querySelector(".messagesBubbleTime"));
-  const html = messagesBubbleHtml(msg, viewerId, { showTime });
+  const html = messagesBubbleHtml(msg, viewerId, {
+    showTime,
+    childMixes: voiceMixesForParent(msg, Array.isArray(_messagesList) ? _messagesList : []),
+  });
   const tmp = document.createElement("div");
   tmp.innerHTML = html.trim();
   const next = tmp.firstElementChild;
@@ -38273,9 +38305,16 @@ function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}
   // instead of stamping every bubble — quieter, more like a native chat.
   mount.innerHTML = `${olderLoader}<div class="messagesBubbleStack${stackLiveCls}${threadReveal ? " messagesBubbleStack--revealing" : ""}">${msgs
     .map((m, i) => {
+      if (shouldSkipVoiceMixBubble(m, msgs)) return "";
       const next = msgs[i + 1];
       const showTime = !next || !shouldGroupMessageTime(m, next);
-      return messagesBubbleHtml(m, viewerId, { showTime, threadReveal, threadRevealIndex: i, threadRevealTotal: msgs.length });
+      return messagesBubbleHtml(m, viewerId, {
+        showTime,
+        threadReveal,
+        threadRevealIndex: i,
+        threadRevealTotal: msgs.length,
+        childMixes: voiceMixesForParent(m, msgs),
+      });
     })
     .join("")}${typingBubble}</div><div class="messagesThreadScrollAnchor" aria-hidden="true"></div>`;
   if (stickToBottom) {
@@ -39532,15 +39571,107 @@ function parseDmVoicePayload(data) {
   };
 }
 
+function parseDmVoiceMixPayload(data) {
+  if (String(data?.nabad_dm || "") !== DM_VOICE_MIX_MARKER && String(data?.nabad_dm || "") !== "voice_mix") {
+    return null;
+  }
+  return {
+    type: "voice_mix",
+    url: String(data.u || data.url || "").trim(),
+    parentMsgId: String(data.of || data.parent || "").trim(),
+    durationSec: Math.max(0, Number(data.d ?? data.duration) || 0),
+    mood: String(data.m || data.mood || "").trim(),
+    peaks: Array.isArray(data.p) ? data.p : [],
+  };
+}
+
+function voiceMixParentId(parsed) {
+  return String(parsed?.parentMsgId || "").trim();
+}
+
+function isLegacyChatVoiceRemixSong(parsed) {
+  return parsed?.type === "song" && Boolean(parsed.legacyVoiceMix);
+}
+
+function voiceMessageId(msg) {
+  return String(msg?.id || msg?.client_message_id || "").trim();
+}
+
+function isVoiceDropMessage(msg) {
+  return parseDmMessageBody(msg?.body)?.type === "voice";
+}
+
+function voiceMixParsedFromLegacySong(parsed, parentId) {
+  return {
+    type: "voice_mix",
+    url: String(parsed?.url || "").trim(),
+    parentMsgId: String(parentId || "").trim(),
+    durationSec: Math.max(0, Number(parsed?.durationSec) || 0),
+    mood: "",
+    peaks: [],
+    legacy: true,
+  };
+}
+
+function legacyMixParentFor(msg, list) {
+  const rows = Array.isArray(list) ? list : [];
+  const idx = rows.indexOf(msg);
+  const start = idx >= 0 ? idx - 1 : rows.length - 1;
+  for (let i = start; i >= 0; i--) {
+    if (isVoiceDropMessage(rows[i])) return voiceMessageId(rows[i]);
+  }
+  if (idx >= 0) {
+    for (let i = idx + 1; i < rows.length; i++) {
+      if (isVoiceDropMessage(rows[i])) return voiceMessageId(rows[i]);
+    }
+  }
+  return "";
+}
+
+function resolvedVoiceMixForMessage(msg, list) {
+  const parsed = parseDmMessageBody(msg?.body);
+  if (parsed?.type === "voice_mix") return parsed;
+  if (!isLegacyChatVoiceRemixSong(parsed)) return null;
+  return voiceMixParsedFromLegacySong(parsed, legacyMixParentFor(msg, list));
+}
+
+function voiceMixesForParent(parentMsg, list) {
+  const pid = String(parentMsg?.id || "").trim();
+  const cid = String(parentMsg?.client_message_id || "").trim();
+  if (!pid && !cid) return [];
+  return (Array.isArray(list) ? list : []).flatMap((m) => {
+    if (m === parentMsg) return [];
+    const parsed = resolvedVoiceMixForMessage(m, list);
+    if (parsed?.type !== "voice_mix") return [];
+    const of = voiceMixParentId(parsed);
+    if (!of || (of !== pid && of !== cid)) return [];
+    return [{ msg: m, parsed }];
+  });
+}
+
+function shouldSkipVoiceMixBubble(msg, list) {
+  const parsed = resolvedVoiceMixForMessage(msg, list);
+  if (parsed?.type !== "voice_mix") return false;
+  const of = voiceMixParentId(parsed);
+  if (!of) return false;
+  return (Array.isArray(list) ? list : []).some((m) => {
+    if (m === msg) return false;
+    return String(m?.id || "") === of || String(m?.client_message_id || "") === of;
+  });
+}
+
 function parseDmMessageBody(raw) {
   const body = String(raw || "").replace(/^\uFEFF/, "").trim();
   if (!body) return { type: "text", text: "" };
-  if (body.includes('"nabad_dm"') && body.includes('"voice"')) {
+  if (body.includes('"nabad_dm"') && (body.includes('"voice_mix"') || body.includes('"voice"'))) {
     const start = body.indexOf("{");
     const end = body.lastIndexOf("}");
     if (start >= 0 && end > start) {
       try {
-        const voice = parseDmVoicePayload(JSON.parse(body.slice(start, end + 1)));
+        const data = JSON.parse(body.slice(start, end + 1));
+        const mix = parseDmVoiceMixPayload(data);
+        if (mix) return mix;
+        const voice = parseDmVoicePayload(data);
         if (voice) return voice;
       } catch {}
     }
@@ -39548,17 +39679,21 @@ function parseDmMessageBody(raw) {
   if (body.startsWith("{")) {
     try {
       const data = JSON.parse(body);
+      const mix = parseDmVoiceMixPayload(data);
+      if (mix) return mix;
       const voice = parseDmVoicePayload(data);
       if (voice) return voice;
       if (data?.[DM_SONG_MARKER] === "song" || data?.nabad_dm === "song") {
+        const title = String(data.t || data.title || "Song").trim() || "Song";
         return {
           type: "song",
           songId: String(data.id || "").trim(),
-          title: String(data.t || data.title || "Song").trim() || "Song",
+          title,
           url: String(data.u || data.url || "").trim(),
           art: String(data.a || data.art || "").trim(),
           by: String(data.b || data.by || "").trim(),
           kind: String(data.k || data.kind || "song").trim(),
+          legacyVoiceMix: /^drop remix\b/i.test(title),
         };
       }
     } catch {}
@@ -39569,9 +39704,11 @@ function parseDmMessageBody(raw) {
 function formatDmInboxPreview(raw) {
   const parsed = parseDmMessageBody(raw);
   if (parsed.type === "song") {
+    if (parsed.legacyVoiceMix) return "Voice mix";
     const kindLabel = parsed.kind === "mashup" ? "Mashup" : parsed.kind === "remix" ? "Remix" : "Song";
     return `${kindLabel} · ${parsed.title}`;
   }
+  if (parsed.type === "voice_mix") return formatDmVoiceMixInboxPreview(parsed);
   if (parsed.type === "voice") return formatDmVoiceInboxPreview(parsed);
   return String(raw || "").trim();
 }
@@ -40350,6 +40487,35 @@ let _messagesShareAllTracks = [];
 let _messagesShareSearchQuery = "";
 let _messagesShareCandidates = [];
 
+async function sendDmVoiceMixShare({ url, sourceMsgId, mood, durationSec, threadId } = {}) {
+  const tid = String(threadId || _conversationId || "").trim();
+  const mixUrl = String(url || "").trim();
+  if (!tid || !mixUrl) throw new Error("Could not drop the voice mix in chat.");
+  const body = buildDmVoiceMixPayload({
+    url: mixUrl,
+    sourceMsgId,
+    durationSec,
+    mood,
+  });
+  const clientMessageId = newClientMessageId();
+  const viewerId = String(authSession?.user?.id || "");
+  const optimistic = {
+    id: `pending:${clientMessageId}`,
+    client_message_id: clientMessageId,
+    sender_id: viewerId,
+    body,
+    created_at: new Date().toISOString(),
+    sendStatus: "sending",
+  };
+  addOptimisticThreadMessage(optimistic);
+  patchInboxFromOutgoingMessage({
+    threadId: tid,
+    body,
+    createdAt: optimistic.created_at,
+  });
+  await sendThreadMessageInBackground({ clientMessageId, threadId: tid, body });
+}
+
 async function sendDmSongShare(track, opts = {}) {
   const threadId = String(opts.threadId || _conversationId || "").trim();
   if (!threadId || !track) return;
@@ -40995,6 +41161,15 @@ function messagesBubbleHtml(msg, viewerId, opts) {
       ? `<span class="messagesBubbleMeta">${timeHtml}${statusHtml}</span>`
       : "";
   if (parsed.type === "song") {
+    if (parsed.legacyVoiceMix) {
+      return `
+      <div class="messagesBubbleWrap messagesBubbleWrap--voice messagesBubbleWrap--voiceMix${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${deliveredToPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
+        <div class="messagesBubble messagesBubble--voice">
+          ${messagesVoiceMixCapsuleHtml(voiceMixParsedFromLegacySong(parsed, ""), { mine, msgId: msg?.id })}
+          ${metaHtml}
+        </div>
+      </div>`;
+    }
     return `
       <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${deliveredToPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
         <div class="messagesBubble messagesBubble--song">
@@ -41003,12 +41178,22 @@ function messagesBubbleHtml(msg, viewerId, opts) {
         </div>
       </div>`;
   }
+  if (parsed.type === "voice_mix") {
+    return `
+      <div class="messagesBubbleWrap messagesBubbleWrap--voice messagesBubbleWrap--voiceMix${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${deliveredToPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
+        <div class="messagesBubble messagesBubble--voice">
+          ${messagesVoiceMixCapsuleHtml(parsed, { mine, msgId: msg?.id })}
+          ${metaHtml}
+        </div>
+      </div>`;
+  }
   if (parsed.type === "voice") {
     const voiceParsed = voiceParsedForBubble(msg, parsed);
+    const mixHtml = messagesVoiceMixThreadHtml(opts?.childMixes, { mine });
     return `
       <div class="messagesBubbleWrap messagesBubbleWrap--voice${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${deliveredToPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
         <div class="messagesBubble messagesBubble--voice">
-          ${messagesVoiceDropBubbleHtml(voiceParsed, { mine, msgId: msg?.id })}
+          ${messagesVoiceDropBubbleHtml(voiceParsed, { mine, msgId: msg?.id, mixHtml })}
           ${metaHtml}
         </div>
       </div>`;

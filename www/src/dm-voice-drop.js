@@ -11,6 +11,7 @@ import {
 } from "./studio/native-mic-probe.js";
 
 export const DM_VOICE_MARKER = "voice";
+export const DM_VOICE_MIX_MARKER = "voice_mix";
 export const DM_VOICE_MAX_MS = 30000;
 export const DM_VOICE_MAX_BYTES = 512 * 1024;
 export const DM_VOICE_BLOOM_BARS = 12;
@@ -484,7 +485,7 @@ function stopPreviewPlayback() {
     _playingAudio = null;
   }
   _playingId = "";
-  document.querySelectorAll(".messagesVoiceDrop.is-playing").forEach((el) => el.classList.remove("is-playing"));
+  document.querySelectorAll(".messagesVoiceDrop.is-playing, .messagesVoiceMix.is-playing").forEach((el) => el.classList.remove("is-playing"));
 }
 
 async function togglePreviewPlayback() {
@@ -736,6 +737,9 @@ function stopRecording() {
   try { _recorder.stop(); } catch {}
 }
 
+const VOICE_MIX_SPARK_SVG =
+  '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M12 2.4l1.4 5.2L18.6 9 13.4 10.4 12 15.6l-1.4-5.2L5.4 9l5.2-1.4zM18.2 14.2l.8 2.8 2.8.8-2.8.8-.8 2.8-.8-2.8-2.8-.8 2.8-.8z"/></svg>';
+
 function waveBarsHtml(peaks) {
   const heights = normalizeVoicePeaks(peaks, DM_VOICE_WAVE_BARS);
   return heights.map((h, i) => {
@@ -744,7 +748,7 @@ function waveBarsHtml(peaks) {
   }).join("");
 }
 
-export function messagesVoiceDropBubbleHtml(parsed, { mine = false, msgId = "" } = {}) {
+export function messagesVoiceDropBubbleHtml(parsed, { mine = false, msgId = "", mixHtml = "" } = {}) {
   const url = escapeAttr(parsed?.url || "");
   const storageKey = escapeAttr(parsed?.storageKey || voiceDropKeyFromUrl(parsed?.url) || "");
   const dur = Math.max(0, Number(parsed?.durationSec) || 0);
@@ -777,7 +781,54 @@ export function messagesVoiceDropBubbleHtml(parsed, { mine = false, msgId = "" }
         </div>
         <button type="button" class="messagesVoiceClipGo" data-voice-clip-go="${id}">Remix · 12 credits</button>
       </div>
+      ${mixHtml || ""}
     </div>`;
+}
+
+export function buildDmVoiceMixPayload({ url, sourceMsgId, durationSec, mood } = {}) {
+  const payload = {
+    nabad_dm: DM_VOICE_MIX_MARKER,
+    u: String(url || "").trim(),
+    of: String(sourceMsgId || "").trim(),
+    d: Math.max(0, Math.round(Number(durationSec) || 0)),
+  };
+  const moodKey = String(mood || "").trim().slice(0, 12);
+  if (moodKey) payload.m = moodKey;
+  return JSON.stringify(payload);
+}
+
+export function messagesVoiceMixCapsuleHtml(parsed, { mine = false, msgId = "" } = {}) {
+  const url = escapeAttr(parsed?.url || "");
+  const dur = Math.max(0, Number(parsed?.durationSec) || 0);
+  const durLabel = formatDurationSec(dur);
+  const peaksJson = escapeAttr(JSON.stringify(normalizeVoicePeaks(parsed?.peaks, DM_VOICE_WAVE_BARS)));
+  const id = escapeAttr(`mix-${String(msgId || "")}`);
+  const mood = escapeAttr(String(parsed?.mood || "").trim());
+  return `
+    <div class="messagesVoiceMix${mine ? " is-mine" : ""}" data-voice-mix="${id}" data-voice-drop="${id}" data-voice-url="${url}" data-voice-peaks="${peaksJson}" data-voice-dur="${dur}" data-voice-mood="${mood}">
+      <button type="button" class="messagesVoiceDropPlay" aria-label="Play voice mix">
+        <span class="messagesVoiceDropPlayDisc" aria-hidden="true">
+          <svg class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--play" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M9 7.5v9l7.5-4.5z"/></svg>
+          <svg class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--pause" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7 6h3v12H7zm7 0h3v12h-3z"/></svg>
+        </span>
+      </button>
+      <div class="messagesVoiceDropWave" aria-hidden="true">${waveBarsHtml(parsed?.peaks)}</div>
+      <span class="messagesVoiceMixSpark" aria-hidden="true">${VOICE_MIX_SPARK_SVG}</span>
+      ${dur > 0 ? `<span class="messagesVoiceDropDur">${durLabel}</span>` : ""}
+    </div>`;
+}
+
+export function messagesVoiceMixThreadHtml(mixes, { mine = false } = {}) {
+  const rows = (Array.isArray(mixes) ? mixes : []).filter((row) => row?.parsed?.url);
+  if (!rows.length) return "";
+  return `<div class="messagesVoiceMixThread" role="group" aria-label="Voice mixes">
+    ${rows.map((row) => messagesVoiceMixCapsuleHtml(row.parsed, { mine, msgId: row.msg?.id || row.msg?.client_message_id || "" })).join("")}
+  </div>`;
+}
+
+export function formatDmVoiceMixInboxPreview(parsed) {
+  const dur = formatDurationSec(parsed?.durationSec || 0);
+  return `Voice mix · ${dur}`;
 }
 
 function escapeAttr(s) {
@@ -1113,6 +1164,12 @@ export function handleVoiceDropBubbleClick(target) {
   if (chip) {
     const dock = chip.closest(".messagesVoiceClipDock");
     dock?.querySelectorAll("[data-voice-clip-mood]").forEach((el) => el.classList.toggle("is-on", el === chip));
+    try { d().haptic?.("light"); } catch {}
+    return true;
+  }
+  const mixCard = target?.closest?.("[data-voice-mix]");
+  if (mixCard) {
+    void toggleVoiceDropPlayback(mixCard);
     try { d().haptic?.("light"); } catch {}
     return true;
   }

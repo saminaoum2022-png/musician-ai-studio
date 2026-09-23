@@ -97,6 +97,8 @@ import {
   formatDmVoiceMixInboxPreview,
   buildDmVoiceMixPayload,
   handleVoiceDropBubbleClick,
+  voiceClipJustToggled,
+  composerVoiceMixMood,
   cacheVoiceDropPlayUrl,
   preloadVoiceDropAudio,
   DM_VOICE_MARKER,
@@ -8518,6 +8520,8 @@ try {
     updateMessagesComposerReserve,
     cancelMessagesComposerAutofocus: () => { _messagesComposerAutofocusToken += 1; },
     startVoiceDropClipFromChat,
+    failPendingChatVoiceRemix,
+    queueComposerVoiceRemix,
   });
 } catch {}
 try {
@@ -24056,9 +24060,12 @@ function syncChatVoiceRemixBrewing({ scroll = false } = {}) {
   }
   let el = document.getElementById("chatVoiceRemixBrew");
   const sourceId = String(pending.sourceMsgId || "");
-  const voiceBlock = sourceId
-    ? document.querySelector(`[data-voice-drop="${cssAttrEscape(sourceId)}"]`)?.closest(".messagesVoiceDropBlock")
+  const voiceEl = sourceId
+    ? document.querySelector(`[data-voice-drop="${cssAttrEscape(sourceId)}"]`)
+      || document.querySelector(`[data-msg-id="${cssAttrEscape(sourceId)}"] [data-voice-drop]`)
+      || document.querySelector(`[data-client-msg-id="${cssAttrEscape(sourceId.replace(/^pending:/, ""))}"] [data-voice-drop]`)
     : null;
+  const voiceBlock = voiceEl?.closest(".messagesVoiceDropBlock");
   if (!el) {
     el = document.createElement("div");
     el.id = "chatVoiceRemixBrew";
@@ -24266,6 +24273,23 @@ function rememberChatVoiceRemixMix(taskId, url) {
 
 function chatVoiceRemixMixForTask(taskId) {
   return String(_chatVoiceRemixMixByTask[String(taskId || "").trim()] || "").trim();
+}
+
+function queueComposerVoiceRemix({ clientMessageId, threadId, mood } = {}) {
+  const cid = String(clientMessageId || "").trim();
+  const tid = String(threadId || _conversationId || "").trim();
+  if (!cid || !tid) return;
+  const moodKey = VOICE_CLIP_MOODS[mood] ? mood : "soft";
+  persistPendingVoiceClipShare({
+    taskId: "",
+    threadId: tid,
+    title: "Drop remix",
+    mood: moodKey,
+    sourceMsgId: cid,
+    audioUrl: "",
+  });
+  _chatVoiceRemixShareSentTask = "";
+  syncChatVoiceRemixBrewing({ scroll: true });
 }
 
 function isChatVoiceRemixJob(taskId = "") {
@@ -44561,7 +44585,7 @@ function coachInboxRowHtml() {
 
 function sendCurrentThreadMessage() {
   if (isComposerVoiceActive()) {
-    void sendComposerVoiceDrop();
+    void sendComposerVoiceDrop({ remixMood: composerVoiceMixMood() || undefined });
     return;
   }
   const input = document.getElementById("messagesComposerInput");
@@ -44753,12 +44777,13 @@ function shouldRecordFromComposerSend(sendBtn) {
 let _messagesComposerSendArmedAt = 0;
 function activateMessagesComposerSend(sendBtn) {
   if (!sendBtn || sendBtn.disabled) return;
+  if (voiceClipJustToggled()) return;
   const now = performance.now();
   if (now - _messagesComposerSendArmedAt < 450) return;
   _messagesComposerSendArmedAt = now;
   const kind = shouldRecordFromComposerSend(sendBtn);
   if (kind === "send") {
-    void sendComposerVoiceDrop();
+    void sendComposerVoiceDrop({ remixMood: composerVoiceMixMood() || undefined });
     return;
   }
   if (kind === "record") {
@@ -44809,11 +44834,23 @@ function bindMessagesPageOnce() {
   }
   wireMessagesPresenceSheetOnce();
 
+  const composerSparkBtn = document.getElementById("messagesVoiceComposerSpark");
+  if (composerSparkBtn && !composerSparkBtn.dataset.boundComposerSparkPtr) {
+    composerSparkBtn.dataset.boundComposerSparkPtr = "1";
+    composerSparkBtn.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      e.preventDefault();
+      handleVoiceDropBubbleClick(composerSparkBtn);
+    });
+  }
+
   const composerSendBtn = document.getElementById("messagesComposerSend");
   if (composerSendBtn && !composerSendBtn.dataset.boundComposerSendPtr) {
     composerSendBtn.dataset.boundComposerSendPtr = "1";
     composerSendBtn.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
+      if (e.target.closest?.("#messagesVoiceComposerSpark, [data-voice-clip-open]")) return;
+      if (voiceClipJustToggled()) return;
       const kind = shouldRecordFromComposerSend(composerSendBtn);
       if (kind === "text") return;
       e.preventDefault();
@@ -44976,16 +45013,16 @@ function bindMessagesPageOnce() {
       void respondMessageRequest(declineBtn.getAttribute("data-messages-request-decline"), "decline");
       return;
     }
+    const voiceComposerUi = e.target.closest("#messagesVoiceComposerPill, #messagesVoiceComposerSpark, #messagesVoiceComposerDock");
+    if (voiceComposerUi) {
+      e.preventDefault();
+      handleVoiceDropBubbleClick(e.target);
+      return;
+    }
     const sendBtn = e.target.closest("#messagesComposerSend");
     if (sendBtn) {
       e.preventDefault();
       activateMessagesComposerSend(sendBtn);
-      return;
-    }
-    const voicePill = e.target.closest("#messagesVoiceComposerPill");
-    if (voicePill) {
-      e.preventDefault();
-      handleVoiceDropBubbleClick(e.target);
       return;
     }
     const retryBtn = e.target.closest("[data-retry-client-msg]");

@@ -41227,8 +41227,10 @@ html[data-theme="light"] .messagesBubbleText--coachMd strong{
   isolation: isolate;
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0;
   padding: 8px 12px;
   padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   border-top: 0;
@@ -41295,6 +41297,16 @@ body[data-route="messages-thread"] .footer{
 html.is-web-shell body.messagesThreadViewportSized[data-route="messages-thread"] .messagesThreadPage{
   overflow: hidden;
 }
+.messagesComposerBar{
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
 .messagesComposerAttach,
 .messagesComposerSend,
 .messagesComposerInput{
@@ -41355,6 +41367,7 @@ body.messagesVoiceComposing .messagesComposerAttach{
   display: none;
   flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
   position: relative;
   z-index: 1;
 }
@@ -41362,6 +41375,105 @@ body.messagesVoiceComposing .messagesVoiceComposer,
 body.messagesVoiceComposing .messagesVoiceComposer[hidden]{
   display: flex;
   align-items: center;
+}
+.messagesVoiceComposerRow{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.messagesVoiceComposerRow .messagesVoiceDrop--composer{
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+}
+.messagesComposerBar > .messagesVoiceClipSpark{
+  display: none;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  position: relative;
+  z-index: 3;
+}
+.messagesComposerBar > .messagesVoiceClipSpark:not([hidden]){
+  display: flex;
+}
+.messagesVoiceComposerDock{
+  flex: 0 0 auto;
+  order: 0;
+  position: static;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  z-index: 2;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-height: 0;
+  margin: 0;
+  padding: 0 8px;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  transition:
+    max-height 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.22s ease,
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    padding 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.messagesVoiceComposerDock.is-open{
+  max-height: 92px;
+  padding: 4px 8px 8px;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.messagesVoiceComposerDock .messagesVoiceClipLead{
+  margin: 0;
+  text-align: center;
+}
+.messagesVoiceComposerDock .messagesVoiceClipChips{
+  justify-content: center;
+}
+.messagesComposerSendLabel{
+  display: none;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+body.messagesVoiceMixArmed .messagesComposerSend{
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  padding: 0 14px;
+  border: 0;
+  color: #081018;
+  background: linear-gradient(135deg, #5eead4, #a78bfa);
+  box-shadow: none;
+  z-index: 1;
+}
+body.messagesVoiceMixArmed .messagesComposerSendIco--send,
+body.messagesVoiceMixArmed .messagesComposerSendIco--mic{
+  display: none !important;
+}
+body.messagesVoiceMixArmed .messagesComposerSendLabel{
+  display: inline;
+}
+body.messagesVoiceMixArmed .messagesComposerSend:active:not(:disabled){
+  background: linear-gradient(135deg, #5eead4, #a78bfa);
+  filter: brightness(0.96);
 }
 body.messagesVoiceComposing .messagesComposerInput{
   display: none !important;
@@ -41647,6 +41759,21 @@ body.coachComposerMode .messagesComposerSheetListDm{
     var(--nabad-glass-inset-top),
     var(--nabad-glass-inset-bottom);
 }
+.messagesVoiceClipDock.messagesVoiceComposerDock{
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  scroll-margin-bottom: 0;
+}
+.messagesVoiceComposerDock[hidden]{
+  display: none !important;
+}
 .messagesVoiceClipLead{
   margin: 0 0 8px;
   font-size: 12px;
@@ -41849,6 +41976,7 @@ body.coachComposerMode .messagesComposerSheetListDm{
 }
 .messagesComposerInput{
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 40px;
   max-height: 120px;
   resize: none;

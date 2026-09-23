@@ -207,6 +207,15 @@ function syncVoiceDropUi() {
     if (url) pill.setAttribute("data-voice-url", url);
     else pill.removeAttribute("data-voice-url");
   }
+  const spark = document.getElementById("messagesVoiceComposerSpark");
+  if (spark) {
+    spark.hidden = !hasBlob;
+    if (!hasBlob) {
+      spark.classList.remove("is-on");
+      spark.setAttribute("aria-expanded", "false");
+      closeComposerMixDock();
+    }
+  }
   if (play) {
     play.setAttribute("aria-label", recording ? "Stop recording" : "Preview voice");
   }
@@ -948,7 +957,9 @@ async function stopRecordingAndWait() {
   ]);
 }
 
-export async function sendComposerVoiceDrop() {
+let _pendingComposerRemix = null;
+
+export async function sendComposerVoiceDrop({ remixMood } = {}) {
   _sendRequested = true;
   if (_startPromise) {
     try { await _startPromise; } catch {
@@ -962,7 +973,7 @@ export async function sendComposerVoiceDrop() {
   if (_recState !== "ready") return;
   if (!_blob?.size || _composerSendLock) return;
   _sendRequested = false;
-  await sendVoiceDrop();
+  await sendVoiceDrop({ remixMood });
 }
 
 function clearVoiceDropAfterSend(localPlayUrl) {
@@ -1028,23 +1039,41 @@ async function sendVoiceDropInBackground({ clientMessageId, threadId, blob, dura
       await d().pollNewThreadMessages?.(threadId);
     }
     await d().refreshMessagesUnreadBadge?.({ force: true });
+    const remix = _pendingComposerRemix;
+    if (remix && remix.clientMessageId === cid) {
+      _pendingComposerRemix = null;
+      void d().startVoiceDropClipFromChat?.({
+        msgId: String(msg?.id || cid),
+        audioUrl: url,
+        storageKey: key,
+        mood: remix.mood,
+      });
+    }
   } catch (e) {
+    if (_pendingComposerRemix?.clientMessageId === cid) {
+      _pendingComposerRemix = null;
+      d().failPendingChatVoiceRemix?.("Couldn't send the drop — remix cancelled.");
+    }
     d().markOptimisticThreadMessageFailed?.(cid, e);
   } finally {
     _sendInFlight = false;
   }
 }
 
-async function sendVoiceDrop() {
+async function sendVoiceDrop({ remixMood } = {}) {
   const threadId = String(d().getThreadId?.() || "").trim();
   const sendBtn = document.getElementById("messagesComposerSend");
   if (_composerSendLock) return;
   if (!threadId) {
     d().showToast?.("Open a chat first.", { durationMs: 2600 });
+    const go = document.querySelector('[data-voice-clip-go="composer"]');
+    if (go) go.disabled = false;
     return;
   }
   if (!_blob?.size || _blob.size < 400) {
     d().showToast?.("Record a little longer, then send.", { durationMs: 2800 });
+    const go = document.querySelector('[data-voice-clip-go="composer"]');
+    if (go) go.disabled = false;
     return;
   }
   _composerSendLock = true;
@@ -1085,6 +1114,16 @@ async function sendVoiceDrop() {
       createdAt: optimistic.created_at,
     });
 
+    const moodKey = String(remixMood || "").trim();
+    if (moodKey) {
+      _pendingComposerRemix = { clientMessageId, mood: moodKey, threadId };
+      d().queueComposerVoiceRemix?.({
+        clientMessageId,
+        threadId,
+        mood: moodKey,
+      });
+    }
+
     clearVoiceDropAfterSend(localPlayUrl);
     closeDmVoiceDropSheet({ skipReset: true });
     d().closeMessagesComposerSheet?.();
@@ -1109,14 +1148,51 @@ export function initDmVoiceDrop(deps = {}) {
   document.documentElement.dataset.dmVoiceDropWired = "1";
 }
 
+function syncComposerMixArmed() {
+  const dock = document.getElementById("messagesVoiceComposerDock");
+  const spark = document.getElementById("messagesVoiceComposerSpark");
+  const armed = Boolean(spark?.classList.contains("is-on") && dock && !dock.hidden);
+  document.body.classList.toggle("messagesVoiceMixArmed", armed);
+  const send = document.getElementById("messagesComposerSend");
+  if (send) {
+    send.setAttribute("aria-label", armed ? "Send mix" : "Send message");
+    const label = send.querySelector(".messagesComposerSendLabel");
+    if (label) label.hidden = !armed;
+  }
+  try { d().updateMessagesComposerReserve?.(); } catch {}
+}
+
+function closeComposerMixDock() {
+  const dock = document.getElementById("messagesVoiceComposerDock");
+  if (dock) {
+    dock.classList.remove("is-open");
+    dock.hidden = true;
+  }
+  document.body.classList.remove("messagesVoiceMixArmed");
+  const send = document.getElementById("messagesComposerSend");
+  if (send) {
+    send.setAttribute("aria-label", "Send message");
+    const label = send.querySelector(".messagesComposerSendLabel");
+    if (label) label.hidden = true;
+  }
+}
+
+export function composerVoiceMixMood() {
+  const dock = document.getElementById("messagesVoiceComposerDock");
+  if (!dock || dock.hidden || !document.body.classList.contains("messagesVoiceMixArmed")) return "";
+  return String(dock.querySelector("[data-voice-clip-mood].is-on")?.getAttribute("data-voice-clip-mood") || "soft");
+}
+
 function closeAllVoiceClipDocks() {
   document.querySelectorAll(".messagesVoiceClipDock").forEach((el) => {
+    el.classList.remove("is-open");
     el.hidden = true;
   });
   document.querySelectorAll(".messagesVoiceClipSpark").forEach((el) => {
     el.classList.remove("is-on");
     el.setAttribute("aria-expanded", "false");
   });
+  syncComposerMixArmed();
 }
 
 function revealVoiceClipDockAboveComposer(dock) {
@@ -1137,26 +1213,39 @@ function revealVoiceClipDockAboveComposer(dock) {
   window.setTimeout(pin, 80);
 }
 
+let _voiceClipToggleAt = 0;
+
+export function voiceClipJustToggled() {
+  return performance.now() - _voiceClipToggleAt < 450;
+}
+
 export function handleVoiceDropBubbleClick(target) {
+  const spark = target?.closest?.("[data-voice-clip-open]");
+  if (spark) {
+    const now = performance.now();
+    if (now - _voiceClipToggleAt < 400) return true;
+    _voiceClipToggleAt = now;
+    const id = String(spark.getAttribute("data-voice-clip-open") || "");
+    const dock = document.querySelector(`[data-voice-clip-dock="${id}"]`);
+    const willOpen = !spark.classList.contains("is-on");
+    closeAllVoiceClipDocks();
+    if (dock && willOpen) {
+      dock.hidden = false;
+      spark.classList.add("is-on");
+      spark.setAttribute("aria-expanded", "true");
+      dock.classList.add("is-open");
+      revealVoiceClipDockAboveComposer(dock);
+    }
+    // Morph Send mix after the tap finishes so the growing CTA cannot steal the click.
+    if (willOpen) window.setTimeout(() => syncComposerMixArmed(), 80);
+    else syncComposerMixArmed();
+    try { d().haptic?.("light"); } catch {}
+    return true;
+  }
   const composer = target?.closest?.("#messagesVoiceComposerPill");
   if (composer) {
     if (_recState === "recording" || _recState === "starting") stopRecording();
     else if (_recState === "ready" && _blobUrl) void togglePreviewPlayback();
-    try { d().haptic?.("light"); } catch {}
-    return true;
-  }
-  const spark = target?.closest?.("[data-voice-clip-open]");
-  if (spark) {
-    const id = String(spark.getAttribute("data-voice-clip-open") || "");
-    const dock = document.querySelector(`[data-voice-clip-dock="${id}"]`);
-    const open = Boolean(dock && dock.hidden);
-    closeAllVoiceClipDocks();
-    if (dock && open) {
-      dock.hidden = false;
-      spark.classList.add("is-on");
-      spark.setAttribute("aria-expanded", "true");
-      revealVoiceClipDockAboveComposer(dock);
-    }
     try { d().haptic?.("light"); } catch {}
     return true;
   }
@@ -1176,9 +1265,14 @@ export function handleVoiceDropBubbleClick(target) {
   const go = target?.closest?.("[data-voice-clip-go]");
   if (go) {
     const dock = go.closest(".messagesVoiceClipDock");
+    const mood = String(dock?.querySelector?.("[data-voice-clip-mood].is-on")?.getAttribute("data-voice-clip-mood") || "soft");
+    if (String(go.getAttribute("data-voice-clip-go") || "") === "composer") {
+      void sendComposerVoiceDrop({ remixMood: mood });
+      try { d().haptic?.("medium"); } catch {}
+      return true;
+    }
     const wrap = go.closest(".messagesVoiceDropBlock");
     const card = wrap?.querySelector?.(".messagesVoiceDrop");
-    const mood = String(dock?.querySelector?.("[data-voice-clip-mood].is-on")?.getAttribute("data-voice-clip-mood") || "soft");
     void d().startVoiceDropClipFromChat?.({
       msgId: String(go.getAttribute("data-voice-clip-go") || card?.getAttribute("data-voice-drop") || ""),
       audioUrl: String(card?.getAttribute("data-voice-url") || ""),

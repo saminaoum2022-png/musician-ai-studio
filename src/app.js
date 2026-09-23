@@ -23970,41 +23970,17 @@ const CHAT_VOICE_REMIX_BREW_LINES = [
 
 const VOICE_NOTE_CHALLENGE_STYLE =
   "Voice-note remix, intimate intro, modern Arabic pop, warm drums, emotional hook, 96 bpm";
+const VOICE_NOTE_CHALLENGE_PROMPT =
+  "Start with a spoken line or hummed idea.\nTurn it into a repeating hook.\nKeep the first verse personal and close.\nMake the chorus simple enough to sing back.";
 const VOICE_CLIP_MOODS = {
   soft: "soft intimate pop, warm pads, tender close vocal",
   night: "late-night rnb, dark bass, neon night atmosphere",
   arabic: "modern arabic pop, oud shimmer, light darbuka, warm levantine vocal",
 };
-const VOICE_CLIP_BAND_TAGS = {
-  soft: "Soft Pop, Warm Pads",
-  night: "Late Night, Dark Bass",
-  arabic: "Arabic Pop, Oud",
-};
 
 function chatVoiceNoteRemixStyle(mood) {
   const extra = VOICE_CLIP_MOODS[mood] || VOICE_CLIP_MOODS.soft;
   return `${VOICE_NOTE_CHALLENGE_STYLE}, ${extra}`;
-}
-
-async function postChatVoiceStems({ sourceUrl, title, style, referenceMode, model, negativeTags, authToken }) {
-  const r = await fetch(apiUrl("/api/suno/stems"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-    },
-    body: JSON.stringify({
-      action: "add_instrumental",
-      referenceMode,
-      sourceAudioUrl: sourceUrl,
-      style,
-      title,
-      model,
-      ...(negativeTags ? { negativeTags } : {}),
-    }),
-  });
-  const d = await r.json().catch(() => ({}));
-  return { r, d };
 }
 
 const CHAT_VOICE_REMIX_GO_LABEL = "Remix · 12 credits";
@@ -24178,46 +24154,26 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
     showToast("Something’s blooming from that drop…", { icon: "♪", durationMs: 4200 });
     const authToken = getSupabaseAuthToken();
     const remixStyle = chatVoiceNoteRemixStyle(moodKey);
-    let usedMode = "humming_music";
     const data = await trackCreditsAround("Remix chat voice drop", async () => {
-      // Keep-voice only. Cover fallback was posting a new 15s song with no
-      // drop vocal. Attach the same public URL the player uses, plus the file
-      // when the client can fetch it.
-      const file = await fetchChatVoiceDropFile(sourceUrl).catch(() => null);
-      let r;
-      let d = {};
-      if (file) {
-        const fd = new FormData();
-        const uniqueUploadName = `ref-${Date.now()}-${file.name}`;
-        fd.append("action", "add_instrumental");
-        fd.append("referenceMode", "humming_music");
-        fd.append("file", file, uniqueUploadName);
-        fd.append("fileName", uniqueUploadName);
-        fd.append("fileType", file.type);
-        fd.append("sourceAudioUrl", sourceUrl);
-        fd.append("style", VOICE_CLIP_BAND_TAGS[moodKey] || VOICE_CLIP_BAND_TAGS.soft);
-        fd.append("negativeTags", "Harsh, Noisy");
-        fd.append("title", title);
-        fd.append("model", "V5_5");
-        r = await fetch(apiUrl("/api/suno/stems"), {
-          method: "POST",
-          headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
-          body: fd,
-        });
-        d = await r.json().catch(() => ({}));
-      } else {
-        const posted = await postChatVoiceStems({
-          sourceUrl,
+      // Same Hum tab path: upload-cover / vocal_full / V6 / 2-minute song.
+      const r = await apiFetch("/api/suno/stems", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({
+          action: "add_instrumental",
+          referenceMode: "vocal_full",
+          sourceAudioUrl: sourceUrl,
+          style: remixStyle,
+          prompt: VOICE_NOTE_CHALLENGE_PROMPT,
           title,
-          style: VOICE_CLIP_BAND_TAGS[moodKey] || VOICE_CLIP_BAND_TAGS.soft,
-          referenceMode: "humming_music",
-          model: "V5_5",
-          negativeTags: "Harsh, Noisy",
-          authToken,
-        });
-        r = posted.r;
-        d = posted.d;
-      }
+          model: LATEST_SUNO_MODEL,
+          duration: 120,
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
       if (r.status === 402 || d?.code === "insufficient_credits") {
         const err = new Error(
           `Not enough credits (need ${formatCreditsAmount(remixCost)} for a remix).`,
@@ -24226,7 +24182,6 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
         throw err;
       }
       rejectSunoApiResponse(r, d);
-      usedMode = "humming_music";
       return d;
     });
     const attachedKb = Math.max(1, Math.round(Number(data?._attachedBytes || 0) / 1024));
@@ -24259,13 +24214,13 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
     syncChatVoiceRemixBrewing({ scroll: true });
     lastSunoTitle = title;
     lastGenerationMeta = {
-      engine: usedMode === "humming_music" ? "suno_add_instrumental" : "suno_upload_cover",
-      mode: usedMode === "humming_music" ? "Chat voice band" : "Chat voice note",
+      engine: "suno_upload_cover",
+      mode: "Chat hum",
       styleInput: remixStyle,
       musicProvider: "suno",
       hasReference: true,
       vocalRefOrigin: "record",
-      referenceMode: usedMode,
+      referenceMode: "vocal_full",
       chatVoiceClip: true,
     };
     try {
@@ -24320,7 +24275,7 @@ function maybeShareChatVoiceRemixFromPoll(state) {
   const url = String(state?.finishedAudioUrl || lastSunoFullUrl || lastSunoProxyUrl || "").trim();
   if (!url || isSunoStreamPreviewUrl(url)) return;
   const dur = Number(state?.durationSec || 0);
-  if (dur > 0 && dur < 40 && status !== "SUCCESS") return;
+  if (dur > 0 && dur < 45) return;
   void maybeShareReadyVoiceClip([{
     id: String(sunoAudioId || pending.taskId || ""),
     url,

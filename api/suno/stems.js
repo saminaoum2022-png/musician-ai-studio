@@ -48,7 +48,7 @@ const {
   resolveStemsLogKind,
   buildStemsPromptLabel,
 } = require("../_lib/suno-admin-log");
-const { DEFAULT_SUNO_MODEL, normalizeSunoModel } = require("../_lib/suno-upstream");
+const { DEFAULT_SUNO_MODEL, normalizeSunoModel, sunoModelSupportsDuration } = require("../_lib/suno-upstream");
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 // Reference-audio generations (remix / cover / hum / extend) produce full
@@ -317,6 +317,14 @@ module.exports = async function handler(req, res) {
             : 0.5;
         const coverAudioWeight =
           humTrackPreset && audioWeight === null && styleWeight === null ? 0.95 : audioWeight;
+        const durationSec = Math.round(Number(body?.duration || body?.durationSec || 0));
+        const coverDuration =
+          !coverInstrumental
+          && sunoModelSupportsDuration(safeModel)
+          && durationSec >= 10
+          && durationSec <= 360
+            ? durationSec
+            : null;
         const coverPayload = {
           uploadUrl,
           customMode: true,
@@ -325,6 +333,7 @@ module.exports = async function handler(req, res) {
           callBackUrl,
           prompt: coverInstrumental ? "" : (prompt || ""),
           style: coverStyle,
+          ...(coverDuration != null ? { duration: coverDuration } : {}),
           title:
             title ||
             (humTrackPreset

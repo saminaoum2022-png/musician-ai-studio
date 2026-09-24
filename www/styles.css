@@ -64411,3 +64411,44 @@ button.proSubscribeBtn:hover{
 .onboardingSkip{
   color: rgba(223, 231, 251, 0.62);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Connect — quick fixes
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Presence dot: only for people who are online right now (the code's 5-minute window).
+   The orange "seen recently" dot showed on rows active hours ago and read like a warning —
+   the chat header already says "Active 55m ago". */
+.messagesRowAvatarWrap.is-recent::after,
+.messagesThreadAvatar.is-recent::after{
+  display: none;
+}
+
+/* Chat header + composer scrims — Telegram-style, kept out of the message area.
+   Header: the scrim covers the status bar and the avatar pill row only, and is gone by the bottom
+   of the pill, so no message text below the pill is dimmed. The clock and battery stay faintly
+   readable through it.
+   Composer: the scrim starts below the text input (home-indicator strip only); messages above and
+   beside the input are untouched. */
+.messagesThreadHead{
+  --messages-thread-fade-h: 0px;
+}
+.messagesThreadHead::before{
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg) 72%, transparent) 0,
+    color-mix(in srgb, var(--bg) 60%, transparent) calc(6px + env(safe-area-inset-top, 0px)),
+    transparent 100%
+  );
+}
+.messagesComposer{
+  --messages-composer-fade-h: 0px;
+}
+.messagesComposer::before{
+  height: calc(8px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(
+    180deg,
+    transparent 0,
+    color-mix(in srgb, var(--bg) 80%, transparent) 100%
+  );
+}

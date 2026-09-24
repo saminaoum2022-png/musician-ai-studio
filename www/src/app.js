@@ -44778,11 +44778,23 @@ function messagesInboxMeHeaderHtml() {
     </section>`;
 }
 
+/** Coach replies are markdown; the inbox row is one plain line (so no literal ** in the preview). Coach row only. */
+function plainCoachInboxPreview(text) {
+  return String(text || "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/(\*\*|__)(.+?)\1/g, "$2")
+    .replace(/(^|[^*])\*(?!\s)([^*\n]+?)\*(?!\*)/g, "$1$2")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s{0,3}(#{1,6}|[-*•]|\d+\.)\s+/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function coachInboxRowHtml() {
   const chat = loadCoachChat();
   const signupUnread = coachSignupUnreadBump() > 0;
   const last = [...chat].reverse().find((m) => String(m.body || "").trim() && m.id !== "coach:welcome");
-  const preview = last ? formatDmInboxPreview(last.body) : "Ask about lyrics, credits, Pro, or making music";
+  const preview = last ? plainCoachInboxPreview(formatDmInboxPreview(last.body)) : "Ask about lyrics, credits, Pro, or making music";
   return `
     <button type="button" class="messagesRow messagesRow--coach${signupUnread ? " is-unread" : ""}" data-messages-thread="${COACH_THREAD_ID}">
       ${coachAvatarHtml("messagesRowAvatar")}

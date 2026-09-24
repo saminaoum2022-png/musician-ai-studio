@@ -22724,9 +22724,27 @@ input::placeholder, textarea::placeholder{
     opacity: 1;
     filter: none;
   }
+  /* Tab icons — same shapes, one line weight and optical sizing.
+   * The SVGs carry their own stroke-width attributes (1.75 / 2.3), which beat inherited CSS,
+   * so the weight is set on the drawn elements. Boxes are sized so every glyph reads ~21px tall
+   * (the house sits small in its 24px viewBox); margin-top keeps each icon centred at y = 23px. */
+  .mobileTabbar a .tabIcoHome path,
+  .mobileTabbar a .tabIcoMessages path,
+  .mobileTabbar a .tabIcoActivity polyline,
+  .mobileTabbar a .tabIcoProfileGuest path,
+  .mobileTabbar a .tabIcoProfileGuest circle{
+    stroke-width: 2;
+  }
+  .mobileTabbar a .tabIcoHome{
+    width: 28px;
+    height: 28px;
+    margin-top: 9px;
+  }
   .mobileTabbar a .tabIcoMessages,
   .mobileTabbar a .tabIcoActivity{
-    stroke-width: 2.3;
+    width: 25px;
+    height: 25px;
+    margin-top: 10.5px;
   }
   .tabProfileAvatarSlot{
     position: relative;
@@ -22889,8 +22907,8 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCreate .tabIco.tabIcoCreate{
     display: block;
     pointer-events: none;
-    width: 25px;
-    height: 25px;
+    width: 24px;
+    height: 24px;
     background: currentColor;
     filter: none;
     -webkit-mask-image: url(assets/icons/create-tab-music-note.png);
@@ -22938,8 +22956,8 @@ input::placeholder, textarea::placeholder{
     background: transparent;
   }
   .mobileTabbar a.tabCreate.active .tabIco.tabIcoCreate{
-    width: 25px;
-    height: 25px;
+    width: 24px;
+    height: 24px;
     background: currentColor;
   }
   html[data-theme="light"] .mobileTabbar{
@@ -23184,12 +23202,12 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.active .tabIcoHome path{
     fill: currentColor;
     stroke: currentColor;
-    stroke-width: 1.35;
+    stroke-width: 1.5;
   }
   .mobileTabbar a.active .tabIcoMessages path{
     fill: currentColor;
     stroke: currentColor;
-    stroke-width: 2.15;
+    stroke-width: 1.5;
   }
   .mobileTabbar a.tabCreate.active .tabIco,
   .mobileTabbar a.tabCreate.tabIsReady .tabIco,
@@ -23220,7 +23238,7 @@ input::placeholder, textarea::placeholder{
   }
   .mobileTabbar a.active .tabIcoActivity polyline{
     stroke: #fff;
-    stroke-width: 2.75;
+    stroke-width: 2.5;
   }
   .mobileTabbar a.friendsTab.active,
   .mobileTabbar a.messagesTab.active{

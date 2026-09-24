@@ -64260,3 +64260,79 @@ html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate.isG
 .connectNewSheet .messagesComposerSheetRow[hidden]{
   display: none !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Bottom sheets — one liquid-glass recipe (the Create glass, at sheet scale)
+ * Built on the existing --nabad-sheet-* / --nabad-glass-* tokens. Only the surface, scrim,
+ * close button and title are unified — layout, rows and content are untouched.
+ * Appended last so it wins the cascade over each sheet's older one-off styling.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Card: translucent glass, hairline border + highlights, soft blur. Top corners unified;
+   bottom corners stay as each sheet is mounted (floating vs docked). */
+html:not([data-theme="light"]) body .messagesShareSheetCard,
+html:not([data-theme="light"]) body .messagesRequestSheetCard,
+html:not([data-theme="light"]) body .feedReplySheetCard,
+html:not([data-theme="light"]) body .discoverTrackSheetCard,
+html:not([data-theme="light"]) body .coachSongPlanSheetCard,
+html:not([data-theme="light"]) body .campaignSheetCard,
+html:not([data-theme="light"]) body .styleLibraryCard,
+html:not([data-theme="light"]) body .profileEditSheetCard,
+html:not([data-theme="light"]) body .searchRemixCard{
+  background: var(--nabad-sheet-bg);
+  border: 1px solid var(--nabad-sheet-border);
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  -webkit-backdrop-filter: blur(var(--nabad-sheet-blur)) saturate(var(--nabad-sheet-saturate));
+          backdrop-filter: blur(var(--nabad-sheet-blur)) saturate(var(--nabad-sheet-saturate));
+  box-shadow: var(--nabad-sheet-shadow);
+}
+
+/* Scrim: light dim + soft blur so the screen behind stays readable (was 62–82% black, mostly no blur). */
+html:not([data-theme="light"]) body .messagesShareSheetBackdrop,
+html:not([data-theme="light"]) body .messagesRequestSheetBackdrop,
+html:not([data-theme="light"]) body .feedReplySheetBackdrop,
+html:not([data-theme="light"]) body .discoverTrackSheetBackdrop,
+html:not([data-theme="light"]) body .coachSongPlanSheetBackdrop,
+html:not([data-theme="light"]) body .campaignSheetBackdrop,
+html:not([data-theme="light"]) body .profileEditSheetBackdrop,
+html:not([data-theme="light"]) body .searchRemixBackdrop,
+html:not([data-theme="light"]) body .userActionSheetScrim{
+  background: var(--nabad-sheet-scrim);
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
+          backdrop-filter: blur(10px) saturate(1.1);
+}
+
+/* Close button: the same round glass control everywhere (was 32/34/36px, square-ish or round, 4 fills). */
+html:not([data-theme="light"]) body .messagesShareSheetClose,
+html:not([data-theme="light"]) body .messagesRequestSheetClose,
+html:not([data-theme="light"]) body .feedReplySheetClose,
+html:not([data-theme="light"]) body .discoverTrackSheetClose,
+html:not([data-theme="light"]) body .coachSongPlanSheetClose,
+html:not([data-theme="light"]) body .campaignSheetClose,
+html:not([data-theme="light"]) body .searchRemixClose{
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  color: var(--nabad-glass-color);
+  box-shadow: var(--nabad-glass-inset-top);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+
+/* Title: one size / weight / tracking (was 17px at 750, 800 and 900). */
+html:not([data-theme="light"]) body .messagesShareSheetTitle,
+html:not([data-theme="light"]) body .messagesRequestSheetTitle,
+html:not([data-theme="light"]) body .feedReplySheetTitle,
+html:not([data-theme="light"]) body .coachSongPlanSheetTitle,
+html:not([data-theme="light"]) body .searchRemixTitle,
+html:not([data-theme="light"]) body .profileEditSheetTitle{
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}

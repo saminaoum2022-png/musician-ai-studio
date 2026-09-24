@@ -886,6 +886,10 @@
           <header class="appScreenHeader createPageHeader">
             <div class="createHeadRow">
               <h2 class="appScreenTitle">Create</h2>
+              <span id="createCreditsChip" class="createCreditsChip" role="status" hidden aria-label="Credits balance">
+                <svg class="createCreditsChipIco" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2.8l2.1 6.1 6.1 2.1-6.1 2.1L12 19.2l-2.1-6.1-6.1-2.1 6.1-2.1z"/></svg>
+                <span id="createCreditsChipValue" class="createCreditsChipValue">0</span>
+              </span>
               <div class="createHeadActions">
                 <span class="coachFabSlot" data-coach-fab-slot="generate" aria-hidden="true"></span>
                 <button id="btnOpenAdvancedSheet" class="btnCreateSettings" type="button" hidden aria-hidden="true" tabindex="-1" title="Advanced options" aria-label="Advanced options">
@@ -1407,7 +1411,7 @@
                 </button>
                 <button type="button" id="singerPersonaPill" class="addressPill singerPersonaPill" data-persona-action="create" aria-pressed="false">
                   <span class="addressPillMain">Persona</span>
-                  <span class="addressPillSub singerPersonaPillSub">＋</span>
+                  <span class="addressPillSub singerPersonaPillSub"><svg class="singerPersonaPlusIco" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
                 </button>
                 <button type="button" id="singerDuoPill" class="addressPill singerDuoPill" data-singer-value="duo" hidden aria-pressed="false">
                   <span class="addressPillMain">Duo</span>

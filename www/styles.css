@@ -63984,3 +63984,248 @@ html.is-native-shell .playerCard.isDiscoverReelLayout.isReelAnimating .playerArt
 html.is-native-shell .playerCard[data-discover-reel="1"].isReelAnimating .playerArtStage{
   visibility: hidden;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Create — visual polish: "Quiet glass, one lit action"
+ * Appended last on purpose: earlier Create rules are layered across several passes
+ * (base, dark route, mobile, dock, neutral), so this block owns the final look.
+ * Scope: body[data-route="generate"] only.
+ * Roles — teal = go / ready / credits · violet = selected / focus / AI · Pro = badge only.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Header — balance chip sits right after the title so the Coach pill (right) never covers it. */
+body[data-route="generate"] .createHeadRow .appScreenTitle{
+  flex: 0 1 auto;
+}
+.createCreditsChip{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  margin-right: auto;
+  min-height: 28px;
+  padding: 4px 11px 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow: var(--nabad-glass-inset-top);
+  color: rgba(248, 250, 255, 0.92);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.createCreditsChip[hidden]{
+  display: none !important;
+}
+.createCreditsChipIco{
+  flex: 0 0 auto;
+  color: var(--brand-teal);
+}
+
+/* Placeholders carry the only guidance on an empty Create — keep them readable (~3:1). */
+body[data-route="generate"] input::placeholder,
+body[data-route="generate"] textarea::placeholder,
+body[data-route="generate"] .inputPanel input::placeholder,
+body[data-route="generate"] .inputPanel textarea::placeholder,
+body[data-route="generate"] input::-webkit-input-placeholder,
+body[data-route="generate"] textarea::-webkit-input-placeholder{
+  color: rgba(244, 243, 255, 0.36);
+  -webkit-text-fill-color: rgba(244, 243, 255, 0.36);
+  opacity: 1;
+}
+
+/* Card titles — separate from tab/chip labels (13.5/700 → 15/750). */
+body[data-route="generate"] .inPanelLabel,
+body[data-route="generate"] .inputPanel .label,
+body[data-route="generate"] .label.inPanelLabel,
+body[data-route="generate"] .stylePanelHead > span{
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 720px){
+  /* Slightly more air between cards. */
+  body[data-route="generate"] .createFlow,
+  body[data-route="generate"] .createFlowStep,
+  body[data-route="generate"] .createSectionStack,
+  body[data-route="generate"] #createFlow > .createFlowStep:first-child{
+    gap: 12px;
+  }
+  /* Lyrics leads; Singer + Artwork are supporting cards — same glass, quieter lift. */
+  body[data-route="generate"] #singerVoicePanel,
+  body[data-route="generate"] .inputPanel--style:has(#sunoArtworkStyle){
+    background: color-mix(in srgb, var(--surface-panel) 70%, transparent);
+    box-shadow: var(--surface-highlight);
+  }
+}
+
+/* AI assist chips — violet-tint glass, no glow (only the Generate CTA is lit). */
+body[data-route="generate"] .aiAssistBtn{
+  border-color: rgba(167, 148, 230, 0.30);
+  background: linear-gradient(135deg, rgba(35, 213, 171, 0.07) 0%, rgba(124, 92, 255, 0.10) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Icons — line/vector instead of emoji / text glyphs. */
+.styleSuggestPill--auto .styleSuggestPillIco{
+  display: inline-flex;
+  align-items: center;
+  color: var(--create-icon-accent, #bfa9ff);
+}
+.styleSuggestPill--auto .styleSuggestPillIco svg{
+  display: block;
+}
+.singerPersonaPlusIco{
+  display: block;
+}
+.singerPersonaPillSub .singerPersonaPlusIco{
+  margin-left: 5px;
+}
+.singerPersonaChip--create .singerPersonaPlusIco{
+  margin: 0 auto;
+}
+
+/* Pro badge on Hum — inline after the label instead of straddling the container edge. */
+body[data-route="generate"] #createTabHum .webProFeaturePill--pill{
+  position: static;
+  top: auto;
+  right: auto;
+  margin-left: 2px;
+  font-size: 9px;
+  padding: 2px 6px;
+  letter-spacing: 0.06em;
+}
+
+/* Result card — same surface family as the input panels (radius 18, panel glass). */
+body[data-route="generate"] .resultCard{
+  border-radius: 18px;
+  border-color: var(--surface-border);
+  background: var(--surface-panel);
+  box-shadow: var(--surface-highlight), 0 10px 24px rgba(0, 0, 0, 0.20);
+}
+/* Share is a secondary action here: violet-tint glass, so only Generate carries the gradient. */
+body[data-route="generate"] .resultActionBtn--share{
+  color: #fff;
+  border-color: rgba(167, 148, 230, 0.55);
+  background: rgba(124, 92, 255, 0.30);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+/* Loading bar — shared glass recipe instead of a flat card with a heavy drop. */
+body[data-route="generate"] .loadingBar{
+  border-radius: 18px;
+  border: 1px solid var(--nabad-glass-border);
+  background: var(--nabad-glass-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
+  box-shadow: var(--nabad-glass-shadow), var(--nabad-glass-inset-top);
+}
+
+/* ── Generate CTA — the one lit action ─────────────────────────────────────
+ * Idle: frosted glass with a faint brand tint + lilac hairline.
+ * Ready: teal→violet fill fades in (gradient sits on ::before so it can animate opacity).
+ * Generating: dimmed fill with a moving sheen + spinner.
+ * Cost chip is drawn from data-cost (set in syncCreateGenerateDock) — button text is rewritten by JS. */
+html body[data-route="generate"] #btnSunoGenerate.aiGenerate,
+html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate{
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  gap: 10px;
+  transition: color 220ms ease, border-color 220ms ease, box-shadow 260ms ease, transform 120ms ease;
+}
+html body[data-route="generate"] #btnSunoGenerate.aiGenerate::before,
+html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate::before{
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(148deg, #23d5ab 0%, #2ec4b8 34%, #6b78e8 72%, #7c5cff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  opacity: 0.12;
+  filter: none;
+  animation: none;
+  transition: opacity 240ms ease;
+  pointer-events: none;
+}
+html body[data-route="generate"] #btnSunoGenerate.aiGenerate:not(.isReady),
+html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate:not(.isReady){
+  color: rgba(247, 245, 250, 0.94);
+  border-color: rgba(190, 178, 240, 0.30);
+}
+html body[data-route="generate"] #btnSunoGenerate.aiGenerate.isReady,
+html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate.isReady{
+  color: #fff;
+  background: transparent;
+  border: 0;
+  box-shadow: 0 12px 28px rgba(35, 213, 171, 0.22), 0 12px 28px rgba(0, 0, 0, 0.30);
+}
+html body[data-route="generate"] #btnSunoGenerate.aiGenerate.isReady::before,
+html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate.isReady::before{
+  display: block !important;
+  opacity: 1;
+}
+html body[data-route="generate"] #btnSunoGenerate.aiGenerate.isGenerating,
+html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate.isGenerating{
+  color: rgba(255, 255, 255, 0.94);
+  border-color: transparent;
+}
+html body[data-route="generate"] #btnSunoGenerate.aiGenerate.isGenerating::before,
+html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate.isGenerating::before{
+  display: block !important;
+  opacity: 0.66;
+  background:
+    linear-gradient(110deg, transparent 32%, rgba(255, 255, 255, 0.26) 50%, transparent 68%) 120% 0 / 240% 100% no-repeat,
+    linear-gradient(148deg, #23d5ab 0%, #2ec4b8 34%, #6b78e8 72%, #7c5cff 100%);
+}
+@media (prefers-reduced-motion: no-preference){
+  html body[data-route="generate"] #btnSunoGenerate.aiGenerate.isGenerating::before,
+  html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate.isGenerating::before{
+    animation: createCtaSheen 1600ms linear infinite;
+  }
+}
+@keyframes createCtaSheen{
+  from{ background-position: 120% 0, 0 0; }
+  to{ background-position: -120% 0, 0 0; }
+}
+@keyframes createCtaSpin{
+  to{ transform: rotate(360deg); }
+}
+html body[data-route="generate"] #btnSunoGenerate.aiGenerate[data-cost]:not([data-cost=""]):not(.isGenerating)::after,
+html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate[data-cost]:not([data-cost=""]):not(.isGenerating)::after{
+  content: attr(data-cost) " credits";
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+html body[data-route="generate"] #btnSunoGenerate.aiGenerate.isReady[data-cost]:not([data-cost=""])::after,
+html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate.isReady[data-cost]:not([data-cost=""])::after{
+  background: rgba(255, 255, 255, 0.20);
+  color: #fff;
+}
+html body[data-route="generate"] #btnSunoGenerate.aiGenerate.isGenerating::after,
+html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate.isGenerating::after{
+  content: "";
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.32);
+  border-top-color: #fff;
+  animation: createCtaSpin 800ms linear infinite;
+}

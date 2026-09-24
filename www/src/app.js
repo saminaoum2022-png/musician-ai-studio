@@ -7629,8 +7629,12 @@ function syncSingerGenderPills() {
   if (wrap) wrap.classList.toggle("isOverridden", overridden);
 }
 
+/** Line "+" used on Create chips — replaces the fullwidth "＋" text glyph so it matches the other 12px line icons. */
+const CREATE_PLUS_ICON_HTML =
+  '<svg class="singerPersonaPlusIco" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+
 /** The Persona slot lives inline on the Singer row (Male | Female | Persona).
- *  With no persona it's a "＋" create button; with personas it shows
+ *  With no persona it's a "+" create button; with personas it shows
  *  the active persona's name (or "Persona") and opens a chooser drawer. */
 function renderSingerPersonaPill() {
   const pill = document.getElementById("singerPersonaPill");
@@ -7649,7 +7653,7 @@ function renderSingerPersonaPill() {
     pill.classList.remove("isActive");
     pill.setAttribute("aria-pressed", "false");
     if (main) main.textContent = "Persona";
-    if (sub) sub.textContent = "＋";
+    if (sub) sub.innerHTML = CREATE_PLUS_ICON_HTML;
   };
   if (!authSession?.user?.id) { setCreate(); return; }
   let list = [];
@@ -7705,7 +7709,7 @@ function renderSingerPersonaRow() {
       const on = String(p.personaId || "") === active;
       return `<button type="button" class="singerPersonaChip ${on ? "isActive" : ""}" data-singer-persona-id="${id}" aria-pressed="${on ? "true" : "false"}">${lab}</button>`;
     }),
-    `<button type="button" class="singerPersonaChip singerPersonaChip--create" data-singer-persona-create="1" aria-label="Create a new persona">＋</button>`,
+    `<button type="button" class="singerPersonaChip singerPersonaChip--create" data-singer-persona-create="1" aria-label="Create a new persona">${CREATE_PLUS_ICON_HTML}</button>`,
   ];
   row.innerHTML = `<span class="singerPersonaNote">Persona</span>${chips.join("")}`;
   row.hidden = !_singerPersonaDrawerOpen;
@@ -32447,6 +32451,14 @@ function paintCreditsDisplays() {
   if (els.profileCreditsLink) {
     els.profileCreditsLink.classList.toggle("isAdmin", admin);
     els.profileCreditsLink.setAttribute("aria-label", `${aria}. Tap to manage credits.`);
+  }
+  // Create header: quiet balance chip (status only — Credits stays one tap away on Profile).
+  const createChip = document.getElementById("createCreditsChip");
+  if (createChip) {
+    const chipVal = document.getElementById("createCreditsChipValue");
+    if (chipVal) chipVal.textContent = disp;
+    createChip.hidden = !creditsState.loaded;
+    createChip.setAttribute("aria-label", aria);
   }
   renderCreditsBreakdown();
 }
@@ -73294,7 +73306,7 @@ function renderStyleSuggestions() {
   // and turns off the moment the user adds a pill or types their own.
   const autoOn = selected.size === 0;
   let html =
-    `<button type="button" class="styleSuggestPill styleSuggestPill--auto${autoOn ? " isActive" : ""}" data-style-auto="1" aria-pressed="${autoOn ? "true" : "false"}" aria-label="Let AI suggest a style"><span class="styleSuggestPillIco" aria-hidden="true">\u2728</span>Auto</button>`;
+    `<button type="button" class="styleSuggestPill styleSuggestPill--auto${autoOn ? " isActive" : ""}" data-style-auto="1" aria-pressed="${autoOn ? "true" : "false"}" aria-label="Let AI suggest a style"><span class="styleSuggestPillIco" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" focusable="false"><path fill="currentColor" d="M12 2.8l2.1 6.1 6.1 2.1-6.1 2.1L12 19.2l-2.1-6.1-6.1-2.1 6.1-2.1z"/><path fill="currentColor" d="M19 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg></span>Auto</button>`;
   for (const tag of STYLE_BASE_SUGGESTIONS) {
     const on = selected.has(tag.toLowerCase());
     html += `<button type="button" class="styleSuggestPill${on ? " isActive" : ""}" data-style-tag="${escapeHtml(tag)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(tag)}</button>`;
@@ -74391,6 +74403,22 @@ function pinCreateGenerateDockForNativeGlass() {
   } catch {}
 }
 
+/**
+ * Credits the Generate CTA will spend right now, or 0 when we can't state it with confidence
+ * (reference/hum uploads, admin engine picker, edit mode — priced server-side, so no chip).
+ */
+function createGenerateCostForCurrentFlow() {
+  try {
+    if (nabadSongEditEnabled() && getActiveCreateTabMode() === "edit") return 0;
+    if (useAltMusicProvider()) return 0;
+    if (isLyriaClipGenerateFlow()) return Number(lyriaClipCreditCostForFlow()) || 0;
+    if (getVocalReferenceFile()) return 0;
+    return FULL_SONG_CREDIT_COST;
+  } catch {
+    return 0;
+  }
+}
+
 function syncCreateGenerateDock() {
   pinCreateGenerateDockForNativeGlass();
   const dock = document.getElementById("createGenerateDock");
@@ -74410,6 +74438,11 @@ function syncCreateGenerateDock() {
   const armed = createGenerateCtaArmed();
   btn.classList.toggle("isReady", !hide && armed && !generating);
   btn.classList.toggle("isIdle", !hide && !generating && !armed);
+  btn.classList.toggle("isGenerating", !hide && generating);
+  // CSS draws the cost chip from data-cost (button text is rewritten by setGenerateBtn).
+  const cost = hide ? 0 : createGenerateCostForCurrentFlow();
+  if (cost > 0) btn.dataset.cost = formatCreditsAmount(cost);
+  else delete btn.dataset.cost;
 }
 
 function syncGenerateOrbVisibility() {
@@ -75469,7 +75502,7 @@ window.addEventListener("hashchange", () => {
 // `refreshAdminCreditsView`, which updates the Credits admin card (Suno bucket, etc.).
 window.addEventListener("hashchange", () => {
   const route = document.body.getAttribute("data-route") || "";
-  if (route === "profile" || route === "credits" || route === "sounds") void refreshMyCredits({ silent: true });
+  if (route === "profile" || route === "credits" || route === "sounds" || route === "generate") void refreshMyCredits({ silent: true });
 });
 
 async function copyAdminPromoCode(code) {

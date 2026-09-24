@@ -195,6 +195,7 @@ import {
   syncSettingsProSingerRows,
 } from "./pro-singer.js";
 import { configureProPlan, formatProPeriodLabel, initProPlanOnce, onProPlanRouteActive, openProManageSubscription, proManageSubscriptionSubcopyForState, refreshProSubscriptionUi, setProReturnRoute, weeklyInTrialWindow, weeklyProDisplayStatus, weeklyTrialStartFromState } from "./pro-plan.js";
+import { PRO_PLANS } from "./pro-plan-config.js";
 import { setRevenueCatApiKey, resetRevenueCatSession, reconcileProSubscription, isBillingConfigured } from "./billing/revenuecat.js";
 import { setStripeWebBillingEnabled, isStripeWebBillingConfigured, syncStripeBillingWithServer } from "./billing/stripe.js";
 import { augmentCoachApiPayload } from "./coach-knowledge.js";
@@ -32184,6 +32185,16 @@ function showOutOfCreditsPrompt(info = {}) {
   }
   const proRow = document.getElementById("outOfCreditsGetPro");
   if (proRow) proRow.hidden = pro;
+  // Real numbers from the plan config (no price here — App Store prices are localised on the Pro page).
+  const proSub = document.getElementById("outOfCreditsProSub");
+  const weekly = PRO_PLANS.find((p) => p.id === "weekly");
+  const weeklyCredits = Number(weekly?.creditsPerPeriod) || 0;
+  if (proSub && weeklyCredits > 0) {
+    const songs = Math.floor(weeklyCredits / FULL_SONG_CREDIT_COST);
+    proSub.textContent = songs > 0
+      ? `${formatCreditsAmount(weeklyCredits)} credits/week · about ${songs} songs`
+      : `${formatCreditsAmount(weeklyCredits)} credits/week`;
+  }
   _outOfCreditsRoute = document.body.getAttribute("data-route") || "generate";
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");

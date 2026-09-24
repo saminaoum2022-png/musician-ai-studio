@@ -64336,3 +64336,78 @@ html:not([data-theme="light"]) body .profileEditSheetTitle{
   font-weight: 800;
   letter-spacing: -0.02em;
 }
+
+/* Out-of-credits sheet — the Pro row leads (violet = Pro / selected), Redeem stays a quiet secondary row. */
+.outOfCreditsSheet #outOfCreditsGetPro{
+  border-color: rgba(167, 148, 230, 0.42);
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.20) 0%, rgba(124, 92, 255, 0.07) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+.outOfCreditsSheet #outOfCreditsGetPro .messagesComposerSheetCopy span{
+  color: rgba(226, 218, 255, 0.80);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Buttons — one hierarchy across onboarding, auth and Pro ("one lit action per screen")
+ *   Level 1  primary   the same gradient pill as the Generate CTA (onboarding Next, auth Sign up /
+ *                      email submit, Pro Subscribe) — was white pill / violet rect / teal rect
+ *   Level 2  secondary matching glass pills (auth Apple / Google / email outline)
+ *   Level 3  text      readable links (Skip, Restore purchases, Hide benefits)
+ * Appended last so it wins over each screen's older one-off styling.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+:root{
+  --nabad-cta-gradient: linear-gradient(148deg, #23d5ab 0%, #2ec4b8 34%, #6b78e8 72%, #7c5cff 100%);
+  --nabad-cta-shadow: 0 12px 28px rgba(35, 213, 171, 0.22), 0 12px 28px rgba(0, 0, 0, 0.30);
+}
+
+/* Level 1 — primary */
+.onboardingPrimaryBtn,
+.authPrimaryBtn,
+.authEmailBtn--solid,
+button.proSubscribeBtn{
+  border: 0;
+  border-radius: 999px;
+  background: var(--nabad-cta-gradient);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--nabad-cta-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.authPrimaryBtn,
+.authEmailBtn--solid,
+.onboardingPrimaryBtn{
+  height: 54px;
+}
+button.proSubscribeBtn{
+  min-height: 54px;
+  padding: 0 20px;
+}
+/* Keep the gradient on hover / sticky-hover (older rules swapped in a flat colour). */
+.authPrimaryBtn:hover,
+.authEmailBtn--solid:hover,
+button.proSubscribeBtn:hover{
+  border: 0;
+  background: var(--nabad-cta-gradient);
+  filter: brightness(1.06);
+}
+
+/* Level 2 — secondary: same pill geometry as the primary above them. */
+.authSecondaryBtn,
+.authOutlineBtn,
+.authEmailBtn:not(.authEmailBtn--solid){
+  border-radius: 999px;
+}
+
+/* Level 3 — text links: readable, not ghosts (Restore purchases was 11px at 34%). */
+.proRestoreLink{
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(232, 238, 247, 0.56);
+}
+.proBenefitsToggle{
+  color: rgba(232, 238, 247, 0.56);
+}
+.onboardingSkip{
+  color: rgba(223, 231, 251, 0.62);
+}

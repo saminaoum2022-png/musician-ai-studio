@@ -1384,7 +1384,7 @@ function openTogetherSummary({ host, onAction, onDismiss }) {
       ${hint}
       <button type="button" class="npPresenceBtn npPresenceBtn--primary liveListenCardPrimary" data-ll-act="${primaryAct}">${primary}</button>
       <div class="liveListenCardRow">
-        <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="message">Message @${escapeHtml(name)}</button>
+        <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="message" aria-label="Message @${escapeHtml(name)}">Message</button>
         <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="${endAct}">${endLabel}</button>
       </div>`,
     onAction: (act) => {

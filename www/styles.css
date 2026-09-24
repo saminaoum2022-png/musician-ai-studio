@@ -64056,12 +64056,19 @@ body[data-route="generate"] .stylePanelHead > span{
   body[data-route="generate"] #createFlow > .createFlowStep:first-child{
     gap: 12px;
   }
-  /* Lyrics leads; Singer + Artwork are supporting cards — same glass, quieter lift. */
+  /* Lyrics leads; Singer + Artwork are supporting cards — the same Create glass (blur, border,
+     bloom pick-up all inherited from the panel rule), just a lower fill alpha (.075 → .05). */
   body[data-route="generate"] #singerVoicePanel,
   body[data-route="generate"] .inputPanel--style:has(#sunoArtworkStyle){
-    background: color-mix(in srgb, var(--surface-panel) 70%, transparent);
-    box-shadow: var(--surface-highlight);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: none;
   }
+}
+
+/* Style chips scroll sideways — fade the right edge instead of a hard clip. */
+body[data-route="generate"] .styleSuggestRow{
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%);
+          mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%);
 }
 
 /* AI assist chips — violet-tint glass, no glow (only the Generate CTA is lit). */

@@ -40589,7 +40589,6 @@ body.liveListenGuest .playerSeekWrap,
 body.liveListenGuest #playerSeek{
   pointer-events: none;
 }
-body.liveListenGuest .playerTransport,
 body.liveListenGuest #btnPlayerMenu,
 body.liveListenGuest #playerSocialRail,
 body.liveListenGuest #playerCoverToolsRail,
@@ -40598,37 +40597,6 @@ body.liveListenGuest #playerTemplateAttribution,
 body.liveListenGuest #playerPlaysCount{
   display: none !important;
 }
-.liveListenGuestBar{
-  display: flex;
-  justify-content: center;
-  margin-top: 14px;
-}
-.liveListenGuestBar[hidden]{ display: none !important; }
-.liveListenGuestStatus{
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  max-width: min(86vw, 320px);
-  margin: 0;
-  padding: 8px 14px;
-  border: 1px solid rgba(124,92,255,0.38);
-  border-radius: 999px;
-  background: rgba(18, 14, 32, 0.72);
-  color: #f4f0ff;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 750;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.liveListenGuestStatus [data-ll-guest-status]{
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.liveListenGuestStatus:active{ transform: scale(0.98); }
 .liveListenInviteList{
   width: 100%;
   max-height: 46vh;
@@ -40769,11 +40737,6 @@ body:has(.liveListenOverlay.is-open) .toast{
 
 html[data-theme="light"] .liveListenChip{
   background: rgba(255,255,255,0.9);
-  color: #1b1630;
-  border-color: rgba(124,92,255,0.28);
-}
-html[data-theme="light"] .liveListenGuestStatus{
-  background: rgba(255,255,255,0.92);
   color: #1b1630;
   border-color: rgba(124,92,255,0.28);
 }
@@ -64451,4 +64414,470 @@ button.proSubscribeBtn:hover{
     transparent 0,
     color-mix(in srgb, var(--bg) 80%, transparent) 100%
   );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Listen together — polish (copy fits, buttons, chip)
+ *   - Sheet sub-lines were one-line ellipsis, so "Waiting on this song … until @name joins" and the
+ *     song-finished copy were cut off. They now wrap.
+ *   - Sheet buttons follow the app button hierarchy (one lit gradient action + a glass secondary).
+ *   - The status chip uses the same liquid glass as the Create panels; Leave uses the primary gradient.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+.liveListenOverlay .npPresenceArtist{
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.35;
+}
+.liveListenOverlay .npPresenceBtn{
+  min-height: 50px;
+  border-radius: 999px;
+  font-size: 15px;
+}
+.liveListenOverlay .npPresenceBtn--primary{
+  border: 0;
+  background: var(--nabad-cta-gradient);
+  color: #fff;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--nabad-cta-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+}
+.liveListenOverlay .npPresenceBtn--primary[disabled]{
+  opacity: 0.6;
+}
+
+html:not([data-theme="light"]) body .liveListenChip{
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.085);
+  color: #f4f0ff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 10px 28px rgba(0, 0, 0, 0.32);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(24px) saturate(140%);
+}
+html:not([data-theme="light"]) body .liveListenChip.is-waiting{
+  border-color: rgba(255, 196, 92, 0.42);
+  background: rgba(255, 196, 92, 0.10);
+  color: #fff4e4;
+}
+html:not([data-theme="light"]) body .liveListenChip.is-ended{
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+}
+body .liveListenChipLeave{
+  background: var(--nabad-cta-gradient);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--nabad-cta-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+/* The sheet already adds the home-indicator padding itself; the overlay's own bottom padding left a
+   gap under it (a differently-shaded strip below the sheet). */
+.liveListenOverlay{
+  padding-bottom: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Listen together — the together experience
+ *   presence chip (two avatars) · live ring on the cover · locked-but-visible guest controls ·
+ *   full-screen waiting / 3-2-1 room · reactions · "Listened together" card
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Presence chip: two avatars + two lines instead of one text label. */
+html:not([data-theme="light"]) body .liveListenChip{
+  gap: 10px;
+  max-width: min(78vw, 300px);
+  padding: 6px 14px 6px 6px;
+  text-align: left;
+}
+.liveListenChipAvatars{
+  display: flex;
+  flex: 0 0 auto;
+}
+.liveListenChip .liveListenChipAv{
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #15151f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #efe8ff;
+  background: rgba(124, 92, 255, 0.35);
+}
+.liveListenChip .liveListenChipAv + .liveListenChipAv{
+  margin-left: -8px;
+}
+.liveListenChip .liveListenChipAv--wait{
+  border: 2px dashed rgba(255, 196, 92, 0.85);
+  background: rgba(255, 196, 92, 0.12);
+  color: #ffc45c;
+}
+.liveListenChipText{
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.18;
+}
+.liveListenChip .liveListenChipLabel,
+.liveListenChip.is-waiting .liveListenChipLabel{
+  font-size: 13px;
+  white-space: nowrap;
+  line-height: 1.18;
+}
+.liveListenChipSub{
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.liveListenChip .liveListenChipDot{
+  flex: 0 0 auto;
+}
+
+/* While you're live together the player edge glows a soft "live" teal. */
+.liveListenGlow{
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  display: none;
+  box-shadow: inset 0 0 64px rgba(94, 240, 212, 0.16);
+  animation: liveListenGlow 3.2s ease-in-out infinite;
+}
+body[data-route="player"] .liveListenGlow:not([hidden]){ display: block; }
+@keyframes liveListenGlow{
+  0%, 100%{ box-shadow: inset 0 0 44px rgba(94, 240, 212, 0.10); }
+  50%{ box-shadow: inset 0 0 84px rgba(94, 240, 212, 0.22); }
+}
+
+/* Guest: the controls stay visible (dimmed) so the screen doesn't look broken, with a clear reason. */
+body.liveListenGuest .playerTransport{
+  opacity: 0.4;
+}
+.liveListenLockNote{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 14px 0 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.62);
+}
+.liveListenLockNote[hidden]{ display: none !important; }
+
+/* Reactions: a row inside the player, under the transport (and the guest lock note). */
+.liveListenReactBar{
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 12px;
+}
+.liveListenReactBar[hidden]{ display: none !important; }
+.liveListenReactPill{
+  display: flex;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.085);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 10px 28px rgba(0, 0, 0, 0.32);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(24px) saturate(140%);
+}
+.liveListenReactBtn{
+  appearance: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 140ms ease, background 140ms ease;
+}
+.liveListenReactBtn:active{
+  transform: scale(1.25);
+  background: rgba(255, 255, 255, 0.1);
+}
+.liveListenFloatLayer{
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  pointer-events: none;
+  overflow: hidden;
+}
+.liveListenFloat{
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+  font-size: 30px;
+  line-height: 1;
+  animation: liveListenFloatUp 2.4s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+@keyframes liveListenFloatUp{
+  0%{ opacity: 0; transform: translate(0, 0) scale(0.6); }
+  12%{ opacity: 1; transform: translate(0, -24px) scale(1.15); }
+  100%{ opacity: 0; transform: translate(var(--ll-dx, 0px), -340px) scale(1); }
+}
+
+/* Room: waiting for the guest · 3-2-1 · getting ready */
+.liveListenRoom{
+  position: fixed;
+  inset: 0;
+  z-index: 4100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 56px) 24px calc(env(safe-area-inset-bottom, 0px) + 28px);
+  background: #0c0c14;
+  color: #fff;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.liveListenRoom.is-open{ opacity: 1; }
+.liveListenRoomBg{
+  position: absolute;
+  top: -60px;
+  left: -60px;
+  width: calc(100% + 120px);
+  height: calc(100% + 120px);
+  object-fit: cover;
+  filter: blur(60px) saturate(1.3);
+  opacity: 0.5;
+}
+.liveListenRoomVeil{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(12, 12, 20, 0.35), rgba(12, 12, 20, 0.85) 70%, #0c0c14);
+}
+.liveListenRoomMin{
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: 16px;
+  z-index: 2;
+  appearance: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.085);
+  color: #fff;
+  -webkit-backdrop-filter: blur(24px);
+          backdrop-filter: blur(24px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+.liveListenRoomBody{
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 0;
+}
+.liveListenRoomAvatars{
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+.liveListenRoom .liveListenRoomAv{
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 38px;
+  font-weight: 800;
+  color: #efe8ff;
+  background: rgba(124, 92, 255, 0.35);
+}
+.liveListenRoom .liveListenRoomAv--empty{
+  border: 2px dashed rgba(255, 196, 92, 0.75);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 196, 92, 0.95);
+  box-shadow: 0 0 0 10px rgba(255, 196, 92, 0.08), 0 0 0 22px rgba(255, 196, 92, 0.04);
+  animation: liveListenWaitHalo 2.4s ease-in-out infinite;
+}
+@keyframes liveListenWaitHalo{
+  0%, 100%{ box-shadow: 0 0 0 8px rgba(255, 196, 92, 0.08), 0 0 0 18px rgba(255, 196, 92, 0.03); }
+  50%{ box-shadow: 0 0 0 14px rgba(255, 196, 92, 0.12), 0 0 0 30px rgba(255, 196, 92, 0.04); }
+}
+.liveListenRoomCover{
+  width: min(46vw, 190px);
+  height: min(46vw, 190px);
+  margin-top: 34px;
+  border-radius: 24px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.5);
+}
+.liveListenRoomCover--ph{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  color: rgba(196, 182, 255, 0.9);
+}
+.liveListenRoomTitle{
+  margin: 28px 0 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.liveListenRoomSub{
+  margin: 8px 0 0;
+  max-width: 320px;
+  font-size: 15px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.62);
+}
+.liveListenRoomCount{
+  margin-top: 26px;
+  font-size: 150px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  background: var(--nabad-cta-gradient);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 20px 40px rgba(124, 92, 255, 0.35));
+}
+.liveListenRoomCount.is-tick{
+  animation: liveListenCountTick 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes liveListenCountTick{
+  0%{ opacity: 0; transform: scale(1.35); }
+  25%{ opacity: 1; transform: scale(1); }
+  100%{ opacity: 1; transform: scale(0.96); }
+}
+.liveListenRoomActions{
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  min-height: 52px;
+}
+.liveListenRoomActions .npPresenceBtn{
+  width: 100%;
+  min-height: 52px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+/* "Listened together" card (song finished) */
+.liveListenOverlay--card{
+  align-items: center;
+  padding: 20px;
+}
+.liveListenCard{
+  width: 100%;
+  max-width: 380px;
+  padding: 28px 22px 22px;
+  border-radius: 28px;
+  border: 1px solid var(--nabad-sheet-border);
+  background: var(--nabad-sheet-bg);
+  -webkit-backdrop-filter: blur(var(--nabad-sheet-blur)) saturate(var(--nabad-sheet-saturate));
+          backdrop-filter: blur(var(--nabad-sheet-blur)) saturate(var(--nabad-sheet-saturate));
+  box-shadow: var(--nabad-sheet-shadow);
+  text-align: center;
+  transform: translateY(14px) scale(0.98);
+  opacity: 0;
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease;
+}
+.liveListenOverlay.is-open .liveListenCard{
+  transform: none;
+  opacity: 1;
+}
+.liveListenCardAvatars{
+  display: flex;
+  justify-content: center;
+}
+.liveListenCard .liveListenCardAv{
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #15151f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 800;
+  color: #efe8ff;
+  background: rgba(124, 92, 255, 0.35);
+}
+.liveListenCard .liveListenCardAv + .liveListenCardAv{
+  margin-left: -16px;
+}
+.liveListenCardTitle{
+  margin: 16px 0 4px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #f8faff;
+}
+.liveListenCardSub{
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(223, 231, 251, 0.62);
+}
+.liveListenCardSong{
+  margin: 20px 0 14px;
+  text-align: left;
+}
+.liveListenCardHint{
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(223, 231, 251, 0.52);
+}
+.liveListenCardPrimary{
+  width: 100%;
+  flex: none;
+  margin-bottom: 10px;
+}
+.liveListenCardRow{
+  display: flex;
+  gap: 10px;
+}
+.liveListenCardRow .npPresenceBtn{
+  min-width: 0;
+  padding: 0 10px;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (prefers-reduced-motion: reduce){
+  .liveListenGlow,
+  .liveListenRoom .liveListenRoomAv--empty{ animation: none; }
+  .liveListenRoomCount.is-tick,
+  .liveListenFloat{ animation-duration: 1ms; }
 }

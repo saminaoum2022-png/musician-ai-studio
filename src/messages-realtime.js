@@ -348,6 +348,7 @@ let _listenChannelReady = false;
 let _onListenTickHandler = null;
 let _onListenEndHandler = null;
 let _onListenJoinHandler = null;
+let _onListenReactHandler = null;
 
 export function isListenSessionChannelReady() {
   return Boolean(_listenChannelReady && _listenChannel && _listenSessionId);
@@ -378,6 +379,7 @@ export async function stopListenSessionRealtime() {
   _onListenTickHandler = null;
   _onListenEndHandler = null;
   _onListenJoinHandler = null;
+  _onListenReactHandler = null;
   if (!client || !channel) return;
   try {
     await client.removeChannel(channel);
@@ -394,6 +396,7 @@ export async function subscribeListenSession({
   onTick,
   onEnd,
   onJoin,
+  onReact,
   onStatus,
 } = {}) {
   const sid = String(sessionId || "").trim();
@@ -407,6 +410,7 @@ export async function subscribeListenSession({
     _onListenTickHandler = onTick;
     _onListenEndHandler = onEnd;
     _onListenJoinHandler = onJoin;
+    _onListenReactHandler = onReact;
     await refreshDmThreadRealtimeAuth(token);
     return true;
   }
@@ -415,6 +419,7 @@ export async function subscribeListenSession({
   _onListenTickHandler = onTick;
   _onListenEndHandler = onEnd;
   _onListenJoinHandler = onJoin;
+  _onListenReactHandler = onReact;
 
   try {
     client.realtime.setAuth(token);
@@ -443,6 +448,11 @@ export async function subscribeListenSession({
       try { _onListenJoinHandler?.(data && typeof data === "object" ? data : {}); } catch (e) {
         console.warn("[live-listen] onJoin", e);
       }
+    })
+    .on("broadcast", { event: "ll_react" }, (payload) => {
+      const data = payload?.payload;
+      if (!data || typeof data !== "object") return;
+      try { _onListenReactHandler?.(data); } catch (e) { console.warn("[live-listen] onReact", e); }
     })
     .subscribe((status, err) => {
       _listenChannelReady = status === "SUBSCRIBED";

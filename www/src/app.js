@@ -47230,8 +47230,8 @@ function activityItemDisplayParts(n, msg) {
   if (t === "live_listen") {
     const songTitle = String(meta.song_title || "").trim();
     return {
-      category: "Live listen",
-      title: username ? `${username} wants to listen live` : "Someone wants to listen live",
+      category: "Listen together",
+      title: username ? `${username} wants to listen together` : "Someone wants to listen together",
       description: songTitle,
     };
   }
@@ -79297,6 +79297,15 @@ try {
     }),
     getChatPartnerPresence: () => _chatPartnerPresence,
     pickSongForChatListen: () => openMessagesListenPicker(),
+    openChatWithUser: (u) => {
+      const userId = String(u?.userId || "").trim();
+      if (!userId) return;
+      navigateToMessagesThread({
+        threadId: "",
+        headerUser: { userId, username: u?.username || "", displayName: u?.displayName || u?.username || "", avatarUrl: u?.avatar || "" },
+        targetUserId: userId,
+      });
+    },
   });
   syncLiveListenChrome();
   startLiveListenGuestInbox();

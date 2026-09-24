@@ -55,6 +55,17 @@ let _hostEndSheetOpen = false;
 let _guestSongEnded = false;
 let _guestSongEndedSheetOpen = false;
 const _seenInviteIds = new Set();
+/** Full-screen "room": waiting for the guest (host), 3-2-1 (host), getting ready (guest). */
+let _roomEl = null;
+let _roomPhase = "";
+let _roomTimer = 0;
+let _countdownActive = false;
+/** Client-side start of the current together-listen, for the "listened together" time. */
+let _togetherStartedAt = 0;
+let _lastReactAt = 0;
+let _reactBarEl = null;
+let _floatLayerEl = null;
+const REACTIONS = ["🔥", "❤️", "🎧", "👏", "😮"];
 
 function clientLiveListenUiBaked() {
   try {
@@ -255,6 +266,9 @@ function setBodyRole() {
     document.body.classList.toggle("liveListenHost", isLiveListenHost());
     document.body.classList.toggle("liveListenGuest", isLiveListenGuest());
     document.body.classList.toggle("liveListenActive", Boolean(_state?.role));
+    const live = Boolean(_state?.role) && !_state?.solo
+      && _state?.session?.status !== "pending" && !hostAwaitingGuest();
+    document.body.classList.toggle("liveListenLive", live);
   } catch {}
 }
 
@@ -288,6 +302,12 @@ function syncShareChooserButton() {
   btn.style.display = show ? "" : "none";
 }
 
+function sessionPeople() {
+  const session = _state?.session || {};
+  const host = _state?.role === "host";
+  return { me: (host ? session.host : session.guest) || {}, other: (host ? session.guest : session.host) || {} };
+}
+
 function ensureChip() {
   if (_chipEl && document.body.contains(_chipEl)) return _chipEl;
   const row = document.createElement("div");
@@ -301,7 +321,8 @@ function ensureChip() {
   el.addEventListener("click", () => {
     haptic();
     if (!isLiveListenHost()) return;
-    if (_hostAtEnd) showHostSongEnded();
+    if (hostAwaitingGuest()) openRoom("waiting");
+    else if (_hostAtEnd) showHostSongEnded();
     else void confirmHostEnd();
   });
   const leave = document.createElement("button");
@@ -320,6 +341,15 @@ function ensureChip() {
   return el;
 }
 
+const LOCK_ICON_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z"/></svg>';
+
+function syncLockNote(guest) {
+  const note = document.getElementById("liveListenLockNote");
+  if (!note) return;
+  note.hidden = !guest;
+  if (guest) note.innerHTML = `${LOCK_ICON_SVG}<span>@${escapeHtml(partnerLabel(_state?.session))} controls playback</span>`;
+}
+
 export function syncLiveListenChrome() {
   const chip = ensureChip();
   const row = document.getElementById("liveListenChipRow");
@@ -328,51 +358,259 @@ export function syncLiveListenChrome() {
   const guest = active && isLiveListenGuest();
   if (row) row.hidden = !active;
   if (leave) leave.hidden = !guest;
+  syncLockNote(guest);
   if (!active) {
     setBodyRole();
-    syncGuestPlayerBar(false, "");
+    syncReactBar();
     syncShareChooserButton();
     try { bridge.refreshPresence?.(); } catch {}
     return;
   }
+  const { me, other } = sessionPeople();
   const name = partnerLabel(_state.session);
   const waiting = hostAwaitingGuest() || _state.session?.status === "pending";
-  const live = _state.session?.status === "live" && !waiting;
   const songEnded = (_state.role === "host" && _hostAtEnd) || (guest && _guestSongEnded);
-  const kicker = _state.role === "host"
-    ? (waiting
-      ? `Waiting for @${name} — tap to cancel`
-      : (songEnded ? "Song finished · tap to replay" : (live ? `Live with @${name}` : "Live listen")))
-    : (songEnded ? "Song finished" : `Listening with @${name}`);
-  chip.innerHTML = `<span class="liveListenChipDot" aria-hidden="true"></span><span class="liveListenChipLabel">${escapeHtml(kicker)}</span>`;
+  let label;
+  let sub;
+  if (_state.role === "host") {
+    if (waiting) { label = `Waiting for @${name}`; sub = "Tap to open"; }
+    else if (songEnded) { label = "Song finished"; sub = "Tap for options"; }
+    else { label = `Listening with @${name}`; sub = "You control playback"; }
+  } else if (songEnded) {
+    label = "Song finished"; sub = `@${name} can play it again`;
+  } else {
+    label = `Listening with @${name}`; sub = "Following along";
+  }
+  const waitingAv = waiting && !guest
+    ? '<span class="liveListenChipAv liveListenChipAv--wait" aria-hidden="true">?</span>'
+    : avatarHtml(other, "liveListenChipAv");
+  const html = `<span class="liveListenChipAvatars">${avatarHtml(me, "liveListenChipAv")}${waitingAv}</span>`
+    + `<span class="liveListenChipText"><span class="liveListenChipLabel">${escapeHtml(label)}</span>`
+    + `<span class="liveListenChipSub">${escapeHtml(sub)}</span></span>`
+    + '<span class="liveListenChipDot" aria-hidden="true"></span>';
+  if (chip.dataset.sig !== html) {
+    chip.dataset.sig = html;
+    chip.innerHTML = html;
+  }
   chip.classList.toggle("is-status", guest);
   chip.classList.toggle("is-waiting", Boolean(waiting && !guest));
   chip.classList.toggle("is-ended", Boolean(songEnded));
   chip.setAttribute("aria-label", _state.role === "host"
-    ? (waiting ? `Waiting for @${name}. Tap to cancel the invite.` : (songEnded ? "Song finished. Tap to play again or end." : "End live listen"))
+    ? (waiting ? `Waiting for @${name}. Tap to open.` : (songEnded ? "Song finished. Tap for options." : `Listening with @${name}. Tap to end.`))
     : (songEnded ? "Song finished" : `Listening with @${name}`));
   setBodyRole();
-  syncGuestPlayerBar(false, "");
+  syncReactBar();
   syncShareChooserButton();
   try { bridge.refreshPresence?.(); } catch {}
 }
 
-function syncGuestPlayerBar(guest, name) {
-  const bar = document.getElementById("liveListenGuestBar");
-  if (!bar) return;
-  wireGuestPlayerBarOnce(bar);
-  bar.hidden = !guest;
-  const text = bar.querySelector("[data-ll-guest-status]");
-  if (text && guest) text.textContent = `Listening with @${name}`;
+// ── Reactions ────────────────────────────────────────────────────────────────
+
+function ensureReactBar() {
+  if (_reactBarEl && document.body.contains(_reactBarEl)) return _reactBarEl;
+  const bar = document.createElement("div");
+  bar.id = "liveListenReactBar";
+  bar.className = "liveListenReactBar";
+  bar.hidden = true;
+  bar.innerHTML = `<div class="liveListenReactPill" role="group" aria-label="Send a reaction">${
+    REACTIONS.map((e) => `<button type="button" class="liveListenReactBtn" data-ll-react="${e}" aria-label="React ${e}">${e}</button>`).join("")
+  }</div>`;
+  bar.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-ll-react]");
+    if (btn) sendReaction(String(btn.getAttribute("data-ll-react") || ""));
+  });
+  // Mounted inside the player, under the transport, so it never covers the controls.
+  const note = document.getElementById("liveListenLockNote");
+  if (note?.parentElement) note.after(bar);
+  else document.body.appendChild(bar);
+  _reactBarEl = bar;
+  return bar;
 }
 
-function wireGuestPlayerBarOnce(bar) {
-  if (bar.dataset.wired === "1") return;
-  bar.dataset.wired = "1";
-  bar.querySelector("#liveListenGuestLeave")?.addEventListener("click", () => {
-    haptic();
-    void confirmGuestLeave();
-  });
+let _glowEl = null;
+/** Soft teal glow around the player edge while you're live together. */
+function syncLiveGlow(on) {
+  if (!_glowEl || !document.body.contains(_glowEl)) {
+    if (!on) return;
+    _glowEl = document.createElement("div");
+    _glowEl.className = "liveListenGlow";
+    _glowEl.setAttribute("aria-hidden", "true");
+    document.body.appendChild(_glowEl);
+  }
+  _glowEl.hidden = !on;
+}
+
+function syncReactBar() {
+  const bar = ensureReactBar();
+  const on = Boolean(_state?.role) && !_state?.solo && document.body.classList.contains("liveListenLive");
+  bar.hidden = !on;
+  syncLiveGlow(on);
+}
+
+function showFloatingReaction(emoji) {
+  if (!REACTIONS.includes(emoji)) return;
+  if (!_floatLayerEl || !document.body.contains(_floatLayerEl)) {
+    _floatLayerEl = document.createElement("div");
+    _floatLayerEl.className = "liveListenFloatLayer";
+    _floatLayerEl.setAttribute("aria-hidden", "true");
+    document.body.appendChild(_floatLayerEl);
+  }
+  while (_floatLayerEl.childElementCount > 24) _floatLayerEl.firstElementChild?.remove();
+  const el = document.createElement("span");
+  el.className = "liveListenFloat";
+  el.textContent = emoji;
+  el.style.left = `${58 + Math.random() * 34}%`;
+  el.style.setProperty("--ll-dx", `${Math.round((Math.random() - 0.5) * 60)}px`);
+  _floatLayerEl.appendChild(el);
+  window.setTimeout(() => { try { el.remove(); } catch {} }, 2600);
+}
+
+function sendReaction(emoji) {
+  if (!isLiveListenActive() || !REACTIONS.includes(emoji)) return;
+  const now = Date.now();
+  if (now - _lastReactAt < 220) return;
+  _lastReactAt = now;
+  haptic("light");
+  showFloatingReaction(emoji);
+  void (async () => {
+    try {
+      const mod = await bridge.loadRealtimeMod?.();
+      await mod?.sendListenSessionBroadcast?.({
+        sessionId: _state?.session?.id,
+        event: "ll_react",
+        payload: { emoji, at: now },
+      });
+    } catch {}
+  })();
+}
+
+function onRemoteReaction(payload) {
+  if (!isLiveListenActive()) return;
+  const emoji = String(payload?.emoji || "");
+  if (!REACTIONS.includes(emoji)) return;
+  showFloatingReaction(emoji);
+  haptic("light");
+}
+
+// ── Room: waiting / 3-2-1 / getting ready ───────────────────────────────────
+
+function roomAvatarsHtml(phase) {
+  const { me, other } = sessionPeople();
+  const second = phase === "waiting"
+    ? '<span class="liveListenRoomAv liveListenRoomAv--empty" aria-hidden="true">?</span>'
+    : avatarHtml(other, "liveListenRoomAv");
+  return `<div class="liveListenRoomAvatars">${avatarHtml(me, "liveListenRoomAv")}${second}</div>`;
+}
+
+function renderRoom() {
+  const el = _roomEl;
+  if (!el || !_state) return;
+  const session = _state.session || {};
+  const name = partnerLabel(session);
+  const cover = String(session.songCover || "").trim();
+  const song = String(session.songTitle || "").trim() || "This song";
+  const coverHtml = cover
+    ? `<img class="liveListenRoomCover" src="${escapeHtml(cover)}" alt="" />`
+    : '<span class="liveListenRoomCover liveListenRoomCover--ph" aria-hidden="true">♪</span>';
+  const bgHtml = cover ? `<img class="liveListenRoomBg" src="${escapeHtml(cover)}" alt="" />` : "";
+  let body = "";
+  let actions = "";
+  if (_roomPhase === "waiting") {
+    body = `${roomAvatarsHtml("waiting")}${coverHtml}
+      <h2 class="liveListenRoomTitle">Waiting for @${escapeHtml(name)}…</h2>
+      <p class="liveListenRoomSub">${escapeHtml(song)} starts the moment they join.</p>`;
+    actions = '<button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-room="cancel">Cancel invite</button>';
+  } else if (_roomPhase === "countdown") {
+    body = `${roomAvatarsHtml("countdown")}
+      <div class="liveListenRoomCount" data-ll-count aria-live="assertive">3</div>
+      <p class="liveListenRoomSub">Starting together…</p>`;
+  } else {
+    body = `${roomAvatarsHtml("starting")}${coverHtml}
+      <h2 class="liveListenRoomTitle">Starting together…</h2>
+      <p class="liveListenRoomSub">Getting ${escapeHtml(song)} ready with @${escapeHtml(name)}.</p>`;
+    actions = '<button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-room="leave">Leave</button>';
+  }
+  const minimize = _roomPhase === "waiting"
+    ? '<button type="button" class="liveListenRoomMin" data-ll-room="min" aria-label="Minimize"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg></button>'
+    : "";
+  el.innerHTML = `${bgHtml}<div class="liveListenRoomVeil"></div>${minimize}
+    <div class="liveListenRoomBody">${body}</div>
+    <div class="liveListenRoomActions">${actions}</div>`;
+}
+
+function openRoom(phase) {
+  if (!_state?.session) return;
+  _roomPhase = phase;
+  if (_roomTimer) window.clearTimeout(_roomTimer);
+  _roomTimer = 0;
+  if (!_roomEl || !document.body.contains(_roomEl)) {
+    _roomEl = document.createElement("div");
+    _roomEl.id = "liveListenRoom";
+    _roomEl.className = "liveListenRoom";
+    _roomEl.setAttribute("role", "dialog");
+    _roomEl.setAttribute("aria-modal", "true");
+    _roomEl.setAttribute("aria-label", "Listen together");
+    _roomEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-ll-room]");
+      if (!btn) return;
+      const act = btn.getAttribute("data-ll-room");
+      haptic();
+      if (act === "min") closeRoom();
+      else if (act === "cancel") void endHostSession();
+      else if (act === "leave") void confirmGuestLeave();
+    });
+    document.body.appendChild(_roomEl);
+    requestAnimationFrame(() => _roomEl?.classList.add("is-open"));
+  }
+  renderRoom();
+  if (phase === "starting") {
+    // Safety: never leave the guest staring at this if the host's start never arrives.
+    _roomTimer = window.setTimeout(() => closeRoom(), 20000);
+  }
+}
+
+function closeRoom() {
+  if (_roomTimer) window.clearTimeout(_roomTimer);
+  _roomTimer = 0;
+  _roomPhase = "";
+  const el = _roomEl;
+  _roomEl = null;
+  if (!el) return;
+  el.classList.remove("is-open");
+  window.setTimeout(() => { try { el.remove(); } catch {} }, 260);
+}
+
+function setRoomCount(n) {
+  const num = _roomEl?.querySelector("[data-ll-count]");
+  if (!num) return;
+  num.textContent = String(n);
+  num.classList.remove("is-tick");
+  void num.offsetWidth;
+  num.classList.add("is-tick");
+}
+
+const sleep = (ms) => new Promise((r) => window.setTimeout(r, ms));
+
+/** Guest joined: 3-2-1 on the host while the song loads paused at 0:00, then both start together. */
+async function runHostCountdownThenStart() {
+  if (_countdownActive || !isLiveListenHost()) return;
+  _countdownActive = true;
+  openRoom("countdown");
+  const preload = loadInvitedSongOnHost(_state.session, { play: false }).catch(() => {});
+  for (let n = 3; n >= 1; n -= 1) {
+    setRoomCount(n);
+    haptic("light");
+    await sleep(1000);
+    if (!isLiveListenHost() || !_state?.session) {
+      _countdownActive = false;
+      closeRoom();
+      return;
+    }
+  }
+  await preload;
+  _countdownActive = false;
+  closeRoom();
+  if (isLiveListenHost()) await startTogetherAsHost();
 }
 
 function closeOverlay() {
@@ -429,14 +667,14 @@ function openOverlay({ kicker, title, sub, art, actionsHtml, onAction, onDismiss
     : `<div class="npPresenceTop">
         ${coverHtml}
         <div class="npPresenceMeta">
-          <span class="npPresenceKicker">${escapeHtml(kicker || "Live listen")}</span>
+          <span class="npPresenceKicker">${escapeHtml(kicker || "Listen together")}</span>
           <strong class="npPresenceTitle">${escapeHtml(title || "Song")}</strong>
           <span class="npPresenceArtist">${escapeHtml(sub || "")}</span>
         </div>
       </div>`;
   if (inviteHost) overlay.classList.add("liveListenOverlay--invite");
   overlay.innerHTML = `
-    <div class="npPresenceSheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(kicker || "Live listen")}">
+    <div class="npPresenceSheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(kicker || "Listen together")}">
       <div class="npPresenceGrab" aria-hidden="true"></div>
       ${topHtml}
       <div class="npPresenceActions">${actionsHtml}</div>
@@ -620,6 +858,8 @@ async function applyGuestTick(tick, { force = false } = {}) {
       noteHostClock({ positionMs: 0, playing: true });
       _guestStarted = true;
       await playGuestFromStart(a);
+      _togetherStartedAt = Date.now();
+      closeRoom();
       return;
     }
     const endMs = Math.max(0, Number(tick?.positionMs) || 0);
@@ -727,13 +967,14 @@ async function subscribeSession(sessionId) {
       onEnd: () => {
         if (isLiveListenGuest()) void onHostLeft();
         else if (isLiveListenHost()) {
-          toast("They left live listen");
+          toast(`@${partnerLabel(_state?.session)} left`);
           void clearLocalSession();
         }
       },
       onJoin: () => {
         if (isLiveListenHost()) markGuestAccepted();
       },
+      onReact: (payload) => onRemoteReaction(payload),
     });
   } catch (e) {
     console.warn("[live-listen] realtime", e);
@@ -797,6 +1038,9 @@ async function clearLocalSession({ keepRealtime = false } = {}) {
   _hostScrubUntil = 0;
   _suppressHostEventsUntil = 0;
   _hostWantsPlaying = false;
+  _countdownActive = false;
+  _togetherStartedAt = 0;
+  closeRoom();
   if (!keepRealtime) {
     try {
       const mod = await bridge.loadRealtimeMod?.();
@@ -820,7 +1064,7 @@ async function holdHostAtStart() {
   if (_state?.session) _state.session.positionMs = 0;
 }
 
-async function loadInvitedSongOnHost(session) {
+async function loadInvitedSongOnHost(session, { play = true } = {}) {
   const url = String(session?.songUrl || "").trim();
   if (!url) return;
   const a0 = playerEl();
@@ -843,7 +1087,9 @@ async function loadInvitedSongOnHost(session) {
     try { a.currentTime = 0; } catch {}
     await waitForSeeked(a, 1500);
   }
-  try { await a?.play?.(); } catch {}
+  if (play) {
+    try { await a?.play?.(); } catch {}
+  }
 }
 
 async function startTogetherAsHost({ replay = false } = {}) {
@@ -860,6 +1106,7 @@ async function startTogetherAsHost({ replay = false } = {}) {
     return;
   }
   if (_state?.session) _state.session.positionMs = 0;
+  _togetherStartedAt = Date.now();
   void broadcastTick({ playing: true, positionMs: 0, reason: "start" });
   if (replay) {
     window.setTimeout(() => {
@@ -881,6 +1128,7 @@ async function becomeHost(session, { awaitingGuest = true } = {}) {
   void persistHeartbeat();
   void sendInviteToGuest(session);
   syncLiveListenChrome();
+  if (_state?.awaitingGuest) openRoom("waiting");
 }
 
 function markGuestAccepted() {
@@ -892,16 +1140,14 @@ function markGuestAccepted() {
   if (!wasWaiting) return;
   haptic("success");
   playListenCue("joined");
-  const name = partnerLabel(_state.session);
-  toast(`@${name} joined — starting together`, { icon: "🎧", durationMs: 2800 });
-  void startTogetherAsHost();
+  void runHostCountdownThenStart();
 }
 
 function applyHostSessionUpdate(session) {
   if (!isLiveListenHost() || !session) return;
   if (session.status === "ended") {
     void clearLocalSession();
-    toast("Live listen ended");
+    toast("Listen together ended");
     return;
   }
   const joined = session.guestJoined === true;
@@ -1080,6 +1326,80 @@ async function onHostLeft() {
   });
 }
 
+function openCardOverlay({ ariaLabel, html, onAction, onDismiss }) {
+  closeOverlay();
+  const overlay = document.createElement("div");
+  overlay.id = "liveListenOverlay";
+  overlay.className = "npPresenceOverlay liveListenOverlay liveListenOverlay--card";
+  overlay.innerHTML = `<div class="liveListenCard" role="dialog" aria-modal="true" aria-label="${escapeHtml(ariaLabel || "Listen together")}">${html}</div>`;
+  document.body.appendChild(overlay);
+  _overlayEl = overlay;
+  requestAnimationFrame(() => overlay.classList.add("is-open"));
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) {
+      closeOverlay();
+      try { onDismiss?.(); } catch {}
+      return;
+    }
+    const btn = e.target.closest("[data-ll-act]");
+    if (!btn || btn.disabled) return;
+    try { onAction?.(btn.getAttribute("data-ll-act"), btn); } catch {}
+  });
+}
+
+function togetherDurationLabel() {
+  const dur = currentDurationMs();
+  let ms = _togetherStartedAt ? Date.now() - _togetherStartedAt : dur;
+  if (dur > 0) ms = Math.min(ms, dur);
+  if (!(ms > 1000)) return "";
+  const sec = Math.round(ms / 1000);
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+}
+
+/** "Listened together" card shown when the song finishes (replaces the old blocking sheets). */
+function openTogetherSummary({ host, onAction, onDismiss }) {
+  const session = _state?.session || {};
+  const { me, other } = sessionPeople();
+  const name = partnerLabel(session);
+  const time = togetherDurationLabel();
+  const cover = String(session.songCover || "").trim();
+  const coverHtml = cover
+    ? `<img class="liveListenInviteSongArt" src="${escapeHtml(cover)}" alt="" />`
+    : '<span class="liveListenInviteSongArt liveListenInviteSongArt--ph" aria-hidden="true">♪</span>';
+  const primary = host ? "Play again" : "Stay";
+  const primaryAct = host ? "replay" : "stay";
+  const endLabel = host ? "Done" : "Leave";
+  const endAct = host ? "done" : "leave";
+  const hint = host ? "" : `<p class="liveListenCardHint">@${escapeHtml(name)} can play it again.</p>`;
+  openCardOverlay({
+    ariaLabel: "Listened together",
+    html: `<div class="liveListenCardAvatars">${avatarHtml(me, "liveListenCardAv")}${avatarHtml(other, "liveListenCardAv")}</div>
+      <h2 class="liveListenCardTitle">Listened together</h2>
+      <p class="liveListenCardSub">${time ? `${escapeHtml(time)} with ` : "With "}@${escapeHtml(name)}</p>
+      <div class="liveListenInviteSong liveListenCardSong">${coverHtml}
+        <div class="liveListenInviteSongMeta">
+          <strong class="liveListenInviteSongTitle">${escapeHtml(session.songTitle || "Song")}</strong>
+          <span class="liveListenInviteSongSub">Played to the end</span>
+        </div></div>
+      ${hint}
+      <button type="button" class="npPresenceBtn npPresenceBtn--primary liveListenCardPrimary" data-ll-act="${primaryAct}">${primary}</button>
+      <div class="liveListenCardRow">
+        <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="message">Message @${escapeHtml(name)}</button>
+        <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="${endAct}">${endLabel}</button>
+      </div>`,
+    onAction: (act) => {
+      if (act === "message") {
+        closeOverlay();
+        try { onDismiss?.(); } catch {}
+        try { bridge.openChatWithUser?.(other); } catch {}
+        return;
+      }
+      onAction?.(act);
+    },
+    onDismiss,
+  });
+}
+
 function clearGuestSongEnded() {
   const wasOpen = _guestSongEndedSheetOpen;
   _guestSongEnded = false;
@@ -1096,17 +1416,8 @@ function showGuestSongEnded() {
   syncLiveListenChrome();
   if (_guestSongEndedSheetOpen) return;
   _guestSongEndedSheetOpen = true;
-  const name = partnerLabel(_state?.session);
-  openOverlay({
-    kicker: "Song finished",
-    title: _state?.session?.songTitle || "Song",
-    sub: name
-      ? `@${name} can play it again from the start. You follow, or leave.`
-      : "The host can play it again from the start. You follow, or leave.",
-    art: _state?.session?.songCover,
-    actionsHtml: `
-      <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="leave">Leave</button>
-      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="ok">OK</button>`,
+  openTogetherSummary({
+    host: false,
     onAction: (act) => {
       _guestSongEndedSheetOpen = false;
       closeOverlay();
@@ -1119,15 +1430,8 @@ function showGuestSongEnded() {
 function showHostSongEnded() {
   if (!isLiveListenHost() || !_hostAtEnd || _hostEndSheetOpen) return;
   _hostEndSheetOpen = true;
-  const name = partnerLabel(_state?.session);
-  openOverlay({
-    kicker: "Song finished",
-    title: _state?.session?.songTitle || "Song",
-    sub: name ? `Play it again with @${name}, or end the listen.` : "Play it again, or end the listen.",
-    art: _state?.session?.songCover,
-    actionsHtml: `
-      <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="done">Done</button>
-      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="replay">Play again</button>`,
+  openTogetherSummary({
+    host: true,
     onAction: (act) => {
       _hostEndSheetOpen = false;
       closeOverlay();
@@ -1149,11 +1453,11 @@ async function confirmHostEnd() {
   const name = partnerLabel(_state?.session);
   const waiting = hostAwaitingGuest();
   openOverlay({
-    kicker: waiting ? "Invite sent" : "Live listen",
+    kicker: waiting ? "Invite sent" : "Listen together",
     title: _state?.session?.songTitle || "Song",
     sub: waiting
       ? `Waiting on this song at the start until @${name} joins. Cancel if you want to play something else.`
-      : `End live listen with @${name}?`,
+      : `End this listen with @${name}?`,
     art: _state?.session?.songCover,
     actionsHtml: `
       <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="cancel">${waiting ? "Keep waiting" : "Keep going"}</button>
@@ -1167,9 +1471,9 @@ async function confirmHostEnd() {
 
 async function confirmGuestLeave() {
   openOverlay({
-    kicker: "Live listen",
+    kicker: "Listen together",
     title: _state?.session?.songTitle || "Song",
-    sub: "Leave this live listen?",
+    sub: "Leave this listen?",
     art: _state?.session?.songCover,
     actionsHtml: `
       <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="cancel">Stay</button>
@@ -1185,6 +1489,7 @@ async function endHostSession() {
   const wasWaiting = hostAwaitingGuest();
   const sid = _state?.session?.id;
   closeOverlay();
+  closeRoom();
   _hostAtEnd = false;
   _hostEndSheetOpen = false;
   if (sid) {
@@ -1199,7 +1504,7 @@ async function endHostSession() {
     try { await api("post", { action: "end", sessionId: sid }); } catch {}
   }
   await clearLocalSession();
-  toast(wasWaiting ? "Invite canceled — press play whenever you want" : "Live listen ended");
+  toast(wasWaiting ? "Invite canceled — press play whenever you want" : "Listen together ended");
 }
 
 export async function endLiveListenBecauseHostClosedPlayer() {
@@ -1257,6 +1562,11 @@ function revealExpiredListen(session) {
     if (kicker) kicker.textContent = copy.kicker;
     if (title) title.textContent = copy.title;
     if (sub) sub.textContent = copy.sub;
+    // Invite-style sheet (avatar + "wants to listen with you"): there is no title/sub line, so update its copy too.
+    const verb = root.querySelector(".liveListenInviteVerb");
+    const songSub = root.querySelector(".liveListenInviteSongSub");
+    if (verb) verb.textContent = copy.sub;
+    if (songSub) songSub.textContent = "Ended";
     return;
   }
   showEndedFallback(session);
@@ -1308,6 +1618,7 @@ function showJoinPrompt(session) {
         }
         closeOverlay();
         await becomeGuest(next);
+        openRoom("starting");
         await loadSessionAudio(next, {
           startAtMs: 0,
           autoplay: false,
@@ -1395,7 +1706,7 @@ export async function handleLiveListenDeepLink(sessionId, preview = null) {
       revealExpiredListen(preview);
       return;
     }
-    toast(msg || "Could not open live listen", { durationMs: 2800 });
+    toast(msg || "Could not open this listen", { durationMs: 2800 });
   }
 }
 
@@ -1460,17 +1771,14 @@ async function createSessionForGuest(guest, track, rowBtn) {
       threadId: guest.threadId || "",
     });
     const session = data?.session;
-    if (!session?.id) throw new Error("Could not start live listen");
+    if (!session?.id) throw new Error("Could not start listen together");
     closeOverlay();
     await becomeHost(session);
-    toast(`Waiting on this song for @${handle} — tap the chip to cancel.`, { icon: "🎧", durationMs: 3400 });
   } catch (e) {
-    const raw = String(e?.message || "Could not start live listen");
-    const msg = /not set up|table_missing/i.test(raw)
-      ? "Database table missing — run listen_sessions.sql, then push staging"
-      : /not found|404/i.test(raw)
-        ? "Live Listen isn’t available right now. Try again in a minute."
-        : raw;
+    const raw = String(e?.message || "Could not start listen together");
+    const msg = /not set up|table_missing|not found|404/i.test(raw)
+      ? "Listen together isn’t available right now. Try again in a minute."
+      : raw;
     setOverlayStatus(msg);
     toast(msg, { durationMs: 4200 });
     if (rowBtn) {
@@ -1498,7 +1806,7 @@ function renderInviteList(friends, track) {
   openOverlay({
     kicker: "Listen together",
     title: track?.title || "Song",
-    sub: "Pick a mutual fan",
+    sub: "Pick a friend to invite",
     art: track?.artUrl || track?.art,
     actionsHtml: `<div class="liveListenInviteList">${rows || `<div class="messagesShareEmpty">Become mutual fans with someone first.</div>`}</div>`,
     onAction: (act, btn) => {
@@ -1712,12 +2020,12 @@ export function interceptLiveListenSongChange(nextUrl, opts = {}) {
     toast("Stay on this song — it starts when they join. Tap the chip to cancel.", { durationMs: 2600 });
     return true;
   }
-  toast("Stay on this song until you leave live listen", { durationMs: 2400 });
+  toast("Stay on this song until this listen ends", { durationMs: 2400 });
   return true;
 }
 
 export function interceptLiveListenTransport() {
   if (!isLiveListenTransportLocked()) return false;
-  toast("Following the host — you can leave from the live chip", { durationMs: 2200 });
+  toast(`@${partnerLabel(_state?.session)} controls playback`, { durationMs: 2200 });
   return true;
 }

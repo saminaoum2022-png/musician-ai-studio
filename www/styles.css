@@ -64254,3 +64254,8 @@ html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate.isG
   border-top-color: #fff;
   animation: createCtaSpin 800ms linear infinite;
 }
+
+/* Out-of-credits sheet — reuses the chat "Send" sheet look; the Pro row hides for subscribers. */
+.outOfCreditsSheet .messagesComposerSheetRow[hidden]{
+  display: none !important;
+}

@@ -24263,7 +24263,8 @@ async function startVoiceDropClipFromChat({ msgId, audioUrl, storageKey, mood, g
       goBtn.disabled = false;
       goBtn.textContent = CHAT_VOICE_REMIX_GO_LABEL;
     }
-    failPendingChatVoiceRemix(e?.message || "Could not start this remix.");
+    // Out of credits already showed the Get Pro / Redeem prompt — just clean up quietly.
+    failPendingChatVoiceRemix(e?._creditsPromptShown ? "" : (e?.message || "Could not start this remix."));
   }
 }
 
@@ -32108,6 +32109,87 @@ function requireProFeature(featureLabel = "This feature") {
   if (proFeatureAllowed()) return true;
   promptWebProUpgrade(featureLabel);
   return false;
+}
+
+/** True for the 402 / "not enough credits" errors thrown by the paid flows. */
+function isInsufficientCreditsError(e) {
+  if (!e) return false;
+  if (e.code === "insufficient_credits") return true;
+  return /not enough credits/i.test(String(e.message || ""));
+}
+
+let _outOfCreditsRoute = "";
+
+function closeOutOfCreditsPrompt() {
+  const sheet = document.getElementById("outOfCreditsSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("outOfCreditsSheetOpen");
+}
+
+function wireOutOfCreditsSheetOnce(sheet) {
+  if (!sheet || sheet.dataset.wiredOutOfCredits === "1") return;
+  sheet.dataset.wiredOutOfCredits = "1";
+  sheet.addEventListener("click", (e) => {
+    if (e.target.closest("#outOfCreditsSheetClose") || e.target.closest("#outOfCreditsSheetBackdrop")) {
+      closeOutOfCreditsPrompt();
+      return;
+    }
+    const act = e.target.closest("[data-out-of-credits-action]");
+    if (!act) return;
+    const which = String(act.getAttribute("data-out-of-credits-action") || "");
+    const from = _outOfCreditsRoute || "generate";
+    try { haptic("light"); } catch {}
+    closeOutOfCreditsPrompt();
+    const target = which === "pro" ? "#/pro" : "#/credits";
+    if (which === "pro") {
+      // Pro's back arrow returns to where the user ran out (Create, Sounds, chat…).
+      try { setProReturnRoute(from); } catch {}
+    }
+    try {
+      if (location.hash !== target) location.hash = target;
+      bumpApplyRouteGeneration();
+      void runApplyRouteOnce();
+    } catch {
+      try { location.hash = target; } catch {}
+    }
+  });
+}
+
+/**
+ * One tappable "out of credits" moment for every paid flow — replaces the old text-only
+ * "Open Profile → Credits to redeem a code" toast. Pro subscribers don't see the Pro row.
+ */
+function showOutOfCreditsPrompt(info = {}) {
+  const sheet = document.getElementById("outOfCreditsSheet");
+  if (!sheet) return false;
+  wireOutOfCreditsSheetOnce(sheet);
+  let need = Number(info.needed);
+  let have = Number(info.balance);
+  const parsed = String(info.message || "").match(/you have ([\d.]+),\s*need ([\d.]+)/i);
+  if (parsed) {
+    if (!Number.isFinite(have)) have = Number(parsed[1]);
+    if (!Number.isFinite(need)) need = Number(parsed[2]);
+  }
+  if (!Number.isFinite(have)) have = Number(creditsState.balance);
+  const parts = [];
+  if (Number.isFinite(have)) parts.push(`You have ${formatCreditsAmount(have)} credits`);
+  if (Number.isFinite(need) && need > 0) parts.push(`this needs ${formatCreditsAmount(need)}`);
+  const pro = Boolean(creditsState.proActive);
+  const lead = document.getElementById("outOfCreditsSheetLead");
+  if (lead) {
+    const head = parts.length ? `${parts.join(" · ")}.` : "You're out of credits.";
+    lead.textContent = pro ? `${head} Your Pro credits renew each billing period.` : head;
+  }
+  const proRow = document.getElementById("outOfCreditsGetPro");
+  if (proRow) proRow.hidden = pro;
+  _outOfCreditsRoute = document.body.getAttribute("data-route") || "generate";
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("outOfCreditsSheetOpen");
+  try { haptic("light"); } catch {}
+  return true;
 }
 
 function promptWebProUpgrade(featureLabel = "This feature") {
@@ -48240,6 +48322,7 @@ async function startMashupGeneration() {
     if (r.status === 402 || d?.code === "insufficient_credits") {
       const need = Number(d?.needed ?? FULL_SONG_CREDIT_COST);
       const have = Number(d?.balance || 0);
+      try { showOutOfCreditsPrompt({ needed: need, balance: have }); } catch {}
       throw new Error(`Not enough credits (you have ${formatCreditsAmount(have)}, need ${formatCreditsAmount(need)}).`);
     }
     if (r.status === 401) throw new Error("Sign in to create a mashup.");
@@ -49664,9 +49747,8 @@ async function runLibraryInstrumentalForTrack(t) {
     if (r.status === 402 || d?.code === "insufficient_credits") {
       const need = Number(d?.needed ?? 2);
       const have = Number(d?.balance || 0);
-      throw new Error(
-        `Not enough credits to extract vocals (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
-      );
+      try { showOutOfCreditsPrompt({ needed: need, balance: have }); } catch {}
+      throw new Error(`Not enough credits to extract vocals (you have ${have}, need ${need}).`);
     }
     if (!r.ok) throw new Error(d?.error || "Instrumental request failed");
     try {
@@ -57282,9 +57364,8 @@ async function createPersonaForSong({
     if (r.status === 402 || d?.code === "insufficient_credits") {
       const need = Number(d?.needed ?? 5);
       const have = Number(d?.balance || 0);
-      throw new Error(
-        `Not enough credits to save a persona (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
-      );
+      try { showOutOfCreditsPrompt({ needed: need, balance: have }); } catch {}
+      throw new Error(`Not enough credits to save a persona (you have ${have}, need ${need}).`);
     }
     if (d?.code === "pro_required" || r.status === 403) {
       promptWebProUpgrade("Persona");
@@ -69040,6 +69121,14 @@ async function trackCreditsAround(action, fn, extra = "") {
   const t0 = Date.now();
   try {
     return await fn();
+  } catch (e) {
+    // Out of credits: one tappable prompt (Get Pro / Redeem) instead of a text-only toast.
+    // Tagged so each flow's catch can skip its own generic failure toast.
+    if (isInsufficientCreditsError(e)) {
+      try { showOutOfCreditsPrompt({ needed: e.needed, balance: e.balance, message: e.message }); } catch {}
+      try { e._creditsPromptShown = true; } catch {}
+    }
+    throw e;
   } finally {
     const after = await refreshSunoCredits();
     const delta =
@@ -71692,9 +71781,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setGenerateFieldsLocked(false);
         setProgress(0);
         setStatus(e?.message || "Clip generation failed.");
-        try {
-          showToast(e?.message || "Clip generation failed.", { icon: "!", durationMs: 4800 });
-        } catch {}
+        // Out of credits already showed the Get Pro / Redeem prompt — skip the duplicate toast.
+        if (!e?._creditsPromptShown) {
+          try {
+            showToast(e?.message || "Clip generation failed.", { icon: "!", durationMs: 4800 });
+          } catch {}
+        }
         if (is80sPhotoSolo) {
           try { cancelCoachPriorityStatus(); } catch {}
         }
@@ -72610,7 +72702,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     } catch (e) {
       console.error(e);
       const friendly = e?._friendly;
-      if (friendly) {
+      if (e?._creditsPromptShown) {
+        // Out of credits: the Get Pro / Redeem prompt is already up — no failure toast or "didn't finish" item.
+        setStatus("Not enough credits for this song.");
+      } else if (friendly) {
         const isRemix = Boolean(currentRemixSource?.originalUrl || vocalRefOrigin === "remix");
         const userCopy = sunoFailureUserCopy(friendly.kind, { isRemix });
         const upstreamDetail = String(friendly.detail || friendly.headline || e?.message || "").trim();
@@ -75732,6 +75827,7 @@ async function submitSoundGenerate() {
       if (r.status === 402 || d?.code === "insufficient_credits") {
         const need = Number(d?.needed ?? SOUND_CREDIT_COST);
         const have = Number(d?.balance || 0);
+        try { showOutOfCreditsPrompt({ needed: need, balance: have }); } catch {}
         setStatus(
           `Not enough credits (you have ${formatCreditsAmount(have)}, need ${formatCreditsAmount(need)}).`
         );
@@ -79224,7 +79320,8 @@ async function studioSeparateVocals(track, onPhase) {
   if (r.status === 402 || d?.code === "insufficient_credits") {
     const need = Number(d?.needed ?? 2);
     const have = Number(d?.balance || 0);
-    throw new Error(`Not enough credits to separate vocals (you have ${have}, need ${need}). Redeem a code in Profile → Credits.`);
+    try { showOutOfCreditsPrompt({ needed: need, balance: have }); } catch {}
+    throw new Error(`Not enough credits to separate vocals (you have ${have}, need ${need}).`);
   }
   if (!r.ok) throw new Error(d?.error || "Couldn’t start vocal separation.");
   try { if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true }); } catch {}

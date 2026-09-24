@@ -40475,15 +40475,18 @@ function closeMessagesShareSheet() {
   _messagesShareAllTracks = [];
   _messagesShareCandidates = [];
   _messagesShareMode = "share";
+  _messagesShareNoPartner = false;
   applyMessagesShareSheetCopy();
 }
 
 const MESSAGES_SHARE_LEAD_DEFAULT = "Pick a song, remix, or mashup from your Library.";
 let _messagesShareConfirmTrack = null;
 let _messagesShareMode = "share";
+/** Listen-together started from Connect (no open chat): don't borrow the last chat's @handle, and pick the friend after the song. */
+let _messagesShareNoPartner = false;
 
 function messagesShareSheetCopy() {
-  const handle = String(_chatHeaderUser?.username || "").replace(/^@/, "").trim();
+  const handle = _messagesShareNoPartner ? "" : String(_chatHeaderUser?.username || "").replace(/^@/, "").trim();
   if (_messagesShareMode === "listen") {
     return {
       title: "Listen together",
@@ -40525,6 +40528,109 @@ function trackRefFromSharePick(track) {
 
 function openMessagesListenPicker() {
   void openMessagesShareSheet({ mode: "listen" });
+}
+
+// ── Connect "+" → New chat / Listen together ────────────────────────────────
+let _newChatCandidates = [];
+
+function closeConnectNewSheet() {
+  const sheet = document.getElementById("connectNewSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+}
+
+function closeNewChatSheet() {
+  const sheet = document.getElementById("newChatSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+}
+
+function openConnectNewSheet() {
+  if (!MESSAGES_FEATURE_ENABLED) return;
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    try { showToast("Sign in to message friends."); } catch {}
+    return;
+  }
+  const sheet = document.getElementById("connectNewSheet");
+  if (!sheet) return;
+  wireConnectNewSheetsOnce();
+  const listenRow = document.getElementById("connectNewListenRow");
+  if (listenRow) listenRow.hidden = !nabadLiveListenEnabled();
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+}
+
+async function openNewChatSheet() {
+  const sheet = document.getElementById("newChatSheet");
+  const list = document.getElementById("newChatList");
+  if (!sheet || !list) return;
+  wireConnectNewSheetsOnce();
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  list.innerHTML = `<div class="messagesShareEmpty">Loading friends…</div>`;
+  let friends = [];
+  try { friends = await fetchMutualFriendsForShare(); } catch {}
+  _newChatCandidates = friends;
+  if (!friends.length) {
+    list.innerHTML = `<div class="messagesShareEmpty">Become mutual fans with someone first — then you can chat here.</div>`;
+    return;
+  }
+  list.innerHTML = friends.map((f, idx) => {
+    const handle = escapeHtml(String(f.username || "creator").replace(/^@/, "") || "creator");
+    const avatarHtml = messagesAvatarHtml(f.avatar, f.username, "messagesShareRowArt");
+    return `
+      <button type="button" class="messagesShareRow" data-new-chat-idx="${idx}" role="option">
+        ${avatarHtml}
+        <span class="messagesShareRowBody">
+          <strong>@${handle}</strong>
+          <span>${f.threadId ? "Open chat" : "Start chat"}</span>
+        </span>
+      </button>`;
+  }).join("");
+}
+
+function wireConnectNewSheetsOnce() {
+  if (document.documentElement.dataset.wiredConnectNew === "1") return;
+  document.documentElement.dataset.wiredConnectNew = "1";
+  document.getElementById("connectNewSheet")?.addEventListener("click", (e) => {
+    if (e.target.closest("#connectNewSheetClose") || e.target.closest("#connectNewSheetBackdrop")) {
+      closeConnectNewSheet();
+      return;
+    }
+    const row = e.target.closest("[data-connect-new]");
+    if (!row) return;
+    const which = String(row.getAttribute("data-connect-new") || "");
+    try { haptic("light"); } catch {}
+    closeConnectNewSheet();
+    if (which === "chat") {
+      void openNewChatSheet();
+    } else if (which === "listen") {
+      if (isLiveListenActive()) {
+        try { showToast("Leave the current listen first."); } catch {}
+        return;
+      }
+      void openMessagesShareSheet({ mode: "listen", noPartner: true });
+    }
+  });
+  document.getElementById("newChatSheet")?.addEventListener("click", (e) => {
+    if (e.target.closest("#newChatSheetClose") || e.target.closest("#newChatSheetBackdrop")) {
+      closeNewChatSheet();
+      return;
+    }
+    const row = e.target.closest("[data-new-chat-idx]");
+    if (!row) return;
+    const f = _newChatCandidates[Number(row.getAttribute("data-new-chat-idx"))];
+    if (!f) return;
+    try { haptic("light"); } catch {}
+    closeNewChatSheet();
+    navigateToMessagesThread({
+      threadId: f.threadId,
+      headerUser: { userId: f.userId, username: f.username, displayName: f.username, avatarUrl: f.avatar },
+      targetUserId: f.userId,
+    });
+  });
 }
 
 // Step 2 of the share flow: after the user taps a song, show a simple confirm
@@ -40587,11 +40693,12 @@ function hideMessagesShareConfirm() {
   renderMessagesShareList(_messagesShareSearchQuery);
 }
 
-async function openMessagesShareSheet({ mode } = {}) {
+async function openMessagesShareSheet({ mode, noPartner } = {}) {
   const sheet = document.getElementById("messagesShareSheet");
   const list = document.getElementById("messagesShareList");
   if (!sheet || !list) return;
   _messagesShareMode = mode === "listen" ? "listen" : "share";
+  _messagesShareNoPartner = Boolean(noPartner) && _messagesShareMode === "listen";
   applyMessagesShareSheetCopy();
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
@@ -44924,6 +45031,7 @@ function bindMessagesPageOnce() {
     inboxAdd.addEventListener("click", (e) => {
       e.preventDefault();
       try { haptic("light"); } catch {}
+      openConnectNewSheet();
     });
   }
   wireMessagesPresenceSheetOnce();
@@ -45224,8 +45332,11 @@ function bindMessagesPageOnce() {
           }
           shareSend.setAttribute("aria-busy", "true");
           shareSend.textContent = "Inviting…";
+          const fromConnect = _messagesShareNoPartner;
           closeMessagesShareSheet();
-          void openLiveListenInviteFromChat({ track: listenTrack });
+          // From Connect there's no open chat: after the song, Live Listen asks which friend to invite.
+          if (fromConnect) void openLiveListenInviteForTrack(listenTrack);
+          else void openLiveListenInviteFromChat({ track: listenTrack });
           return;
         }
         shareSend.setAttribute("aria-busy", "true");

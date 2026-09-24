@@ -64255,7 +64255,8 @@ html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate.isG
   animation: createCtaSpin 800ms linear infinite;
 }
 
-/* Out-of-credits sheet — reuses the chat "Send" sheet look; the Pro row hides for subscribers. */
-.outOfCreditsSheet .messagesComposerSheetRow[hidden]{
+/* Out-of-credits and Connect "+" sheets reuse the chat "Send" sheet look; a row hides via [hidden] (Pro row for subscribers, Listen row when Live Listen is off). */
+.outOfCreditsSheet .messagesComposerSheetRow[hidden],
+.connectNewSheet .messagesComposerSheetRow[hidden]{
   display: none !important;
 }

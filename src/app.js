@@ -3025,7 +3025,8 @@ function migrateCachesOnBuildChange() {
       try { localStorage.removeItem(k); } catch {}
     });
     try {
-      sessionStorage.removeItem("nabad_friends_feed_snap_v3");
+      sessionStorage.removeItem("nabad_friends_feed_snap_v4");
+    sessionStorage.removeItem("nabad_friends_feed_snap_v3");
       sessionStorage.removeItem("nabad_activity_feed_snap_v3");
       sessionStorage.removeItem("nabad_profile_act_snap_v3");
     } catch {}
@@ -4157,6 +4158,8 @@ function finishTabRouteEnter(route, prevRoute) {
     // Connect = Friends | Chats: set the section (and start Friends) before the cached chat list paints.
     bindConnectSegOnce();
     syncConnectSegUi();
+    startConnectPresencePoll();
+    void refreshDiscoverLiveFriends();
     if (_connectSeg === "friends") activateConnectFriends();
     loadMessagesInboxFromStorage();
     const hasCache = messagesInboxHasCachedData();
@@ -13537,7 +13540,7 @@ function discoverTonightHeroHtml(t, profMap) {
   const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
   const menu = discoverSheetMenuBtnHtml(t, profMap, { className: "discoverCardMenuBtn discoverTonightMenuBtn" });
   const together = nabadLiveListenEnabled()
-    ? `<button type="button" class="discoverTonightTogether" data-discover-listen-together="${escapeHtml(String(t.id))}"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5"/><circle cx="17" cy="10" r="2.6"/><path d="M14 20c.4-2.6 2-4 4.2-4 1.6 0 2.8.7 3.3 2"/></svg><span>Listen together</span></button>`
+    ? `<button type="button" class="discoverTonightTogether" data-discover-listen-together="${escapeHtml(String(t.id))}">${LIVE_TOGETHER_ICON}<span>Listen together</span></button>`
     : "";
   return `
     <div class="discoverFeaturedChallengeHero discoverTonightHero" role="group" aria-label="${escapeHtml(discoverPickLabel())}: ${escapeHtml(title)}">
@@ -14174,7 +14177,7 @@ function discoverLiveNowInnerHtml() {
     if (!st.hasFriends || !nabadLiveListenEnabled()) return "";
     return `
       <button type="button" class="discoverLiveInvite" data-discover-live-start>
-        <span class="discoverLiveInviteIco" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5"/><circle cx="17" cy="10" r="2.6"/><path d="M14 20c.4-2.6 2-4 4.2-4 1.6 0 2.8.7 3.3 2"/></svg></span>
+        <span class="discoverLiveInviteIco" aria-hidden="true">${LIVE_TOGETHER_ICON}</span>
         <span class="discoverLiveInviteText"><strong>Listen together</strong><span>Press play at the same time as a friend</span></span>
         <span class="discoverLiveInviteGo">Start</span>
       </button>`;
@@ -14204,15 +14207,59 @@ function discoverLiveNowInnerHtml() {
     </div>`;
 }
 
+const LIVE_TOGETHER_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 14.5h2.5a1.8 1.8 0 0 1 1.8 1.8v2.4a1.8 1.8 0 0 1-1.8 1.8H5.3a1.8 1.8 0 0 1-1.8-1.8v-5.7a8.5 8.5 0 0 1 17 0v5.7a1.8 1.8 0 0 1-1.8 1.8h-.7a1.8 1.8 0 0 1-1.8-1.8v-2.4a1.8 1.8 0 0 1 1.8-1.8h2.5"/></svg>`;
+
+/** Presence under "Connect" — shown on both Friends and Chats. Quiet when nobody is live. */
+function connectPresenceInnerHtml() {
+  const st = _discoverLiveFriends;
+  if (!st.hasFriends || !nabadLiveListenEnabled()) return "";
+  if (!st.list.length) return "";
+  const items = st.list.map((f, i) => {
+    const p = f.presence || {};
+    const name = String(f.username || "friend").replace(/^@/, "");
+    return `
+      <button type="button" class="discoverLiveItem" data-discover-live="${i}" aria-label="${escapeHtml(name)} is listening${p.songTitle ? ` to ${escapeHtml(p.songTitle)}` : ""}">
+        <span class="discoverLiveRing"><span class="discoverLiveAv">${messagesAvatarHtml(f.avatar, name, "discoverLiveAvImg")}</span></span>
+        <strong class="discoverLiveName">${escapeHtml(name)}</strong>
+        <small class="discoverLiveTag">${escapeHtml(String(p.songTitle || "Live").slice(0, 16))}</small>
+      </button>`;
+  }).join("");
+  return `
+    <div class="discoverLiveStrip connectPresenceStrip">
+      <button type="button" class="discoverLiveItem discoverLiveItem--start" data-discover-live-start aria-label="Start a listen together">
+        <span class="discoverLiveRing discoverLiveRing--start"><span class="discoverLiveAv">＋</span></span>
+        <strong class="discoverLiveName">Together</strong>
+        <small class="discoverLiveTag discoverLiveTag--soft">Start one</small>
+      </button>
+      ${items}
+    </div>`;
+}
+
 function paintDiscoverLiveNow() {
   const html = discoverLiveNowInnerHtml();
-  for (const id of ["discoverLiveNow", "friendsLiveNow"]) {
-    const sec = document.getElementById(id);
-    if (!sec) continue;
-    sec.hidden = !html;
-    sec.innerHTML = html;
+  const disc = document.getElementById("discoverLiveNow");
+  if (disc) { disc.hidden = !html; disc.innerHTML = html; }
+  const presence = document.getElementById("connectPresence");
+  if (presence) {
+    const ph = connectPresenceInnerHtml();
+    // Repaint only when it changed, so the strip doesn't flash or lose its scroll every poll.
+    if (presence.dataset.sig !== ph) {
+      presence.dataset.sig = ph;
+      presence.innerHTML = ph;
+    }
+    presence.hidden = !ph;
   }
-  try { syncConnectSegUi(); } catch {}
+}
+
+let _connectPresenceTimer = 0;
+/** Keep presence fresh while Connect is open (either section). */
+function startConnectPresencePoll() {
+  if (_connectPresenceTimer) return;
+  _connectPresenceTimer = window.setInterval(() => {
+    if (document.hidden) return;
+    if (String(document.body.getAttribute("data-route") || "") !== "messages") return;
+    void refreshDiscoverLiveFriends({ force: true });
+  }, 45_000);
 }
 
 function openDiscoverLiveFriendSheet(idx) {
@@ -16855,7 +16902,7 @@ function openStyleTagBrowse(tag) {
 function handleFeedStyleTagClick(e) {
   const moreBtn = e.target?.closest?.("[data-style-tag-more]");
   if (moreBtn) {
-    const root = moreBtn.closest("#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicRepostsList, #userPublicSongs");
+    const root = moreBtn.closest("#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicRepostsList, #userPublicSongs");
     if (!root || !root.contains(moreBtn)) return false;
     e.preventDefault();
     e.stopPropagation();
@@ -16871,7 +16918,7 @@ function handleFeedStyleTagClick(e) {
   }
   const pill = e.target?.closest?.("[data-style-tag-browse]");
   if (!pill) return false;
-  const root = pill.closest("#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicRepostsList, #userPublicSongs");
+  const root = pill.closest("#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicRepostsList, #userPublicSongs");
   if (!root || !root.contains(pill)) return false;
   e.preventDefault();
   e.stopPropagation();
@@ -16903,7 +16950,25 @@ function friendsFeedReleaseCaptionHtml(track) {
   return `<div class="followActReleaseCaption${clamp ? " followActReleaseCaption--clamp" : ""}">${body}${moreBtn}</div>`;
 }
 
-const FRIENDS_FEED_WAVE_BAR_COUNT = 42;
+/** The one progress bar for feed posts (vinyl and cover): elapsed · sliding bar · total.
+ *  `.feedSeek` keeps the classes the feed already drives (progress %, hook marker, seek input). */
+function feedSeekBarHtml(track, encUrl) {
+  const durSec = discoverTrackDurationSec(track);
+  const hookSec = feedHookStartFromTrack(track);
+  const hookAttr = hookSec > 0 ? ` data-feed-hook-sec="${hookSec}"` : "";
+  const durAttr = durSec > 0 ? ` data-feed-hook-dur="${durSec}"` : "";
+  return `
+              <div class="feedSeekRow">
+                <span class="feedSeekTime" data-feed-seek-cur>${escapeHtml(formatTime(0))}</span>
+                <div class="feedSeek followActRealtimeProgress" data-user-lib-url="${encUrl}" data-feed-seek-dur="${durSec > 0 ? durSec : 0}"${hookAttr}${durAttr}>
+                  <span class="feedSeekTrack" aria-hidden="true"><span class="feedSeekFill"></span></span>
+                  <span class="feedSeekThumb" aria-hidden="true"></span>
+                  <span class="feedHookMarker" aria-hidden="true"></span>
+                  <input class="followActRealtimeSeek followActRealtimeSeek--ghost" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" />
+                </div>
+                <span class="feedSeekTime" data-feed-seek-total>${escapeHtml(formatTime(durSec > 0 ? durSec : 0))}</span>
+              </div>`;
+}
 const _friendsFeedDockDurByUrl = new Map();
 
 function rememberFriendsFeedDockDuration(url, sec) {
@@ -16947,153 +17012,6 @@ function syncFriendsFeedDockDurations(root, { curRef, cur, dur, audible }) {
   });
 }
 
-function friendsFeedWaveformFallbackPeaks() {
-  return Array.from({ length: FRIENDS_FEED_WAVE_BAR_COUNT }, (_, i) => {
-    const t = i / Math.max(1, FRIENDS_FEED_WAVE_BAR_COUNT - 1);
-    const w1 = Math.abs(Math.sin(t * 11.4 + 0.25) * Math.cos(t * 4.3 + 0.6));
-    const w2 = Math.abs(Math.sin(t * 24.1 + 1.2) * 0.42);
-    const w3 = Math.abs(Math.cos(t * 6.8 - 0.4) * Math.sin(t * 18.3) * 0.28);
-    const env = t > 0.08 && t < 0.92 ? 1 : 0.68;
-    return Math.round((0.1 + 0.9 * Math.max(w1, w2, w3) * env) * 1000) / 1000;
-  });
-}
-
-function friendsFeedWaveformSeededPeaks(seed) {
-  let s = Number(seed) || 1;
-  const rnd = () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-  const raw = Array.from({ length: FRIENDS_FEED_WAVE_BAR_COUNT }, (_, i) => {
-    const t = i / Math.max(1, FRIENDS_FEED_WAVE_BAR_COUNT - 1);
-    const a = Math.abs(Math.sin(t * 13.5 + rnd() * 3.2) * Math.cos(t * 5.8 + rnd() * 2.1));
-    const b = Math.abs(Math.sin(t * 27.2 + rnd() * 4.5) * 0.35);
-    return 0.12 + 0.88 * Math.max(a, b);
-  });
-  return statusVoiceNormalizePeaks(raw, FRIENDS_FEED_WAVE_BAR_COUNT);
-}
-
-function friendsFeedWaveformPeaksFromTrack(track) {
-  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
-  const raw = meta.waveformPeaks || meta.waveform_peaks;
-  if (Array.isArray(raw) && raw.length) {
-    return statusVoiceNormalizePeaks(raw, FRIENDS_FEED_WAVE_BAR_COUNT);
-  }
-  const seedKey = String(track?.id || track?.url || track?.taskId || "").trim();
-  if (seedKey) {
-    let seed = 0;
-    for (let i = 0; i < seedKey.length; i++) seed = (seed * 31 + seedKey.charCodeAt(i)) >>> 0;
-    return friendsFeedWaveformSeededPeaks(seed);
-  }
-  return friendsFeedWaveformFallbackPeaks();
-}
-
-function friendsFeedWaveBarsInnerHtml(peaks) {
-  return statusVoiceNormalizePeaks(peaks, FRIENDS_FEED_WAVE_BAR_COUNT)
-    .map((h, i) => {
-      const ht = Math.max(0.1, Math.min(1, Number(h) || 0.3));
-      return `<span class="friendsFeedWaveBar" data-bar-i="${i}" style="--bar-h:${ht.toFixed(3)}"></span>`;
-    })
-    .join("");
-}
-
-let _friendsFeedWaveRaf = 0;
-let _friendsFeedWaveActiveWrap = null;
-let _friendsFeedWaveBasePeaks = null;
-
-function friendsFeedWavePeaksFromWrap(wrap) {
-  try {
-    const raw = decodeURIComponent(String(wrap?.getAttribute?.("data-friends-wave-peaks") || ""));
-    const parsed = raw ? JSON.parse(raw) : [];
-    return statusVoiceNormalizePeaks(parsed, FRIENDS_FEED_WAVE_BAR_COUNT);
-  } catch {
-    return friendsFeedWaveformFallbackPeaks();
-  }
-}
-
-function friendsFeedWaveApplyHeights(wrap, layer, heights) {
-  const wave = wrap?.querySelector?.(`[data-friends-feed-wave="${layer}"]`);
-  if (!wave) return;
-  wave.querySelectorAll(".friendsFeedWaveBar").forEach((bar, i) => {
-    const h = heights[i] ?? 0.28;
-    bar.style.setProperty("--bar-h", String(Math.max(0.08, Math.min(1, h)).toFixed(3)));
-  });
-}
-
-function friendsFeedWaveMotionHeights(base, t, playing) {
-  if (!playing) return base;
-  return base.map((b, i) => {
-    const phase = t * 11.2 + i * 0.36;
-    const flutter =
-      0.58 +
-      0.42 *
-        (0.45 * Math.abs(Math.sin(phase)) +
-          0.32 * Math.abs(Math.cos(phase * 1.65 + i * 0.09)) +
-          0.23 * Math.abs(Math.sin(phase * 2.45 - t * 2.8)));
-    const beat = 0.76 + 0.24 * Math.pow(Math.abs(Math.sin(t * 1.92)), 0.7);
-    return Math.min(1, Math.max(0.1, b * flutter * beat));
-  });
-}
-
-function friendsFeedWaveResetWrap(wrap) {
-  if (!wrap) return;
-  const peaks = friendsFeedWavePeaksFromWrap(wrap);
-  friendsFeedWaveApplyHeights(wrap, "base", peaks);
-  friendsFeedWaveApplyHeights(wrap, "prog", peaks);
-}
-
-function stopFriendsFeedWaveVisualizer() {
-  if (_friendsFeedWaveRaf) {
-    try {
-      cancelAnimationFrame(_friendsFeedWaveRaf);
-    } catch {}
-    _friendsFeedWaveRaf = 0;
-  }
-  if (_friendsFeedWaveActiveWrap) {
-    friendsFeedWaveResetWrap(_friendsFeedWaveActiveWrap);
-    _friendsFeedWaveActiveWrap = null;
-  }
-  _friendsFeedWaveBasePeaks = null;
-}
-
-function friendsFeedWaveVisualizerTick() {
-  _friendsFeedWaveRaf = 0;
-  const wrap = _friendsFeedWaveActiveWrap;
-  const a = playerEl;
-  if (!wrap || !a || a.paused || a.ended) {
-    stopFriendsFeedWaveVisualizer();
-    return;
-  }
-  const base = _friendsFeedWaveBasePeaks || friendsFeedWavePeaksFromWrap(wrap);
-  const heights = friendsFeedWaveMotionHeights(base, a.currentTime || 0, true);
-  friendsFeedWaveApplyHeights(wrap, "prog", heights);
-  _friendsFeedWaveRaf = requestAnimationFrame(friendsFeedWaveVisualizerTick);
-}
-
-function syncFriendsFeedWaveVisualizer(curRef, audible) {
-  const friendsPage = document.getElementById("friendsPage");
-  if (!friendsPage || !curRef || !audible) {
-    if (_friendsFeedWaveActiveWrap) stopFriendsFeedWaveVisualizer();
-    return;
-  }
-  let wrap = null;
-  friendsPage.querySelectorAll(".followActMediaDockWave").forEach((w) => {
-    const u = decodeDiscoveryPlayUrl(w);
-    if (u && audioUrlsEquivalent(curRef, u)) wrap = w;
-  });
-  if (!wrap) {
-    stopFriendsFeedWaveVisualizer();
-    return;
-  }
-  if (_friendsFeedWaveActiveWrap !== wrap) {
-    if (_friendsFeedWaveActiveWrap) friendsFeedWaveResetWrap(_friendsFeedWaveActiveWrap);
-    _friendsFeedWaveActiveWrap = wrap;
-    _friendsFeedWaveBasePeaks = friendsFeedWavePeaksFromWrap(wrap);
-    friendsFeedWaveApplyHeights(wrap, "base", _friendsFeedWaveBasePeaks);
-    friendsFeedWaveApplyHeights(wrap, "prog", _friendsFeedWaveBasePeaks);
-  }
-  if (!_friendsFeedWaveRaf) friendsFeedWaveVisualizerTick();
-}
 
 function friendsFeedCompactMediaHtml({
   artSafe,
@@ -17105,40 +17023,21 @@ function friendsFeedCompactMediaHtml({
   safeTitle,
   track,
 }) {
-  const durSec = discoverTrackDurationSec(track);
-  const durLabel = durSec > 0 ? escapeHtml(formatTime(durSec)) : "";
-  const hookSec = feedHookStartFromTrack(track);
-  const hookAttr = hookSec > 0 ? ` data-feed-hook-sec="${hookSec}"` : "";
-  const durAttr = durSec > 0 ? ` data-feed-hook-dur="${durSec}"` : "";
   const kickerHtml = isPhotoMoodTrack(track)
     ? `<span class="followActMediaKicker">Created with Photo Mood</span>`
     : "";
-  const wavePeaks = friendsFeedWaveformPeaksFromTrack(track);
-  const wavePeaksEnc = encodeURIComponent(JSON.stringify(wavePeaks));
-  const waveBars = friendsFeedWaveBarsInnerHtml(wavePeaks);
   return `
           <div class="followActMediaWrap followActMediaWrap--friendsDock">
             <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
               <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
               <span class="followActMediaScrim" aria-hidden="true"></span>
+              <span class="followActMediaCenterPlay" aria-hidden="true">${coverArtPlayStateIconsHtml(22)}</span>
               <div class="followActMediaCopy">
                 <span class="followActMediaTitle" dir="auto">${safeTitle}</span>
                 ${kickerHtml}
               </div>
             </button>
-            <div class="followActMediaDock">
-              <button type="button" class="followActMediaDockPlay" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
-                ${coverArtPlayStateIconsHtml(11)}
-              </button>
-              <div class="followActMediaDockWave followActRealtimeProgress" data-user-lib-url="${encUrl}" data-friends-wave-peaks="${escapeHtml(wavePeaksEnc)}"${hookAttr}${durAttr}>
-                <div class="friendsFeedWaveStage" aria-hidden="true">
-                  <div class="friendsFeedWave friendsFeedWave--base" data-friends-feed-wave="base">${waveBars}</div>
-                  <div class="friendsFeedWave friendsFeedWave--prog" data-friends-feed-wave="prog">${waveBars}</div>
-                </div>
-                <span class="feedHookMarker" aria-hidden="true"></span>
-                <input class="followActRealtimeSeek followActRealtimeSeek--ghost" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek ${safeTitle}" />
-              </div>
-              <span class="followActMediaDockDur" data-friends-dock-dur data-friends-dock-idle-dur="${durSec > 0 ? durSec : ""}">${durLabel}</span>
+            <div class="followActMediaDock">${feedSeekBarHtml(track, encUrl)}
             </div>
           </div>`;
 }
@@ -19995,7 +19894,7 @@ function followingActivityPlayAttrs(t, profMap, byLine, opts = {}) {
  * `kind` here is "music" or "status" (UI kind). The DB target kind is
  * derived: music → "song", status → "status".
  */
-function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPending = false } = {}) {
+function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPending = false, togetherId = "" } = {}) {
   const safeId = escapeHtml(String(targetId || ""));
   const safeUid = escapeHtml(String(targetUserId || ""));
   const safeKind = escapeHtml(String(kind || ""));
@@ -20030,6 +19929,9 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
         <span class="followActActCount" data-friends-act-count="repost"></span>
       </button>`
       : "";
+  const togetherBlock = togetherId
+    ? `<button type="button" class="followActAct followActAct--together" data-friends-listen-together="${escapeHtml(String(togetherId))}" aria-label="Listen together">${LIVE_TOGETHER_ICON}</button>`
+    : "";
   const giftBlock =
     kind === "music" && !isOwner && myId
       ? `<button type="button" class="followActAct followActAct--gift" data-friends-act="gift" aria-label="Gift credits">
@@ -20046,10 +19948,11 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
         ${feedActIconLike()}
         <span class="followActActCount" data-friends-act-count="like"></span>
       </button>
+      ${repostBlock}
+      ${togetherBlock}
       ${giftBlock}
       ${analyticsBlock}
       ${playsBlock}
-      ${repostBlock}
     </div>`;
 }
 
@@ -20704,6 +20607,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
         centerPlayIconsHtml: coverArtPlayStateIconsHtml(18),
         durSec: discoverTrackDurationSec(t),
         durLabel: escapeHtml(formatTime(discoverTrackDurationSec(t) || 0)),
+        seekHtml: feedSeekBarHtml(t, encUrl),
       })
     : friendsFeed
       ? friendsFeedCompactMediaHtml({
@@ -20728,13 +20632,11 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             </button>
             ${followActRealtimeProgressHtml(encUrl, safeTitle, t)}
           </div>`;
-  // "Listen together" sits on the poster / record itself (top right), not in the crowded action bar.
-  const togetherBtnHtml = friendsFeed && xstyle && nabadLiveListenEnabled() && String(t.url || "").trim()
-    ? `<button type="button" class="followActTogether" data-friends-listen-together="${escapeHtml(String(t.id || ""))}" aria-label="Listen together"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5"/><circle cx="17" cy="10" r="2.6"/><path d="M14 20c.4-2.6 2-4 4.2-4 1.6 0 2.8.7 3.3 2"/></svg><span>Listen together</span></button>`
+  // "Listen together" lives in the action row (a quiet icon), not on the artwork.
+  const togetherId = friendsFeed && xstyle && nabadLiveListenEnabled() && String(t.url || "").trim()
+    ? String(t.id || "")
     : "";
-  const mediaBlockWithProgressHtml = togetherBtnHtml
-    ? mediaBlockHtml.replace(/(<div class="[^"]*\b(?:feedVinylWrap|followActMediaWrap)\b[^"]*"[^>]*>)/, `$1${togetherBtnHtml}`)
-    : mediaBlockHtml;
+  const mediaBlockWithProgressHtml = mediaBlockHtml;
   const topMenuHtml = songMenuBtn ? `<div class="followActTopMenu">${songMenuBtn}</div>` : "";
   if (xstyle) {
     const badgeHtml = orig || mashupBlockHtml ? "" : (followingActivityBadgeHtml("music", type) || "");
@@ -20776,6 +20678,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             targetUserId: t.userId,
             plays,
             playsPending,
+            togetherId,
           })}
         </div>
       </article>`;
@@ -21955,7 +21858,7 @@ let _friendsFeedSnapshot = null;
 const FOLLOWING_LIST_CACHE_MS = 45000;
 const FRIENDS_FEED_SNAPSHOT_MS = 90000;
 const FRIENDS_MIN_FETCH_GAP_MS = 30000;
-const FRIENDS_FEED_SNAPSHOT_KEY = "nabad_friends_feed_snap_v4";
+const FRIENDS_FEED_SNAPSHOT_KEY = "nabad_friends_feed_snap_v5";
 const FOLLOWING_LIST_STORAGE_KEY = "nabad_following_list_v1";
 
 let _profileActSnapshot = null;
@@ -22140,6 +22043,7 @@ const FRIENDS_FEED_LIBRARY_SONG_LIMIT = 24;
 function hydrateFriendsFeedSnapshotFromStorage() {
   if (_friendsFeedSnapshot) return;
   try {
+    sessionStorage.removeItem("nabad_friends_feed_snap_v4");
     sessionStorage.removeItem("nabad_friends_feed_snap_v3");
     sessionStorage.removeItem("nabad_friends_feed_snap_v2");
     sessionStorage.removeItem("nabad_friends_feed_snap_v1");
@@ -25927,7 +25831,7 @@ function remixPillHtml(label = "Remix") {
 }
 
 function repostIconSvgHtml(klass = "followActActIco") {
-  return `<svg class="${escapeHtml(klass)}" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1ZM7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/></svg>`;
+  return `<svg class="${escapeHtml(klass)}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m17 2.5 3.5 3.5L17 9.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 11V10a4 4 0 0 1 4-4h13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 21.5 3.5 18 7 14.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.5 13v1a4 4 0 0 1-4 4h-13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
 function remixAttributionText(remixOf) {
@@ -26108,11 +26012,8 @@ function defaultPostMediaLayoutForTrack(track) {
   return publishTrackEligibleForVinylChoice(track) ? POST_MEDIA_LAYOUT_VINYL : POST_MEDIA_LAYOUT_COVER;
 }
 
-function publishReleaseDesignWaveBarsHtml() {
-  const peaks = friendsFeedWaveformFallbackPeaks().slice(0, 18);
-  return peaks
-    .map((h) => `<span class="publishReleaseDesignWaveBar" style="--bar-h:${Number(h).toFixed(3)}"></span>`)
-    .join("");
+function publishReleaseDesignBarHtml() {
+  return `<span class="publishReleaseDesignBar"><i></i></span>`;
 }
 
 function publishReleaseDesignPreviewInnerHtml(layout, artSafe) {
@@ -26129,7 +26030,7 @@ function publishReleaseDesignPreviewInnerHtml(layout, artSafe) {
   return `<div class="publishReleaseDesignPreview publishReleaseDesignPreview--cover" aria-hidden="true">
     <img class="publishReleaseDesignCoverArt" src="${artSafe}" alt="" decoding="async" />
     <div class="publishReleaseDesignCoverDock">
-      <span class="publishReleaseDesignCoverWave" aria-hidden="true">${publishReleaseDesignWaveBarsHtml()}</span>
+      <span class="publishReleaseDesignCoverWave" aria-hidden="true">${publishReleaseDesignBarHtml()}</span>
     </div>
   </div>`;
 }
@@ -26158,7 +26059,7 @@ function renderPublishReleasePostDesign(sheet, track, artUrl) {
         ${publishReleaseDesignPreviewInnerHtml(POST_MEDIA_LAYOUT_COVER, artSafe)}
         <span class="publishReleaseDesignCopy">
           <span class="publishReleaseDesignName">Cover</span>
-          <span class="publishReleaseDesignSub">Edge-to-edge art + waveform</span>
+          <span class="publishReleaseDesignSub">Edge-to-edge art</span>
         </span>
       </div>`;
     return;
@@ -26167,7 +26068,7 @@ function renderPublishReleasePostDesign(sheet, track, artUrl) {
     .map((layout) => {
       const on = layout === selected;
       const label = layout === POST_MEDIA_LAYOUT_VINYL ? "Vinyl" : "Cover";
-      const sub = layout === POST_MEDIA_LAYOUT_VINYL ? "Classic spinning disc" : "Edge-to-edge art + waveform";
+      const sub = layout === POST_MEDIA_LAYOUT_VINYL ? "Classic spinning disc" : "Edge-to-edge art";
       return `<button type="button" class="publishReleaseDesignPick${on ? " is-selected" : ""}" data-post-design="${layout}" aria-pressed="${on ? "true" : "false"}">
         ${publishReleaseDesignPreviewInnerHtml(layout, artSafe)}
         <span class="publishReleaseDesignCopy">
@@ -37336,6 +37237,8 @@ let _messagesInboxRefreshing = false;
 let _messagesInboxHasLoadedOnce = false;
 let _messagesInboxFetchInFlight = null;
 let _messagesInboxScrollY = 0;
+/** Connect keeps one scroll position per section (Friends feed / Chats list) so one never yanks the other. */
+const _connectScrollY = { friends: 0, chats: 0 };
 let _messagesInboxPollTimer = 0;
 let _messagesInboxPaintSig = "";
 let _dmReceiptHeartbeatTimer = 0;
@@ -38193,10 +38096,11 @@ function captureMessagesInboxScroll() {
     0,
     Number(window.scrollY || document.documentElement.scrollTop || 0),
   );
+  _connectScrollY[_connectSeg === "chats" ? "chats" : "friends"] = _messagesInboxScrollY;
 }
 
 function restoreMessagesInboxScroll() {
-  const y = Math.max(0, Number(_messagesInboxScrollY) || 0);
+  const y = Math.max(0, Number(_connectScrollY[_connectSeg === "chats" ? "chats" : "friends"]) || 0);
   if (y <= 0) return;
   requestAnimationFrame(() => {
     try { window.scrollTo(0, y); } catch {}
@@ -40530,9 +40434,22 @@ function messagesInboxAvatarPaintKey() {
   return `letter:${(handle.slice(0, 1) || "?").toUpperCase()}`;
 }
 
+/** "Your presence" card — sits under "Connect" and is shared by Friends and Chats. */
+function paintConnectMeCard() {
+  const host = document.getElementById("connectMe");
+  if (!host) return;
+  if (!authSession?.user?.id) {
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+  host.hidden = false;
+  if (!host.querySelector(".messagesInboxPresence")) host.innerHTML = messagesInboxMeHeaderHtml();
+}
+
 function syncMessagesInboxPresenceCard() {
-  const mount = document.getElementById("messagesInboxMount");
-  const existing = mount?.querySelector?.(".messagesInboxPresence");
+  paintConnectMeCard();
+  const existing = document.getElementById("connectMe")?.querySelector?.(".messagesInboxPresence");
   if (!existing) return;
   const view = messagesInboxPresenceView();
   const sig = messagesInboxPresencePaintSig(view);
@@ -41572,15 +41489,14 @@ function renderMessagesInbox() {
   const listHtml = requestsHtml + sentHtml + threadsHtml;
   if (
     listHtml === _messagesInboxPaintSig
-    && mount.querySelector(".messagesInboxPresence, .messagesInboxList, .messagesEmpty")
+    && mount.querySelector(".messagesInboxList, .messagesEmpty")
   ) {
     syncMessagesInboxPresenceCard();
     if (statusEl) statusEl.hidden = true;
     return;
   }
   _messagesInboxPaintSig = listHtml;
-  const meHtml = messagesInboxMeHeaderHtml();
-  mount.innerHTML = meHtml + listHtml;
+  mount.innerHTML = listHtml;
   if (statusEl) statusEl.hidden = true;
 }
 
@@ -45436,8 +45352,16 @@ async function loadMessagesInbox({ silent = false } = {}) {
     } finally {
       _messagesInboxLoading = false;
       _messagesInboxRefreshing = false;
+      // A background refresh repaints the chat list only. It must never scroll the page: on Connect the
+      // Friends feed shares this window, and restoring a saved chat-list position there made the feed jump.
+      const scrollBefore = Math.max(0, Number(window.scrollY || document.documentElement.scrollTop || 0));
       renderMessagesInbox();
-      if (silent && hasCache) restoreMessagesInboxScroll();
+      if (silent && hasCache && _connectSeg === "chats" && String(document.body.getAttribute("data-route") || "") === "messages") {
+        const cur = Math.max(0, Number(window.scrollY || document.documentElement.scrollTop || 0));
+        if (Math.abs(cur - scrollBefore) > 2) {
+          requestAnimationFrame(() => { try { window.scrollTo(0, scrollBefore); } catch {} });
+        }
+      }
       void refreshMessagesUnreadBadge({ force: true });
     }
   })();
@@ -45485,14 +45409,7 @@ function syncConnectSegUi() {
   });
   const search = document.getElementById("messagesInboxSearchBtn");
   if (search) search.hidden = friends;
-  const sub = document.getElementById("connectSub");
-  if (sub) {
-    const n = _discoverLiveFriends.list.length;
-    sub.innerHTML = friends && n
-      ? `<span class="discoverGreetingLive connectSubLive"><i aria-hidden="true"></i>${n} ${n === 1 ? "friend" : "friends"} listening now</span>`
-      : "";
-    sub.hidden = !(friends && n);
-  }
+  try { syncMessagesInboxPresenceCard(); } catch {}
 }
 
 function activateConnectFriends() {
@@ -45503,12 +45420,12 @@ function activateConnectFriends() {
   try { paintFriendsFeedTabsActive(); } catch {}
   try { paintFriendsFeedSnapshotIfFresh(); } catch {}
   void enterFriendsRoute();
-  void refreshDiscoverLiveFriends();
 }
 
 function setConnectSeg(seg) {
   const next = seg === "chats" ? "chats" : "friends";
   if (next === _connectSeg) return;
+  try { captureMessagesInboxScroll(); } catch {}
   _connectSeg = next;
   try { sessionStorage.setItem(CONNECT_SEG_KEY, next); } catch {}
   syncConnectSegUi();
@@ -45519,7 +45436,8 @@ function setConnectSeg(seg) {
     _friendsRouteEnterToken += 1;
     try { enterMessagesRoute({}); } catch {}
   }
-  try { window.scrollTo(0, 0); } catch {}
+  const y = Math.max(0, Number(_connectScrollY[next]) || 0);
+  try { window.scrollTo(0, y); } catch {}
 }
 
 let _connectSegBound = false;
@@ -45538,6 +45456,8 @@ function bindConnectSegOnce() {
 function enterMessagesRoute({ fromThread = false } = {}) {
   bindConnectSegOnce();
   syncConnectSegUi();
+  startConnectPresencePoll();
+  void refreshDiscoverLiveFriends();
   if (_connectSeg === "friends" && !fromThread) activateConnectFriends();
   syncFriendsMessagesBtn();
   startMessagesInboxPoll();
@@ -52631,6 +52551,16 @@ function syncFriendsFeedProgressBars() {
       input.style.setProperty("--feedSeekPct", pct);
       wrap.style.setProperty("--feedSeekPct", pct);
       wrap.style.setProperty("--feedWavePct", pct);
+      const seekRow = wrap.closest(".feedSeekRow");
+      if (seekRow) {
+        const curEl = seekRow.querySelector("[data-feed-seek-cur]");
+        const totalEl = seekRow.querySelector("[data-feed-seek-total]");
+        if (curEl) curEl.textContent = formatTime(active ? cur : 0);
+        if (totalEl) {
+          const known = Number(wrap.getAttribute("data-feed-seek-dur") || 0);
+          totalEl.textContent = formatTime(active && dur > 0 ? dur : known);
+        }
+      }
       const followAct = wrap.closest(".followAct");
       if (followAct) {
         const heroFill = followAct.querySelector(".feedHeroPlayerProgFill");
@@ -52654,7 +52584,6 @@ function syncFriendsFeedProgressBars() {
     });
     syncFriendsFeedDockDurations(root, { curRef, cur, dur, audible });
   }
-  syncFriendsFeedWaveVisualizer(curRef, audible);
   try {
     syncFeedVinylPlayers({
       curRef,
@@ -68462,12 +68391,17 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
   } catch (e) {
     setStatus(`In-app playback failed (${e?.name || "error"}). Tap Open Direct.`);
     try {
-      showToast("Playback failed — link may be expired. Try Open Direct.", {
-        icon: "♪",
-        durationMs: 4200,
-      });
+      showToast(audioLoadFailureMessage(a), { icon: "♪", durationMs: 4200 });
     } catch {}
   }
+}
+
+/** Honest failure copy: only a real media error says the song can't be loaded; a stall says it's slow. */
+function audioLoadFailureMessage(a) {
+  const code = Number(a?.error?.code || 0);
+  if (code === 2) return "Connection problem — tap ▶ to try again.";
+  if (code === 3 || code === 4) return "This song couldn't be loaded. Tap ▶ to try again.";
+  return "Still loading — your connection looks slow. Tap ▶ to try again.";
 }
 
 async function playInline(url, label, source, opts = {}) {
@@ -68477,7 +68411,8 @@ async function playInline(url, label, source, opts = {}) {
     queueArchiveForPlaybackSource(source);
   }
   const throwOnError = opts?.throwOnError === true;
-  const canPlayMs = Number(opts?.canPlayTimeoutMs) > 0 ? Number(opts.canPlayTimeoutMs) : 8000;
+  // Songs are 1–7 MB mp3s; on a phone connection 8s is often too short even though the link is fine.
+  const canPlayMs = Number(opts?.canPlayTimeoutMs) > 0 ? Number(opts.canPlayTimeoutMs) : 20000;
   if (String(source?.type || "") !== "studio_vocal") {
     try { stopVocalsPlayback(); } catch {}
   }
@@ -68529,12 +68464,9 @@ async function playInline(url, label, source, opts = {}) {
     clearPlaybackPending();
     if (throwOnError) throw e;
     setStatus(`In-app playback failed (${e?.name || "error"}). Tap Open Direct.`);
-    // Don't fail silently on inline taps — the usual cause is an expired link.
+    // Say what actually happened: a hard load error vs. just a slow connection.
     try {
-      showToast("Playback failed — link may be expired. Try Open Direct.", {
-        icon: "♪",
-        durationMs: 4200,
-      });
+      showToast(audioLoadFailureMessage(a), { icon: "♪", durationMs: 4200 });
     } catch {}
     try {
       syncAllPlaybackRowHighlights();

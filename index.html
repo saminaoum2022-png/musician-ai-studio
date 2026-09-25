@@ -1958,7 +1958,6 @@
             </button>
             <div class="discoveryStudioTitles">
               <h2 class="discoveryStudioH2 appScreenTitle">Connect</h2>
-              <p id="connectSub" class="discoverGreeting connectSub" hidden></p>
             </div>
             <div class="messagesConnectSearchField" hidden>
               <input id="messagesInboxSearch" class="messagesConnectSearchInput" type="search" enterkeyhint="search" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Search" aria-label="Search chats" />
@@ -1977,13 +1976,14 @@
               </button>
             </div>
           </header>
+          <div id="connectMe" class="connectMe" hidden></div>
+          <section id="connectPresence" class="connectPresence" aria-label="Listening now" hidden></section>
           <div id="connectSeg" class="connectSeg" role="tablist" aria-label="Connect sections">
             <button type="button" role="tab" class="connectSegBtn is-active" data-connect-seg="friends" aria-selected="true">Friends</button>
             <button type="button" role="tab" class="connectSegBtn" data-connect-seg="chats" aria-selected="false">Chats<span id="connectChatsBadge" class="connectSegBadge" hidden></span></button>
           </div>
           <div id="messagesStatus" class="messagesStatus" role="status" aria-live="polite" hidden></div>
           <div id="connectFriendsPane" class="connectFriendsPane" hidden>
-            <section id="friendsLiveNow" class="discoverFeedSection discoverLiveNow" aria-label="Live now" hidden></section>
             <div id="discoverFriendsPanel" class="discoverFriendsPanel" aria-hidden="true">
               <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
               <div id="discoveryFollowingList" class="followActStack" hidden></div>

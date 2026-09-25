@@ -66654,3 +66654,320 @@ body #discoveryFollowingList .followAct--xstyle.followAct--skel .followActSkelMe
   transform: none;
   will-change: auto;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Friends — quiet v2 (fewer containers) + presence under "Connect"
+ * Posts sit on the page, separated by a hairline. Only the artwork has a shape.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed{
+  margin: 0 !important;
+  padding: 22px 16px 8px !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07) !important;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed:last-child{ border-bottom: 0 !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAvatar{ width: 40px; height: 40px; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAvatar.isLive{ width: 44px; height: 44px; padding: 2.5px; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMetaPrimary,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMetaPrimary .followActUserLink{ font-size: 15px; }
+
+/* Style tags: a quiet line of text, not a row of chips */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActStylePills{ gap: 0 !important; margin: 0 0 12px !important; padding: 0 2px !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActStylePill{
+  height: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActStylePill + .followActStylePill::before{
+  content: "·";
+  margin: 0 8px;
+  opacity: 0.7;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActStylePill--more{ color: #23d5ab !important; }
+
+/* Cover: one soft image, the title and player sit on a gentle bottom shade (no hard edge, no half-dark image) */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActRemixFlow .followActMediaWrap--friendsDock,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMashup .followActMediaWrap--friendsDock{
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  border-radius: 24px !important;
+  border: 0 !important;
+  box-shadow: 0 18px 36px -12px rgba(0, 0, 0, 0.55) !important;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock .followActMedia{ aspect-ratio: 1 / 1 !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock .followActMediaImg{
+  object-fit: cover !important;
+  object-position: 50% 50% !important;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock .followActMediaScrim{
+  position: absolute !important;
+  top: auto !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  inset-block-start: auto !important;
+  height: 56% !important;
+  background: linear-gradient(180deg, rgba(6, 8, 14, 0) 0%, rgba(6, 8, 14, 0.5) 55%, rgba(6, 8, 14, 0.78) 100%) !important;
+  pointer-events: none;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock .followActMediaCopy{
+  left: 18px !important;
+  right: 18px !important;
+  bottom: 78px !important;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock .followActMediaTitle{
+  font-size: 24px !important;
+  padding-right: 40px;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6) !important;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock .followActMediaDockPlay{ width: 46px !important; height: 46px !important; }
+
+/* Vinyl: the record sits on the page — no card around it */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .feedVinylWrap{
+  padding: 4px 0 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .feedVinylStage{ width: min(100%, 270px) !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .feedVinylTitle{ font-size: 21px !important; }
+
+/* Actions: plain icons, no circles or boxes */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActActionsBar{ margin: 8px 0 0 !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActActions{ gap: 0 !important; margin-left: -8px; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct{
+  height: 42px !important;
+  min-width: 42px !important;
+  padding: 0 9px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.66) !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct svg{ width: 22px; height: 22px; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct:active{ background: rgba(255, 255, 255, 0.07) !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct[data-friends-act="like"]{ order: 1; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct[data-friends-act="reply"]{ order: 2; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct--repost{ order: 3; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct--together{ order: 4; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct--gift{ order: 5; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct--analytics{ order: 6; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct--stat{
+  order: 9;
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.42) !important;
+  pointer-events: none;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct--stat svg{ width: 18px; height: 18px; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct[aria-pressed="true"]{ color: #ff5d7d !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct[aria-pressed="true"] svg{ fill: currentColor; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct--gift,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct--gift svg{ color: rgba(255, 255, 255, 0.66) !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct--together{ color: rgba(255, 255, 255, 0.66) !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct--together svg{ width: 22px; height: 22px; }
+
+/* Reposts: one line of text */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActRepostBanner{
+  height: auto !important;
+  margin: 0 0 12px !important;
+  padding: 0 2px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  font-size: 13px !important;
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
+/* ── Presence under "Connect" (Friends and Chats) ─────────────────────────── */
+.connectPresence{ margin: 4px 0 2px; }
+.connectPresence[hidden]{ display: none !important; }
+.connectPresence .discoverLiveStrip{ padding: 2px 16px 8px 0; }
+.connectPresence .discoverLiveTag{ max-width: 68px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connectTogetherRow{
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.connectTogetherIco{ display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: #23d5ab; background: rgba(35, 213, 171, 0.12); }
+.connectTogetherText{ flex: 1; min-width: 0; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+.connectTogetherText em{ font-style: normal; font-weight: 600; color: rgba(255, 255, 255, 0.5); }
+.connectTogetherChev{ color: rgba(255, 255, 255, 0.4); }
+.connectTogetherRow:active{ opacity: 0.7; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActActions{ justify-content: flex-start !important; gap: 2px !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct[data-friends-act="like"].isLiked{ color: #ff5d7d !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct[data-friends-act="like"].isLiked svg{ fill: #ff5d7d; stroke: #ff5d7d; }
+.connectPresence .discoverLiveRing{ width: 58px; height: 58px; }
+.connectPresence .discoverLiveItem{ flex-basis: 64px; width: 64px; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActStylePills + .feedVinylWrap{ margin-top: 18px !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActActions > .followActAct:not(.followActAct--stat){ margin-left: 0 !important; margin-right: 0 !important; flex: 0 0 auto !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .feedVinylStage{ width: min(100%, 236px) !important; }
+/* "Your presence" card under Connect (shared by Friends and Chats) */
+.connectMe{ margin: 4px 0 12px; }
+.connectMe[hidden]{ display: none !important; }
+.connectMe .messagesInboxPresence{ padding: 0; }
+.connectMe .messagesInboxPresenceCard{ min-height: 72px; padding: 10px 18px 10px 10px; gap: 12px; }
+.connectMe .messagesInboxPresenceAvatarWrap{ flex-basis: 52px; width: 52px; height: 52px; }
+.connectMe .messagesInboxPresenceAvatar, .connectMe .messagesInboxPresenceAvatar.messagesAvatarFallback{ width: 52px; height: 52px; }
+.connectPresence{ margin: -2px 0 8px; }
+
+/* Friends actions — one weight, one size, one active language (tint the stroke, never fill it) */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct svg,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct .followActActIco{
+  width: 22px !important;
+  height: 22px !important;
+  flex: none;
+  stroke-width: 1.9;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct svg :is(path, circle, rect, line){ stroke-width: 1.9px; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct--stat svg{ width: 20px !important; height: 20px !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct:not([data-friends-act="like"]) svg{ fill: none !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct[data-friends-act="like"]:not(.isLiked):not([aria-pressed="true"]) svg{ fill: none; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct:is(.isReposted, .isGifted, [aria-pressed="true"]):not([data-friends-act="like"]){ color: #23d5ab !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct:is(.isReposted, .isGifted):not([data-friends-act="like"]) svg{ fill: none !important; stroke: currentColor; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct .followActActCount{ font-size: 13.5px; font-weight: 700; line-height: 1; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct{ box-sizing: border-box; align-items: center; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct:is(.isReposted, .isGifted, [aria-pressed="true"]):not([data-friends-act="like"]) svg{ color: inherit !important; }
+
+
+/* Cover posts: no second play button. The whole artwork is the control; a small glass mark shows when it is idle. */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaCenterPlay{
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  z-index: 3;
+  width: 60px;
+  height: 60px;
+  margin: -30px 0 0 -30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(14, 16, 24, 0.34);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+          backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 8px 24px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.followActMediaCenterPlay .coverArtPlayIco--pause,
+.followActMediaCenterPlay .coverArtPlayIco--loading{ display: none; }
+.followActMediaCenterPlay .coverArtPlayIco--play{ margin-left: 3px; }
+.followActMediaCenterPlay .coverArtPlayIco--play{ display: flex; align-items: center; justify-content: center; }
+.followAct--friendsFeed.discoveryRowLoading .followActMediaCenterPlay .coverArtPlayIco--loading{ align-items: center; justify-content: center; }
+.followActMediaCenterPlay .coverArtPlayIco svg{ width: 22px; height: 22px; }
+/* Playing: the mark gets out of the way (tap the artwork to pause) */
+.followAct--friendsFeed.discoveryRowPlaying .followActMediaCenterPlay{ opacity: 0; transform: scale(0.86); }
+.followAct--friendsFeed.discoveryRowLoading .followActMediaCenterPlay{ opacity: 1; transform: none; }
+.followAct--friendsFeed.discoveryRowLoading .followActMediaCenterPlay .coverArtPlayIco--play{ display: none !important; }
+.followAct--friendsFeed.discoveryRowLoading .followActMediaCenterPlay .coverArtPlayIco--loading{ display: flex !important; }
+/* The dock is just the sliding bar, low on the artwork */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaDock{ left: 18px !important; right: 18px !important; bottom: 14px !important; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock .followActMediaCopy{ bottom: 50px !important; }
+
+/* ── One sliding bar for feed posts (vinyl and cover): 0:00 ───●─── 3:12 ─────────────────────────── */
+.feedSeekRow{ display: flex; align-items: center; gap: 12px; width: 100%; }
+.feedVinylWrap > .feedSeekRow{ margin-top: 14px; padding: 0 2px; }
+.feedSeekTime{
+  flex: none;
+  min-width: 32px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.68);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+}
+.feedSeekTime:last-child{ text-align: right; }
+body #discoveryFollowingList .feedSeek.followActRealtimeProgress{
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  flex: 1 1 auto;
+  width: auto !important;
+  min-width: 0;
+  height: 28px;
+  margin: 0 !important;
+  padding: 0 !important;
+  --feedSeekPct: 0%;
+}
+.feedSeekTrack{
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.22);
+  transition: height 0.2s ease, margin-top 0.2s ease;
+}
+.feedSeekFill{
+  display: block;
+  width: var(--feedSeekPct, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: #fff;
+}
+.feedSeekThumb{
+  position: absolute;
+  left: var(--feedSeekPct, 0%);
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  transform: scale(0);
+  transition: transform 0.2s ease;
+  pointer-events: none;
+}
+.feedSeek.isActive .feedSeekThumb{ transform: scale(1); }
+.feedSeek.isActive .feedSeekTrack{ height: 5px; margin-top: -2.5px; }
+.feedSeek .followActRealtimeSeek--ghost{
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.feedSeek .followActRealtimeSeek--ghost:disabled{ cursor: default; }
+body #discoveryFollowingList .feedSeek.hasFeedHook .feedHookMarker{ top: auto; bottom: calc(50% + 5px); width: 8px; height: 6px; }
+body #discoveryFollowingList .feedSeek.hasFeedHook .feedHookMarker::before{ width: 8px; height: 6px; }
+
+/* publish sheet preview: a mini bar instead of waveform bars */
+.publishReleaseDesignBar{ display: block; width: 100%; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.24); overflow: hidden; }
+.publishReleaseDesignBar i{ display: block; width: 38%; height: 100%; border-radius: inherit; background: #fff; }

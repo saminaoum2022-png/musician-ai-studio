@@ -77,6 +77,7 @@ export function feedVinylPlayerBlockHtml(opts) {
     centerPlayIconsHtml,
     durLabel = "0:00",
     durSec = 0,
+    seekHtml = "",
   } = opts;
   const playLabel = `Play ${safeTitle}`;
   return `
@@ -136,11 +137,11 @@ export function feedVinylPlayerBlockHtml(opts) {
             <div class="feedVinylMeta">
               <h3 class="feedVinylTitle" dir="auto">${safeTitle}</h3>
             </div>
-            <div class="followActRealtimeProgress feedVinylTimeline" data-user-lib-url="${encUrl}">
+            ${seekHtml || `<div class="followActRealtimeProgress feedVinylTimeline" data-user-lib-url="${encUrl}">
               <span class="feedVinylTimeCur" aria-hidden="true">0:00</span>
               <input class="followActRealtimeSeek feedVinylSeek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek ${safeTitle}" />
               <span class="feedVinylTimeDur" aria-hidden="true" data-fallback-dur="${Math.max(0, Number(durSec) || 0)}">${durLabel}</span>
-            </div>
+            </div>`}
           </div>`;
 }
 

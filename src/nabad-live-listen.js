@@ -1890,6 +1890,28 @@ export async function openLiveListenInviteFromPlayer() {
   renderInviteList(friends, track);
 }
 
+/** Start a listen with one specific friend (e.g. from Discover's "Live now"): they are invited to this song. */
+export async function openLiveListenInviteWithFriend(friend, track) {
+  if (!nabadLiveListenEnabled()) return;
+  if (!friend?.userId) return;
+  if (isLiveListenActive()) {
+    toast("Leave the current listen first.");
+    return;
+  }
+  if (!String(track?.url || "").trim()) {
+    toast("This song has no audio yet.");
+    return;
+  }
+  try { bridge.primePlayerInGesture?.(); } catch {}
+  await createSessionForGuest({
+    userId: friend.userId,
+    username: friend.username || friend.displayName,
+    displayName: friend.displayName || friend.username,
+    avatar: friend.avatar || friend.avatarUrl,
+    threadId: friend.threadId || "",
+  }, track);
+}
+
 export async function openLiveListenInviteForTrack(track) {
   if (!nabadLiveListenEnabled()) return;
   if (!String(bridge.getUserId?.() || "").trim()) {

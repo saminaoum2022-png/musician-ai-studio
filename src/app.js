@@ -46,7 +46,9 @@ import {
   openLiveListenInviteFromChat,
   openLiveListenInviteFromPlayer,
   openLiveListenInviteForTrack,
+  openLiveListenInviteWithFriend,
   nabadLiveListenEnabled,
+  nabadLiveListenGuestEnabled,
   handleLiveListenDeepLink,
   openLiveListenFromNotification,
   decorateNowPlayingPresenceActions,
@@ -3724,6 +3726,7 @@ const TAB_REFRESH_ACTIONS = {
     try {
       syncFollowingComposeUi();
       void refreshDiscoveryFollowingFeed();
+      void refreshDiscoverLiveFriends();
     } catch (e) { console.warn("[tabRefresh/friends]", e); }
   },
   messages(opts = {}) {
@@ -3796,8 +3799,9 @@ function isRouteRefreshInFlight(route) {
 
 function isPullToRefreshRouteEnabled() {
   const rawRoute = String(document.body.getAttribute("data-route") || "").trim();
-  if (rawRoute === "messages" || rawRoute === "messages-thread") return false;
-  const route = tabBarRouteKey(rawRoute);
+  if (rawRoute === "messages-thread") return false;
+  if (rawRoute === "messages" && _connectSeg !== "friends") return false;
+  const route = rawRoute === "messages" ? "friends" : tabBarRouteKey(rawRoute);
   if (!PTR_REFRESH_ROUTES.has(route)) return false;
   if (document.body.classList.contains("echoComposeOpen")) return false;
   if (route === "profile") {
@@ -4150,6 +4154,10 @@ function finishTabRouteEnter(route, prevRoute) {
     kickDiscoverFeedRoute({ deferFetch: true });
   } else if (wanted === "messages") {
     bindMessagesPageOnce();
+    // Connect = Friends | Chats: set the section (and start Friends) before the cached chat list paints.
+    bindConnectSegOnce();
+    syncConnectSegUi();
+    if (_connectSeg === "friends") activateConnectFriends();
     loadMessagesInboxFromStorage();
     const hasCache = messagesInboxHasCachedData();
     if (hasCache) {
@@ -5464,6 +5472,10 @@ function invalidateInFlightRouteFeedWork(leavingRoute) {
     _discoveryFeedGen += 1;
   }
   if (left === "friends") _friendsRouteEnterToken += 1;
+  if (left === "messages" && _connectSeg === "friends") {
+    _discoveryFollowingGen += 1;
+    _friendsRouteEnterToken += 1;
+  }
 }
 
 function tabBarRouteKey(route = "") {
@@ -5776,9 +5788,16 @@ function applyRoute({ passGen } = {}) {
   } else if (normalized === "discover") {
     try {
       if (sessionStorage.getItem(DISCOVERY_SEGMENT_KEY) === "following") {
-        _discoverFeedTab = "friends";
-        sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, "friends");
         sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, "for-you");
+        if (MESSAGES_FEATURE_ENABLED) {
+          _connectSeg = "friends";
+          sessionStorage.setItem(CONNECT_SEG_KEY, "friends");
+          normalized = "messages";
+          try { history.replaceState(null, "", "#/messages"); } catch {}
+        } else {
+          _discoverFeedTab = "friends";
+          sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, "friends");
+        }
       }
     } catch {}
   }
@@ -5789,10 +5808,18 @@ function applyRoute({ passGen } = {}) {
     _profileSongsSegment = "all";
   }
   if (normalized === "moment" || normalized === "friends") {
-    try { sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, "friends"); } catch {}
-    _discoverFeedTab = "friends";
-    try { history.replaceState(null, "", "#/discover"); } catch {}
-    normalized = "discover";
+    if (MESSAGES_FEATURE_ENABLED) {
+      // Friends now lives in Connect (Friends | Chats).
+      _connectSeg = "friends";
+      try { sessionStorage.setItem(CONNECT_SEG_KEY, "friends"); } catch {}
+      try { history.replaceState(null, "", "#/messages"); } catch {}
+      normalized = "messages";
+    } else {
+      try { sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, "friends"); } catch {}
+      _discoverFeedTab = "friends";
+      try { history.replaceState(null, "", "#/discover"); } catch {}
+      normalized = "discover";
+    }
   }
   if (normalized === "sparks") {
     try { sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, "challenges"); } catch {}
@@ -11316,6 +11343,7 @@ function chartWeekWinnerHtml(hero) {
   const menu = discoverSheetMenuBtnHtml(hero, null, { className: "discoverCardMenuBtn chartWeekMenuBtn" });
   return `
     <div class="chartWeekWinner">
+      <span class="chartWeekWinnerNum" aria-hidden="true">01</span>
       <button type="button" class="chartWeekWinnerTap" ${chartEntryPlayAttrs(hero, { display: true })} aria-label="Play ${escapeHtml(title)}, number 1 this week">
         <span class="chartWeekWinnerArt">
           <img src="${escapeHtml(heroArt)}" alt="" loading="lazy" decoding="async" />
@@ -12707,7 +12735,6 @@ function discoverCommunityPicksTracks(tracks) {
 const DISCOVER_FEED_TABS = [
   { id: "for-you", label: "For You" },
   { id: "occasions", label: "Occasions" },
-  { id: "friends", label: "Friends" },
   { id: "challenges", label: "Challenges" },
 ];
 const DISCOVER_FEED_TAB_KEY = "nabad_discover_feed_tab";
@@ -13284,9 +13311,11 @@ function discoverFeedSongRowHtml(t, profMap, opts = {}) {
         <span class="discoverFeedSongBody">
           ${titleHtml}
           ${secondaryHtml}
+          ${opts.remixChipHtml || ""}
         </span>
         <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
       </button>
+      ${opts.remixBtnHtml || ""}
       ${menu}
     </div>`;
 }
@@ -13418,8 +13447,9 @@ function bindDiscoverFeaturedHeroCarousel(root) {
     writeDiscoverHeroSlideIndex(idx);
   };
   const visitKey = `${document.body.getAttribute("data-route") || ""}|${_discoverFeedTab}`;
+  const openOnPick = cards[0]?.classList?.contains("discoverTonightHero");
   const start = visitKey !== _discoverHeroVisitKey
-    ? nextDiscoverHeroStartIndex(cards.length)
+    ? (openOnPick ? 0 : nextDiscoverHeroStartIndex(cards.length))
     : Math.max(0, readDiscoverHeroSlideIndex() % cards.length);
   _discoverHeroVisitKey = visitKey;
   goTo(start, false);
@@ -13437,7 +13467,7 @@ function bindDiscoverFeaturedHeroCarousel(root) {
     if (String(document.body.getAttribute("data-route") || "") !== "discover") return;
     if (_discoverFeedTab !== "for-you") return;
     goTo(indexFromScroll() + 1, true);
-  }, 6000);
+  }, 8000);
 }
 
 function discoverFeedChallengeCreationsRailHtml(entries, profMap) {
@@ -13478,13 +13508,61 @@ function discoverFeaturedChallengeHeroButtonHtml(c, top, tracks) {
     </button>`;
 }
 
-function discoverFeedFeaturedHeroCarouselHtml(packs, tracks) {
+/** Time-aware label for the song hero. */
+function discoverPickLabel() {
+  const h = new Date().getHours();
+  if (h < 5 || h >= 22) return "Late night pick";
+  if (h < 12) return "Morning pick";
+  if (h < 17) return "Afternoon pick";
+  return "Tonight’s pick";
+}
+
+/** "Tonight's pick": the best-matching track that has real cover art and audio. */
+function discoverTonightPickTrack(tracks, prefs) {
+  const pool = (tracks || []).filter((t) => t && t.id && String(t.url || "").trim());
+  const withArt = pool.filter((t) => {
+    const art = trackCoverArtForFeed(t);
+    return art && art !== DEFAULT_SONG_COVER_URL && !isDefaultSongCoverUrl(art) && !isLogoCoverUrl(art);
+  });
+  return discoverTracksSortedByPreferences(withArt.length ? withArt : pool, prefs, 1)[0] || null;
+}
+
+function discoverTonightHeroHtml(t, profMap) {
+  if (!t) return "";
+  const prof = resolveProfileForFeedCreator(t.userId, profMap);
+  const handle = String(prof?.username || "").trim();
+  const title = String(t.title || "Untitled").trim();
+  const art = trackCoverArtForDisplay(t);
+  const plays = DISCOVER_SHOW_PLAY_COUNTS ? Math.max(0, Number(t.playCount) || 0) : 0;
+  const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
+  const menu = discoverSheetMenuBtnHtml(t, profMap, { className: "discoverCardMenuBtn discoverTonightMenuBtn" });
+  const together = nabadLiveListenEnabled()
+    ? `<button type="button" class="discoverTonightTogether" data-discover-listen-together="${escapeHtml(String(t.id))}"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5"/><circle cx="17" cy="10" r="2.6"/><path d="M14 20c.4-2.6 2-4 4.2-4 1.6 0 2.8.7 3.3 2"/></svg><span>Listen together</span></button>`
+    : "";
+  return `
+    <div class="discoverFeaturedChallengeHero discoverTonightHero" role="group" aria-label="${escapeHtml(discoverPickLabel())}: ${escapeHtml(title)}">
+      <span class="discoverTonightBg" aria-hidden="true"><img src="${escapeHtml(art)}" alt="" decoding="async" /></span>
+      <span class="discoverTonightScrim" aria-hidden="true"></span>
+      <span class="discoverTonightTag"><i aria-hidden="true"></i>${escapeHtml(discoverPickLabel())}</span>
+      ${menu ? `<span class="discoverTonightMenu">${menu}</span>` : ""}
+      <div class="discoverTonightBody">
+        <strong class="discoverTonightTitle" dir="auto">${escapeHtml(title)}</strong>
+        <span class="discoverTonightBy">${handle ? `<span class="discoverTonightAv">${discoverFeedCreatorAvatarHtml(prof, handle)}</span><span>@${escapeHtml(handle)}</span>` : "<span>Creator</span>"}${plays ? `<span class="discoverTonightDot" aria-hidden="true">·</span><span>${escapeHtml(discoverHubStatLabel(plays))} ${plays === 1 ? "play" : "plays"}</span>` : ""}</span>
+        <span class="discoverTonightActs">
+          <button type="button" class="discoverTonightPlay" ${playAttrs} aria-label="Play ${escapeHtml(title)}">${discoverPlayBtnSvg(24)}</button>
+          ${together}
+        </span>
+      </div>
+    </div>`;
+}
+
+function discoverFeedFeaturedHeroCarouselHtml(packs, tracks, tonightHtml = "") {
   const slides = (packs || []).filter((p) => p?.challenge);
-  if (!slides.length) return "";
-  const heroes = slides.map((pack) => (
+  if (!slides.length && !tonightHtml) return "";
+  const heroes = tonightHtml + slides.map((pack) => (
     discoverFeaturedChallengeHeroButtonHtml(pack.challenge, pack.entries?.[0] || null, tracks)
   )).join("");
-  const dots = slides.map((_, i) => (
+  const dots = Array.from({ length: slides.length + (tonightHtml ? 1 : 0) }, (_, i) => (
     `<span class="discoverFeaturedHeroDot${i === 0 ? " isActive" : ""}"></span>`
   )).join("");
   return `
@@ -13790,6 +13868,10 @@ function discoverOccasionStripHtml() {
   return `
     <section class="discoverFeedSection discoverMomentSection" aria-label="Gift a song">
       ${discoverFeedSectionHeadHtml("Gift a song", seeAll)}
+      <button type="button" class="discoverWhoFor" data-discover-who-for aria-label="Gift a song to someone">
+        <span class="discoverWhoForText">Who’s it for?</span>
+        <span class="discoverWhoForGo">Start</span>
+      </button>
       <div class="discoverMomentRail" role="list">
         ${cards}
       </div>
@@ -13809,10 +13891,13 @@ function discoverFeedVibeRailHtml() {
       <button type="button" class="discoverVibeCard" role="listitem" data-discover-playlist="${escapeHtml(pl.slug)}" aria-label="${escapeHtml(pl.title)} playlist${label ? `, ${label}` : ""}">
         <span class="discoverVibeCardArt">
           <img src="${escapeHtml(discoverVibeCoverUrl(pl))}" alt="" loading="lazy" decoding="async" />
+          <span class="discoverVibeCardShade" aria-hidden="true"></span>
           <span class="discoverVibeCardGo" aria-hidden="true">${go}</span>
+          <span class="discoverVibeCardText">
+            <span class="discoverVibeCardTitle">${escapeHtml(pl.title)}</span>
+            ${label ? `<span class="discoverVibeCardCount">${escapeHtml(label)}</span>` : ""}
+          </span>
         </span>
-        <span class="discoverVibeCardTitle">${escapeHtml(pl.title)}</span>
-        ${label ? `<span class="discoverVibeCardCount">${escapeHtml(label)}</span>` : ""}
       </button>`;
   }).join("");
   return `
@@ -13836,12 +13921,21 @@ function renderDiscoverFeedForYou(tracks, profMap) {
     12,
   );
   const featuredPacks = discoverFeaturedChallengePacksForForYou(tracks);
-  const challengeBlock = featuredPacks.length
-    ? discoverFeedFeaturedHeroCarouselHtml(featuredPacks, tracks)
+  const tonightHtml = discoverTonightHeroHtml(discoverTonightPickTrack(tracks, prefs), profMap);
+  const challengeBlock = (featuredPacks.length || tonightHtml)
+    ? discoverFeedFeaturedHeroCarouselHtml(featuredPacks, tracks, tonightHtml)
     : "";
-  const remixRowOpts = { rowClass: "discoverFeedSongRow--remix", compactMeta: true };
   const remixList = remixTracks.length
-    ? remixTracks.map((t) => discoverFeedSongRowHtml(t, profMap, remixRowOpts)).join("")
+    ? remixTracks.map((t) => {
+      const of = remixAttributionForTrack(t);
+      const chip = of ? `<span class="discoverRemixChip">Remix of ${escapeHtml(String(of.title || "the original").slice(0, 28))}</span>` : "";
+      return discoverFeedSongRowHtml(t, profMap, {
+        rowClass: "discoverFeedSongRow--remix",
+        compactMeta: true,
+        remixChipHtml: chip,
+        remixBtnHtml: `<button type="button" class="discoverRemixBtn" data-discover-remix="${escapeHtml(String(t.id || ""))}">Remix this</button>`,
+      });
+    }).join("")
     : `<p class="discoverHubQuietNote">Remixes and mashups will appear as creators publish.</p>`;
   const templateSeeAll = templateTracks.length
     ? `<button type="button" class="discoverFeedSectionLink" data-discover-feed-tab-jump="occasions">See all</button>`
@@ -13855,6 +13949,8 @@ function renderDiscoverFeedForYou(tracks, profMap) {
   const suggestedFollowBlock = discoverFeedSuggestedFollowBlockHtml(tracks, profMap);
   return `
     ${challengeBlock}
+    ${discoverLiveNowSectionHtml()}
+    ${discoverFriendsTeaserSectionHtml()}
     ${discoverFeedVibeRailHtml()}
     ${discoverOccasionStripHtml()}
     <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final isLoading" aria-busy="true" aria-label="Top songs this week">${discoverWeeklyChartSkeletonHtml()}</section>
@@ -13872,7 +13968,9 @@ function renderDiscoverFeedForYou(tracks, profMap) {
 
 function isFriendsFeedSurface() {
   const route = String(document.body.getAttribute("data-route") || "");
-  return route === "friends" || (route === "discover" && _discoverFeedTab === "friends");
+  return route === "friends"
+    || (route === "discover" && _discoverFeedTab === "friends")
+    || (route === "messages" && _connectSeg === "friends");
 }
 
 function syncDiscoverFriendsFeedChrome() {
@@ -13962,9 +14060,220 @@ function paintDiscoverFeedTabsActive(tab) {
   setNabadTabsActiveByAttr(root, tab, "data-discover-feed-tab");
 }
 
+function syncDiscoverGreeting() {
+  const el = document.getElementById("discoverGreeting");
+  if (!el) return;
+  const h = new Date().getHours();
+  const hi = h < 5 || h >= 22 ? "Late night" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  const first = String(activeProfile?.displayName || activeProfile?.username || "").replace(/^@/, "").trim().split(/\s+/)[0];
+  const n = _discoverLiveFriends.list.length;
+  const live = n
+    ? `<span class="discoverGreetingLive"><i aria-hidden="true"></i>${n} ${n === 1 ? "friend" : "friends"} listening</span>`
+    : "";
+  el.innerHTML = `<span>${escapeHtml(first ? `${hi}, ${first}` : hi)}</span>${live}`;
+  el.hidden = false;
+}
+
+/* ── Live now: friends who are listening right now ─────────────────────────── */
+const DISCOVER_LIVE_TTL_MS = 60_000;
+const DISCOVER_LIVE_MAX_FRIENDS = 12;
+let _discoverLiveFriends = { at: 0, busy: false, list: [], hasFriends: false };
+
+/* ── Home: "From your friends" ─────────────────────────────────────────────── */
+function discoverFriendsTeaserSectionHtml() {
+  return `<section id="discoverFriendsTeaser" class="discoverFeedSection discoverFriendsTeaser" aria-label="From your friends" hidden></section>`;
+}
+
+function discoverFriendCardHtml(item, profMap) {
+  const t = item?.track;
+  if (!t) return "";
+  const prof = resolveProfileForFeedCreator(t.userId, profMap);
+  const handle = String(prof?.username || "").trim();
+  const title = String(t.title || "Untitled").trim();
+  const art = trackCoverArtForFeed(t);
+  const when = relativeTime(libraryTrackPublicTs(t) || Number(t.ts || 0));
+  return `
+    <div class="discoverFriendCard">
+      <button type="button" class="discoverFriendCardPlay" ${discoverHubTrackPlayAttrs(t, profMap)} aria-label="Play ${escapeHtml(title)}">
+        <span class="discoverFriendCardArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
+        <span class="discoverFriendCardShade" aria-hidden="true"></span>
+        <span class="discoverFriendCardWho"><span class="discoverFriendCardAv">${discoverFeedCreatorAvatarHtml(prof, handle)}</span><span>${escapeHtml(handle || "friend")}</span></span>
+        <span class="discoverFriendCardPl" aria-hidden="true">${discoverPlayBtnSvg(16)}</span>
+        <span class="discoverFriendCardText"><strong dir="auto">${escapeHtml(title)}</strong><span>${escapeHtml(when)}</span></span>
+      </button>
+    </div>`;
+}
+
+function paintDiscoverFriendsTeaser() {
+  const sec = document.getElementById("discoverFriendsTeaser");
+  if (!sec) return;
+  const items = (_friendsFeedMergedItems || []).filter((i) => i && i.kind !== "status" && i.track && String(i.track.url || "").trim()).slice(0, 8);
+  if (!authSession?.user?.id || !items.length) {
+    sec.hidden = true;
+    sec.innerHTML = "";
+    return;
+  }
+  const me = String(activeProfile?.displayName || activeProfile?.username || "S").replace(/^@/, "").trim();
+  const myAv = String(activeProfile?.avatar || "").trim();
+  const meHtml = myAv && isRealUserAvatarUrl(myAv)
+    ? `<img class="discoverSayAvImg" src="${escapeHtml(normalizeProfileAvatarForImg(myAv))}" alt="" />`
+    : `<span class="discoverSayAvImg discoverSayAvFallback">${escapeHtml(me.slice(0, 1).toUpperCase())}</span>`;
+  sec.hidden = false;
+  sec.innerHTML = `
+    <header class="discoverFeedSectionHead">
+      <h3 class="discoverFeedSectionTitle">From your friends</h3>
+      <div class="discoverFeedSectionAction"><button type="button" class="discoverFeedSectionLink" data-discover-friends-all>See all</button></div>
+    </header>
+    <button type="button" class="discoverSayBar" data-discover-say aria-label="Share a song with your friends">
+      <span class="discoverSayAv">${meHtml}</span>
+      <span class="discoverSayText">Share a song with your friends…</span>
+      <span class="discoverSayGo" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+    </button>
+    <div class="discoverFriendRail" role="list">${items.map((i) => discoverFriendCardHtml(i, _friendsFeedProfMap)).join("")}</div>`;
+}
+
+function discoverLiveNowSectionHtml() {
+  return `<section id="discoverLiveNow" class="discoverFeedSection discoverLiveNow" aria-label="Live now" hidden></section>`;
+}
+
+async function refreshDiscoverLiveFriends({ force = false } = {}) {
+  wireDiscoverLiveClicksOnce();
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) return;
+  if (!nabadLiveListenGuestEnabled()) return;
+  paintDiscoverLiveNow();
+  const st = _discoverLiveFriends;
+  if (st.busy) return;
+  if (!force && Date.now() - st.at < DISCOVER_LIVE_TTL_MS) return;
+  st.busy = true;
+  try {
+    const friends = ((await fetchMutualFriendsForShare()) || []).slice(0, DISCOVER_LIVE_MAX_FRIENDS);
+    st.hasFriends = friends.length > 0;
+    const found = await Promise.all(friends.map(async (f) => {
+      try {
+        const d = await messagesApi(`/api/messages?type=presence&userId=${encodeURIComponent(f.userId)}`, { timeoutMs: 6000 });
+        const p = d?.presence;
+        if (p && p.status === "now_playing") return { ...f, presence: p };
+      } catch {}
+      return null;
+    }));
+    st.list = found.filter(Boolean);
+    st.at = Date.now();
+  } catch {
+    st.at = Date.now();
+  } finally {
+    st.busy = false;
+  }
+  try { syncDiscoverGreeting(); } catch {}
+  paintDiscoverLiveNow();
+}
+
+function discoverLiveNowInnerHtml() {
+  const st = _discoverLiveFriends;
+  const list = st.list;
+  if (!list.length) {
+    if (!st.hasFriends || !nabadLiveListenEnabled()) return "";
+    return `
+      <button type="button" class="discoverLiveInvite" data-discover-live-start>
+        <span class="discoverLiveInviteIco" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5"/><circle cx="17" cy="10" r="2.6"/><path d="M14 20c.4-2.6 2-4 4.2-4 1.6 0 2.8.7 3.3 2"/></svg></span>
+        <span class="discoverLiveInviteText"><strong>Listen together</strong><span>Press play at the same time as a friend</span></span>
+        <span class="discoverLiveInviteGo">Start</span>
+      </button>`;
+  }
+  const items = list.map((f, i) => {
+    const p = f.presence || {};
+    const name = String(f.username || "friend").replace(/^@/, "");
+    const cover = p.songCover ? `<span class="discoverLiveCover"><img src="${escapeHtml(p.songCover)}" alt="" loading="lazy" decoding="async" /></span>` : "";
+    return `
+      <button type="button" class="discoverLiveItem" data-discover-live="${i}" aria-label="${escapeHtml(name)} is listening${p.songTitle ? ` to ${escapeHtml(p.songTitle)}` : ""}">
+        <span class="discoverLiveRing"><span class="discoverLiveAv">${messagesAvatarHtml(f.avatar, name, "discoverLiveAvImg")}</span>${cover}</span>
+        <strong class="discoverLiveName">${escapeHtml(name)}</strong>
+        <small class="discoverLiveTag">Live</small>
+      </button>`;
+  }).join("");
+  return `
+    <header class="discoverFeedSectionHead">
+      <h3 class="discoverFeedSectionTitle"><i class="discoverLiveDot" aria-hidden="true"></i>Live now</h3>
+    </header>
+    <div class="discoverLiveStrip">
+      <button type="button" class="discoverLiveItem discoverLiveItem--start" data-discover-live-start aria-label="Start a listen together">
+        <span class="discoverLiveRing discoverLiveRing--start"><span class="discoverLiveAv">＋</span></span>
+        <strong class="discoverLiveName">Start one</strong>
+        <small class="discoverLiveTag discoverLiveTag--soft">Listen together</small>
+      </button>
+      ${items}
+    </div>`;
+}
+
+function paintDiscoverLiveNow() {
+  const html = discoverLiveNowInnerHtml();
+  for (const id of ["discoverLiveNow", "friendsLiveNow"]) {
+    const sec = document.getElementById(id);
+    if (!sec) continue;
+    sec.hidden = !html;
+    sec.innerHTML = html;
+  }
+  try { syncConnectSegUi(); } catch {}
+}
+
+function openDiscoverLiveFriendSheet(idx) {
+  const f = _discoverLiveFriends.list[Number(idx)];
+  const p = f?.presence;
+  if (!f || !p) return;
+  const name = String(f.username || "friend").replace(/^@/, "");
+  const title = String(p.songTitle || "").trim();
+  const cover = String(p.songCover || "");
+  const url = String(p.songUrl || "");
+  const songId = String(p.songId || "");
+  const ownerId = String(p.songOwnerId || "");
+  document.getElementById("discoverLiveSheet")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "discoverLiveSheet";
+  overlay.className = "npPresenceOverlay liveListenOverlay";
+  const art = cover
+    ? `<img class="npPresenceArt" src="${escapeHtml(cover)}" alt="" decoding="async" />`
+    : `<span class="npPresenceArt npPresenceArt--ph" aria-hidden="true">♪</span>`;
+  overlay.innerHTML = `
+    <div class="npPresenceSheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(name)} is listening">
+      <div class="npPresenceGrab" aria-hidden="true"></div>
+      <div class="npPresenceTop">
+        ${art}
+        <div class="npPresenceMeta">
+          <span class="npPresenceKicker">@${escapeHtml(name)} is listening</span>
+          <strong class="npPresenceTitle">${escapeHtml(title || "A song")}</strong>
+          <span class="npPresenceArtist">Right now</span>
+        </div>
+      </div>
+      <div class="npPresenceActions">
+        <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-dz-live-act="play"${url ? "" : " disabled"}>Play it</button>
+        <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-dz-live-act="together"${url ? "" : " disabled"}>Listen together</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("is-open"));
+  const close = () => {
+    overlay.classList.remove("is-open");
+    window.setTimeout(() => overlay.remove(), 220);
+  };
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) { close(); return; }
+    const btn = e.target.closest("[data-dz-live-act]");
+    if (!btn || btn.disabled) return;
+    const act = btn.getAttribute("data-dz-live-act");
+    close();
+    if (act === "play") {
+      try { void playLibraryUrlOnPlayer(url, title || "Song", cover, { songId, ownerUserId: ownerId, openPlayer: true }); } catch {}
+    } else if (act === "together") {
+      window.setTimeout(() => {
+        void openLiveListenInviteWithFriend(f, { url, title: title || "Song", artUrl: cover, songId, ownerUserId: ownerId });
+      }, 220);
+    }
+  });
+}
+
 function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
   const mount = document.getElementById("discoverFeedMount");
   if (!mount) return;
+  try { syncDiscoverGreeting(); } catch {}
   _discoverFeedTab = normalizeDiscoverFeedTab(tab);
   try { sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, _discoverFeedTab); } catch {}
   if (_discoverFeedTab !== "for-you") {
@@ -13998,6 +14307,11 @@ function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
   mount.removeAttribute("aria-busy");
   if (_discoverFeedTab === "for-you") {
     bindDiscoverFeaturedHeroCarousel(mount);
+    void refreshDiscoverLiveFriends();
+    paintDiscoverFriendsTeaser();
+    if (authSession?.user?.id && !_friendsFeedMergedItems.length) {
+      try { void refreshDiscoveryFollowingFeed(); } catch {}
+    }
     void refreshDiscoverWeeklyChart();
     void paintDiscoverFeedFollowCards();
   }
@@ -14576,6 +14890,87 @@ function applyDiscoverOccasionStart(occasionId, liveChallenge) {
   });
 }
 
+let _discoverLiveClicksWired = false;
+function wireDiscoverLiveClicksOnce() {
+  if (_discoverLiveClicksWired) return;
+  _discoverLiveClicksWired = true;
+  document.addEventListener("click", (e) => {
+    const liveItem = e.target?.closest?.("[data-discover-live]");
+    if (liveItem) {
+      e.preventDefault();
+      haptic("light");
+      openDiscoverLiveFriendSheet(liveItem.getAttribute("data-discover-live"));
+      return;
+    }
+    const liveStart = e.target?.closest?.("[data-discover-live-start]");
+    if (!liveStart) return;
+    e.preventDefault();
+    haptic("light");
+    const heroBtn = document.querySelector("[data-discover-listen-together]");
+    const id = heroBtn?.getAttribute("data-discover-listen-together") || "";
+    if (id && String(document.body.getAttribute("data-route") || "") === "discover") startDiscoverListenTogether(id);
+    else if (isLiveListenActive()) showToast("Leave the current listen first.");
+    else void openMessagesShareSheet({ mode: "listen", noPartner: true });
+  });
+}
+
+function discoverFeedTrackById(id) {
+  const key = String(id || "").trim();
+  return key ? (_discoveryFeedTracksRaw || []).find((x) => String(x?.id || "") === key) || null : null;
+}
+
+/** "Listen together" from a Discover song: pick a friend, then start the shared listen. */
+function startDiscoverListenTogether(trackId) {
+  const t = discoverFeedTrackById(trackId);
+  if (!t || !String(t.url || "").trim()) {
+    showToast("This song has no audio yet.", { durationMs: 2600 });
+    return;
+  }
+  if (!authSession?.user?.id) {
+    showToast("Sign in to listen together.", { durationMs: 2800 });
+    location.hash = "#/auth";
+    return;
+  }
+  void openLiveListenInviteForTrack({
+    url: t.url,
+    title: String(t.title || "Song"),
+    artUrl: trackCoverArtForDisplay(t),
+    songId: String(t.id || ""),
+    ownerUserId: String(t.userId || ""),
+  });
+}
+
+/** "Remix this" on a Discover remix row — the same flow as the track sheet's Remix action. */
+async function startDiscoverRemix(trackId) {
+  const t = discoverFeedTrackById(trackId);
+  if (!t) return;
+  if (!authSession?.user?.id) {
+    showToast("Sign in to remix songs from Discover.", { icon: "!", durationMs: 3800 });
+    location.hash = "#/auth";
+    return;
+  }
+  if (!trackAllowsRemix({ meta: t.meta || {}, url: t.url, taskId: t.taskId, audioId: t.audioId })) {
+    showToast("The creator disabled remixes for this song.", { icon: "!", durationMs: 3600 });
+    return;
+  }
+  const prof = resolveProfileForFeedCreator(t.userId, _discoveryLastProfMap || new Map());
+  const remixMeta = t.id && t.userId
+    ? await supabaseFetchPublicSongRemixMeta({ songId: t.id, ownerUserId: t.userId })
+    : { lyricsInput: "", styleInput: "" };
+  await startHubRemix({
+    url: t.url,
+    id: t.id || "",
+    songId: t.id || "",
+    ownerUserId: t.userId || "",
+    title: t.title,
+    creator: String(prof?.username || "").trim(),
+    artUrl: trackCoverArtForDisplay(t),
+    taskId: t.taskId || "",
+    audioId: t.audioId || "",
+    meta: remixMeta,
+  });
+}
+
 function bindDiscoverHubV1Once() {
   bindDiscoverFeedTabsOnce();
   bindChallengesPageOnce();
@@ -14595,6 +14990,44 @@ function bindDiscoverHubV1Once() {
     }
   });
   root.addEventListener("click", (e) => {
+    const togetherBtn = e.target?.closest?.("[data-discover-listen-together]");
+    if (togetherBtn && root.contains(togetherBtn)) {
+      e.preventDefault();
+      haptic("light");
+      startDiscoverListenTogether(togetherBtn.getAttribute("data-discover-listen-together"));
+      return;
+    }
+    const sayBtn = e.target?.closest?.("[data-discover-say]");
+    if (sayBtn && root.contains(sayBtn)) {
+      e.preventDefault();
+      haptic("light");
+      void openMessagesShareSheet({ mode: "publish", noPartner: true });
+      return;
+    }
+    const friendsAll = e.target?.closest?.("[data-discover-friends-all]");
+    if (friendsAll && root.contains(friendsAll)) {
+      e.preventDefault();
+      haptic("light");
+      _connectSeg = "friends";
+      try { sessionStorage.setItem(CONNECT_SEG_KEY, "friends"); } catch {}
+      location.hash = "#/messages";
+      return;
+    }
+    const whoBtn = e.target?.closest?.("[data-discover-who-for]");
+    if (whoBtn && root.contains(whoBtn)) {
+      e.preventDefault();
+      haptic("light");
+      _homeMakeSeg = "personal";
+      openDiscoverOccasionsTab("");
+      return;
+    }
+    const remixBtn = e.target?.closest?.("[data-discover-remix]");
+    if (remixBtn && root.contains(remixBtn)) {
+      e.preventDefault();
+      haptic("light");
+      void startDiscoverRemix(remixBtn.getAttribute("data-discover-remix"));
+      return;
+    }
     const occasionChip = e.target?.closest?.("[data-discover-occasion-open]");
     if (occasionChip && root.contains(occasionChip)) {
       e.preventDefault();
@@ -16271,6 +16704,11 @@ function followActMetaSublineHtml(parts) {
 
 const FRIENDS_FEED_NEW_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 let _friendsFeedFilter = "all";
+const CONNECT_SEG_KEY = "nabad.connectSeg.v1";
+/** Connect has two sections: the Friends feed (default) and Chats. */
+let _connectSeg = (() => {
+  try { return sessionStorage.getItem(CONNECT_SEG_KEY) === "chats" ? "chats" : "friends"; } catch { return "friends"; }
+})();
 let _friendsFeedMergedItems = [];
 let _friendsFeedProfMap = new Map();
 /** First paint shows this many posts; scroll / Load more reveals the rest. */
@@ -16714,6 +17152,12 @@ function friendsFeedItemMatchesFilter(item, filter = _friendsFeedFilter) {
   const tab = String(filter || "all").trim() || "all";
   if (tab === "all") return true;
   if (tab === "new") return friendsFeedItemIsNew(item);
+  if (tab === "thoughts") return item.kind === "status";
+  if (tab === "songs") return item.kind !== "status" && Boolean(item.track);
+  if (tab === "remixes") {
+    return item.kind !== "status" && Boolean(item.track)
+      && ["remix", "mashup"].includes(followingActivityTypeForTrack(item.track));
+  }
   if (item.kind === "status") return false;
   const track = item.track;
   if (!track) return false;
@@ -16832,7 +17276,9 @@ function friendsFeedFilterEmptyCopy(filter) {
   const tab = String(filter || "all").trim() || "all";
   if (tab === "new") return "No posts from the last week. Check back soon.";
   if (tab === "photo-mood") return "Photo Mood songs from people you fan will show up here.";
-  if (tab === "music") return "Music posts from people you fan will show up here.";
+  if (tab === "music" || tab === "songs") return "Songs from people you fan will show up here.";
+  if (tab === "thoughts") return "Thoughts from people you fan will show up here.";
+  if (tab === "remixes") return "Remixes and mashups from people you fan will show up here.";
   return "Nothing here yet.";
 }
 
@@ -16916,18 +17362,23 @@ function followActXstyleTopHtml(opts) {
     badgeHtml = "",
     trailingHtml = "",
     avatarLabel = "Profile",
+    verbHtml = "",
+    friendsFeed = false,
   } = opts;
   const userPrimary = isOwn
     ? whoHtml
     : `<a class="followActUserLink followActUserLink--badge" href="${escapeHtml(profileHref)}" data-route-link="user">${whoHtml}</a>`;
   const subline = followActMetaSublineHtml([
+    verbHtml,
     `<span class="followActWhen">${escapeHtml(when)}</span>`,
     createdChipHtml,
     badgeHtml,
   ]);
+  const isLive = friendsFeed && userId
+    && _discoverLiveFriends.list.some((f) => String(f.userId) === String(userId));
   return `
         <div class="followActTop">
-          <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(String(userId || ""))}" aria-label="${escapeHtml(avatarLabel)}">
+          <a class="followActAvatar${isLive ? " isLive" : ""}" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(String(userId || ""))}" aria-label="${escapeHtml(avatarLabel)}">
             <span class="followActAvatarRing" aria-hidden="true"></span>
             ${avatarSrc
               ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
@@ -17074,7 +17525,7 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
   if (xstyle) {
     const statusBadge = followingActivityBadgeHtml("status", postType, { post });
     return `
-      <article class="followAct followAct--status followAct--xstyle${ownCls}" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" data-follow-status-id="${escapeHtml(postId)}" style="--i:${idx}">
+      <article class="followAct followAct--status followAct--xstyle${opts.friendsFeed ? " followAct--friendsFeed" : ""}${ownCls}" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" data-follow-status-id="${escapeHtml(postId)}" style="--i:${idx}">
         ${followActXstyleTopHtml({
           profileHref,
           userId,
@@ -17086,6 +17537,8 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
           badgeHtml: statusBadge,
           trailingHtml: menuBtn,
           avatarLabel: feedActorProfileLabel(handle, prof, { own: isOwn }),
+          friendsFeed: Boolean(opts.friendsFeed),
+          verbHtml: opts.friendsFeed && !isOwn ? `<span class="followActVerb">${postType === "voice" ? "sent a voice note" : "shared a thought"}</span>` : "",
         })}
         <div class="followActContent followActBody--static">
           ${contentHtml}
@@ -20275,7 +20728,13 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             </button>
             ${followActRealtimeProgressHtml(encUrl, safeTitle, t)}
           </div>`;
-  const mediaBlockWithProgressHtml = mediaBlockHtml;
+  // "Listen together" sits on the poster / record itself (top right), not in the crowded action bar.
+  const togetherBtnHtml = friendsFeed && xstyle && nabadLiveListenEnabled() && String(t.url || "").trim()
+    ? `<button type="button" class="followActTogether" data-friends-listen-together="${escapeHtml(String(t.id || ""))}" aria-label="Listen together"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5"/><circle cx="17" cy="10" r="2.6"/><path d="M14 20c.4-2.6 2-4 4.2-4 1.6 0 2.8.7 3.3 2"/></svg><span>Listen together</span></button>`
+    : "";
+  const mediaBlockWithProgressHtml = togetherBtnHtml
+    ? mediaBlockHtml.replace(/(<div class="[^"]*\b(?:feedVinylWrap|followActMediaWrap)\b[^"]*"[^>]*>)/, `$1${togetherBtnHtml}`)
+    : mediaBlockHtml;
   const topMenuHtml = songMenuBtn ? `<div class="followActTopMenu">${songMenuBtn}</div>` : "";
   if (xstyle) {
     const badgeHtml = orig || mashupBlockHtml ? "" : (followingActivityBadgeHtml("music", type) || "");
@@ -20296,6 +20755,10 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
           badgeHtml,
           trailingHtml: topMenuHtml,
           avatarLabel: feedActorProfileLabel(handle, prof),
+          friendsFeed,
+          verbHtml: friendsFeed
+            ? `<span class="followActVerb">${escapeHtml(type === "remix" ? "posted a remix" : type === "mashup" ? "posted a mashup" : type === "challenge" ? "joined a challenge" : "shared a song")}</span>`
+            : "",
         })}
         ${releaseCaptionHtml}
         ${legacyCaptionBlock}
@@ -21741,7 +22204,7 @@ function runFriendsRouteRefresh(token) {
 function friendsFeedRowsHtml(mergedItems, profMap) {
   return mergedItems
     .map((item, i) => {
-      if (item.kind === "status") return followingStatusRowHtml(item.post, profMap, i, { xstyle: true });
+      if (item.kind === "status") return followingStatusRowHtml(item.post, profMap, i, { xstyle: true, friendsFeed: true });
       if (item.kind === "repost") return followingRepostRowHtml(item, profMap, i);
       return followingActivityRowHtml(item.track, profMap, i, { xstyle: true, friendsFeed: true });
     })
@@ -21857,6 +22320,7 @@ async function enrichFriendsFeedAfterPaint({
 }
 
 function enterFriendsRoute() {
+  wireFriendsListenTogetherOnce();
   const token = ++_friendsRouteEnterToken;
   paintFriendsFeedTabsActive();
   paintFriendsFeedSnapshotIfFresh();
@@ -21870,6 +22334,37 @@ function enterFriendsRoute() {
       try { openFriendsComposeSheet(); } catch {}
     }, 80);
   }
+}
+
+function wireFriendsListenTogetherOnce() {
+  if (document.documentElement.dataset.friendsListenWired) return;
+  document.documentElement.dataset.friendsListenWired = "1";
+  document.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("[data-friends-listen-together]");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    haptic("light");
+    const id = String(btn.getAttribute("data-friends-listen-together") || "").trim();
+    const item = (_friendsFeedMergedItems || []).find((x) => x?.track && String(x.track.id || "") === id);
+    const t = item?.track;
+    if (!t || !String(t.url || "").trim()) {
+      showToast("This song has no audio yet.", { durationMs: 2600 });
+      return;
+    }
+    if (!authSession?.user?.id) {
+      showToast("Sign in to listen together.", { durationMs: 2800 });
+      location.hash = "#/auth";
+      return;
+    }
+    void openLiveListenInviteForTrack({
+      url: t.url,
+      title: String(t.title || "Song"),
+      artUrl: trackCoverArtForDisplay(t),
+      songId: String(t.id || ""),
+      ownerUserId: String(t.userId || ""),
+    });
+  }, true);
 }
 
 function wireFriendsComposeFabOnce() {
@@ -22132,6 +22627,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     const mergedItems = mergeFriendsOwnPostPin(feedItems).slice(0, 80);
     _friendsFeedMergedItems = mergedItems;
     _friendsFeedProfMap = profMap;
+    try { paintDiscoverFriendsTeaser(); } catch {}
     const hadRealRows = Boolean(listEl.querySelector(".followAct:not(.followAct--skel)"));
     if (force || !hadRealRows) resetFriendsFeedPagination();
 
@@ -40518,6 +41014,14 @@ function messagesShareSheetCopy() {
       confirmAction: "Invite",
     };
   }
+  if (_messagesShareMode === "publish") {
+    return {
+      title: "Share a song",
+      lead: "Pick a song to post to your friends.",
+      confirmLead: "Post this song to your feed?",
+      confirmAction: "Continue",
+    };
+  }
   return {
     title: "Share a song",
     lead: MESSAGES_SHARE_LEAD_DEFAULT,
@@ -40629,6 +41133,8 @@ function wireConnectNewSheetsOnce() {
     closeConnectNewSheet();
     if (which === "chat") {
       void openNewChatSheet();
+    } else if (which === "publish") {
+      void openMessagesShareSheet({ mode: "publish", noPartner: true });
     } else if (which === "listen") {
       if (isLiveListenActive()) {
         try { showToast("Leave the current listen first."); } catch {}
@@ -40720,8 +41226,8 @@ async function openMessagesShareSheet({ mode, noPartner } = {}) {
   const sheet = document.getElementById("messagesShareSheet");
   const list = document.getElementById("messagesShareList");
   if (!sheet || !list) return;
-  _messagesShareMode = mode === "listen" ? "listen" : "share";
-  _messagesShareNoPartner = Boolean(noPartner) && _messagesShareMode === "listen";
+  _messagesShareMode = mode === "listen" ? "listen" : mode === "publish" ? "publish" : "share";
+  _messagesShareNoPartner = Boolean(noPartner) && _messagesShareMode !== "share";
   applyMessagesShareSheetCopy();
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
@@ -40731,6 +41237,14 @@ async function openMessagesShareSheet({ mode, noPartner } = {}) {
   list.innerHTML = `<div class="messagesShareEmpty">Loading your Library…</div>`;
   await ensureUserLibraryHydrated();
   _messagesShareAllTracks = dmShareEligibleTracks();
+  if (_messagesShareMode === "publish") {
+    // Only songs that aren't already on the feed.
+    const lib = new Map(loadLibrary().map((t) => [String(t.id), t]));
+    _messagesShareAllTracks = _messagesShareAllTracks.filter((t) => {
+      const row = lib.get(String(t?.id || ""));
+      return row && !row.publicOnProfile && !row.publishPending;
+    });
+  }
   renderMessagesShareList("");
 }
 
@@ -40832,6 +41346,11 @@ function updateMessagesUnreadBadge(count) {
       badge.hidden = true;
       badge.textContent = "";
     }
+  }
+  const segBadge = document.getElementById("connectChatsBadge");
+  if (segBadge) {
+    segBadge.hidden = !hasUnread;
+    segBadge.textContent = hasUnread ? (n > 99 ? "99+" : String(n)) : "";
   }
   if (btn) {
     btn.classList.toggle("hasNotice", hasUnread);
@@ -44942,7 +45461,84 @@ function startMessagesInboxPoll() {
   restartMessagesInboxPoll();
 }
 
+/** Connect = Friends feed + Chats. Shows the active section and (for Friends) starts the feed. */
+function syncConnectSegUi() {
+  const page = document.getElementById("messagesPage");
+  if (!page) return;
+  const friends = _connectSeg === "friends";
+  page.setAttribute("data-connect-seg", _connectSeg);
+  const onConnect = String(document.body.getAttribute("data-route") || "") === "messages";
+  document.body.classList.toggle("connectFriendsActive", onConnect && friends);
+  if (onConnect) document.body.classList.toggle("friendsFeedActive", friends);
+  const pane = document.getElementById("connectFriendsPane");
+  if (pane) pane.hidden = !friends;
+  const panel = document.getElementById("discoverFriendsPanel");
+  if (panel) {
+    panel.hidden = false;
+    panel.style.display = "";
+    panel.setAttribute("aria-hidden", friends ? "false" : "true");
+  }
+  document.querySelectorAll("[data-connect-seg]").forEach((btn) => {
+    const on = String(btn.getAttribute("data-connect-seg")) === _connectSeg;
+    btn.classList.toggle("is-active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  const search = document.getElementById("messagesInboxSearchBtn");
+  if (search) search.hidden = friends;
+  const sub = document.getElementById("connectSub");
+  if (sub) {
+    const n = _discoverLiveFriends.list.length;
+    sub.innerHTML = friends && n
+      ? `<span class="discoverGreetingLive connectSubLive"><i aria-hidden="true"></i>${n} ${n === 1 ? "friend" : "friends"} listening now</span>`
+      : "";
+    sub.hidden = !(friends && n);
+  }
+}
+
+function activateConnectFriends() {
+  try { bindFriendsPageOnce(); } catch {}
+  try { wireFriendsComposeFabOnce(); } catch {}
+  try { syncFollowingComposeUi(); } catch {}
+  try { hydrateFriendsFeedSnapshotFromStorage(); } catch {}
+  try { paintFriendsFeedTabsActive(); } catch {}
+  try { paintFriendsFeedSnapshotIfFresh(); } catch {}
+  void enterFriendsRoute();
+  void refreshDiscoverLiveFriends();
+}
+
+function setConnectSeg(seg) {
+  const next = seg === "chats" ? "chats" : "friends";
+  if (next === _connectSeg) return;
+  _connectSeg = next;
+  try { sessionStorage.setItem(CONNECT_SEG_KEY, next); } catch {}
+  syncConnectSegUi();
+  if (next === "friends") {
+    activateConnectFriends();
+  } else {
+    _discoveryFollowingGen += 1;
+    _friendsRouteEnterToken += 1;
+    try { enterMessagesRoute({}); } catch {}
+  }
+  try { window.scrollTo(0, 0); } catch {}
+}
+
+let _connectSegBound = false;
+function bindConnectSegOnce() {
+  if (_connectSegBound) return;
+  _connectSegBound = true;
+  document.getElementById("connectSeg")?.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("[data-connect-seg]");
+    if (!btn) return;
+    e.preventDefault();
+    haptic("light");
+    setConnectSeg(String(btn.getAttribute("data-connect-seg") || ""));
+  });
+}
+
 function enterMessagesRoute({ fromThread = false } = {}) {
+  bindConnectSegOnce();
+  syncConnectSegUi();
+  if (_connectSeg === "friends" && !fromThread) activateConnectFriends();
   syncFriendsMessagesBtn();
   startMessagesInboxPoll();
   startMessagesInboxRealtime();
@@ -45359,6 +45955,12 @@ function bindMessagesPageOnce() {
       feedbackMessagesComposerSend();
       const track = _messagesShareConfirmTrack;
       if (track) {
+        if (_messagesShareMode === "publish") {
+          // Same publish flow as the player's Publish button (release note, tags, layout: cover or vinyl).
+          closeMessagesShareSheet();
+          window.setTimeout(() => openPublishReleaseSheet(String(track.id || ""), { source: "friends" }), 220);
+          return;
+        }
         if (_messagesShareMode === "listen") {
           const listenTrack = trackRefFromSharePick(track);
           if (!listenTrack) {
@@ -78932,7 +79534,12 @@ try { wireProfileChromeNavOnce(); } catch (e) { console.warn("[profileChromeNav]
 try {
   initPullToRefresh({
     triggerTabRefresh,
-    getRoute: () => tabBarRouteKey(document.body.getAttribute("data-route") || ""),
+    getRoute: () => {
+      const raw = String(document.body.getAttribute("data-route") || "");
+      // Connect › Friends pulls the Friends feed.
+      if (raw === "messages" && _connectSeg === "friends") return "friends";
+      return tabBarRouteKey(raw);
+    },
     isRouteEnabled: isPullToRefreshRouteEnabled,
     isRefreshInFlight: isRouteRefreshInFlight,
     haptic,

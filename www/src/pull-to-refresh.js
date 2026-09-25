@@ -97,6 +97,13 @@ export function initPullToRefresh(deps) {
 
   function ensurePtrShells() {
     wrapDiscoverFeedBody();
+    // Connect › Friends: the pane itself is the movable (the Friends feed no longer lives in #friendsPage).
+    const connectPane = document.getElementById("connectFriendsPane");
+    if (connectPane && !connectPane.classList.contains("ptrMovable")) {
+      connectPane.classList.add("ptrMovable");
+      connectPane.dataset.ptrRoute = "friends";
+      ensureSpinnerAnchor(connectPane);
+    }
     wrapSiblingsAfter(
       document.getElementById("friendsPage"),
       ".discoveryStudioHead",

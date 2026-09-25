@@ -65290,3 +65290,1367 @@ body.coverStudioOpen .toast{ z-index: 4400; }
 @media (prefers-reduced-motion: reduce){
   .csRoot{ transition: opacity 120ms ease; transform: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Discover — redesign (For You)
+ * One confident system: liquid-glass surfaces, poster cards, Nabad rounded display type, a live "Tonight's pick"
+ * hero, podium chart, one lit gradient action per card. Appended last so it wins over the older shelf styling.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+:root{
+  --dz-glass: rgba(255, 255, 255, 0.075);
+  --dz-glass-border: rgba(255, 255, 255, 0.14);
+  --dz-glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.13);
+  --dz-display: "csNabad", "Nunito", "SF Pro Display", -apple-system, sans-serif;
+}
+body[data-route="discover"] .discoveryStudioH2{
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+.discoverGreeting{
+  margin: 7px 0 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: rgba(255, 255, 255, 0.62);
+}
+.discoverGreeting[hidden]{ display: none !important; }
+body[data-route="discover"] .discoveryStudioTitles{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+body[data-route="discover"] .discoveryHeadIconBtn{
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--dz-glass-border);
+  background: var(--dz-glass);
+  box-shadow: var(--dz-glass-hi);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(24px) saturate(140%);
+}
+
+/* Tabs → glass segmented pill */
+body[data-route="discover"] .discoverFeedTabs{
+  margin: 14px 0 0;
+  padding: 0;
+}
+body[data-route="discover"] .discoverFeedTabs .nabadTabsTrack{
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid var(--dz-glass-border);
+  background: var(--dz-glass);
+  box-shadow: var(--dz-glass-hi);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(24px) saturate(140%);
+}
+body[data-route="discover"] .discoverFeedTabs .nabadTabsTrack::after,
+body[data-route="discover"] .discoverFeedTabs::after,
+body[data-route="discover"] .discoverFeedTabs .nabadTabsTab::after{ display: none !important; }
+body[data-route="discover"] .discoverFeedTabs .nabadTabsTab{
+  flex: 1 1 0;
+  min-width: 0;
+  height: 36px;
+  padding: 0 4px;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.58);
+  transition: background 200ms ease, color 200ms ease;
+}
+body[data-route="discover"] .discoverFeedTabs .nabadTabsTab.is-active{
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+/* Section heads + rhythm */
+body[data-route="discover"] .discoverFeedSection{ margin-top: 30px; }
+body[data-route="discover"] .discoverFeedSection--featuredChallenge{ margin-top: 14px; }
+body[data-route="discover"] .discoverFeedSectionHead{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 13px;
+}
+body[data-route="discover"] .discoverFeedSectionTitle{
+  margin: 0;
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #fff;
+}
+body[data-route="discover"] .discoverFeedSectionLink{
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ── Hero: Tonight's pick + featured slides ───────────────────────────────── */
+body[data-route="discover"] .discoverFeaturedHeroCarousel .discoverFeaturedChallengeHero{
+  min-height: clamp(340px, 92vw, 400px);
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.discoverTonightHero{ cursor: default; }
+.discoverTonightBg,
+.discoverTonightBg img{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discoverTonightScrim{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, transparent 30%, rgba(6, 6, 12, 0.55) 62%, rgba(6, 6, 12, 0.95));
+}
+.discoverTonightTag{
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  z-index: 2;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #fff;
+  border: 1px solid var(--dz-glass-border);
+  background: rgba(20, 22, 32, 0.5);
+  box-shadow: var(--dz-glass-hi);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(24px) saturate(140%);
+}
+.discoverTonightTag i{
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #23d5ab;
+  animation: liveListenPulse 1.6s ease-out infinite;
+}
+.discoverTonightMenu{ position: absolute; right: 12px; top: 12px; z-index: 2; }
+.discoverTonightBody{
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  text-align: left;
+}
+.discoverTonightTitle{
+  font-family: var(--dz-display);
+  font-weight: 900;
+  font-size: 34px;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: #fff;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: 0 4px 22px rgba(0, 0, 0, 0.45);
+}
+.discoverTonightBy{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+.discoverTonightAv{ display: inline-flex; width: 24px; height: 24px; border-radius: 50%; overflow: hidden; flex: none; }
+.discoverTonightAv img, .discoverTonightAv > *{ width: 100%; height: 100%; object-fit: cover; }
+.discoverTonightDot{ opacity: 0.6; }
+.discoverTonightActs{ display: flex; align-items: center; gap: 10px; margin-top: 7px; }
+.discoverTonightPlay{
+  appearance: none;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #0b0b13;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverTonightPlay:active{ transform: scale(0.94); }
+.discoverTonightTogether{
+  appearance: none;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  border: 1px solid var(--dz-glass-border);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: var(--dz-glass-hi);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(24px) saturate(140%);
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverTonightTogether:active{ transform: scale(0.97); }
+/* Featured challenge slides share the hero language */
+body[data-route="discover"] .discoverFeaturedChallengeHeroTitle{
+  font-family: var(--dz-display);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+body[data-route="discover"] .discoverFeaturedChallengeHeroCta{
+  border: 0;
+  background: var(--nabad-cta-gradient, linear-gradient(148deg, #23d5ab, #7c5cff));
+  color: #fff;
+  box-shadow: var(--nabad-cta-shadow, 0 12px 28px rgba(35, 213, 171, 0.22));
+}
+body[data-route="discover"] .discoverFeaturedHeroDots{ margin-top: 14px; }
+body[data-route="discover"] .discoverFeaturedHeroDot{ background: rgba(255, 255, 255, 0.28); }
+body[data-route="discover"] .discoverFeaturedHeroDot.isActive{ width: 20px; background: #fff; }
+
+/* ── Your vibes: poster cards ─────────────────────────────────────────────── */
+body[data-route="discover"] .discoverVibeRail{
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 2px 20px 10px 0;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+body[data-route="discover"] .discoverVibeRail::-webkit-scrollbar{ display: none; }
+body[data-route="discover"] .discoverVibeCard{
+  flex: 0 0 150px;
+  width: 150px;
+  min-width: 150px;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  display: block;
+  color: #fff;
+  -webkit-tap-highlight-color: transparent;
+}
+body[data-route="discover"] .discoverVibeCardArt{
+  position: relative;
+  display: block;
+  width: 150px;
+  height: 200px;
+  aspect-ratio: auto;
+  border-radius: 26px;
+  overflow: hidden;
+  border: 1px solid var(--dz-glass-border);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
+}
+body[data-route="discover"] .discoverVibeCardArt img{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.discoverVibeCardShade{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 42%, rgba(6, 6, 12, 0.88));
+}
+body[data-route="discover"] .discoverVibeCardGo{
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  bottom: auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  border: 1px solid var(--dz-glass-border);
+  background: rgba(20, 22, 32, 0.5);
+  -webkit-backdrop-filter: blur(16px);
+          backdrop-filter: blur(16px);
+}
+.discoverVibeCardText{
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+body[data-route="discover"] .discoverVibeCardTitle{
+  display: block;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #fff;
+  white-space: normal;
+}
+body[data-route="discover"] .discoverVibeCardCount{
+  display: block;
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ── Gift a song ──────────────────────────────────────────────────────────── */
+.discoverWhoFor{
+  appearance: none;
+  width: 100%;
+  height: 56px;
+  margin: 0 0 12px;
+  padding: 0 8px 0 20px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font: inherit;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  border: 1px solid var(--dz-glass-border);
+  background: var(--dz-glass);
+  box-shadow: var(--dz-glass-hi);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(24px) saturate(140%);
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverWhoForText{ font-size: 15px; font-weight: 600; }
+.discoverWhoForGo{
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--nabad-cta-gradient, linear-gradient(148deg, #23d5ab, #7c5cff));
+  box-shadow: var(--nabad-cta-shadow, 0 12px 28px rgba(35, 213, 171, 0.22)), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+}
+body[data-route="discover"] .discoverMomentTile{
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+body[data-route="discover"] .discoverMomentTileTitle{ font-weight: 800; letter-spacing: -0.02em; }
+
+/* ── Top this week: podium ────────────────────────────────────────────────── */
+body[data-route="discover"] .chartWeekWinner{
+  position: relative;
+  min-height: 150px;
+  padding: 16px;
+  border-radius: 28px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(120deg, rgba(35, 213, 171, 0.16), rgba(124, 92, 255, 0.22));
+  box-shadow: var(--dz-glass-hi), 0 18px 40px rgba(0, 0, 0, 0.3);
+}
+.chartWeekWinnerNum{
+  position: absolute;
+  right: 12px;
+  bottom: -30px;
+  z-index: 0;
+  font-family: var(--dz-display);
+  font-weight: 900;
+  font-size: 118px;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0));
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+}
+body[data-route="discover"] .chartWeekWinnerTap{ position: relative; z-index: 1; }
+body[data-route="discover"] .chartWeekWinnerArt{
+  border-radius: 22px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+}
+body[data-route="discover"] .chartWeekWinnerTitle{
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+body[data-route="discover"] .chartWeekWinnerRank{
+  color: #23d5ab;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+body[data-route="discover"] .chartWeekRunners{
+  margin-top: 10px;
+  padding: 4px 14px;
+  border-radius: 26px;
+  border: 1px solid var(--dz-glass-border);
+  background: var(--dz-glass);
+  box-shadow: var(--dz-glass-hi);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(24px) saturate(140%);
+}
+body[data-route="discover"] .chartWeekRunner{
+  border: 0;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 0;
+  box-shadow: none;
+}
+body[data-route="discover"] .chartWeekRunner:last-child{ border-bottom: 0; }
+body[data-route="discover"] .chartWeekRunnerRank{
+  font-family: var(--dz-display);
+  font-weight: 900;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.85);
+}
+body[data-route="discover"] .chartWeekRunnerArt{ border-radius: 14px; }
+body[data-route="discover"] .chartWeekRunnerTitle{ font-size: 14.5px; font-weight: 700; letter-spacing: -0.01em; }
+body[data-route="discover"] .chartWeekTrend--up{ color: #23d5ab; }
+body[data-route="discover"] .chartWeekTrend--down{ color: #ff8a7a; }
+
+/* ── Poster cards (Community picks · Templates) ───────────────────────────── */
+body[data-route="discover"] .discoverFeedTemplateCardWrap{ position: relative; }
+body[data-route="discover"] .discoverFeedTemplateCard{
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  aspect-ratio: 3 / 4;
+  border: 1px solid var(--dz-glass-border);
+  border-radius: 24px;
+  overflow: hidden;
+  background: #0d0e16;
+  text-align: left;
+  color: #fff;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+  -webkit-tap-highlight-color: transparent;
+}
+body[data-route="discover"] .discoverFeedTemplateCover{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+  display: block;
+}
+body[data-route="discover"] .discoverFeedTemplateCover img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+body[data-route="discover"] .discoverFeedTemplateCard::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 52%, rgba(6, 6, 12, 0.9));
+}
+body[data-route="discover"] .discoverFeedTemplateMeta{
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 11px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0;
+}
+body[data-route="discover"] .discoverFeedTemplateTitle{
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body[data-route="discover"] .discoverFeedTemplateBy{
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body[data-route="discover"] .discoverFeedTemplateMeta > :nth-child(n+3){ display: none; }
+body[data-route="discover"] .discoverFeedTemplateMenuOuter{
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 3;
+}
+/* Community picks: two staggered columns */
+body[data-route="discover"] .discoverFeedSection--communityPicks .discoverFeedCommunityCarousel{
+  display: block;
+  column-count: 2;
+  column-gap: 12px;
+}
+body[data-route="discover"] .discoverFeedSection--communityPicks .discoverFeedCarouselRow,
+body[data-route="discover"] .discoverFeedSection--communityPicks .discoverFeedCarouselRail{ display: contents; }
+body[data-route="discover"] .discoverFeedSection--communityPicks .discoverFeedTemplateCardWrap{
+  break-inside: avoid;
+  margin: 0 0 12px;
+  width: auto;
+  max-width: none;
+}
+body[data-route="discover"] .discoverFeedSection--communityPicks .discoverFeedTemplateCardWrap:nth-child(4n+1) .discoverFeedTemplateCard{ aspect-ratio: 3 / 4.15; }
+body[data-route="discover"] .discoverFeedSection--communityPicks .discoverFeedTemplateCardWrap:nth-child(4n+2) .discoverFeedTemplateCard{ aspect-ratio: 1 / 1.02; }
+body[data-route="discover"] .discoverFeedSection--communityPicks .discoverFeedTemplateCardWrap:nth-child(4n+3) .discoverFeedTemplateCard{ aspect-ratio: 1 / 1.02; }
+body[data-route="discover"] .discoverFeedSection--communityPicks .discoverFeedTemplateCardWrap:nth-child(4n+4) .discoverFeedTemplateCard{ aspect-ratio: 3 / 4.15; }
+/* Templates carousel: poster row */
+body[data-route="discover"] .discoverFeedCommunityCarousel--single .discoverFeedTemplateCardWrap{
+  flex: 0 0 150px;
+  width: 150px;
+}
+
+/* ── Remixes ──────────────────────────────────────────────────────────────── */
+body[data-route="discover"] .discoverFeedSongRow--remix{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border: 0;
+}
+body[data-route="discover"] .discoverFeedSongRow--remix .discoverFeedSongArt{
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+}
+body[data-route="discover"] .discoverFeedSongRow--remix .discoverFeedSongTitle{
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.discoverRemixChip{
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  margin-top: 5px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #cbbcff;
+  background: rgba(124, 92, 255, 0.22);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverRemixBtn{
+  appearance: none;
+  flex: none;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  background: var(--nabad-cta-gradient, linear-gradient(148deg, #23d5ab, #7c5cff));
+  box-shadow: var(--nabad-cta-shadow, 0 8px 20px rgba(35, 213, 171, 0.2)), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverRemixBtn:active{ transform: scale(0.96); }
+
+/* ── Creators to fan ──────────────────────────────────────────────────────── */
+body[data-route="discover"] .discoverFeedCarouselRail--follow{ gap: 12px; }
+body[data-route="discover"] .discoverFeedFollowCard{
+  flex: 0 0 120px;
+  width: 120px;
+  padding: 16px 10px 14px;
+  border-radius: 26px;
+  text-align: center;
+  border: 1px solid var(--dz-glass-border);
+  background: var(--dz-glass);
+  box-shadow: var(--dz-glass-hi);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(24px) saturate(140%);
+}
+body[data-route="discover"] .discoverFeedFollowCta{
+  height: 34px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* ── Live now ─────────────────────────────────────────────────────────────── */
+.discoverGreetingLive{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  padding-left: 8px;
+  color: #23d5ab;
+  font-weight: 700;
+  border-left: 1px solid rgba(255, 255, 255, 0.18);
+}
+.discoverGreetingLive i,
+.discoverLiveDot{
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #23d5ab;
+  animation: liveListenPulse 1.6s ease-out infinite;
+}
+.discoverLiveDot{ margin-right: 9px; vertical-align: 2px; }
+.discoverGreeting{ display: flex; align-items: center; flex-wrap: wrap; }
+.discoverLiveNow[hidden]{ display: none !important; }
+body[data-route="discover"] .discoverLiveNow{ margin-top: 22px; }
+.discoverLiveStrip{
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 2px 20px 6px 0;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.discoverLiveStrip::-webkit-scrollbar{ display: none; }
+.discoverLiveItem{
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 0 0 68px;
+  width: 68px;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: center;
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverLiveItem:active{ transform: scale(0.96); }
+.discoverLiveRing{
+  position: relative;
+  display: block;
+  flex: none;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto;
+  border-radius: 50%;
+  padding: 3px;
+  background: conic-gradient(from 200deg, #23d5ab, #7c5cff, #23d5ab);
+}
+.discoverLiveRing--start{ background: rgba(255, 255, 255, 0.16); }
+.discoverLiveAv{
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 3px solid #0b0b13;
+  background: #15161f;
+  font-size: 26px;
+  font-weight: 700;
+  color: #23d5ab;
+}
+.discoverLiveAv img, .discoverLiveAvImg{ width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }
+.discoverLiveAvImg.messagesAvatarFallback{ display: grid; place-items: center; font-size: 22px; font-weight: 800; color: #efe8ff; background: rgba(124, 92, 255, 0.35); }
+.discoverLiveCover{
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 26px;
+  height: 26px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 2.5px solid #0b0b13;
+  background: #15161f;
+}
+.discoverLiveCover img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.discoverLiveName{
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discoverLiveTag{ display: block; width: 100%; margin-top: 1px; font-size: 10.5px; font-weight: 700; color: #23d5ab; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.discoverLiveTag--soft{ color: rgba(255, 255, 255, 0.5); }
+.discoverLiveInvite{
+  appearance: none;
+  width: 100%;
+  padding: 12px 10px 12px 14px;
+  border-radius: 26px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  font: inherit;
+  color: #fff;
+  cursor: pointer;
+  border: 1px solid var(--dz-glass-border);
+  background: var(--dz-glass);
+  box-shadow: var(--dz-glass-hi);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(24px) saturate(140%);
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverLiveInviteIco{
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #23d5ab;
+  background: rgba(35, 213, 171, 0.12);
+  border: 1px solid rgba(35, 213, 171, 0.3);
+}
+.discoverLiveInviteText{ flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.discoverLiveInviteText strong{ font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
+.discoverLiveInviteText span{ font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, 0.58); }
+.discoverLiveInviteGo{
+  flex: none;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 13.5px;
+  font-weight: 800;
+  background: var(--nabad-cta-gradient, linear-gradient(148deg, #23d5ab, #7c5cff));
+  box-shadow: var(--nabad-cta-shadow, 0 8px 20px rgba(35, 213, 171, 0.2)), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+}
+/* Creators: round avatars */
+body[data-route="discover"] .discoverFeedFollowAvBtn,
+body[data-route="discover"] .discoverFeedFollowAvBtn img,
+body[data-route="discover"] .discoverFeedFollowAvBtn > *{ border-radius: 50%; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Friends — redesign (posts)
+ * Open, airy posts on the page (no boxed timeline rows): a real avatar with a live ring, the person's own words,
+ * then either the cover poster or the vinyl — both in the Nabad glass language — and a pill action bar.
+ * Scoped to .followAct--friendsFeed so profile posts are untouched.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed{
+  position: relative;
+  margin: 0 0 30px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActTop{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 2px;
+  margin: 0 0 10px;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAvatar{
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: visible;
+  display: block;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAvatar img,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAvatarFallback{
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  font-weight: 800;
+  color: #efe8ff;
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.5), rgba(35, 213, 171, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAvatarRing{ display: none; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAvatar.isLive{
+  width: 50px;
+  height: 50px;
+  padding: 3px;
+  border-radius: 50%;
+  background: conic-gradient(from 200deg, #23d5ab, #7c5cff, #23d5ab);
+  box-shadow: 0 0 18px rgba(35, 213, 171, 0.28);
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAvatar.isLive .followActAvatarRing{ display: none; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAvatar.isLive img,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAvatar.isLive .followActAvatarFallback{
+  border: 2.5px solid #0b0b13;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActHeadStack{ min-width: 0; flex: 1; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMetaPrimary,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMetaPrimary .followActUserLink{
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: #fff;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMetaSub{
+  margin-top: 1px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActVerb{ color: rgba(255, 255, 255, 0.72); }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActReleaseCaption{ margin: 0 2px 12px; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActCaption,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActStatusText{
+  font-size: 15.5px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.94);
+}
+/* style tags → tiny glass chips */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActStylePills{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0 2px;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActStylePill{
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--dz-glass-border, rgba(255, 255, 255, 0.14));
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ── Cover layout: poster with the player docked inside ───────────────────── */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock{
+  position: relative;
+  margin: 0;
+  border-radius: 30px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.5);
+  background: #06060c;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock .followActMedia{
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1.06;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  overflow: hidden;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock .followActMediaImg{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock .followActMediaScrim{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.22) 0%, transparent 28%, rgba(6, 6, 12, 0.5) 58%, rgba(6, 6, 12, 0.94) 100%);
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock .followActMediaCopy{
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 82px;
+  text-align: left;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaWrap--friendsDock .followActMediaTitle{
+  font-family: var(--dz-display, "csNabad", "Nunito", sans-serif);
+  font-weight: 900;
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: #fff;
+  text-shadow: 0 4px 22px rgba(0, 0, 0, 0.45);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaDock{
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaDockPlay{
+  flex: none;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #0b0b13;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaDockPlay svg{ width: 18px; height: 18px; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActMediaDockWave{ flex: 1; min-width: 0; }
+
+/* ── Vinyl layout: a glass card around a modern record ────────────────────── */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .feedVinylWrap{
+  position: relative;
+  margin: 0;
+  padding: 18px 16px 16px;
+  border-radius: 30px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(90% 60% at 20% 0%, rgba(35, 213, 171, 0.14), transparent 60%),
+    radial-gradient(90% 60% at 100% 100%, rgba(124, 92, 255, 0.2), transparent 60%),
+    rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 24px 50px rgba(0, 0, 0, 0.42);
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .feedVinylStage{
+  width: min(100%, 290px);
+  margin: 0 auto;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .feedVinylMeta{ margin: 6px 0 0; text-align: center; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .feedVinylTitle{
+  margin: 0;
+  font-family: var(--dz-display, "csNabad", "Nunito", sans-serif);
+  font-weight: 900;
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: #fff;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .feedVinylTimeline{ margin-top: 10px; }
+
+/* ── Action bar: glass pills, one lit action lives on the cover ───────────── */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActActionsBar{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActActions{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct{
+  height: 36px;
+  min-width: 36px;
+  padding: 0 9px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--dz-glass-border, rgba(255, 255, 255, 0.14));
+  background: rgba(255, 255, 255, 0.075);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  font-weight: 700;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct--stat{ background: transparent; border-color: transparent; box-shadow: none; color: rgba(255, 255, 255, 0.55); padding: 0 6px; }
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActAct[aria-pressed="true"]{
+  color: #ff6f8f;
+  border-color: rgba(255, 111, 143, 0.4);
+  background: rgba(255, 111, 143, 0.1);
+}
+.followActTogether{
+  appearance: none;
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 4;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(20, 22, 32, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.13);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+          backdrop-filter: blur(20px) saturate(140%);
+  -webkit-tap-highlight-color: transparent;
+}
+.followActTogether:active{ transform: scale(0.97); }
+.feedVinylWrap > .followActTogether{ right: auto; left: 14px; }
+
+/* ── Thoughts / voice notes ───────────────────────────────────────────────── */
+body #discoveryFollowingList .followAct--status.followAct--xstyle.followAct--friendsFeed{
+  margin-inline: 16px;
+  padding: 16px 18px 14px;
+  border-radius: 28px;
+  border: 1px solid var(--dz-glass-border, rgba(255, 255, 255, 0.14));
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.11);
+  overflow: hidden;
+}
+body #discoveryFollowingList .followAct--status.followAct--xstyle.followAct--friendsFeed::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #23d5ab, #7c5cff);
+}
+body #discoveryFollowingList .followAct--status.followAct--xstyle.followAct--friendsFeed .followActStatusText{
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  margin: 8px 0 4px;
+}
+
+/* ── Reposts ──────────────────────────────────────────────────────────────── */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed .followActRepostBanner{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin: 0 0 12px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--dz-glass-border, rgba(255, 255, 255, 0.14));
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* The old X-style layout indents every block under the avatar column; the new posts are full-width. */
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed > .followActTop,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed > .followActReleaseCaption,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed > .followActStylePills,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed > .followActMediaWrap,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed > .feedVinylWrap,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed > .followActActionsBar,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed > .followActContent,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed > .followActRemixFlow,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed > .followActMashup,
+body #discoveryFollowingList .followAct--xstyle.followAct--friendsFeed > .followActStatusText{
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  left: auto !important;
+  right: auto !important;
+  width: auto !important;
+  max-width: 100% !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Connect — Friends | Chats
+ * ═══════════════════════════════════════════════════════════════════════════ */
+.connectSub{ display: flex; align-items: center; }
+.connectSub[hidden]{ display: none !important; }
+.connectSeg{
+  display: flex;
+  gap: 2px;
+  margin: 14px 0 6px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--dz-glass-border, rgba(255, 255, 255, 0.14));
+  background: var(--dz-glass, rgba(255, 255, 255, 0.075));
+  box-shadow: var(--dz-glass-hi, inset 0 1px 0 rgba(255, 255, 255, 0.13));
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(24px) saturate(140%);
+}
+.connectSegBtn{
+  appearance: none;
+  flex: 1 1 0;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.58);
+  cursor: pointer;
+  transition: background 200ms ease, color 200ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.connectSegBtn.is-active{
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.connectSegBadge{
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  background: #ff4d67;
+}
+.connectSegBadge[hidden]{ display: none !important; }
+.connectFriendsPane[hidden]{ display: none !important; }
+/* One section at a time */
+#messagesPage[data-connect-seg="friends"] #messagesInboxMount,
+#messagesPage[data-connect-seg="friends"] #messagesStatus{ display: none !important; }
+#messagesPage[data-connect-seg="chats"] .connectFriendsPane{ display: none !important; }
+body.connectFriendsActive #friendsComposeFabRoot{ display: none !important; }
+/* Live now inside Connect */
+.connectFriendsPane .discoverLiveNow{ margin-top: 18px; }
+/* Filter chips */
+.friendsFeedChips{
+  display: flex;
+  gap: 8px;
+  margin: 18px 0 4px;
+  padding: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.friendsFeedChips::-webkit-scrollbar{ display: none; }
+.friendsFeedChips .nabadTabsTab{
+  flex: none;
+  height: 34px;
+  padding: 0 15px;
+  margin: 0;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+}
+.friendsFeedChips .nabadTabsTab.is-active{
+  color: #0b0b13;
+  border-color: #fff;
+  background: #fff;
+  font-weight: 800;
+}
+.connectFriendsPane #discoverFriendsPanel{ margin-top: 8px; }
+
+/* Connect header: sub-line sits under the title */
+.messagesConnectHead .discoveryStudioTitles{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+.connectFriendsPane #discoveryFollowingList{ margin-top: 16px; }
+
+/* ── Home: From your friends ─────────────────────────────────────────────── */
+.discoverFriendsTeaser[hidden]{ display: none !important; }
+.discoverSayBar{
+  appearance: none;
+  width: 100%;
+  height: 56px;
+  margin: 0 0 14px;
+  padding: 0 8px 0 8px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font: inherit;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  border: 1px solid var(--dz-glass-border, rgba(255, 255, 255, 0.14));
+  background: var(--dz-glass, rgba(255, 255, 255, 0.075));
+  box-shadow: var(--dz-glass-hi, inset 0 1px 0 rgba(255, 255, 255, 0.13));
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(24px) saturate(140%);
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverSayAv{ flex: none; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; display: block; }
+.discoverSayAvImg{ width: 100%; height: 100%; object-fit: cover; display: grid; place-items: center; border-radius: 50%; }
+.discoverSayAvFallback{ font-size: 16px; font-weight: 800; color: #fff; background: linear-gradient(135deg, #6b78e8, #23d5ab); }
+.discoverSayText{ flex: 1; min-width: 0; text-align: left; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.discoverSayGo{
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--nabad-cta-gradient, linear-gradient(148deg, #23d5ab, #7c5cff));
+  box-shadow: var(--nabad-cta-shadow, 0 8px 20px rgba(35, 213, 171, 0.2)), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.discoverFriendRail{
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 2px 20px 8px 0;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.discoverFriendRail::-webkit-scrollbar{ display: none; }
+.discoverFriendCard{ flex: 0 0 176px; width: 176px; }
+.discoverFriendCardPlay{
+  appearance: none;
+  position: relative;
+  display: block;
+  width: 176px;
+  height: 176px;
+  padding: 0;
+  border-radius: 26px;
+  overflow: hidden;
+  border: 1px solid var(--dz-glass-border, rgba(255, 255, 255, 0.14));
+  background: #0d0e16;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
+  color: #fff;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverFriendCardArt, .discoverFriendCardArt img{ position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.discoverFriendCardShade{ position: absolute; inset: 0; background: linear-gradient(180deg, transparent 42%, rgba(6, 6, 12, 0.9)); }
+.discoverFriendCardWho{
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  max-width: calc(100% - 20px);
+  padding: 0 11px 0 3px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 800;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(20, 22, 32, 0.55);
+  -webkit-backdrop-filter: blur(16px);
+          backdrop-filter: blur(16px);
+}
+.discoverFriendCardWho > span:last-child{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.discoverFriendCardAv{ width: 24px; height: 24px; border-radius: 50%; overflow: hidden; flex: none; display: block; }
+.discoverFriendCardAv img, .discoverFriendCardAv > *{ width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.discoverFriendCardPl{
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #0b0b13;
+}
+.discoverFriendCardText{ position: absolute; left: 12px; right: 56px; bottom: 12px; display: flex; flex-direction: column; gap: 1px; }
+.discoverFriendCardText strong{ font-size: 14px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.discoverFriendCardText span{ font-size: 11px; font-weight: 600; color: rgba(255, 255, 255, 0.7); }
+
+/* Connect › Friends — loading skeleton in the new post look (soft glass card, visible shimmer). */
+body #discoveryFollowingList .followAct--xstyle.followAct--skel{
+  border: 0 !important;
+  padding: 14px 16px 6px !important;
+  margin: 0 !important;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--skel .followActAvatar.followActSkelAvatar{
+  width: 46px; height: 46px; flex: none; border-radius: 50%;
+  background: var(--skeleton-shimmer-strong) !important; background-size: 200% 100% !important;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--skel .followActSkel{
+  background: var(--skeleton-shimmer-strong); background-size: 200% 100%;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--skel .followActSkelHero{
+  position: relative !important; left: auto !important; right: auto !important;
+  width: 100% !important; max-width: none !important;
+  margin: 14px 0 0 !important;
+  aspect-ratio: 1 / 1; border-radius: 28px !important;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background:
+    radial-gradient(60% 50% at 30% 20%, rgba(124, 92, 255, 0.16), transparent 70%),
+    radial-gradient(50% 45% at 75% 80%, rgba(35, 213, 171, 0.12), transparent 70%),
+    var(--skeleton-shimmer-strong) !important;
+  background-size: auto, auto, 200% 100% !important;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--skel .followActActionsBar{ margin-top: 12px; }
+body #discoveryFollowingList .followAct--xstyle.followAct--skel .followActAct--skel{
+  width: 64px; height: 42px; border-radius: 999px;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--skel .followActTop{
+  display: flex !important; flex-direction: row !important; align-items: center !important; gap: 12px !important;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--skel .followActHeadStack{
+  display: flex !important; flex-direction: column !important; gap: 8px !important; flex: 1 1 0; min-width: 0;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--skel .followActSkelMetaLine{ width: 46%; height: 13px; }
+body #discoveryFollowingList .followAct--xstyle.followAct--skel .followActSkelMetaLine.short{ width: 28%; height: 11px; }
+body #discoveryFollowingList .followAct--xstyle.followAct--skel .followActSkelHero{ aspect-ratio: 4 / 5; }
+body #discoveryFollowingList .followAct--xstyle.followAct--skel :is(.followActMetaPrimary, .followActMetaSub){
+  display: block !important; opacity: 1 !important; visibility: visible !important; width: 100% !important; height: auto !important; margin: 0 !important;
+}
+body #discoveryFollowingList .followAct--xstyle.followAct--skel .followActSkelMetaLine{ display: block !important; }
+/* Connect › Friends pane is a pull-to-refresh movable: no transform/layer while at rest (long feed = huge GPU layer). */
+#connectFriendsPane.ptrMovable:not(.isPtrPulling):not(.isPtrRefreshing):not(.isPtrSnapping){
+  transform: none;
+  will-change: auto;
+}

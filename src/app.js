@@ -22282,7 +22282,21 @@ function wireFriendsListenTogetherOnce() {
     window.setTimeout(() => btn.classList.remove("isBusy"), 900);
     const id = String(btn.getAttribute("data-friends-listen-together") || "").trim();
     const item = (_friendsFeedMergedItems || []).find((x) => x?.track && String(x.track.id || "") === id);
-    const t = item?.track;
+    let t = item?.track;
+    if (!t) {
+      // Profile posts (yours and public) aren't in the Friends feed: read the song off the post itself.
+      const row = btn.closest(".followAct");
+      const url = String(decodeDiscoverDataAttr(row, "data-user-lib-url") || "").trim();
+      if (row && url) {
+        t = {
+          id,
+          url,
+          title: String(decodeDiscoverDataAttr(row, "data-user-lib-title") || "Song"),
+          artUrl: String(decodeDiscoverDataAttr(row, "data-user-lib-art") || ""),
+          userId: String(row.querySelector("[data-avatar-user-id]")?.getAttribute("data-avatar-user-id") || ""),
+        };
+      }
+    }
     if (!t || !String(t.url || "").trim()) {
       showToast("This song has no audio yet.", { durationMs: 2600 });
       return;

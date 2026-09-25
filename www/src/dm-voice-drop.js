@@ -459,12 +459,22 @@ function blobToDataUrl(blob) {
   });
 }
 
+/**
+ * Data URL for the upload, with a clean media type. A MediaRecorder blob is typed
+ * "audio/mp4; codecs=mp4a.40.2" (Safari) / "audio/webm;codecs=opus" (Chrome), and reading it as a data URL
+ * keeps those parameters ("data:audio/mp4;codecs=…;base64,"). Send just "data:audio/mp4;base64,".
+ */
+export async function dmVoiceBlobToUploadDataUrl(blob) {
+  const clean = new Blob([blob], { type: contentTypeForBlob(blob) });
+  return blobToDataUrl(clean);
+}
+
 export async function uploadDmVoiceBlob(blob, { durationMs = 0 } = {}) {
   const minBytes = minBytesForVoiceDrop(durationMs, blob?.size || 0);
   if (!blob?.size || blob.size < minBytes) {
     throw new Error(`Recording too short (${blob?.size || 0} bytes) — try again.`);
   }
-  const dataUrl = await blobToDataUrl(blob);
+  const dataUrl = await dmVoiceBlobToUploadDataUrl(blob);
   const data = await d().messagesApi("/api/messages", {
     method: "POST",
     timeoutMs: 90000,
@@ -1005,8 +1015,51 @@ function clearVoiceDropAfterSend(localPlayUrl) {
   if (localPlayUrl) preloadVoiceDropAudio(localPlayUrl, "");
 }
 
+/**
+ * Voice messages that are still sending or failed, by client message id, so "Retry" can upload the
+ * recording again. (The failed message's own body only holds a device-local blob: URL — re-sending
+ * that gave the recipient a voice message that could never play.)
+ */
+const _pendingVoiceSends = new Map();
+
+function rememberPendingVoiceSend(cid, entry) {
+  _pendingVoiceSends.set(cid, entry);
+  while (_pendingVoiceSends.size > 12) {
+    const first = _pendingVoiceSends.keys().next().value;
+    if (first === undefined || first === cid) break;
+    _pendingVoiceSends.delete(first);
+  }
+}
+
+/** True for a voice message body that points at a device-local blob and has no uploaded file. */
+export function dmVoiceBodyIsUnuploaded(body) {
+  try {
+    const o = JSON.parse(String(body || ""));
+    if (!o || o.nabad_dm !== DM_VOICE_MARKER) return false;
+    if (String(o.k || "").trim()) return false;
+    return !/^https?:\/\//i.test(String(o.u || "").trim());
+  } catch {
+    return false;
+  }
+}
+
+export function canRetryDmVoiceDropSend(clientMessageId) {
+  return _pendingVoiceSends.has(String(clientMessageId || "").trim());
+}
+
+/** Re-uploads the recording and re-sends. Returns false when the recording is no longer in memory. */
+export async function retryDmVoiceDropSend(clientMessageId) {
+  const cid = String(clientMessageId || "").trim();
+  const entry = _pendingVoiceSends.get(cid);
+  if (!entry) return false;
+  try { d().updateOptimisticMessageStatus?.(cid, "sending"); } catch {}
+  await sendVoiceDropInBackground({ clientMessageId: cid, ...entry });
+  return true;
+}
+
 async function sendVoiceDropInBackground({ clientMessageId, threadId, blob, durationMs, peaks, localPlayUrl = "" }) {
   const cid = String(clientMessageId || "").trim();
+  rememberPendingVoiceSend(cid, { threadId, blob, durationMs, peaks, localPlayUrl });
   try {
     const { url, key } = await uploadDmVoiceBlob(blob, { durationMs });
     if (localPlayUrl) {
@@ -1044,6 +1097,7 @@ async function sendVoiceDropInBackground({ clientMessageId, threadId, blob, dura
       await d().pollNewThreadMessages?.(threadId);
     }
     await d().refreshMessagesUnreadBadge?.({ force: true });
+    _pendingVoiceSends.delete(cid);
     const remix = _pendingComposerRemix;
     if (remix && remix.clientMessageId === cid) {
       _pendingComposerRemix = null;
@@ -1075,8 +1129,9 @@ async function sendVoiceDrop({ remixMood } = {}) {
     if (go) go.disabled = false;
     return;
   }
-  if (!_blob?.size || _blob.size < 400) {
-    d().showToast?.("Record a little longer, then send.", { durationMs: 2800 });
+  if (!_blob?.size || _blob.size < Math.max(400, minBytesForVoiceDrop(_durationMs, _blob.size))) {
+    // Nothing usable was captured: say so now instead of showing a bubble that fails as "not sent".
+    d().showToast?.("Didn’t catch that — hold the mic a little longer, then send.", { durationMs: 3200 });
     const go = document.querySelector('[data-voice-clip-go="composer"]');
     if (go) go.disabled = false;
     return;

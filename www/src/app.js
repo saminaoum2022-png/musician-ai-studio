@@ -101,6 +101,9 @@ import {
   composerVoiceMixMood,
   cacheVoiceDropPlayUrl,
   preloadVoiceDropAudio,
+  canRetryDmVoiceDropSend,
+  retryDmVoiceDropSend,
+  dmVoiceBodyIsUnuploaded,
   DM_VOICE_MARKER,
   DM_VOICE_MIX_MARKER,
 } from "./dm-voice-drop.js";
@@ -38904,6 +38907,14 @@ async function retryFailedThreadMessage(clientMessageId) {
   const threadId = String(_conversationId || "").trim();
   const body = String(msg.body || "").trim();
   if (!threadId || !body) return;
+  // A voice message must be uploaded again — its body only holds a device-local blob: URL.
+  if (canRetryDmVoiceDropSend(cid)) {
+    if (await retryDmVoiceDropSend(cid)) return;
+  }
+  if (dmVoiceBodyIsUnuploaded(body)) {
+    try { showToast("Couldn’t resend this voice message — record it again.", { durationMs: 3200 }); } catch {}
+    return;
+  }
   updateOptimisticMessageStatus(cid, "sending");
   await sendThreadMessageInBackground({ clientMessageId: cid, threadId, body });
 }

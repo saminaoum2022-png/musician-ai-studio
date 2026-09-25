@@ -13,6 +13,7 @@ const {
 } = require("./_lib/credits-auth");
 const { queuePrivacySafePush, sendPrivacySafePush } = require("./_lib/onesignal-push");
 const { uploadObject } = require("./_lib/supabase-storage");
+const { parseBase64DataUrl, voiceDropBodyProblem } = require("./_lib/dm-voice");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -102,9 +103,11 @@ async function uploadVoiceDropForUser(userId, { dataBase64 = "", contentType = "
   if (!uid) return { ok: false, error: "Not signed in" };
   const raw = String(dataBase64 || "").trim();
   if (!raw) return { ok: false, error: "Missing audio" };
-  const match = raw.match(/^data:([^;]+);base64,(.+)$/i);
-  const ct = match ? match[1] : String(contentType || "audio/webm");
-  const b64 = match ? match[2] : raw;
+  // Browsers add ";codecs=…" to the type — parse leniently (see _lib/dm-voice.js).
+  const parsed = parseBase64DataUrl(raw, String(contentType || "audio/webm"));
+  const ct = parsed.contentType || String(contentType || "audio/webm");
+  const b64 = parsed.base64;
+  if (!b64) return { ok: false, error: "Invalid audio data" };
   let buf;
   try {
     buf = Buffer.from(b64, "base64");
@@ -1293,6 +1296,8 @@ async function handlePost(req, res, user) {
     const text = cleanBody(body?.body);
     const threadId = String(body?.threadId || "").trim();
     if (!text) return sendJson(res, 400, { ok: false, error: "Message required" });
+    const voiceProblem = voiceDropBodyProblem(text);
+    if (voiceProblem) return sendJson(res, 400, { ok: false, error: voiceProblem });
 
     let thread = null;
     if (threadId) {

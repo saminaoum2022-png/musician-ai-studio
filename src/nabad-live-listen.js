@@ -34,6 +34,7 @@ let _pollTimer = 0;
 let _chipEl = null;
 let _overlayEl = null;
 let _inviteBusy = false;
+let _inviteOpening = false;
 let _joinBusy = false;
 let _lastTickSentAt = 0;
 let _invitePollTimer = 0;
@@ -673,6 +674,7 @@ function openOverlay({ kicker, title, sub, art, actionsHtml, onAction, onDismiss
         </div>
       </div>`;
   if (inviteHost) overlay.classList.add("liveListenOverlay--invite");
+  overlay._llOnAction = onAction;
   overlay.innerHTML = `
     <div class="npPresenceSheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(kicker || "Listen together")}">
       <div class="npPresenceGrab" aria-hidden="true"></div>
@@ -691,8 +693,41 @@ function openOverlay({ kicker, title, sub, art, actionsHtml, onAction, onDismiss
     const btn = e.target.closest("[data-ll-act]");
     if (!btn || btn.disabled) return;
     const act = btn.getAttribute("data-ll-act");
-    try { onAction?.(act, btn); } catch {}
+    try { overlay._llOnAction?.(act, btn); } catch {}
   });
+}
+
+/** Fill an already-open overlay (used after the loading state) without closing/reopening it. */
+function updateOverlay(el, { sub, actionsHtml, onAction }) {
+  if (!el || _overlayEl !== el) return false;
+  const subEl = el.querySelector(".npPresenceArtist");
+  if (subEl && sub != null) subEl.textContent = String(sub);
+  const actions = el.querySelector(".npPresenceActions");
+  if (actions && actionsHtml != null) actions.innerHTML = actionsHtml;
+  if (onAction) el._llOnAction = onAction;
+  el.classList.remove("is-pending");
+  return true;
+}
+
+/** A calm loading state: the song, a spinning gradient ring on the art, and shimmering friend rows. */
+function pendingActionsHtml(rows = 3) {
+  const row = `<div class="llSkelRow"><span class="llSkelAv"></span><span class="llSkelLines"><i></i><i></i></span></div>`;
+  return `<div class="liveListenInviteList llSkeleton" aria-hidden="true">${row.repeat(rows)}</div>`;
+}
+
+/** Open the sheet right away in its loading state (used when we have to wait for the network). */
+function openPendingOverlay(track, sub, rows) {
+  openOverlay({
+    kicker: "Listen together",
+    title: track?.title || "Song",
+    sub,
+    art: track?.artUrl || track?.art,
+    actionsHtml: pendingActionsHtml(rows),
+    onAction: () => {},
+  });
+  const el = _overlayEl;
+  el?.classList.add("is-pending");
+  return el;
 }
 
 function hostNowMs(tick) {
@@ -1781,6 +1816,13 @@ async function createSessionForGuest(guest, track, rowBtn) {
       : raw;
     setOverlayStatus(msg);
     toast(msg, { durationMs: 4200 });
+    // The loading state must not keep spinning after a failure.
+    if (_overlayEl?.classList.contains("is-pending")) {
+      updateOverlay(_overlayEl, {
+        actionsHtml: `<button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="close">Close</button>`,
+        onAction: (act) => { if (act === "close") closeOverlay(); },
+      });
+    }
     if (rowBtn) {
       rowBtn.disabled = false;
       const sub = rowBtn.querySelector(".messagesShareRowBody span");
@@ -1791,7 +1833,7 @@ async function createSessionForGuest(guest, track, rowBtn) {
   }
 }
 
-function renderInviteList(friends, track) {
+function inviteListActionsHtml(friends) {
   const rows = (friends || []).map((f, idx) => {
     const handle = escapeHtml(displayName(f));
     return `
@@ -1803,18 +1845,57 @@ function renderInviteList(friends, track) {
         </span>
       </button>`;
   }).join("");
+  return `<div class="liveListenInviteList">${rows || `<div class="messagesShareEmpty">Become mutual fans with someone first.</div>`}</div>`;
+}
+
+function inviteHandler(friends, track) {
+  return (act, btn) => {
+    if (act !== "invite") return;
+    const friend = friends[Number(btn.getAttribute("data-ll-friend"))];
+    if (friend) void createSessionForGuest(friend, track, btn);
+  };
+}
+
+function renderInviteList(friends, track) {
   openOverlay({
     kicker: "Listen together",
     title: track?.title || "Song",
     sub: "Pick a friend to invite",
     art: track?.artUrl || track?.art,
-    actionsHtml: `<div class="liveListenInviteList">${rows || `<div class="messagesShareEmpty">Become mutual fans with someone first.</div>`}</div>`,
-    onAction: (act, btn) => {
-      if (act !== "invite") return;
-      const friend = friends[Number(btn.getAttribute("data-ll-friend"))];
-      if (friend) void createSessionForGuest(friend, track, btn);
-    },
+    actionsHtml: inviteListActionsHtml(friends),
+    onAction: inviteHandler(friends, track),
   });
+}
+
+/** Friend picker for a song. Never leaves the tap looking ignored: friends already known open instantly (and refresh
+ *  quietly); otherwise the sheet opens at once in a loading state and fills when the friends arrive. */
+async function showInviteSheet(track) {
+  if (_inviteOpening) return;
+  const warm = bridge.peekMutualFriends?.();
+  if (warm && warm.length) {
+    renderInviteList(warm, track);
+    const el = _overlayEl;
+    void (async () => {
+      try {
+        const fresh = await bridge.fetchMutualFriendsForShare?.({ fresh: true });
+        if (fresh && fresh.length && el && _overlayEl === el && fresh.map((f) => f.userId).join() !== warm.map((f) => f.userId).join()) {
+          updateOverlay(el, { actionsHtml: inviteListActionsHtml(fresh), onAction: inviteHandler(fresh, track) });
+        }
+      } catch {}
+    })();
+    return;
+  }
+  _inviteOpening = true;
+  const el = openPendingOverlay(track, "Finding your friends…", 3);
+  let friends = [];
+  try {
+    friends = await bridge.fetchMutualFriendsForShare?.() || [];
+  } catch {
+    friends = [];
+  } finally {
+    _inviteOpening = false;
+  }
+  updateOverlay(el, { sub: "Pick a friend to invite", actionsHtml: inviteListActionsHtml(friends), onAction: inviteHandler(friends, track) });
 }
 
 function presenceSongTrack(presence) {
@@ -1865,6 +1946,7 @@ export async function openLiveListenInviteFromChat(opts = {}) {
     return;
   }
   try { bridge.primePlayerInGesture?.(); } catch {}
+  openPendingOverlay(track, `Inviting @${String(partner.username || partner.displayName || "friend").replace(/^@/, "")}…`, 1);
   await createSessionForGuest({
     userId: partner.userId,
     username: partner.username || partner.displayName,
@@ -1881,13 +1963,7 @@ export async function openLiveListenInviteFromPlayer() {
     toast("Play a song first, then invite.");
     return;
   }
-  let friends = [];
-  try {
-    friends = await bridge.fetchMutualFriendsForShare?.() || [];
-  } catch {
-    friends = [];
-  }
-  renderInviteList(friends, track);
+  await showInviteSheet(track);
 }
 
 /** Start a listen with one specific friend (e.g. from Discover's "Live now"): they are invited to this song. */
@@ -1903,6 +1979,7 @@ export async function openLiveListenInviteWithFriend(friend, track) {
     return;
   }
   try { bridge.primePlayerInGesture?.(); } catch {}
+  openPendingOverlay(track, `Inviting @${String(friend.username || friend.displayName || "friend").replace(/^@/, "")}…`, 1);
   await createSessionForGuest({
     userId: friend.userId,
     username: friend.username || friend.displayName,
@@ -1923,13 +2000,7 @@ export async function openLiveListenInviteForTrack(track) {
     toast("This song has no audio yet.");
     return;
   }
-  let friends = [];
-  try {
-    friends = await bridge.fetchMutualFriendsForShare?.() || [];
-  } catch {
-    friends = [];
-  }
-  renderInviteList(friends, track);
+  await showInviteSheet(track);
 }
 
 export function decorateNowPlayingPresenceActions(overlay, presence) {

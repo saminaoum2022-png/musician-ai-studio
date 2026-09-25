@@ -4800,6 +4800,8 @@ function wireFloatingTabDock() {
   if (!tabbar) return;
   let lastY = window.scrollY || document.documentElement.scrollTop || 0;
   const THRESH = 16;
+  const UP_REVEAL_PX = 56;
+  let upTravel = 0;
 
   function onScroll(e) {
     if (Date.now() < tabbarDockIgnoreScrollUntil) return;
@@ -4817,12 +4819,19 @@ function wireFloatingTabDock() {
     const dy = y - lastY;
     lastY = y;
     if (y < 28) {
+      upTravel = 0;
       setTabbarCollapsed(false);
       return;
     }
-    // Stay collapsed until the dock (active tab, parked right) is tapped
-    // or the user returns to top.
+    // Collapse on a deliberate scroll down; bring the bar back on a deliberate scroll up
+    // (or by tapping the dock, or on returning to the top).
+    if (dy > 0) upTravel = 0;
+    else if (dy < 0) upTravel += -dy;
     if (dy > THRESH) setTabbarCollapsed(true);
+    else if (upTravel >= UP_REVEAL_PX && document.body.classList.contains("tabbarCollapsed")) {
+      upTravel = 0;
+      setTabbarCollapsed(false);
+    }
   }
 
   function expandFromDock(ev) {
@@ -12737,8 +12746,8 @@ function discoverCommunityPicksTracks(tracks) {
 
 const DISCOVER_FEED_TABS = [
   { id: "for-you", label: "For You" },
-  { id: "occasions", label: "Occasions" },
-  { id: "challenges", label: "Challenges" },
+  { id: "occasions", label: "Moments" },
+  { id: "challenges", label: "Sparks" },
 ];
 const DISCOVER_FEED_TAB_KEY = "nabad_discover_feed_tab";
 
@@ -14207,7 +14216,7 @@ function discoverLiveNowInnerHtml() {
     </div>`;
 }
 
-const LIVE_TOGETHER_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 14.5h2.5a1.8 1.8 0 0 1 1.8 1.8v2.4a1.8 1.8 0 0 1-1.8 1.8H5.3a1.8 1.8 0 0 1-1.8-1.8v-5.7a8.5 8.5 0 0 1 17 0v5.7a1.8 1.8 0 0 1-1.8 1.8h-.7a1.8 1.8 0 0 1-1.8-1.8v-2.4a1.8 1.8 0 0 1 1.8-1.8h2.5"/></svg>`;
+const LIVE_TOGETHER_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="12.4" r="2.3"/><circle cx="18" cy="12.4" r="2.3"/><path d="M6 10.1V9.6a6 6 0 0 1 12 0v.5"/><path d="M2.6 20c.3-2.2 1.7-3.6 3.4-3.6S9.1 17.8 9.4 20M14.6 20c.3-2.2 1.7-3.6 3.4-3.6s3.1 1.4 3.4 3.6"/></svg>`;
 
 /** Presence under "Connect" — shown on both Friends and Chats. Quiet when nobody is live. */
 function connectPresenceInnerHtml() {
@@ -22248,7 +22257,11 @@ function wireFriendsListenTogetherOnce() {
     if (!btn) return;
     e.preventDefault();
     e.stopPropagation();
+    if (btn.classList.contains("isBusy")) return;
     haptic("light");
+    // Instant acknowledgement: the icon turns into a spinner until the sheet is up (a tap should never look ignored).
+    btn.classList.add("isBusy");
+    window.setTimeout(() => btn.classList.remove("isBusy"), 900);
     const id = String(btn.getAttribute("data-friends-listen-together") || "").trim();
     const item = (_friendsFeedMergedItems || []).find((x) => x?.track && String(x.track.id || "") === id);
     const t = item?.track;
@@ -39834,7 +39847,42 @@ function hideSendToFriendConfirm() {
   if (lead) lead.textContent = SEND_TO_FRIEND_LEAD_DEFAULT;
 }
 
-async function fetchMutualFriendsForShare() {
+/** Mutual friends take a few network calls to build (~3s). Keep the result so "Listen together", the Send-to-friend
+ *  sheet and the live-friends strip open instantly; a refresh runs in the background when it is older than the TTL. */
+const MUTUAL_FRIENDS_TTL_MS = 3 * 60_000;
+const _mutualFriendsCache = { uid: "", at: 0, list: null, inflight: null };
+
+function peekMutualFriendsForShare() {
+  const c = _mutualFriendsCache;
+  const uid = String(authSession?.user?.id || "").trim();
+  return uid && c.uid === uid && c.list && c.list.length && Date.now() - c.at < MUTUAL_FRIENDS_TTL_MS ? c.list : null;
+}
+
+async function fetchMutualFriendsForShare({ fresh = false } = {}) {
+  const c = _mutualFriendsCache;
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid) return [];
+  if (!fresh) {
+    const hit = peekMutualFriendsForShare();
+    if (hit) return hit;
+  }
+  if (c.inflight && c.uid === uid) return c.inflight;
+  const run = (async () => {
+    try {
+      const list = await fetchMutualFriendsForShareUncached();
+      // Don't cache an empty answer: it may just be a failed request.
+      if (list.length) { c.uid = uid; c.at = Date.now(); c.list = list; }
+      return list;
+    } finally {
+      c.inflight = null;
+    }
+  })();
+  c.uid = uid;
+  c.inflight = run;
+  return run;
+}
+
+async function fetchMutualFriendsForShareUncached() {
   const uid = String(authSession?.user?.id || "").trim();
   if (!uid) return [];
   const [inbox, following] = await Promise.all([
@@ -79908,6 +79956,7 @@ try {
     escapeHtml,
     messagesAvatarHtml,
     fetchMutualFriendsForShare,
+    peekMutualFriends: peekMutualFriendsForShare,
     resolveShareableAudioUrl,
     messagesApi,
     formatTime,

@@ -22385,7 +22385,9 @@ input::placeholder, textarea::placeholder{
     border: 0;
     border-radius: 0;
     padding: var(--tab-pad-y) var(--tab-pad-x) max(10px, env(safe-area-inset-bottom)) var(--tab-pad-x);
-    background: transparent;
+    /* soft base so page text never runs into the glass edge */
+    background: linear-gradient(0deg, color-mix(in srgb, var(--bg) 82%, transparent) 0%, transparent 100%);
+    transition: background 260ms ease;
     box-shadow: none;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -22393,6 +22395,7 @@ input::placeholder, textarea::placeholder{
     overflow: visible;
     touch-action: none;
   }
+  body.tabbarCollapsed .mobileTabbar{ background: transparent; }
   /* Catch taps on the glass, gutters, and home-indicator strip so they
      cannot fall through to the page scrolling behind the dock. */
   .mobileTabbar::before{
@@ -22416,7 +22419,7 @@ input::placeholder, textarea::placeholder{
     border-radius: 999px;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 42%, rgba(255, 255, 255, 0.04)),
-      color-mix(in srgb, var(--bg) 38%, transparent);
+      color-mix(in srgb, var(--bg) 64%, transparent);
     -webkit-backdrop-filter: blur(44px) saturate(1.45);
     backdrop-filter: blur(44px) saturate(1.45);
     box-shadow:
@@ -22547,7 +22550,7 @@ input::placeholder, textarea::placeholder{
     border-radius: 50%;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 42%, rgba(255, 255, 255, 0.04)),
-      color-mix(in srgb, var(--bg) 38%, transparent);
+      color-mix(in srgb, var(--bg) 64%, transparent);
     box-shadow:
       inset 0 0.5px 0 rgba(255, 255, 255, 0.30),
       inset 0 -0.5px 0 rgba(255, 255, 255, 0.18),
@@ -22730,10 +22733,11 @@ input::placeholder, textarea::placeholder{
    * (the house sits small in its 24px viewBox); margin-top keeps each icon centred at y = 23px. */
   .mobileTabbar a .tabIcoHome path,
   .mobileTabbar a .tabIcoMessages path,
-  .mobileTabbar a .tabIcoActivity polyline,
+  .mobileTabbar a .tabIcoMessages circle,
+  .mobileTabbar a .tabIcoActivity path,
   .mobileTabbar a .tabIcoProfileGuest path,
   .mobileTabbar a .tabIcoProfileGuest circle{
-    stroke-width: 2;
+    stroke-width: 1.9;
   }
   .mobileTabbar a .tabIcoHome{
     width: 28px;
@@ -23199,16 +23203,9 @@ input::placeholder, textarea::placeholder{
     transform: none;
     filter: none;
   }
-  .mobileTabbar a.active .tabIcoHome path{
-    fill: currentColor;
-    stroke: currentColor;
-    stroke-width: 1.5;
-  }
-  .mobileTabbar a.active .tabIcoMessages path{
-    fill: currentColor;
-    stroke: currentColor;
-    stroke-width: 1.5;
-  }
+  /* Active: the same drawing with a soft fill inside (never a different, heavier shape). */
+  .mobileTabbar a .tabIco .tabIcoFill{ fill: none; stroke: none; transition: fill 200ms ease; }
+  .mobileTabbar a.active .tabIco .tabIcoFill{ fill: currentColor; fill-opacity: 0.22; }
   .mobileTabbar a.tabCreate.active .tabIco,
   .mobileTabbar a.tabCreate.tabIsReady .tabIco,
   .mobileTabbar a.tabCreate.tabIsListen .tabIco,
@@ -23236,9 +23233,8 @@ input::placeholder, textarea::placeholder{
     stroke: #fff;
     stroke-width: 1.75;
   }
-  .mobileTabbar a.active .tabIcoActivity polyline{
+  .mobileTabbar a.active .tabIcoActivity path:not(.tabIcoFill){
     stroke: #fff;
-    stroke-width: 2.5;
   }
   .mobileTabbar a.friendsTab.active,
   .mobileTabbar a.messagesTab.active{
@@ -66971,3 +66967,98 @@ body #discoveryFollowingList .feedSeek.hasFeedHook .feedHookMarker::before{ widt
 /* publish sheet preview: a mini bar instead of waveform bars */
 .publishReleaseDesignBar{ display: block; width: 100%; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.24); overflow: hidden; }
 .publishReleaseDesignBar i{ display: block; width: 38%; height: 100%; border-radius: inherit; background: #fff; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Listen together — loading states (a tap always gets an answer at once)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+/* The post icon becomes a small spinner the moment it is tapped */
+.followActAct--together{ position: relative; }
+.followActAct--together.isBusy svg{ opacity: 0; }
+.followActAct--together.isBusy::after{
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-top-color: #23d5ab;
+  animation: llSpin 0.7s linear infinite;
+}
+@keyframes llSpin{ to{ transform: rotate(360deg); } }
+
+/* Sheet: a thin gradient light sweeps across the top edge while it waits, and the cover breathes */
+.liveListenOverlay .npPresenceSheet{ position: relative; overflow: hidden; }
+.liveListenOverlay.is-pending .npPresenceSheet::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 42%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #23d5ab, #7c5cff, transparent);
+  animation: llSweep 1.15s ease-in-out infinite;
+  z-index: 3;
+}
+@keyframes llSweep{ 0%{ transform: translateX(-100%); } 100%{ transform: translateX(240%); } }
+.liveListenOverlay.is-pending .npPresenceArt{ animation: llArtBreathe 1.6s ease-in-out infinite; }
+@keyframes llArtBreathe{
+  0%, 100%{ transform: scale(1); box-shadow: 0 0 0 0 rgba(35, 213, 171, 0); }
+  50%{ transform: scale(1.035); box-shadow: 0 0 26px 2px rgba(35, 213, 171, 0.28); }
+}
+.liveListenOverlay.is-pending .npPresenceArtist{ color: #23d5ab; }
+
+/* Friend rows while loading */
+.liveListenInviteList.llSkeleton{ gap: 6px; pointer-events: none; }
+.llSkelRow{ display: flex; align-items: center; gap: 12px; padding: 8px 4px; }
+.llSkelAv{ flex: none; width: 44px; height: 44px; border-radius: 50%; }
+.llSkelLines{ flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.llSkelLines i{ display: block; height: 11px; width: 46%; border-radius: 6px; }
+.llSkelLines i + i{ width: 30%; height: 9px; }
+.llSkelAv, .llSkelLines i{
+  background: var(--skeleton-shimmer-strong, linear-gradient(110deg, rgba(255,255,255,0.08), rgba(255,255,255,0.18), rgba(255,255,255,0.08)));
+  background-size: 200% 100%;
+  animation: discoveryShimmer 1.15s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce){
+  .liveListenOverlay.is-pending .npPresenceSheet::before,
+  .liveListenOverlay.is-pending .npPresenceArt{ animation: none; }
+}
+
+/* Discover tabs: equal thirds in a glass pill, the active one lifted (ID-level so the older underline-strip rules can't win) */
+body[data-route="discover"] #discoverFeedTabs.discoverFeedTabs{ margin: 14px 0 0; padding: 0; }
+body[data-route="discover"] #discoverFeedTabs .nabadTabsTrack{
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 2px;
+  padding: 4px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--dz-glass-border);
+}
+body[data-route="discover"] #discoverFeedTabs .nabadTabsTab{
+  flex: 1 1 0;
+  min-width: 0;
+  height: 36px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.58);
+}
+body[data-route="discover"] #discoverFeedTabs .nabadTabsTab.is-active{
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+body[data-route="discover"] #discoverFeedTabs .nabadTabsTab.is-active::after,
+body[data-route="discover"] #discoverFeedTabs .nabadTabsTab::after{ display: none !important; content: none !important; }

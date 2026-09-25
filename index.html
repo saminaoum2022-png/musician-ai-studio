@@ -1800,8 +1800,8 @@
             <nav id="discoverFeedTabs" class="nabadTabs discoverFeedTabs" aria-label="Home categories">
               <div class="nabadTabsTrack discoverFeedTabsTrack" role="tablist">
                 <button type="button" class="nabadTabsTab is-active" role="tab" aria-selected="true" data-discover-feed-tab="for-you"><span class="nabadTabsLabel">For You</span></button>
-                <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-discover-feed-tab="occasions"><span class="nabadTabsLabel">Occasions</span></button>
-                <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-discover-feed-tab="challenges"><span class="nabadTabsLabel">Challenges</span></button>
+                <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-discover-feed-tab="occasions"><span class="nabadTabsLabel">Moments</span></button>
+                <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-discover-feed-tab="challenges"><span class="nabadTabsLabel">Sparks</span></button>
               </div>
             </nav>
             <div id="discoverFeedMount" class="discoverFeedMount" aria-live="polite"></div>
@@ -5006,16 +5006,19 @@
         <span class="tabGlassThumb" aria-hidden="true"></span>
         <a href="#/discover" data-route-link="discover" data-tab-slot="l2" aria-label="Home">
           <svg class="tabIco tabIcoDiscover tabIcoHome" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M12 4.75 19.75 11v8.25a1.25 1.25 0 0 1-1.25 1.25H5.5A1.25 1.25 0 0 1 4.25 19.25V11L12 4.75z"/>
+            <path class="tabIcoFill" fill="none" stroke="none" d="M4 10.4 12 4l8 6.4V19a1.5 1.5 0 0 1-1.5 1.5H15v-4.6a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v4.6H5.5A1.5 1.5 0 0 1 4 19z"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M4 10.4 12 4l8 6.4V19a1.5 1.5 0 0 1-1.5 1.5H15v-4.6a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v4.6H5.5A1.5 1.5 0 0 1 4 19z"/>
           </svg>
           <span class="tabLabel">Home</span>
         </a>
         <a href="#/messages" data-route-link="messages" class="messagesTab" data-tab-slot="l1" aria-label="Connect">
           <svg class="tabIco tabIcoMessages" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="9" cy="8" r="3.4" fill="none" stroke="currentColor" stroke-width="2.1"/>
-            <path fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" d="M2.6 20c0-3.5 2.8-5.8 6.4-5.8s6.4 2.3 6.4 5.8"/>
-            <circle cx="17.4" cy="9" r="2.6" fill="none" stroke="currentColor" stroke-width="2.1"/>
-            <path fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" d="M16 14.4c2.9.2 5.4 2 5.4 5.1"/>
+            <circle class="tabIcoFill" cx="9" cy="8" r="3.4" fill="none" stroke="none"/>
+            <circle class="tabIcoFill" cx="17.4" cy="9" r="2.6" fill="none" stroke="none"/>
+            <circle cx="9" cy="8" r="3.4" fill="none" stroke="currentColor" stroke-width="1.9"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M2.6 20c0-3.5 2.8-5.8 6.4-5.8s6.4 2.3 6.4 5.8"/>
+            <circle cx="17.4" cy="9" r="2.6" fill="none" stroke="currentColor" stroke-width="1.9"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M16 14.4c2.9.2 5.4 2 5.4 5.1"/>
           </svg>
           <span class="tabLabel">Connect</span>
           <span id="messagesTabBadge" class="friendsTabDmBadge" hidden aria-hidden="true"></span>
@@ -5032,7 +5035,9 @@
         </a>
         <a href="#/activity" data-route-link="activity" class="activityTab" data-tab-slot="r1" aria-label="Activity">
           <svg class="tabIco tabIcoActivity" viewBox="0 0 24 24" aria-hidden="true">
-            <polyline fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            <path class="tabIcoFill" fill="none" stroke="none" d="M6.2 16.4V11a5.8 5.8 0 0 1 11.6 0v5.4l1.5 2H4.7z"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M6.2 16.4V11a5.8 5.8 0 0 1 11.6 0v5.4l1.5 2H4.7z"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M10 20.6a2.1 2.1 0 0 0 4 0"/>
           </svg>
           <span class="tabLabel">Activity</span>
           <span id="activityTabDot" class="hubDot activityTabDot" style="display:none" aria-hidden="true"></span>

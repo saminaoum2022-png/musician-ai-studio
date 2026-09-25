@@ -262,6 +262,13 @@ if (fs.existsSync(splashAssets)) {
   console.log("sync-www: assets/splash/ → www/assets/splash/");
 }
 
+const fontAssets = path.join(root, "assets", "fonts");
+if (fs.existsSync(fontAssets)) {
+  fs.mkdirSync(path.join(root, "www", "assets"), { recursive: true });
+  execSync(`rsync -a assets/fonts/ www/assets/fonts/`, { cwd: root, stdio: "inherit" });
+  console.log("sync-www: assets/fonts/ → www/assets/fonts/");
+}
+
 const discoverAssets = path.join(root, "assets", "discover");
 const wwwDiscoverAssets = path.join(root, "www", "assets", "discover");
 if (fs.existsSync(discoverAssets)) {

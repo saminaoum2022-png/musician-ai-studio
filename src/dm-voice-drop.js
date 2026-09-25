@@ -740,9 +740,14 @@ function stopRecording() {
     return;
   }
   if (_recState !== "recording" || !_recorder) return;
-  try {
-    if (typeof _recorder.requestData === "function") _recorder.requestData();
-  } catch {}
+  // WebKit (Safari and every iPhone browser) discards the recording when requestData() is called
+  // right before stop(): clips under ~1.2s came out empty ("Recording too short") and longer ones
+  // lost their tail. stop() already flushes the final chunk, so only other engines get the extra flush.
+  if (!isSafariLikeRecorderEnv()) {
+    try {
+      if (typeof _recorder.requestData === "function") _recorder.requestData();
+    } catch {}
+  }
   try { _recorder.stop(); } catch {}
 }
 

@@ -101,6 +101,9 @@ import {
   composerVoiceMixMood,
   cacheVoiceDropPlayUrl,
   preloadVoiceDropAudio,
+  canRetryDmVoiceDropSend,
+  retryDmVoiceDropSend,
+  dmVoiceBodyIsUnuploaded,
   DM_VOICE_MARKER,
   DM_VOICE_MIX_MARKER,
 } from "./dm-voice-drop.js";
@@ -183,6 +186,7 @@ import {
   playerEmptyArtUrl,
 } from "./cover-art/placeholders.js";
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
+import { openCoverStudio, configureCoverStudio } from "./cover-studio.js";
 import { portrait916CropRect } from "./cover-art/portrait-normalize.js";
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays, feedActIconRepost, feedActIconShare } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetForTarget, openGiftSheetFromButton } from "./gifts.js";
@@ -38904,6 +38908,14 @@ async function retryFailedThreadMessage(clientMessageId) {
   const threadId = String(_conversationId || "").trim();
   const body = String(msg.body || "").trim();
   if (!threadId || !body) return;
+  // A voice message must be uploaded again — its body only holds a device-local blob: URL.
+  if (canRetryDmVoiceDropSend(cid)) {
+    if (await retryDmVoiceDropSend(cid)) return;
+  }
+  if (dmVoiceBodyIsUnuploaded(body)) {
+    try { showToast("Couldn’t resend this voice message — record it again.", { durationMs: 3200 }); } catch {}
+    return;
+  }
   updateOptimisticMessageStatus(cid, "sending");
   await sendThreadMessageInBackground({ clientMessageId: cid, threadId, body });
 }
@@ -49455,7 +49467,7 @@ function renderTrackSheetLibrary(track) {
     ${nabadSongEditEnabled() && recordEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_song_edit">Edit structure</button>` : ""}
     ${!isSound && recordEligible ? `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--proSinger" data-track-sheet-action="library_pro_singer">Request real singer</button>` : ""}
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
-    ${profilePublic ? "" : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_change_cover">Change cover</button>`}
+    ${profilePublic ? "" : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_change_cover">Cover Studio</button>`}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_pin">${escapeHtml(pinLabel)}</button>
     ${trackSheetDownloadRowsHtml(track)}
     ${musicVideoEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_music_video">${musicVideoLabel}</button>` : ""}
@@ -50327,7 +50339,7 @@ function runTrackSheetAction(action, sourceEl) {
     }
     if (action === "library_change_cover") {
       shut();
-      openPlayerChangeCoverPicker();
+      void openCoverStudioForTrack(t.id);
       return;
     }
     if (action === "library_details") {
@@ -65195,6 +65207,72 @@ function resolvePlayerLibraryTrack() {
   return currentPlayerTrackRef;
 }
 
+/** Opens the Cover Studio for one of the user's library songs. */
+async function openCoverStudioForTrack(trackId) {
+  const id = String(trackId || "").trim();
+  const track = id ? loadLibrary().find((x) => String(x.id) === id) : null;
+  if (!track) {
+    showToast("Open one of your own songs to edit its cover.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  const rawUrl = trackCoverArtForThumbEdit(track);
+  const hasCover = Boolean(rawUrl && rawUrl !== DEFAULT_SONG_COVER_URL && !isDefaultSongCoverUrl(rawUrl) && !isLogoCoverUrl(rawUrl));
+  await openCoverStudio({
+    trackId: id,
+    title: String(track.title || "").trim(),
+    handle: String(activeProfile?.username || "").replace(/^@/, "").trim(),
+    sourceUrl: hasCover ? rawUrl : "",
+    thumbFrame: track.meta?.thumbFrame,
+    canMagic: playerCanRegenerateCover(track),
+    onMagic: () => openCoverRegenSheet(loadLibrary().find((x) => String(x.id) === id) || track),
+    onSave: (result) => applyCoverStudioResult(id, result),
+  });
+}
+
+/** Saves what the Cover Studio produced: the (optional) new portrait cover + the square thumbnail frame. */
+async function applyCoverStudioResult(trackId, result) {
+  const id = String(trackId || "").trim();
+  const prev = loadLibrary().find((x) => String(x.id) === id);
+  if (!prev || !result) return;
+  const url = result.mainChanged ? String(result.mainDataUrl || "") : "";
+  const nextMeta = {
+    ...(prev.meta || {}),
+    ...(url ? { imageUrl: url } : {}),
+    imageThumb: String(result.thumbDataUrl || ""),
+    thumbFrame: { ...(result.thumbFrame || {}) },
+  };
+  patchLibraryTrack(id, url ? { artUrl: url, meta: nextMeta } : { meta: nextMeta });
+  const trackRef = loadLibrary().find((x) => String(x.id) === id) || { ...prev, meta: nextMeta };
+  const isCurrent = String(currentPlayerTrackRef?.id || "") === id;
+  if (isCurrent) {
+    currentPlayerTrackRef = trackRef;
+    if (url) {
+      setPlayerMeta({
+        title: els.playerTitle?.textContent || trackRef.title || "Library song",
+        subtitle: els.playerSubtitle?.textContent || "Library • Full song",
+        artUrl: url,
+      });
+      flashPlayerCover();
+    }
+  }
+  showShareToast("Cover updated");
+  void (async () => {
+    const publicUrl = url ? await persistTrackCoverIfNeeded(trackRef) : await persistTrackThumbIfNeeded(trackRef);
+    const fresh = loadLibrary().find((x) => String(x.id) === id) || trackRef;
+    if (isCurrent) {
+      currentPlayerTrackRef = fresh;
+      if (url && publicUrl) {
+        setPlayerMeta({
+          title: els.playerTitle?.textContent || fresh.title || "Library song",
+          subtitle: els.playerSubtitle?.textContent || "Library • Full song",
+          artUrl: trackCoverArtForFeed(fresh),
+        });
+      }
+    }
+    refreshCoverChangeSurfaces(fresh, (url && publicUrl) || "");
+  })();
+}
+
 function openPlayerChangeCoverPicker() {
   if (!playerCoverToolsContextAllowed()) {
     showToast("Open this song from your Library to change the cover.", { icon: "!", durationMs: 3200 });
@@ -65236,22 +65314,10 @@ function syncPlayerCoverToolsRail() {
     rail.hidden = true;
     return;
   }
-  const canRegen = playerCanRegenerateCover(track);
-  const canEdit = playerCanEditThumb(track);
-  if (!canRegen && !canEdit) {
-    rail.hidden = true;
-    return;
-  }
+  // One button: Cover Studio (crop, thumbnail, text — and ✦ Magic for AI covers, inside).
   rail.hidden = false;
-  if (els.btnPlayerRegenCover) {
-    els.btnPlayerRegenCover.hidden = !canRegen;
-    if (canRegen) {
-      const locked = proFeatureLocked();
-      els.btnPlayerRegenCover.classList.toggle("isProLocked", locked);
-      setWebProFeaturePill(els.btnPlayerRegenCover, locked, "act");
-    }
-  }
-  if (els.btnPlayerEditThumb) els.btnPlayerEditThumb.hidden = !canEdit;
+  if (els.btnPlayerRegenCover) els.btnPlayerRegenCover.hidden = true;
+  if (els.btnPlayerEditThumb) els.btnPlayerEditThumb.hidden = false;
 }
 
 let _thumbEditTrackId = "";
@@ -67153,7 +67219,44 @@ function showShareToast(message) {
  *  cancel / dismiss. Replaces window.confirm() so we can keep the
  *  app's minimal aesthetic and avoid the iOS PWA system dialog. */
 let _playerConfirmResolver = null;
+let _playerConfirmWired = false;
+/**
+ * Wires the player's inline confirm sheet (Save / Cancel / backdrop / Esc / Enter). Idempotent, and called
+ * every time the sheet opens: this used to live in a DOMContentLoaded listener that never ran, because
+ * app.js is loaded by a dynamic import() after the page has already loaded (index.html). The sheet then
+ * opened but could not be dismissed, and its full-screen backdrop swallowed every tap — the player looked frozen.
+ */
+function wirePlayerConfirmOnce() {
+  if (_playerConfirmWired) return;
+  _playerConfirmWired = true;
+  if (els.playerConfirmOk) {
+    els.playerConfirmOk.addEventListener("click", () => dismissPlayerConfirm(true));
+  }
+  if (els.playerConfirmCancel) {
+    els.playerConfirmCancel.addEventListener("click", () => dismissPlayerConfirm(false));
+  }
+  // Tap the dim backdrop = cancel.
+  if (els.playerConfirm) {
+    els.playerConfirm.addEventListener("click", (e) => {
+      if (e.target === els.playerConfirm) dismissPlayerConfirm(false);
+    });
+  }
+  // Escape = cancel, Enter = confirm (only while the modal is open).
+  document.addEventListener("keydown", (e) => {
+    const wrap = els.playerConfirm;
+    if (!wrap || wrap.hidden || !wrap.classList.contains("show")) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      dismissPlayerConfirm(false);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      dismissPlayerConfirm(true);
+    }
+  });
+}
+
 function playerInlineConfirm({ text, confirmLabel, cancelLabel, thumbUrl, danger } = {}) {
+  wirePlayerConfirmOnce();
   return new Promise((resolve) => {
     const wrap = els.playerConfirm;
     const txt = els.playerConfirmText;
@@ -67217,35 +67320,21 @@ if (typeof document !== "undefined") {
     if (!isTextSelectionAllowedTarget(e.target)) e.preventDefault();
   }, { capture: true });
 
-  document.addEventListener("DOMContentLoaded", () => {
+  // app.js is loaded by a dynamic import() once the page is already interactive, so DOMContentLoaded has
+  // usually fired before this line runs — a plain DOMContentLoaded listener never ran (that silently disabled
+  // the three inits below since the splash change on 2026-09-15). Run now if the page is already loaded, on
+  // the next tick so every declaration in this module has been evaluated.
+  const initPageUiOnce = () => {
     try { initNabadVerificationUi(); } catch {}
     try { initCoverImageFallbackOnce(); } catch {}
     try { initFeedVinylPlayerSystem(); } catch {}
-    if (els.playerConfirmOk) {
-      els.playerConfirmOk.addEventListener("click", () => dismissPlayerConfirm(true));
-    }
-    if (els.playerConfirmCancel) {
-      els.playerConfirmCancel.addEventListener("click", () => dismissPlayerConfirm(false));
-    }
-    // Tap the dim backdrop = cancel.
-    if (els.playerConfirm) {
-      els.playerConfirm.addEventListener("click", (e) => {
-        if (e.target === els.playerConfirm) dismissPlayerConfirm(false);
-      });
-    }
-    // Escape = cancel, Enter = confirm (only while the modal is open).
-    document.addEventListener("keydown", (e) => {
-      const wrap = els.playerConfirm;
-      if (!wrap || wrap.hidden || !wrap.classList.contains("show")) return;
-      if (e.key === "Escape") {
-        e.preventDefault();
-        dismissPlayerConfirm(false);
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        dismissPlayerConfirm(true);
-      }
-    });
-  }, { once: true });
+    try { wirePlayerConfirmOnce(); } catch {}
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initPageUiOnce, { once: true });
+  } else {
+    window.setTimeout(initPageUiOnce, 0);
+  }
 }
 
 /** Briefly flash the player cover after a save. Pure visual feedback —
@@ -76305,8 +76394,7 @@ if (els.btnPlayerEditThumb) {
     e.stopPropagation();
     try { haptic("light"); } catch {}
     const id = String(resolvePlayerLibraryTrack()?.id || currentPlayerTrackRef?.id || "").trim();
-    const track = id ? loadLibrary().find((x) => String(x.id) === id) : null;
-    void openThumbEditSheet(track || resolvePlayerLibraryTrack());
+    void openCoverStudioForTrack(id);
   });
 }
 if (els.btnThumbEditClose) {
@@ -79255,6 +79343,14 @@ try {
   });
   syncNabadSongEditCreateTab();
 } catch (e) { console.warn("[nabad-song-edit] init", e); }
+
+try {
+  configureCoverStudio({
+    haptic,
+    showToast,
+    loadImage: (src) => loadCoverRasterImage(src, { bustCache: true }),
+  });
+} catch (e) { console.warn("[cover-studio] init", e); }
 
 try {
   configureNabadLiveListen({

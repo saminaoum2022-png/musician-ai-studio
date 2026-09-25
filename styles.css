@@ -64881,3 +64881,412 @@ body.liveListenGuest .playerTransport{
   .liveListenRoomCount.is-tick,
   .liveListenFloat{ animation-duration: 1ms; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Cover Studio — full-screen cover maker (Cover · Thumbnail · Text)
+ * Same liquid-glass language as the Create panels and Listen together. Fonts are bundled (offline).
+ * ═══════════════════════════════════════════════════════════════════════════ */
+@font-face{font-family:"csNabad";font-style:normal;font-weight:900;font-display:swap;src:url("./assets/fonts/cover/csNabad-latin.woff2") format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}
+@font-face{font-family:"csModern";font-style:normal;font-weight:700;font-display:swap;src:url("./assets/fonts/cover/csModern-latin.woff2") format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}
+@font-face{font-family:"csSerif";font-style:italic;font-weight:800;font-display:swap;src:url("./assets/fonts/cover/csSerif-latin.woff2") format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}
+@font-face{font-family:"csPoster";font-style:normal;font-weight:400;font-display:swap;src:url("./assets/fonts/cover/csPoster-latin.woff2") format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}
+@font-face{font-family:"csScript";font-style:normal;font-weight:400;font-display:swap;src:url("./assets/fonts/cover/csScript-latin.woff2") format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}
+@font-face{font-family:"csKufi";font-style:normal;font-weight:700;font-display:swap;src:url("./assets/fonts/cover/csKufi-arabic.woff2") format("woff2");unicode-range:U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;}
+@font-face{font-family:"csKufi";font-style:normal;font-weight:700;font-display:swap;src:url("./assets/fonts/cover/csKufi-latin.woff2") format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}
+@font-face{font-family:"csRuqaa";font-style:normal;font-weight:700;font-display:swap;src:url("./assets/fonts/cover/csRuqaa-arabic.woff2") format("woff2");unicode-range:U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;}
+@font-face{font-family:"csRuqaa";font-style:normal;font-weight:700;font-display:swap;src:url("./assets/fonts/cover/csRuqaa-latin.woff2") format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}
+@font-face{font-family:"csDisplay";font-style:normal;font-weight:400;font-display:swap;src:url("./assets/fonts/cover/csDisplay-arabic.woff2") format("woff2");unicode-range:U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;}
+@font-face{font-family:"csDisplay";font-style:normal;font-weight:400;font-display:swap;src:url("./assets/fonts/cover/csDisplay-latin.woff2") format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}
+
+.csRoot{
+  position: fixed;
+  inset: 0;
+  z-index: 4300;
+  display: flex;
+  flex-direction: column;
+  background: #0b0b13;
+  color: #fff;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 240ms ease, transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  -webkit-user-select: none;
+          user-select: none;
+  -webkit-touch-callout: none;
+}
+.csRoot[hidden]{ display: none !important; }
+.csRoot.is-open{ opacity: 1; transform: none; }
+body.coverStudioOpen .toast{ z-index: 4400; }
+.csAmb{
+  position: absolute;
+  inset: -60px;
+  background: center / cover no-repeat;
+  filter: blur(60px) saturate(1.4);
+  opacity: 0.55;
+}
+.csVeil{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(11, 11, 19, 0.5), rgba(11, 11, 19, 0.82) 55%, #0b0b13);
+}
+.csGlass{
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.085);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(24px) saturate(140%);
+}
+.csRoot button{ font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
+.csRoot [hidden]{ display: none !important; }
+.csTop{
+  position: relative;
+  z-index: 3;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 16px 6px;
+  min-height: 56px;
+}
+.csX{
+  appearance: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  cursor: pointer;
+}
+.csTitle{
+  position: absolute;
+  left: 64px;
+  right: 88px;
+  bottom: 8px;
+  text-align: center;
+  pointer-events: none;
+}
+.csTitle b{ display: block; font-size: 17px; font-weight: 800; letter-spacing: -0.02em; }
+.csTitle small{
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.csSave{
+  appearance: none;
+  border: 0;
+  height: 38px;
+  padding: 0 20px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  background: var(--nabad-cta-gradient, linear-gradient(148deg, #23d5ab 0%, #2ec4b8 34%, #6b78e8 72%, #7c5cff 100%));
+  box-shadow: var(--nabad-cta-shadow, 0 10px 24px rgba(35, 213, 171, 0.22)), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+}
+.csSave.off, .csSave:disabled{ opacity: 0.4; box-shadow: none; pointer-events: none; }
+.csSaveBig{ height: 48px; padding: 0 28px; font-size: 16px; margin-top: 6px; }
+.csEditBar{
+  position: absolute;
+  z-index: 6;
+  top: calc(env(safe-area-inset-top, 0px) + 60px);
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(20, 22, 32, 0.86);
+}
+.csEditInput{
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  -webkit-user-select: text;
+          user-select: text;
+}
+.csEditDone{
+  appearance: none;
+  border: 0;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  background: var(--nabad-cta-gradient, linear-gradient(148deg, #23d5ab, #7c5cff));
+}
+.csBody{
+  position: relative;
+  z-index: 2;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.csStageWrap{
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 22px 6px;
+}
+.csStageBox{
+  position: relative;
+  border-radius: 26px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #05050a;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.55);
+}
+.csRoot.csIsEmpty .csStageBox{
+  background: rgba(255, 255, 255, 0.04);
+  border: 1.5px dashed rgba(255, 255, 255, 0.28);
+  box-shadow: none;
+}
+.csStage{ display: block; touch-action: none; }
+.csRoot.csLoading .csStage{ opacity: 0.35; }
+.csStageActions{
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.csReset{ position: absolute; right: 12px; top: 12px; z-index: 2; }
+.csPill{
+  appearance: none;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  background: rgba(20, 22, 32, 0.55);
+}
+.csPill svg{ width: 15px; height: 15px; }
+.csPillMagic{ color: #d9c9ff; }
+.csPillTall{ height: 40px; padding: 0 16px; font-size: 14px; font-weight: 800; }
+.csPillWide{ height: 42px; padding: 0 18px; font-size: 14px; font-weight: 800; }
+.csEmpty{
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 18px;
+  text-align: center;
+}
+.csEmptyIco{
+  width: 60px;
+  height: 60px;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.csEmptyIco svg{ width: 28px; height: 28px; }
+.csEmptyTitle{ font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+.csEmptySub{ margin: 0; max-width: 200px; font-size: 13.5px; line-height: 1.4; font-weight: 600; color: rgba(255, 255, 255, 0.58); }
+.csPanel{ flex: none; padding: 4px 0 0; }
+.csHint{ margin: 2px 0 8px; text-align: center; font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.6); }
+.csHintInline{ margin: 0; font-size: 12px; }
+.csLbl{ font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.5); font-weight: 700; }
+.csSlider{ display: flex; align-items: center; gap: 12px; padding: 0 44px; height: 30px; color: rgba(255, 255, 255, 0.6); }
+.csSlider svg{ width: 18px; height: 18px; flex: none; }
+.csSliderTight{ padding: 0 22px; margin-top: 10px; }
+.csSlider.csDisabled{ opacity: 0.4; }
+.csRoot input[type="range"]{
+  -webkit-appearance: none;
+          appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  outline: none;
+}
+.csRoot input[type="range"]::-webkit-slider-runnable-track{
+  height: 4px;
+  border-radius: 9px;
+  background: linear-gradient(90deg, #23d5ab, #7c5cff) 0 0 / var(--p, 0%) 100% no-repeat, rgba(255, 255, 255, 0.18);
+}
+.csRoot input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -9px;
+  border-radius: 50%;
+  border: 0;
+  background: #fff;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+.csGradRow{ display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 24px 0; }
+.csGrads{ display: flex; gap: 8px; }
+.csGrad{
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+}
+.csGrad.on{ border-color: #fff; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35); }
+.csPreviewsHead{ display: flex; align-items: baseline; justify-content: space-between; padding: 0 24px 8px; }
+.csPreviews{ display: flex; align-items: flex-end; gap: 14px; padding: 0 24px 6px; }
+.csPrevFig{ margin: 0; text-align: center; }
+.csPrevFig figcaption{ margin-top: 6px; }
+.csPrevFigWide{ flex: 1; min-width: 0; }
+.csPrevFeed{
+  width: 84px;
+  height: 84px;
+  display: block;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+.csPrevRow{
+  height: 84px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  text-align: left;
+}
+.csPrevLib{ width: 52px; height: 52px; border-radius: 12px; flex: none; }
+.csPrevMeta{ min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.csPrevMeta b{ font-size: 14px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.csPrevMeta span{ font-size: 12px; color: rgba(255, 255, 255, 0.55); font-weight: 600; }
+.csPanelText{ margin: 0 14px 4px; padding: 12px 0 12px; border-radius: 26px; background: rgba(20, 22, 32, 0.6); }
+.csFonts, .csSwatches{ display: flex; gap: 8px; padding: 0 14px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.csFonts::-webkit-scrollbar, .csSwatches::-webkit-scrollbar{ display: none; }
+.csFont{
+  appearance: none;
+  flex: none;
+  width: 74px;
+  height: 58px;
+  border-radius: 16px;
+  border: 1.5px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  cursor: pointer;
+}
+.csFont.on{ border-color: #23d5ab; background: rgba(35, 213, 171, 0.12); }
+.csFontAa{ font-size: 24px; line-height: 1.15; }
+.csFontName{ font-size: 10px; font-weight: 700; color: rgba(255, 255, 255, 0.55); }
+.csSwatches{ margin-top: 12px; align-items: center; padding-top: 3px; padding-bottom: 3px; }
+.csSwatch{
+  appearance: none;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+}
+.csSwatchNabad{ background: linear-gradient(135deg, #23d5ab, #7c5cff); }
+.csSwatch.on{ box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.92); border-color: rgba(11, 11, 19, 0.7); }
+.csSeg{
+  display: flex;
+  gap: 4px;
+  margin: 12px 14px 0;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.csSeg button{
+  appearance: none;
+  flex: 1;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.62);
+  cursor: pointer;
+}
+.csSeg button.on{ background: rgba(255, 255, 255, 0.16); color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18); }
+.csActions{ display: flex; align-items: center; gap: 8px; margin: 12px 14px 0; }
+.csGrow{ flex: 1; }
+.csRound{
+  appearance: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.csRound svg{ width: 19px; height: 19px; }
+.csRoundDanger{ color: #ff9a9a; }
+.csRound:disabled{ opacity: 0.35; pointer-events: none; }
+.csDock{
+  position: relative;
+  z-index: 3;
+  flex: none;
+  display: flex;
+  gap: 4px;
+  height: 52px;
+  padding: 5px;
+  margin: 8px 26px calc(env(safe-area-inset-bottom, 0px) + 12px);
+  border-radius: 999px;
+}
+.csDock button{
+  appearance: none;
+  flex: 1;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.62);
+  cursor: pointer;
+}
+.csDock button.on{ background: rgba(255, 255, 255, 0.14); color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18); }
+.csDock svg{ width: 17px; height: 17px; }
+@media (max-height: 720px){
+  .csSliderTight{ display: none; }
+  .csFont{ height: 50px; }
+  .csFontAa{ font-size: 20px; }
+  .csSwatches{ margin-top: 8px; }
+  .csSeg{ margin-top: 8px; }
+  .csActions{ margin-top: 8px; }
+}
+@media (prefers-reduced-motion: reduce){
+  .csRoot{ transition: opacity 120ms ease; transform: none; }
+}

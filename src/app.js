@@ -22234,6 +22234,7 @@ async function enrichFriendsFeedAfterPaint({
 
 function enterFriendsRoute() {
   wireFriendsListenTogetherOnce();
+  wirePlayerTogetherOnce();
   const token = ++_friendsRouteEnterToken;
   paintFriendsFeedTabsActive();
   paintFriendsFeedSnapshotIfFresh();
@@ -22247,6 +22248,23 @@ function enterFriendsRoute() {
       try { openFriendsComposeSheet(); } catch {}
     }, 80);
   }
+}
+
+let _playerTogetherWired = false;
+function wirePlayerTogetherOnce() {
+  if (_playerTogetherWired) return;
+  _playerTogetherWired = true;
+  document.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("[data-player-together]");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (btn.classList.contains("isBusy")) return;
+    haptic("light");
+    btn.classList.add("isBusy");
+    window.setTimeout(() => btn.classList.remove("isBusy"), 900);
+    void openLiveListenInviteFromPlayer();
+  }, true);
 }
 
 function wireFriendsListenTogetherOnce() {
@@ -66626,6 +66644,10 @@ function openPlayerGiftSheet() {
 
 function ensurePlayerSocialRailIcons(scope = "player") {
   const gradScope = String(scope || "player").trim() || "player";
+  try {
+    const together = document.getElementById("playerSocialTogether");
+    if (together) together.hidden = !(nabadLiveListenEnabled() && String(currentPlayerTrackRef?.url || "").trim());
+  } catch {}
   document.querySelectorAll("[data-player-social-ico]").forEach((slot) => {
     const kind = String(slot.getAttribute("data-player-social-ico") || "").trim();
     if (kind === "share") delete slot.dataset.filled;
@@ -66635,6 +66657,7 @@ function ensurePlayerSocialRailIcons(scope = "player") {
     else if (kind === "reply") svg = feedActIconComment();
     else if (kind === "gift") svg = feedActIconGift();
     else if (kind === "share") svg = feedActIconShare();
+    else if (kind === "together") svg = LIVE_TOGETHER_ICON;
     if (!svg) return;
     slot.innerHTML = svg;
     if (kind !== "gift") slot.dataset.filled = "1";
@@ -79509,6 +79532,7 @@ setProfileEditing(false);
 // click time, so it stays correct across hash changes without needing
 // a rebind.
 try { attachTabRefresh(); } catch (e) { console.warn("[tabRefresh] init", e); }
+try { wirePlayerTogetherOnce(); } catch (e) { console.warn("[playerTogether] init", e); }
 try { wireFloatingTabDock(); } catch (e) { console.warn("[tabDock] init", e); }
 try { wireProfileChromeNavOnce(); } catch (e) { console.warn("[profileChromeNav] init", e); }
 try {

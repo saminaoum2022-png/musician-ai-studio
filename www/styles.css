@@ -67062,3 +67062,201 @@ body[data-route="discover"] #discoverFeedTabs .nabadTabsTab.is-active{
 }
 body[data-route="discover"] #discoverFeedTabs .nabadTabsTab.is-active::after,
 body[data-route="discover"] #discoverFeedTabs .nabadTabsTab::after{ display: none !important; content: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Player — redesign
+ * A floating liquid-glass control deck (title · creator · sliding bar · transport) over the full-bleed artwork,
+ * so the text is readable on any cover; the same bar as the feed; a "15" on the skip buttons;
+ * a tidier action rail with Listen together.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 720px), (pointer: coarse){
+  body[data-route="player"]{
+    --player-deck-h: 210px;
+    --player-social-rail-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--player-deck-h) + 30px);
+    --player-reel-meta-bottom: 0px;
+  }
+  /* Deck */
+  body[data-route="player"] .playerMeta{
+    left: 12px;
+    right: 12px;
+    width: auto;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+    padding: 16px 18px 12px;
+    border-radius: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03) 46%),
+      rgba(10, 12, 20, 0.44);
+    -webkit-backdrop-filter: blur(34px) saturate(1.6);
+            backdrop-filter: blur(34px) saturate(1.6);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 24px 60px rgba(0, 0, 0, 0.45);
+  }
+  /* let the art breathe under the deck: a soft shade instead of an opaque dark slab */
+  body[data-route="player"] .playerArtStage::after,
+  body[data-route="player"] .playerReelAnimCover::after{
+    height: 340px;
+    transform: none;
+    background: linear-gradient(to top, rgba(6, 8, 14, 0.74) 0%, rgba(6, 8, 14, 0.34) 46%, transparent 100%);
+  }
+  /* Title in the Nabad display face */
+  body[data-route="player"] .playerTitle,
+  body[data-route="player"] .playerCard.isPlaying .playerTitle{
+    font-family: var(--dz-display, "csNabad", "Nunito", sans-serif);
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+    color: #fff;
+    -webkit-text-fill-color: #fff;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  body[data-route="player"] .playerCreatorRow{ margin-top: 6px; }
+  body[data-route="player"] .playerCreatorHandle{ font-size: 14px; font-weight: 600; color: rgba(255, 255, 255, 0.74); }
+  body[data-route="player"] .playerPlaysCount{ font-size: 12px; color: rgba(255, 255, 255, 0.5); }
+
+  /* Bar: elapsed · sliding bar · total (same as the feed) */
+  body[data-route="player"] .playerTimeline{
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    column-gap: 12px;
+  }
+  body[data-route="player"] .playerTimeRow{ display: contents; }
+  body[data-route="player"] #playerTimeCurrent{ grid-column: 1; grid-row: 1; }
+  body[data-route="player"] .playerSeekWrap{ grid-column: 2; grid-row: 1; height: 26px; display: flex; align-items: center; }
+  body[data-route="player"] #playerTimeTotal{ grid-column: 3; grid-row: 1; text-align: right; }
+  body[data-route="player"] .playerTimeNum{
+    min-width: 34px;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  body[data-route="player"] .playerSeekTrack{ background: rgba(255, 255, 255, 0.22); }
+  body[data-route="player"] .playerCard.isPlaying #playerSeek::-webkit-slider-thumb{
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Transport */
+  body[data-route="player"] .playerTransport{ margin-top: 10px; width: min(100%, 330px); }
+  body[data-route="player"] .playerSkipBtn{ position: relative; }
+  body[data-route="player"] .playerSkipBtn::after{
+    content: "15";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -38%);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: currentColor;
+    pointer-events: none;
+  }
+  body[data-route="player"] .playerAuxBtn{ color: rgba(255, 255, 255, 0.58); }
+  body[data-route="player"] .playerAuxBtn[aria-pressed="true"]{ color: #23d5ab; }
+
+  /* Small labels that used to sit on the artwork */
+  body[data-route="player"] .playerInstrumentalLabel{
+    left: 16px;
+    right: auto;
+    top: auto;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + var(--player-deck-h) + 26px);
+    transform: none;
+    padding: 7px 12px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(14, 16, 24, 0.4);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+            backdrop-filter: blur(16px) saturate(140%);
+  }
+  body[data-route="player"] .playerLyricsChip{
+    left: 16px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + var(--player-deck-h) + 26px);
+  }
+
+  /* Action rail: plain icons, one weight, sitting above the deck */
+  body[data-route="player"] .playerSocialRail{ right: 14px; }
+  body[data-route="player"] .playerSocialActions{ gap: 16px; }
+  body[data-route="player"] .playerSocialAct{ filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.55)); }
+  body[data-route="player"] .playerSocialAct--together{ position: relative; }
+  body[data-route="player"] .playerSocialAct--together .playerSocialActIco svg{ width: 26px; height: 26px; }
+  body[data-route="player"] .playerSocialAct--together.isBusy .playerSocialActIco{ opacity: 0; }
+  body[data-route="player"] .playerSocialAct--together.isBusy::after{
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-top-color: #23d5ab;
+    animation: llSpin 0.7s linear infinite;
+  }
+}
+
+/* Player redesign — the Discover "reel" layout (native shell) has its own full-width meta + rail rules */
+html.is-native-shell body.isDiscoverReelPlayer .playerMeta,
+html.is-native-shell body.discoverReelOpening .playerMeta,
+html.is-native-shell .playerCard.isDiscoverReelLayout .playerMeta{
+  left: 12px;
+  right: 12px;
+  width: auto;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+  padding: 16px 18px 12px;
+  border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03) 46%),
+    rgba(10, 12, 20, 0.44);
+  -webkit-backdrop-filter: blur(34px) saturate(1.6);
+          backdrop-filter: blur(34px) saturate(1.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .playerSocialRail,
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .playerSocialRail[hidden],
+html.is-native-shell body.discoverReelOpening[data-route="player"] .playerSocialRail,
+html.is-native-shell body.discoverReelOpening[data-route="player"] .playerSocialRail[hidden],
+html.is-native-shell .playerCard.isDiscoverReelLayout .playerSocialRail,
+html.is-native-shell .playerCard.isDiscoverReelLayout .playerSocialRail[hidden],
+html.is-native-shell .playerCard[data-discover-reel="1"] .playerSocialRail,
+html.is-native-shell .playerCard[data-discover-reel="1"] .playerSocialRail[hidden]{
+  right: 14px;
+  bottom: var(--player-social-rail-bottom);
+}
+
+/* …the reel layout's inline "critical CSS" uses !important, so match it with a more specific selector */
+html.is-native-shell body.isDiscoverReelPlayer .playerCard.isDiscoverReelLayout .playerMeta{
+  left: 12px !important;
+  right: 12px !important;
+  width: auto !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03) 46%),
+    rgba(10, 12, 20, 0.44) !important;
+}
+html.is-native-shell body.isDiscoverReelPlayer .playerCard.isDiscoverReelLayout .playerSocialRail,
+html.is-native-shell body.isDiscoverReelPlayer .playerCard.isDiscoverReelLayout .playerSocialRail[hidden]{
+  right: 14px !important;
+  bottom: var(--player-social-rail-bottom) !important;
+}
+
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"],
+html.is-native-shell body.discoverReelOpening[data-route="player"]{
+  --player-deck-h: 210px;
+  --player-social-rail-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--player-deck-h) + 30px);
+}

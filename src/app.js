@@ -59221,11 +59221,10 @@ function renderProfilePreviewFromInputs() {
   try { syncMobileTabbarProfileAvatar(); } catch {}
   if (els.profileAuraAvatarWrap) {
     const tappable = canChangeOwnProfilePhoto();
-    els.profileAuraAvatarWrap.classList.toggle("profileAuraAvatarWrap--tappable", tappable);
-    els.profileAuraAvatarWrap.setAttribute("role", tappable ? "button" : "presentation");
-    els.profileAuraAvatarWrap.setAttribute("aria-label", tappable ? "Change profile photo" : "");
-    if (!tappable) els.profileAuraAvatarWrap.removeAttribute("tabindex");
-    else els.profileAuraAvatarWrap.setAttribute("tabindex", "0");
+    els.profileAuraAvatarWrap.classList.remove("profileAuraAvatarWrap--tappable");
+    els.profileAuraAvatarWrap.setAttribute("role", "presentation");
+    els.profileAuraAvatarWrap.removeAttribute("aria-label");
+    els.profileAuraAvatarWrap.removeAttribute("tabindex");
   }
 }
 
@@ -78944,20 +78943,8 @@ function triggerProfileAvatarFilePicker() {
     console.error("[avatar] file picker failed", e);
   }
 }
-if (els.profileAuraAvatarWrap && els.profileAvatarFile) {
-  els.profileAuraAvatarWrap.addEventListener("click", (e) => {
-    if ((document.body.getAttribute("data-route") || "") === "profile-edit") return;
-    if (!canChangeOwnProfilePhoto()) {
-      try { showToast("Sign in to change your photo", { icon: "👤", durationMs: 2600 }); } catch {}
-      return;
-    }
-    const t = e.target;
-    if (!(t instanceof Element)) return;
-    if (t.closest("a, button, input, select, textarea")) return;
-    try { haptic("light"); } catch {}
-    triggerProfileAvatarFilePicker();
-  });
-}
+// The photo is changed from Edit profile only (its own screen has the picker). Tapping the photo on the profile
+// page itself does nothing, so it never pops the system photo sheet by accident.
 
 // --- Spotify-x-Nabad: share pill with toast feedback. Uses the native
 //     share sheet when available (Capacitor WKWebView on iOS exposes

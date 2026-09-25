@@ -68128,3 +68128,20 @@ body[data-route="user"] .userPublicVerified{ display: inline-block !important; v
 body[data-route="user"] .userPublicVerified[hidden]{ display: none !important; }
 body[data-route="user"] .userPublicVerified svg{ width: 100%; height: 100%; }
 body[data-route="user"] #userPublicFollowsYou{ padding: 0 !important; margin-left: 0 !important; }
+
+/* Persona mic: a round glass button on the poster's action row (right end), same height as Edit profile */
+body[data-route="profile"] .profilePersonaAvatarBadge{
+  right: 20px !important;
+  bottom: 14px !important;
+  width: 42px !important;
+  height: 42px !important;
+  z-index: 6;
+  color: #23d5ab;
+  background: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+          backdrop-filter: blur(20px) saturate(140%);
+}
+body[data-route="profile"] .profilePersonaAvatarBadge svg{ width: 19px !important; height: 19px !important; }
+body[data-route="profile"] .profileAuraAvatarWrap--tappable{ cursor: default; }

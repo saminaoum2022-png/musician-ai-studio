@@ -553,7 +553,8 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
       return false;
     }
   }
-  if (nextHandle && nextHandle !== "guest") {
+  // Only ask the server when the handle actually changed (an unchanged one is already yours).
+  if (nextHandle && nextHandle !== "guest" && nextHandle !== prevHandle) {
     const available = await _deps.checkUsernameAvailable?.(nextHandle, _originalUsername || normalizeUsername(base.username));
     if (!available) {
       try {
@@ -590,23 +591,13 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
       _deps.els.sunoPersonaId.value = _draft.personaId || "";
     }
   }
-  let cloudSaved = false;
-  try {
-    await _deps.supabaseUpsertProfile(payload);
-    cloudSaved = true;
-  } catch (e) {
-    _deps.setStatus?.(`Saved locally. Cloud sync skipped: ${e?.message || String(e)}`);
-  }
-  if (cloudSaved && usernameWillChange) {
-    payload.usernameChangedAt = Date.now();
-    _deps.saveProfile(payload);
-    try {
-      await _deps.supabaseUpsertProfile(payload);
-    } catch {}
-  }
-  if (cloudSaved && _draft.avatarHd && _draft.avatar) {
-    // Best-effort: if this fails the header simply keeps using the small photo.
-    _deps.uploadAvatarHd?.(_draft.avatarHd, _draft.avatar).catch((err) => { try { console.warn("[avatar-hd]", err?.message || err); } catch {} });
+  // Everything the person sees is saved locally by now. Update the UI and leave immediately; the cloud work
+  // (profile row, HD photo) continues in the background instead of making them wait on the network.
+  const hdDraft = _draft.avatarHd;
+  const smallDraft = _draft.avatar;
+  if (hdDraft && smallDraft) {
+    // The HD copy is already on this device: show it in the header right away, no download needed.
+    try { _deps.rememberLocalAvatarHd?.(smallDraft, hdDraft); } catch {}
   }
   _deps.syncProfileUi?.(payload);
   _dirty = false;
@@ -616,6 +607,26 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
     try { location.hash = "#/profile"; } catch {}
     try { _deps.applyRoute?.(); } catch {}
   }
+  void (async () => {
+    if (hdDraft && smallDraft) {
+      // Runs in parallel with the profile upsert; a failure only means the header keeps using the small photo.
+      _deps.uploadAvatarHd?.(hdDraft, smallDraft).catch((err) => { try { console.warn("[avatar-hd]", err?.message || err); } catch {} });
+    }
+    let cloudSaved = false;
+    try {
+      await _deps.supabaseUpsertProfile(payload);
+      cloudSaved = true;
+    } catch (err) {
+      _deps.setStatus?.(`Saved locally. Cloud sync skipped: ${err?.message || String(err)}`);
+      try { _deps.scheduleProfileCloudSync?.({ delayMs: 3000 }); } catch {}
+      try { _deps.showToast?.("Saved on this device — syncing when the connection is back.", { durationMs: 3200 }); } catch {}
+    }
+    if (cloudSaved && usernameWillChange) {
+      payload.usernameChangedAt = Date.now();
+      _deps.saveProfile(payload);
+      try { await _deps.supabaseUpsertProfile(payload); } catch {}
+    }
+  })();
   return true;
 }
 

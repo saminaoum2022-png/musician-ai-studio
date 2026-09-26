@@ -28329,18 +28329,48 @@ async function uploadAvatarHd(hdDataUrl, smallAvatar) {
   return true;
 }
 
-/** Swap an <img> to the HD photo once it has loaded; stay on the small one if there is no HD copy. */
-function upgradeAvatarToHd(imgEl, userId, smallAvatar) {
+const AVATAR_HD_LOCAL_KEY = "nabad.avatarHdLocal.v1";
+/** The HD copy the person just framed is already on this device: keep the latest so the header never waits on a download. */
+function rememberLocalAvatarHd(smallAvatar, hdDataUrl) {
+  try { localStorage.setItem(AVATAR_HD_LOCAL_KEY, JSON.stringify({ h: avatarHdHash(smallAvatar), d: hdDataUrl })); } catch {}
+}
+function localAvatarHd(smallAvatar) {
+  try {
+    const s = JSON.parse(localStorage.getItem(AVATAR_HD_LOCAL_KEY) || "null");
+    return s && s.h === avatarHdHash(smallAvatar) && typeof s.d === "string" ? s.d : "";
+  } catch { return ""; }
+}
+
+/** Swap an <img> to the HD photo. Order: the copy already on this device (instant) → the stored HD file (retrying
+ *  a few times, since it may still be uploading) → stay on the small photo. */
+function upgradeAvatarToHd(imgEl, userId, smallAvatar, opts = {}) {
   if (!imgEl) return;
+  const mine = String(authSession?.user?.id || "") === String(userId || "");
+  if (mine) {
+    const local = localAvatarHd(smallAvatar);
+    if (local) {
+      imgEl.dataset.hdUrl = avatarHdUrl(userId, smallAvatar);
+      imgEl.dataset.hdLoaded = "1";
+      if (imgEl.src !== local) imgEl.src = local;
+      return;
+    }
+  }
   const url = avatarHdUrl(userId, smallAvatar);
   if (!url) return;
-  if (imgEl.dataset.hdUrl === url) return;
+  const attempt = Number(opts.attempt || 0);
+  if (attempt === 0 && imgEl.dataset.hdUrl === url) return;
   imgEl.dataset.hdUrl = url;
   const probe = new Image();
   probe.decoding = "async";
   probe.onload = () => { if (imgEl.dataset.hdUrl === url) { imgEl.src = url; imgEl.dataset.hdLoaded = "1"; } };
-  probe.onerror = () => {};
-  probe.src = url;
+  probe.onerror = () => {
+    // Not there (yet): the HD file may still be uploading. Retry a few times, then give up quietly.
+    const waits = [2500, 6000, 15000];
+    if (attempt < waits.length && imgEl.dataset.hdUrl === url) {
+      window.setTimeout(() => { if (imgEl.dataset.hdUrl === url) upgradeAvatarToHd(imgEl, userId, smallAvatar, { attempt: attempt + 1 }); }, waits[attempt]);
+    }
+  };
+  probe.src = attempt ? `${url}?r=${attempt}` : url;
 }
 
 async function dataUrlToBlob(dataUrl) {
@@ -77135,6 +77165,8 @@ try {
     compressAvatarFile,
     uploadAvatarHd,
     avatarHdUrl,
+    rememberLocalAvatarHd,
+    scheduleProfileCloudSync,
     loadPersonas,
     loadPersonaSelection,
     savePersonaSelection,

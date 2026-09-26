@@ -21,9 +21,7 @@ export function isOnboardingComplete(userId) {
   const uid = String(userId || "").trim();
   if (uid) {
     try {
-      // Onboarding runs before sign-in now, so the device flag counts for the account too.
-      return localStorage.getItem(onboardingUserKey(uid)) === "1"
-        || localStorage.getItem(ONBOARDING_STORAGE_KEY) === "1";
+      return localStorage.getItem(onboardingUserKey(uid)) === "1";
     } catch {
       return false;
     }
@@ -108,12 +106,6 @@ export function getInitialBootHash(getAuthSession) {
   const session = typeof getAuthSession === "function" ? getAuthSession() : null;
   if (session?.user?.id && shouldShowOnboardingForUser(session.user.id)) {
     return "#/onboarding";
-  }
-  if (!session?.user?.id && shouldShowOnboardingForUser("")) {
-    let guest = false;
-    try { guest = localStorage.getItem("nabadai_guest_mode_v1") === "1"; } catch {}
-    // First launch on this device, signed out: the tap-through pages come before sign-in.
-    if (!guest) return "#/onboarding";
   }
   return getPostOnboardingHash(getAuthSession);
 }
@@ -228,8 +220,6 @@ function finishOnboarding() {
   if (uid) {
     hash = "#/challenges";
   } else {
-    // Signed out: sign in next, then land on the Create page.
-    try { localStorage.setItem(FIRST_RUN_LANDING_KEY, "1"); } catch {}
     hash = getPostOnboardingHash(_deps?.getAuthSession);
   }
   try {

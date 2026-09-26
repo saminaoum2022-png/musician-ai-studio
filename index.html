@@ -288,9 +288,8 @@
     </div>
     <div id="loginSettlingOverlay" class="loginSettlingOverlay" hidden aria-hidden="true" aria-label="Signing you in">
       <div class="loginSettlingInner">
-        <div class="loginSettlingAnim" id="loginSettlingAnim"></div>
-        <span class="loginSettlingDots introDots" aria-hidden="true"><i></i><i></i><i></i></span>
-      </div>
+        <div class="loginSettlingAnim" id="loginSettlingAnim"><div class="bootSplashLock"><div class="nbLock" role="img" aria-label="NabadAi"><svg class="nbLockMark" viewBox="0 0 90 96" aria-hidden="true"><rect x="0" y="0" width="23" height="96" rx="11.5" fill="#7752f8"/><rect x="67" y="0" width="23" height="96" rx="11.5" fill="#22c5a9"/><path d="M11.5 11.5 L78.5 84.5" stroke="#7752f8" stroke-width="23" stroke-linecap="round" fill="none"/></svg><img class="nbLockWord" src="./assets/splash/nabad-wordmark-suffix.png" alt="" decoding="async"></div><div class="nbLoader" aria-hidden="true"><i></i><i></i></div></div></div>
+        </div>
     </div>
     <div id="faqOverlay" class="faqOverlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="faqOverlayTitle">
       <div class="faqOverlayInner">
@@ -499,15 +498,16 @@
         </section>
 
         <section class="card wide authScreen" data-route="auth">
+          <div class="authVinyl" aria-hidden="true"><span class="authVinylLab"></span></div>
           <div class="authInner">
             <div class="authBrand" aria-label="NabadAi">
               <div class="authBrandAnim" id="authBrandAnim"><div class="nbLock" role="img" aria-label="NabadAi"><svg class="nbLockMark" viewBox="0 0 90 96" aria-hidden="true"><rect x="0" y="0" width="23" height="96" rx="11.5" fill="#7752f8"/><rect x="67" y="0" width="23" height="96" rx="11.5" fill="#22c5a9"/><path d="M11.5 11.5 L78.5 84.5" stroke="#7752f8" stroke-width="23" stroke-linecap="round" fill="none"/></svg><img class="nbLockWord" src="./assets/splash/nabad-wordmark-suffix.png" alt="" decoding="async"></div></div>
             </div>
             <h1 class="authTagline" id="authTagline" aria-label="Create. Share. Connect.">
-              <span id="authTaglineTyped">Create.<br>Share.<br>Connect.</span><span class="authTaglineCaret" aria-hidden="true"></span>
+              <span id="authTaglineTyped">Create · Share · Connect</span><span class="authTaglineCaret" aria-hidden="true"></span>
             </h1>
             <div class="authHandoffRest" id="authHandoffRest">
-            <p class="authTogether">Hear it together.</p>
+            <p class="authTogether">Hear it <span>together.</span></p>
             <p class="authSub">The social platform for music creators.</p>
             <div class="authActions">
               <div class="authGateChoices" id="authGateChoices">
@@ -5621,7 +5621,7 @@
         }
         if (!h) {
           if (bootUid && needsOnboarding) h = "onboarding";
-          else h = hasSessionEarly ? "challenges" : (guestMode ? "challenges" : (done ? "auth" : "onboarding"));
+          else h = hasSessionEarly ? "challenges" : (guestMode ? "challenges" : "auth");
         }
         if (/^onboarding\/\d+$/.test(h)) h = "onboarding";
         var ok = /^(intro|onboarding|music-preferences|first-song|auth|generate|challenges|activity|discover|friends|profile|profile-edit|settings|player|sounds|user|vocal|stems|studio|advanced|credits|mentor)$/.test(h);
@@ -5633,7 +5633,7 @@
               var rawFb = localStorage.getItem("mas:supabase:session:v1");
               hasSessionFallback = !!(rawFb && rawFb.indexOf("access_token") !== -1);
             } catch (e) {}
-            h = hasSessionFallback ? "challenges" : (guestMode ? "challenges" : (done ? "auth" : "onboarding"));
+            h = hasSessionFallback ? "challenges" : (guestMode ? "challenges" : "auth");
           }
         }
         document.body.setAttribute("data-route", h);

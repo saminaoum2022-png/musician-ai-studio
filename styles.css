@@ -69042,19 +69042,33 @@ body.isOnboarding .onboardingScreen.ob3{
 .ob3Made2{ position: absolute; left: 22px; right: 22px; top: 274px; margin: 0; text-align: center; font-size: 14px; color: #9aa1b6; }
 @media (prefers-reduced-motion: reduce){ .ob3Spin, .ob3Caret{ animation: none; } .ob3Segs i.is-current::after{ animation-duration: 6s; } }
 
-/* --- sign-in (full logo, slogan, buttons under the copy, agreement line) --- */
-body .authScreen{ align-items: flex-start !important; justify-content: flex-start !important; overflow-y: auto; }
-body .authScreen .authInner{ max-width: none; width: 100%; min-height: 100%; align-items: stretch; text-align: left; padding: 40px 22px 16px; }
-body .authScreen .authBrand{ align-items: flex-start; margin: 0; width: auto; }
+/* --- sign-in: vinyl hero on top, logo + headline just above the buttons, buttons anchored low --- */
+body .authScreen{ position: relative; align-items: flex-start !important; justify-content: flex-start !important; overflow: hidden; }
+body .authScreen .authInner{ position: relative; z-index: 1; max-width: none; width: 100%; min-height: 100%; align-items: stretch; text-align: left; padding: 24px 22px 16px; }
+body .authScreen .authBrand{ align-items: flex-start; margin: auto 0 0; width: auto; }
 body .authScreen .authBrandAnim{ width: auto; max-width: none; aspect-ratio: auto; overflow: visible; }
 body .authScreen .authBrandAnim .nbLock{ justify-content: flex-start; }
-body .authScreen .authTagline{ margin: 30px 0 10px; text-align: left; font-family: var(--dz-display, inherit); font-size: clamp(38px, 11.2vw, 44px); font-weight: 800; line-height: 1.04; letter-spacing: -0.02em; color: #f5f6fb; }
+body .authScreen .authTagline{ margin: 30px 0 0; text-align: left; font-family: var(--dz-body, inherit); font-size: 12.5px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; line-height: 1.3; color: #9aa1b6; }
 body .authScreen .authTagline .authTaglineCaret{ display: none !important; }
-body .authScreen .authTaglineDot, body .authScreen .authTagline span{ color: inherit !important; }
-body .authScreen .authTogether{ margin: 0 0 8px; text-align: left; font-family: var(--dz-display, inherit); font-size: 19px; font-weight: 700; color: #23d5ab; }
-body .authScreen .authSub{ margin: 0 0 32px; text-align: left; font-size: 16px; color: #9aa1b6; }
-body .authScreen .authHandoffRest{ flex: 1 1 auto; align-items: stretch; opacity: 1 !important; pointer-events: auto !important; }
+body .authScreen .authTagline span{ color: inherit !important; }
+body .authScreen .authTogether{ margin: 14px 0 0; text-align: left; font-family: var(--dz-display, inherit); font-size: clamp(36px, 10.4vw, 40px); font-weight: 800; line-height: 1.06; letter-spacing: -0.02em; color: #f5f6fb; }
+body .authScreen .authTogether span{ color: #23d5ab; }
+body .authScreen .authSub{ margin: 12px 0 34px; text-align: left; font-size: 16px; color: #9aa1b6; }
+body .authScreen .authHandoffRest{ flex: 0 0 auto; align-items: stretch; opacity: 1 !important; pointer-events: auto !important; }
 body .authScreen .authActions{ width: 100%; }
 body .authScreen .authLoginPrompt{ margin: 22px 0 0; text-align: center; }
-body .authScreen .authTermsLine{ margin: auto 0 0; padding-top: 22px; text-align: left; font-size: 12px; line-height: 1.5; color: #6d748a; }
+body .authScreen .authTermsLine{ margin: 26px 0 0; padding: 0; text-align: left; font-size: 12px; line-height: 1.5; color: #6d748a; }
 body .authScreen .authTermsLine a{ color: #f5f6fb; text-decoration: underline; text-decoration-color: rgba(255,255,255,.28); text-underline-offset: 3px; }
+/* the vinyl: a complete record, centred in the upper area, slowly turning */
+.authVinyl{ position: absolute; z-index: 0; left: 50%; top: 22px; width: min(50vw, 200px); aspect-ratio: 1; margin-left: calc(min(50vw, 200px) / -2); border-radius: 50%; pointer-events: none;
+  background: repeating-radial-gradient(circle, #0a0b10 0 2px, #151720 2px 3px), #0a0b10; box-shadow: 0 22px 60px rgba(0,0,0,.65), 0 0 90px rgba(119,82,248,.18), inset 0 0 0 2px rgba(255,255,255,.05); animation: authVinylTurn 14s linear infinite; }
+.authVinyl::before{ content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, transparent 0 18%, rgba(255,255,255,.10) 24%, transparent 32% 68%, rgba(255,255,255,.08) 74%, transparent 82%); }
+.authVinylLab{ position: absolute; left: 50%; top: 50%; width: 36%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: 0 0 0 3px rgba(255,255,255,.85);
+  background: radial-gradient(70% 55% at 28% 24%, #e7b56b, transparent 62%), radial-gradient(70% 70% at 82% 78%, #5b3cc0, transparent 66%), #1c1233; }
+.authVinylLab::after{ content: ""; position: absolute; left: 50%; top: 50%; width: 9%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: #05070d; }
+@keyframes authVinylTurn{ to{ transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce){ .authVinyl{ animation: none; } }
+
+/* post-sign-in loading = the launch lockup with the moving bars */
+.loginSettlingAnim{ width: auto !important; }
+.loginSettlingDots{ display: none !important; }

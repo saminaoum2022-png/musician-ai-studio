@@ -121,7 +121,6 @@ import {
 } from "./feed-vinyl-player.js";
 import {
   getInitialBootHash,
-  consumeFirstRunLanding,
   getPostOnboardingHash,
   initOnboarding,
   ONBOARDING_ACTIVE_KEY,
@@ -5260,8 +5259,7 @@ function resolveEmptyHashRoute() {
     return DEFAULT_LOGGED_IN_ROUTE;
   }
   if (isGuestModeEnabled()) return DEFAULT_LOGGED_IN_ROUTE;
-  // First launch on this device: a few tap-through pages before sign-in.
-  return shouldShowOnboardingForUser("") ? "onboarding" : "auth";
+  return "auth";
 }
 
 /** Logged-in users who haven't finished the current feature tour → #/onboarding. */
@@ -5906,8 +5904,7 @@ function applyRoute({ passGen } = {}) {
     }
   }
   if (wanted === "onboarding" && !isLoggedIn && !hasAuthToken) {
-    // Signed-out first run is allowed to stay on onboarding; once it is done the block below sends them to sign-in.
-    if (!shouldHoldSplashForOAuth() && !shouldShowOnboardingForUser("")) {
+    if (!shouldHoldSplashForOAuth()) {
       wanted = "auth";
       replaceLoggedOutAuthHash();
     }
@@ -19949,9 +19946,7 @@ async function finishPostAuthNavigation() {
   ) {
     trySignupCoachWelcomeAfterAuth(postAuthUid);
   }
-  // First run: after the tap-through pages and sign-in, land on the Create page as it is.
-  const firstRunLanding = Boolean(authSession?.user?.id) && consumeFirstRunLanding();
-  const target = authSession?.user?.id ? (firstRunLanding ? "challenges" : DEFAULT_LOGGED_IN_ROUTE) : "auth";
+  const target = authSession?.user?.id ? DEFAULT_LOGGED_IN_ROUTE : "auth";
   try {
     location.hash = `#/${target}`;
   } catch {}
@@ -31221,8 +31216,8 @@ let _loginSettlingCarouselTimer = 0;
 let _loginSettlingForceEndTimer = 0;
 let _loginSettlingCarouselStep = 0;
 const LOGIN_SETTLING_MAX_MS = isCapacitorNativeAuth() ? 45000 : 18000;
-// Hold long enough for the N → NabadAi lockup (1820ms) plus a beat of dots.
-const LOGIN_SETTLING_MIN_MS = 3200;
+// The post-sign-in screen is the same lockup + moving bars as the launch screen; just avoid a flash.
+const LOGIN_SETTLING_MIN_MS = 1000;
 let _loginSettlingEndTimer = 0;
 let _loginSettlingSplash = null;
 
@@ -31230,9 +31225,8 @@ function ensureLoginSettlingSplash() {
   const mount = document.getElementById("loginSettlingAnim");
   if (!mount) return null;
   if (_loginSettlingSplash) return _loginSettlingSplash;
-  _loginSettlingSplash = createNabadSplash(mount, {
-    wordmarkSrc: "./assets/splash/nabad-wordmark.png",
-  });
+  // Static lockup + bars live in index.html; nothing to draw or play.
+  _loginSettlingSplash = { element: mount, play() { return Promise.resolve({ cancelled: false }); }, showFinal() {}, detach() {}, destroy() {} };
   return _loginSettlingSplash;
 }
 
@@ -34724,10 +34718,10 @@ function stopAuthTaglineType() {
 }
 
 function paintAuthTaglineChars(_count) {
-  // Static, three lines: Create. / Share. / Connect. (the typing animation is retired).
+  // Static small label: Create · Share · Connect (the typing animation is retired).
   const host = document.getElementById("authTaglineTyped");
   if (!host) return;
-  host.innerHTML = "Create.<br>Share.<br>Connect.";
+  host.textContent = "Create · Share · Connect";
 }
 
 function typeAuthTagline() {

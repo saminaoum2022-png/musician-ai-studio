@@ -13246,8 +13246,14 @@ function discoverPauseBtnSvg(size = 16) {
 }
 
 /** Play / pause / loading icons for cover overlays and frosted post buttons. */
+/** The two brand bars (purple + teal): the one "playing" sign. kind "play" = quick and uneven, "load" = slow and even. */
+function nbBarsHtml(size = 16, kind = "play") {
+  return `<span class="nbBars nbBars--${kind}" style="--nb-size:${size}px" aria-hidden="true"><i></i><i></i></span>`;
+}
+
 function coverArtPlayStateIconsHtml(size = 12) {
-  return `<span class="coverArtPlayIco coverArtPlayIco--play">${discoverPlayBtnSvg(size)}</span><span class="coverArtPlayIco coverArtPlayIco--pause">${discoverPauseBtnSvg(size)}</span><span class="coverArtPlayIco coverArtPlayIco--loading"><span class="coverArtPlaySpinner"></span></span>`;
+  // Playing = the two bars (was a pause glyph); loading = the same bars breathing slowly. Paused/idle keep the play triangle.
+  return `<span class="coverArtPlayIco coverArtPlayIco--play">${discoverPlayBtnSvg(size)}</span><span class="coverArtPlayIco coverArtPlayIco--pause">${nbBarsHtml(size, "play")}</span><span class="coverArtPlayIco coverArtPlayIco--loading">${nbBarsHtml(size, "load")}</span>`;
 }
 
 /** Centered play/pause overlay — toggled via `.libRowPlaying` / `.discoveryRowPlaying`. */
@@ -27492,7 +27498,9 @@ function renderUserPublicFeaturedCreation(songs, prof) {
   const slot = els.userPublicFeaturedCreation;
   if (!wrap || !slot) return;
   const list = Array.isArray(songs) ? songs : [];
-  const track = list.find((t) => isFeaturedOnProfile(t) && String(t?.url || "").trim()) || null;
+  // The featured card is retired on public profiles: the Music tab and its Trending list carry the songs.
+  const track = null;
+  void list;
   if (!track) {
     wrap.hidden = true;
     wrap.setAttribute("aria-hidden", "true");
@@ -31217,7 +31225,7 @@ let _loginSettlingForceEndTimer = 0;
 let _loginSettlingCarouselStep = 0;
 const LOGIN_SETTLING_MAX_MS = isCapacitorNativeAuth() ? 45000 : 18000;
 // The post-sign-in screen is the same lockup + moving bars as the launch screen; just avoid a flash.
-const LOGIN_SETTLING_MIN_MS = 1000;
+const LOGIN_SETTLING_MIN_MS = 1700;
 let _loginSettlingEndTimer = 0;
 let _loginSettlingSplash = null;
 
@@ -37366,7 +37374,7 @@ function wireUserPublicHeaderActionsOnce() {
     // Playing one of these songs → pause it. Paused/other → resume it, or start the first.
     const cur = document.querySelector("#userPublicMusic .upmRow.isActive .upmRowPlay, #userPublicMusic .upmCard.isActive");
     const first = cur || musicRows()[0] || document.querySelector("#userPublicMusic .upmCard");
-    if (!first) return;
+    if (!first) { showToast("No songs to play yet", { durationMs: 2400 }); return; }
     haptic("light");
     first.click();
   });
@@ -37379,7 +37387,7 @@ function wireUserPublicHeaderActionsOnce() {
   document.getElementById("btnUserPublicTogether")?.addEventListener("click", () => {
     const cache = _userPublicProfileCache;
     const t = cache ? userPublicTopTracks(cache, 1)[0] : null;
-    if (!t) return;
+    if (!t) { showToast("No songs to listen to together yet", { durationMs: 2600 }); return; }
     const btn = document.getElementById("btnUserPublicTogether");
     if (btn?.classList.contains("isBusy")) return;
     haptic("light");
@@ -47033,6 +47041,19 @@ function setUserPublicLoading(on, username = "") {
   }
 }
 
+/** Replace the Music panel's loading skeleton with a message (empty profile, not found, load error). */
+function setUserPublicMusicMessage(title, text = "") {
+  const mp = document.getElementById("userPublicMusic");
+  if (!mp) return;
+  mp.hidden = false;
+  mp.dataset.sig = "";
+  mp.innerHTML = `<div class="profileActEmpty"><p class="profileActEmptyTitle">${escapeHtml(title)}</p>${text ? `<p class="profileActEmptyText">${escapeHtml(text)}</p>` : ""}</div>`;
+  const posts = els.userPublicSongs;
+  if (posts) posts.hidden = true;
+  const reposts = document.getElementById("userPublicRepostsList");
+  if (reposts) reposts.hidden = true;
+}
+
 function userPublicRelationLabel(stats) {
   if (!stats) return "";
   const following = Boolean(stats.isFollowing);
@@ -53391,7 +53412,7 @@ function seekFriendsFeedProgress(input) {
 }
 
 const UPM_EQ_HTML = `<span class="upmEq" aria-hidden="true"><i></i><i></i><i></i></span>`;
-const UPM_OVERLAY_HTML = `<span class="upmOv" aria-hidden="true"><span class="upmOvIco upmOvIco--play">${discoverPlayBtnSvg(20)}</span><span class="upmOvIco upmOvIco--pause">${discoverPauseBtnSvg(20)}</span><span class="upmOvIco upmOvIco--load"><span class="coverArtPlaySpinner"></span></span></span>`;
+const UPM_OVERLAY_HTML = `<span class="upmOv" aria-hidden="true"><span class="upmOvIco upmOvIco--play">${discoverPlayBtnSvg(20)}</span><span class="upmOvIco upmOvIco--pause">${nbBarsHtml(20, "play")}</span><span class="upmOvIco upmOvIco--load">${nbBarsHtml(20, "load")}</span></span>`;
 
 /** Playing state for the Music panels (own + public) and their Play buttons: works for any way the song was started. */
 function syncMusicPanelsPlaying() {
@@ -53402,6 +53423,7 @@ function syncMusicPanelsPlaying() {
   const ct = a && Number.isFinite(a.currentTime) ? a.currentTime : 0;
   const audibleNow = Boolean(a && !a.paused && !a.ended && (dur > 0 || ct > 0));
   let anyPlaying = false;
+  let anyLoading = false;
   let anyActive = false;
   for (const root of roots) {
     root.querySelectorAll(".upmRow, .upmCard:not(.upmCard--draft)").forEach((host) => {
@@ -53418,14 +53440,20 @@ function syncMusicPanelsPlaying() {
         btn.setAttribute("aria-label", `${playing ? "Pause" : loading ? "Loading" : "Play"} ${t}`);
       }
       if (playing) anyPlaying = true;
+      if (loading && !playing) anyLoading = true;
       if (active) anyActive = true;
     });
   }
+  const pillLoading = anyLoading && !anyPlaying;
   for (const id of ["btnUserPublicPlay", "btnProfilePlay"]) {
     const fab = document.getElementById(id);
     if (!fab) continue;
     fab.classList.toggle("isPlaying", anyPlaying);
-    fab.setAttribute("aria-label", anyPlaying ? "Pause" : id === "btnProfilePlay" ? "Play my music" : "Play");
+    fab.classList.toggle("isLoading", pillLoading);
+    const label = anyPlaying ? "Pause" : pillLoading ? "Loading" : "Play";
+    fab.setAttribute("aria-label", anyPlaying ? "Pause" : pillLoading ? "Loading" : id === "btnProfilePlay" ? "Play my music" : "Play");
+    const lbl = fab.querySelector(".fabLbl");
+    if (lbl && lbl.textContent !== label) lbl.textContent = label;
   }
   return { anyPlaying, anyActive };
 }
@@ -55937,6 +55965,9 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
         : "User not found.";
       els.userPublicEmpty.style.display = "";
     }
+    setUserPublicMusicMessage("Profile not found", handle ? `Nobody is using @${handle}.` : "");
+    try { syncUserPublicHeaderActions(null); } catch {}
+    if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
     syncUserPublicVerifiedBadge(null);
     syncUserPublicProBadge(null);
     setUserPublicLoading(false);
@@ -55965,7 +55996,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     if (storedSeg === "music" || storedSeg === "posts" || storedSeg === "reposts") _userPublicSegment = storedSeg;
   } catch {}
   const segBar = document.getElementById("userPublicSegBar");
-  if (segBar) segBar.hidden = false;
+  if (segBar) { segBar.hidden = false; segBar.style.display = ""; delete segBar.dataset.empty; }
   const songs = await supabaseFetchPublicLibraryForUserId(prof.user_id);
   if (!stillCurrent()) return;
   for (const t of songs) {
@@ -56015,10 +56046,12 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
       els.userPublicSongsCount.hidden = true;
     }
     syncUserPublicSegmentUi();
-    if (els.userPublicEmpty) {
-      els.userPublicEmpty.textContent = `No public posts from @${publicHandle} yet.`;
-      els.userPublicEmpty.style.display = "";
-    }
+    // Nothing to browse: no tabs, one clear message where the songs would be.
+    const segBarEmpty = document.getElementById("userPublicSegBar");
+    if (segBarEmpty) { segBarEmpty.hidden = true; segBarEmpty.style.display = "none"; segBarEmpty.dataset.empty = "1"; }
+    setUserPublicMusicMessage("No music yet", `Songs from @${publicHandle} will show up here.`);
+    try { syncUserPublicHeaderActions(null); } catch {}
+    if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
     syncUserPublicVerifiedBadge(prof);
     syncUserPublicProBadge(currentUserPublicSocialStats);
     renderUserPublicFollowButton();
@@ -56077,10 +56110,9 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
   } catch (e) {
     console.warn("[userPublic] profile load failed", e);
     if (stillCurrent()) {
-      if (els.userPublicEmpty) {
-        els.userPublicEmpty.textContent = "Could not load this profile. Pull to refresh or try again.";
-        els.userPublicEmpty.style.display = "";
-      }
+      setUserPublicMusicMessage("Could not load this profile", "Pull to refresh or try again.");
+      try { syncUserPublicHeaderActions(null); } catch {}
+      if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
       setUserPublicLoading(false);
     }
   }

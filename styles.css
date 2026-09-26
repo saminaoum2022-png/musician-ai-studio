@@ -69075,3 +69075,85 @@ body .authScreen .authTermsLine a{ color: #f5f6fb; text-decoration: underline; t
 /* post-sign-in loading = the launch lockup with the moving bars */
 .loginSettlingAnim{ width: auto !important; }
 .loginSettlingDots{ display: none !important; }
+
+
+/* ===== Play pill (profile + public profile) and the shared two-bar sign ===== */
+/* .nbBars = the launch screen's two bars. Playing: quick and uneven. Loading: slow and even, like the launch screen. */
+.nbBars{ --nb-purple: #7752f8; --nb-teal: #14a58b; --nb-size: 16px; display: inline-flex; align-items: flex-end; gap: calc(var(--nb-size) * .25); height: var(--nb-size); }
+.nbBars i{ display: block; width: calc(var(--nb-size) * .31); height: 100%; border-radius: 999px; transform-origin: 50% 100%; }
+.nbBars i:first-child{ background: var(--nb-purple); }
+.nbBars i:last-child{ background: var(--nb-teal); }
+.nbBars--play i:first-child{ animation: nbPlay1 .9s ease-in-out infinite; }
+.nbBars--play i:last-child{ animation: nbPlay2 .9s ease-in-out infinite; }
+.nbBars--load i:first-child{ animation: nbBar1 1.3s ease-in-out infinite; }
+.nbBars--load i:last-child{ animation: nbBar2 1.3s ease-in-out infinite; }
+@keyframes nbPlay1{ 0%,100%{ transform: scaleY(.4); } 35%{ transform: scaleY(1); } 70%{ transform: scaleY(.6); } }
+@keyframes nbPlay2{ 0%,100%{ transform: scaleY(1); } 40%{ transform: scaleY(.35); } 75%{ transform: scaleY(.85); } }
+@media (prefers-reduced-motion: reduce){ .nbBars i{ animation: none !important; } .nbBars--play i:first-child{ transform: scaleY(.6); } }
+
+/* the pill: white, labelled, in the action row next to Edit profile / Become a fan */
+body .userPublicPlayFab{
+  position: static !important; right: auto !important; top: auto !important; z-index: auto;
+  width: auto !important; height: 44px !important; min-width: 0; padding: 0 20px; margin: 0;
+  border-radius: 22px !important; display: inline-flex !important; align-items: center; justify-content: center; gap: 9px;
+  background: #fff !important; color: #0b0b13 !important; box-shadow: none !important; flex: 0 0 auto !important;
+  font: inherit; font-size: 14.5px; font-weight: 800; white-space: nowrap;
+}
+body .userPublicPlayFab[hidden]{ display: none !important; }
+body .userPublicPlayFab svg.fabIcoPlay{ width: 16px; height: 16px; margin: 0; fill: currentColor; stroke: none; display: block; }
+body .userPublicPlayFab .fabBars{ display: none; }
+body .userPublicPlayFab.isPlaying .fabIcoPlay, body .userPublicPlayFab.isLoading .fabIcoPlay{ display: none; }
+body .userPublicPlayFab.isPlaying .fabBars, body .userPublicPlayFab.isLoading .fabBars{ display: inline-flex; }
+body .userPublicPlayFab.isLoading .fabBars i:first-child{ animation: nbBar1 1.3s ease-in-out infinite; }
+body .userPublicPlayFab.isLoading .fabBars i:last-child{ animation: nbBar2 1.3s ease-in-out infinite; }
+body .userPublicPlayFab.isLoading{ cursor: progress; }
+body[data-route="profile"] .profileAuraActionRow .profilePlayFab{ margin-left: 0; }
+body[data-route="profile"] .profileAuraActionRow #btnProfileAvatarEdit{ max-width: none; }
+body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay{ flex: 0 0 auto !important; }
+
+/* the pill wins over the old floating-button positioning and the old play/pause glyph rules */
+body[data-route="profile"] .profileAuraActionRow .profilePlayFab,
+body[data-route="profile"] .profilePlayFab{
+  position: static !important; top: auto !important; right: auto !important; bottom: auto !important; left: auto !important;
+  width: auto !important; height: 44px !important; margin: 0 !important; z-index: auto !important; background: #fff !important; color: #0b0b13 !important;
+  border-radius: 22px !important; padding: 0 20px !important;
+}
+.userPublicPlayFab.isPlaying .fabIcoPause, .profilePlayFab.isPlaying .fabIcoPause{ display: none !important; }
+/* public profile action rows, even and aligned:
+   row 1  [ Become a fan ........ ] [ Message ]
+   row 2  [ Play ] [ Listen together ]   (two equal halves, every pill 44 pt) */
+body[data-route="user"] #userPublicFollowRow:has(#btnUserPublicPlay:not([hidden])){ flex-wrap: wrap !important; row-gap: 10px !important; column-gap: 10px !important; align-items: stretch !important; }
+body[data-route="user"] #userPublicFollowRow:has(#btnUserPublicPlay:not([hidden])) > *{ height: 44px !important; min-height: 44px !important; box-sizing: border-box !important; margin: 0 !important; }
+body[data-route="user"] #userPublicFollowRow:has(#btnUserPublicPlay:not([hidden])) #btnUserPublicFollow{ flex: 1 1 calc(100% - 54px) !important; }
+body[data-route="user"] #userPublicFollowRow:has(#btnUserPublicPlay:not([hidden])) #btnUserPublicMessage{ flex: 0 0 44px !important; width: 44px !important; padding: 0 !important; }
+body[data-route="user"] #userPublicFollowRow:has(#btnUserPublicPlay:not([hidden])) #btnUserPublicPlay,
+body[data-route="user"] #userPublicFollowRow:has(#btnUserPublicPlay:not([hidden])) #btnUserPublicTogether:not([hidden]){ flex: 1 1 calc(50% - 5px) !important; width: auto !important; padding: 0 12px !important; justify-content: center !important; }
+/* Featured track is not shown on public profiles */
+#userPublicFeaturedCreationWrap{ display: none !important; }
+
+/* an empty public profile has nothing to switch between: no tabs, just the message */
+#userPublicSegBar[data-empty="1"]{ display: none !important; }
+
+/* ===== Public profile: Become a fan is the main action (solid purple); Play is a see-through outline ===== */
+body[data-route="user"] #userPublicFollowRow #btnUserPublicFollow[data-following="false"]{
+  background: #7752f8 !important; border: 1.5px solid #7752f8 !important; color: #fff !important; box-shadow: none !important; text-shadow: none !important;
+}
+body[data-route="user"] #userPublicFollowRow #btnUserPublicFollow[data-following="false"]:active{ background: #6a46ea !important; border-color: #6a46ea !important; }
+/* once you are a fan it settles into calm glass (existing look) so nothing shouts at someone who already followed */
+body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay{
+  background: rgba(255,255,255,.04) !important; color: #fff !important; border: 1.5px solid rgba(255,255,255,.75) !important;
+}
+body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay .fabBars{ --nb-teal: #22c5a9; --nb-purple: #8f74ff; }
+body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay:active{ background: rgba(255,255,255,.12) !important; }
+
+
+/* ===== One playing sign: the two brand bars ===== */
+/* on the dark cover scrims the bars use the bright brand colours; on the white feed circle they use the deeper teal */
+.coverArtPlayIco .nbBars, .upmOvIco .nbBars{ --nb-purple: #8f74ff; --nb-teal: #22c5a9; }
+.feedEdgePlay .coverArtPlayIco .nbBars{ --nb-purple: #7752f8; --nb-teal: #14a58b; }
+.coverArtPlayIco .nbBars, .upmOvIco .nbBars{ display: inline-flex; }
+/* the separate teal equaliser is retired: the cover shows "playing", the rank number stays */
+.libRowEq, .upmEq{ display: none !important; }
+.upmRow.isPlaying .upmNo b{ display: inline !important; }
+/* the card's old corner equaliser is retired too */
+.upmCard.isPlaying .upmCardArt::after{ opacity: 0 !important; animation: none !important; display: none !important; }

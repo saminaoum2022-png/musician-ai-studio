@@ -3231,10 +3231,6 @@
                   </span>
                 </button>
               </div>
-              <button id="btnUserPublicPlay" class="userPublicPlayFab" type="button" aria-label="Play" hidden>
-                <svg class="fabIcoPlay" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>
-                <svg class="fabIcoPause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/></svg>
-              </button>
               <button id="btnUserPublicBack" class="nabadBackBtn userPublicBack" type="button" aria-label="Back" hidden>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
               </button>
@@ -3250,6 +3246,11 @@
             <div class="userPublicFollowRow" id="userPublicFollowRow" hidden>
               <div id="btnUserPublicFollow" class="userPublicFollowBtn" role="button" tabindex="0" hidden>Become a fan</div>
               <button id="btnUserPublicMessage" class="userPublicMessageBtn" type="button" hidden aria-label="Message">Message</button>
+              <button id="btnUserPublicPlay" class="userPublicPlayFab" type="button" aria-label="Play" hidden>
+                <svg class="fabIcoPlay" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 5.6v12.8a.8.8 0 0 0 1.2.7l10-6.4a.8.8 0 0 0 0-1.4l-10-6.4a.8.8 0 0 0-1.2.7z"/></svg>
+                <span class="nbBars nbBars--play fabBars" aria-hidden="true"><i></i><i></i></span>
+                <span class="fabLbl">Play</span>
+              </button>
               <button id="btnUserPublicShuffle" class="userPublicIconBtn userPublicShuffleBtn" type="button" hidden aria-label="Shuffle"></button>
               <button id="btnUserPublicTogether" class="userPublicTogetherBtn" type="button" hidden>
                 <span class="userPublicTogetherIco" aria-hidden="true"></span><span>Listen together</span>
@@ -3438,6 +3439,11 @@
                     </svg>
                   </span>
 
+                  <button id="btnProfilePlay" class="userPublicPlayFab profilePlayFab" type="button" aria-label="Play my music" hidden>
+                <svg class="fabIcoPlay" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 5.6v12.8a.8.8 0 0 0 1.2.7l10-6.4a.8.8 0 0 0 0-1.4l-10-6.4a.8.8 0 0 0-1.2.7z"/></svg>
+                <span class="nbBars nbBars--play fabBars" aria-hidden="true"><i></i><i></i></span>
+                <span class="fabLbl">Play</span>
+              </button>
               </div>
               <div id="profileMusicStylesInline" class="profileMusicStylesInline" hidden aria-hidden="true">
                 <button type="button" id="profileMusicStylesBtn" class="profileMusicStylesLine" aria-label="Music styles"></button>
@@ -3470,10 +3476,7 @@
                 </button>
               </div>
 
-              <button id="btnProfilePlay" class="userPublicPlayFab profilePlayFab" type="button" aria-label="Play my music" hidden>
-                <svg class="fabIcoPlay" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>
-                <svg class="fabIcoPause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/></svg>
-              </button>
+              
               <div id="authLoggedInEmailInline" class="profileAuraEmail hint" style="display:none"></div>
 
               <!-- Legacy nodes kept for DOM stability; genres stay off
@@ -5661,7 +5664,7 @@
           detach() {},
           destroy() {},
         };
-        const MIN_MS = 800;
+        const MIN_MS = 1700;
         const start = performance.now();
         const finish = () => {
           window.__nabadBootSplashEnded = true;

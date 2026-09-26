@@ -79,6 +79,12 @@ export function initPullToRefresh(deps) {
   }
 
   /** Skip PTR when the touch starts inside a nested scroll container (e.g. DM thread). */
+  /** Sheets and dialogs own their touches: a drag that starts on one must never pull the page behind it. */
+  const PTR_MODAL_SEL = '[role="dialog"], [aria-modal="true"], .messagesShareSheet, .npPresenceOverlay, .liveListenOverlay, .momentSheet, .faqOverlay, .loginSettlingOverlay';
+  function ptrInsideModal(target) {
+    try { return Boolean(target instanceof Element && target.closest(PTR_MODAL_SEL)); } catch { return false; }
+  }
+
   function ptrNestedScrollContainer(target) {
     let node = target instanceof Element ? target : null;
     while (node && node !== document.body && node !== document.documentElement) {
@@ -272,6 +278,7 @@ export function initPullToRefresh(deps) {
       if (!isRouteEnabled()) return;
       if (ptrPageScrollTop() > 2) return;
       if (e.touches.length !== 1) return;
+      if (ptrInsideModal(e.target)) return;
       if (ptrNestedScrollContainer(e.target)) return;
       ensurePtrShells();
       activeMovable = getMovable();
@@ -292,6 +299,7 @@ export function initPullToRefresh(deps) {
     (e) => {
       if (!pulling || refreshing) return;
       if (!isRouteEnabled()) return;
+      if (ptrInsideModal(e.target)) { pulling = false; resetPull(false); return; }
       const touch = Array.from(e.touches).find((t) => t.identifier === touchId);
       if (!touch) return;
       if (ptrPageScrollTop() > 2) {

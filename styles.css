@@ -69157,3 +69157,86 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay:active{ backgrou
 .upmRow.isPlaying .upmNo b{ display: inline !important; }
 /* the card's old corner equaliser is retired too */
 .upmCard.isPlaying .upmCardArt::after{ opacity: 0 !important; animation: none !important; display: none !important; }
+
+
+/* ===== Listen together sheets: one loading hairline, and a picker made for people ===== */
+/* the hairline: any Listen together sheet that is working (is-loading) or waiting (is-pending) */
+.liveListenOverlay.is-loading .npPresenceSheet::before{
+  content: ""; position: absolute; left: 0; top: 0; width: 42%; height: 2px; z-index: 3;
+  background: linear-gradient(90deg, transparent, #23d5ab, #7c5cff, transparent);
+  animation: llSweep 1.15s ease-in-out infinite;
+}
+.messagesShareSheetCard{ position: relative; overflow: hidden; }
+.messagesShareSheetCard.isLoading::before{
+  content: ""; position: absolute; left: 0; top: 0; width: 42%; height: 2px; z-index: 5;
+  background: linear-gradient(90deg, transparent, #23d5ab, #7c5cff, transparent);
+  animation: llSweep 1.15s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce){
+  .liveListenOverlay.is-loading .npPresenceSheet::before, .messagesShareSheetCard.isLoading::before{ animation: none; width: 100%; opacity: .55; }
+}
+
+/* picker header: title + close, the song as a small strip */
+.llPickHead{ display: flex; align-items: center; justify-content: space-between; margin: 2px 0 0; }
+.llPickTitle{ margin: 0; font-family: var(--dz-display, inherit); font-size: 22px; font-weight: 800; color: #f5f6fb; }
+.llPickClose{ width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(255,255,255,.1); color: #fff; display: grid; place-items: center; cursor: pointer; }
+.llPickSong{ display: flex; align-items: center; gap: 11px; margin: 12px 0 8px; padding: 10px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); }
+.llPickSongArt{ width: 42px; height: 42px; border-radius: 9px; object-fit: cover; flex: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+.llPickSongArt--ph{ display: grid; place-items: center; background: rgba(255,255,255,.08); color: #9aa1b6; }
+.llPickSongMeta{ min-width: 0; text-align: left; }
+.llPickSongMeta small{ display: block; font-size: 12px; color: #9aa1b6; }
+.llPickSongMeta b{ display: block; font-size: 15px; font-weight: 700; color: #f5f6fb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.liveListenOverlay--picker .npPresenceActions{ margin-top: 0; }
+.llPickLabel{ margin: 12px 2px 2px; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #9aa1b6; text-align: left; }
+.llPickList{ display: grid; gap: 0; }
+.llPickSearch{ display: flex; align-items: center; gap: 10px; height: 42px; padding: 0 14px; margin: 4px 0 2px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); color: #9aa1b6; }
+.llPickSearch input{ flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: #fff; font: inherit; font-size: 15px; -webkit-appearance: none; appearance: none; }
+.llPickSearch input:focus{ box-shadow: none !important; border: 0 !important; }
+/* a person: round avatar, ring when live, name / handle / status, one Invite pill */
+.llPickRow{ display: flex; align-items: center; gap: 12px; padding: 9px 0; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.llPickRow[hidden]{ display: none !important; }
+.llPickRow.isBusy{ pointer-events: none; }
+.llPickAv{ position: relative; flex: none; width: 48px; height: 48px; padding: 3px; border-radius: 50%; border: 1.5px solid transparent; box-sizing: border-box; }
+.llPickAv.isLive{ border-color: #23d5ab; }
+.llPickAv .llPickAvImg{ display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; overflow: hidden; }
+.llPickWho{ flex: 1; min-width: 0; display: block; }
+.llPickWho strong{ display: block; font-size: 15.5px; font-weight: 700; color: #f5f6fb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.llPickWho small{ display: block; font-size: 12.5px; color: #9aa1b6; }
+.llPickWho em{ display: block; font-style: normal; font-size: 12px; color: #23d5ab; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.llPickBtn{ flex: none; height: 36px; padding: 0 16px; display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; border: 1.5px solid #23d5ab; color: #23d5ab; font-size: 13.5px; font-weight: 700; }
+.llPickRow.isBusy .llPickBtn{ background: rgba(35,213,171,.1); }
+.llPickRow:active .llPickBtn{ background: rgba(35,213,171,.14); }
+.llBars{ --nb-size: 14px; --nb-purple: #8f74ff; --nb-teal: #22c5a9; }
+.npPresenceBtn .llBars{ --nb-purple: #06121a; --nb-teal: #06121a; margin-right: 8px; vertical-align: -2px; }
+.llSkelBtn{ flex: none; width: 70px; height: 36px; border-radius: 999px; background: var(--skeleton-shimmer-strong, linear-gradient(110deg, rgba(255,255,255,.08), rgba(255,255,255,.18), rgba(255,255,255,.08))); background-size: 200% 100%; animation: discoveryShimmer 1.15s ease-in-out infinite; }
+/* empty */
+.llPickEmpty{ display: grid; justify-items: center; gap: 8px; padding: 22px 8px 8px; text-align: center; }
+.llPickEmptyIco{ width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: rgba(35,213,171,.12); color: #23d5ab; }
+.llPickEmpty strong{ font-size: 18px; font-weight: 800; color: #f5f6fb; }
+.llPickEmpty p{ margin: 0; max-width: 30ch; font-size: 14px; line-height: 1.5; color: #9aa1b6; }
+.llPickEmptyBtn{ margin-top: 8px; height: 46px; padding: 0 22px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.75); background: transparent; color: #fff; font: inherit; font-size: 14.5px; font-weight: 700; cursor: pointer; }
+
+/* sheet backdrops do not pass drags to the page behind */
+.messagesShareSheetBackdrop, .npPresenceOverlay{ touch-action: none; overscroll-behavior: contain; }
+.messagesShareSheetCard, .npPresenceSheet{ overscroll-behavior: contain; }
+
+
+/* ===== Song picker / share sheets: same bottom-sheet family as the new Listen together sheets ===== */
+.messagesShareSheet{ padding: 0 !important; }
+.messagesShareSheetCard{
+  width: 100% !important; max-width: none !important; max-height: min(78dvh, 640px) !important;
+  padding: 22px 16px calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+  border-radius: 28px 28px 0 0 !important; border: 1px solid rgba(255,255,255,.12) !important; border-bottom: 0 !important;
+  background: rgba(20,22,32,.94) !important; -webkit-backdrop-filter: blur(24px) saturate(140%); backdrop-filter: blur(24px) saturate(140%);
+}
+.messagesShareSheetCard::after{ content: ""; position: absolute; left: 50%; top: 8px; width: 38px; height: 4px; margin-left: -19px; border-radius: 4px; background: rgba(255,255,255,.22); pointer-events: none; }
+.messagesShareSheetTitle{ font-family: var(--dz-display, inherit); font-size: 22px !important; font-weight: 800; letter-spacing: -0.01em; }
+.messagesShareSheetClose{ width: 34px !important; height: 34px !important; border-radius: 50% !important; background: rgba(255,255,255,.1) !important; font-size: 20px !important; }
+.messagesShareSheetLead{ margin: 0 0 12px !important; font-size: 14px !important; color: #9aa1b6 !important; }
+.messagesShareSearch{ border-radius: 999px !important; background: rgba(255,255,255,.06) !important; border: 1px solid rgba(255,255,255,.12) !important; }
+.messagesShareRow{ gap: 12px; padding: 8px 2px; }
+.messagesShareRowArt{ width: 46px !important; height: 46px !important; border-radius: 10px !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+.messagesShareRowBody strong{ font-size: 15.5px !important; font-weight: 700 !important; }
+.messagesShareRowBody span{ font-size: 13px !important; color: #9aa1b6 !important; }
+
+.llPickChange{ flex: none; margin-left: auto; height: 32px; padding: 0 14px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.55); background: transparent; color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }

@@ -624,6 +624,11 @@ function closeOverlay() {
   }, 220);
 }
 
+/** The gradient hairline on the sheet's top edge: on while anything is in flight (invite, join, loading friends). */
+function setOverlayBusy(on, el = _overlayEl) {
+  try { el?.classList.toggle("is-loading", Boolean(on)); } catch {}
+}
+
 function setOverlayStatus(text) {
   const el = _overlayEl?.querySelector(".npPresenceArtist");
   if (el) el.textContent = String(text || "");
@@ -654,7 +659,17 @@ function inviteSheetBodyHtml({ kicker, host, songTitle, art }) {
     </div>`;
 }
 
-function openOverlay({ kicker, title, sub, art, actionsHtml, onAction, onDismiss, inviteHost }) {
+function pickerHeadHtml(track, canChange = false) {
+  const cover = String(track?.artUrl || track?.art || "").trim();
+  const coverHtml = cover
+    ? `<img class="llPickSongArt" src="${escapeHtml(cover)}" alt="" />`
+    : `<span class="llPickSongArt llPickSongArt--ph" aria-hidden="true">♪</span>`;
+  return `
+    <div class="llPickHead"><h3 class="llPickTitle">Listen together</h3><button type="button" class="llPickClose" data-ll-act="close" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="llPickSong">${coverHtml}<div class="llPickSongMeta"><small>From the start</small><b>${escapeHtml(track?.title || "Song")}</b></div>${canChange ? `<button type="button" class="llPickChange" data-ll-act="change-song">Change</button>` : ""}</div>`;
+}
+
+function openOverlay({ kicker, title, sub, art, actionsHtml, onAction, onDismiss, inviteHost, picker, canChange }) {
   closeOverlay();
   const overlay = document.createElement("div");
   overlay.id = "liveListenOverlay";
@@ -663,7 +678,9 @@ function openOverlay({ kicker, title, sub, art, actionsHtml, onAction, onDismiss
   const coverHtml = cover
     ? `<img class="npPresenceArt" src="${escapeHtml(cover)}" alt="" />`
     : `<span class="npPresenceArt npPresenceArt--ph" aria-hidden="true">♪</span>`;
-  const topHtml = inviteHost
+  const topHtml = picker
+    ? pickerHeadHtml({ title, artUrl: art }, Boolean(canChange))
+    : inviteHost
     ? inviteSheetBodyHtml({ kicker, host: inviteHost, songTitle: title, art })
     : `<div class="npPresenceTop">
         ${coverHtml}
@@ -674,6 +691,7 @@ function openOverlay({ kicker, title, sub, art, actionsHtml, onAction, onDismiss
         </div>
       </div>`;
   if (inviteHost) overlay.classList.add("liveListenOverlay--invite");
+  if (picker) overlay.classList.add("liveListenOverlay--picker");
   overlay._llOnAction = onAction;
   overlay.innerHTML = `
     <div class="npPresenceSheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(kicker || "Listen together")}">
@@ -693,7 +711,17 @@ function openOverlay({ kicker, title, sub, art, actionsHtml, onAction, onDismiss
     const btn = e.target.closest("[data-ll-act]");
     if (!btn || btn.disabled) return;
     const act = btn.getAttribute("data-ll-act");
+    if (act === "close") { closeOverlay(); try { onDismiss?.(); } catch {} return; }
     try { overlay._llOnAction?.(act, btn); } catch {}
+  });
+  overlay.addEventListener("input", (e) => {
+    const inp = e.target.closest?.("[data-ll-search]");
+    if (!inp) return;
+    const q = String(inp.value || "").trim().toLowerCase();
+    overlay.querySelectorAll(".llPickRow").forEach((row) => {
+      const hay = String(row.getAttribute("data-ll-hay") || "");
+      row.hidden = Boolean(q) && !hay.includes(q);
+    });
   });
 }
 
@@ -711,19 +739,21 @@ function updateOverlay(el, { sub, actionsHtml, onAction }) {
 
 /** A calm loading state: the song, a spinning gradient ring on the art, and shimmering friend rows. */
 function pendingActionsHtml(rows = 3) {
-  const row = `<div class="llSkelRow"><span class="llSkelAv"></span><span class="llSkelLines"><i></i><i></i></span></div>`;
+  const row = `<div class="llSkelRow"><span class="llSkelAv"></span><span class="llSkelLines"><i></i><i></i></span><span class="llSkelBtn"></span></div>`;
   return `<div class="liveListenInviteList llSkeleton" aria-hidden="true">${row.repeat(rows)}</div>`;
 }
 
 /** Open the sheet right away in its loading state (used when we have to wait for the network). */
-function openPendingOverlay(track, sub, rows) {
+function openPendingOverlay(track, sub, rows, { picker = false, canChange = false } = {}) {
   openOverlay({
     kicker: "Listen together",
     title: track?.title || "Song",
     sub,
     art: track?.artUrl || track?.art,
-    actionsHtml: pendingActionsHtml(rows),
+    actionsHtml: (picker ? `<div class="llPickLabel">${escapeHtml(sub || "")}</div>` : "") + pendingActionsHtml(rows),
     onAction: () => {},
+    picker,
+    canChange,
   });
   const el = _overlayEl;
   el?.classList.add("is-pending");
@@ -1631,7 +1661,7 @@ function showJoinPrompt(session) {
     inviteHost: session.host || {},
     actionsHtml: `
       <button type="button" class="npPresenceBtn npPresenceBtn--ghost" data-ll-act="dismiss">Not now</button>
-      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="join">Start together</button>`,
+      <button type="button" class="npPresenceBtn npPresenceBtn--primary" data-ll-act="join">Join</button>`,
     onAction: async (act, btn) => {
       if (act !== "join") {
         closeOverlay();
@@ -1639,8 +1669,9 @@ function showJoinPrompt(session) {
       }
       if (_joinBusy) return;
       _joinBusy = true;
-      btn.textContent = "Starting together…";
+      btn.innerHTML = `<span class="nbBars nbBars--load llBars" aria-hidden="true"><i></i><i></i></span><span>Joining</span>`;
       btn.disabled = true;
+      setOverlayBusy(true);
       try { bridge.primePlayerInGesture?.(); } catch {}
       haptic();
       try {
@@ -1661,8 +1692,9 @@ function showJoinPrompt(session) {
         await announceGuestJoined();
       } catch (e) {
         toast(String(e?.message || "Could not join"), { durationMs: 2800 });
-        btn.textContent = "Start together";
+        btn.textContent = "Join";
         btn.disabled = false;
+        setOverlayBusy(false);
       } finally {
         _joinBusy = false;
       }
@@ -1775,10 +1807,12 @@ async function createSessionForGuest(guest, track, rowBtn) {
     return;
   }
   _inviteBusy = true;
+  setOverlayBusy(true);
   if (rowBtn) {
-    rowBtn.disabled = true;
-    const sub = rowBtn.querySelector(".messagesShareRowBody span");
-    if (sub) sub.textContent = "Inviting…";
+    rowBtn.setAttribute("aria-disabled", "true");
+    rowBtn.classList.add("isBusy");
+    const pill = rowBtn.querySelector(".llPickBtn");
+    if (pill) pill.innerHTML = `<span class="nbBars nbBars--load llBars" aria-hidden="true"><i></i><i></i></span><span>Inviting</span>`;
   }
   setOverlayStatus(`Inviting @${handle}…`);
   try {
@@ -1823,40 +1857,69 @@ async function createSessionForGuest(guest, track, rowBtn) {
         onAction: (act) => { if (act === "close") closeOverlay(); },
       });
     }
+    setOverlayBusy(false);
     if (rowBtn) {
-      rowBtn.disabled = false;
-      const sub = rowBtn.querySelector(".messagesShareRowBody span");
-      if (sub) sub.textContent = "Listen together";
+      rowBtn.removeAttribute("aria-disabled");
+      rowBtn.classList.remove("isBusy");
+      const pill = rowBtn.querySelector(".llPickBtn");
+      if (pill) pill.textContent = "Invite";
     }
   } finally {
     _inviteBusy = false;
   }
 }
 
+function friendPresence(f) {
+  try { return bridge.getFriendPresence?.(String(f?.userId || "")) || null; } catch { return null; }
+}
+
 function inviteListActionsHtml(friends) {
-  const rows = (friends || []).map((f, idx) => {
-    const handle = escapeHtml(displayName(f));
+  const list = Array.isArray(friends) ? friends : [];
+  if (!list.length) {
+    return `<div class="llPickEmpty">
+      <span class="llPickEmptyIco" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12.4" r="2.3"/><circle cx="18" cy="12.4" r="2.3"/><path d="M6 10.1V9.6a6 6 0 0 1 12 0v.5"/><path d="M2.6 20c.3-2.2 1.7-3.6 3.4-3.6S9.1 17.8 9.4 20M14.6 20c.3-2.2 1.7-3.6 3.4-3.6s3.1 1.4 3.4 3.6"/></svg></span>
+      <strong>No friends to invite yet</strong>
+      <p>Listen together works with mutual fans. Invite someone to NabadAi and press play at the same moment.</p>
+      <button type="button" class="llPickEmptyBtn" data-ll-act="invite-app">Invite a friend</button>
+    </div>`;
+  }
+  // Friends who are listening right now come first, with what they are playing.
+  const decorated = list.map((f, idx) => ({ f, idx, live: friendPresence(f) }));
+  decorated.sort((a, b) => Number(Boolean(b.live)) - Number(Boolean(a.live)));
+  const row = ({ f, idx, live }) => {
+    const name = displayName(f);
+    const handle = String(f?.username || "").replace(/^@/, "").trim();
+    const status = live ? `Listening${live.songTitle ? ` to ${live.songTitle}` : " now"}` : "";
     return `
-      <button type="button" class="messagesShareRow" data-ll-act="invite" data-ll-friend="${idx}">
-        ${avatarHtml(f, "messagesShareRowArt")}
-        <span class="messagesShareRowBody">
-          <strong>@${handle}</strong>
-          <span>Listen together</span>
-        </span>
-      </button>`;
-  }).join("");
-  return `<div class="liveListenInviteList">${rows || `<div class="messagesShareEmpty">Become mutual fans with someone first.</div>`}</div>`;
+      <div class="llPickRow" role="button" tabindex="0" data-ll-act="invite" data-ll-friend="${idx}" data-ll-hay="${escapeHtml((name + " " + handle).toLowerCase())}">
+        <span class="llPickAv${live ? " isLive" : ""}">${avatarHtml(f, "llPickAvImg")}</span>
+        <span class="llPickWho"><strong>${escapeHtml(name)}</strong>${handle && handle.toLowerCase() !== name.toLowerCase() ? `<small>@${escapeHtml(handle)}</small>` : ""}${status ? `<em>${escapeHtml(status)}</em>` : ""}</span>
+        <span class="llPickBtn">Invite</span>
+      </div>`;
+  };
+  const live = decorated.filter((d) => d.live);
+  const rest = decorated.filter((d) => !d.live);
+  const search = list.length > 6
+    ? `<label class="llPickSearch"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><input type="search" data-ll-search placeholder="Search friends" autocomplete="off" /></label>`
+    : "";
+  const section = (label, items) => items.length ? `<div class="llPickLabel">${label}</div>${items.map(row).join("")}` : "";
+  const body = live.length
+    ? section("Listening now", live) + section("Your friends", rest)
+    : `<div class="llPickLabel">Pick a friend to invite</div>${rest.map(row).join("")}`;
+  return `<div class="liveListenInviteList llPickList">${search}${body}</div>`;
 }
 
 function inviteHandler(friends, track) {
   return (act, btn) => {
+    if (act === "invite-app") { try { bridge.inviteToApp?.(); } catch {} return; }
+    if (act === "change-song") { closeOverlay(); try { bridge.pickSongForListenTogether?.(); } catch {} return; }
     if (act !== "invite") return;
     const friend = friends[Number(btn.getAttribute("data-ll-friend"))];
     if (friend) void createSessionForGuest(friend, track, btn);
   };
 }
 
-function renderInviteList(friends, track) {
+function renderInviteList(friends, track, opts = {}) {
   openOverlay({
     kicker: "Listen together",
     title: track?.title || "Song",
@@ -1864,16 +1927,18 @@ function renderInviteList(friends, track) {
     art: track?.artUrl || track?.art,
     actionsHtml: inviteListActionsHtml(friends),
     onAction: inviteHandler(friends, track),
+    picker: true,
+    canChange: Boolean(opts.canChange),
   });
 }
 
 /** Friend picker for a song. Never leaves the tap looking ignored: friends already known open instantly (and refresh
  *  quietly); otherwise the sheet opens at once in a loading state and fills when the friends arrive. */
-async function showInviteSheet(track) {
+async function showInviteSheet(track, opts = {}) {
   if (_inviteOpening) return;
   const warm = bridge.peekMutualFriends?.();
   if (warm && warm.length) {
-    renderInviteList(warm, track);
+    renderInviteList(warm, track, opts);
     const el = _overlayEl;
     void (async () => {
       try {
@@ -1886,7 +1951,8 @@ async function showInviteSheet(track) {
     return;
   }
   _inviteOpening = true;
-  const el = openPendingOverlay(track, "Finding your friends…", 3);
+  const el = openPendingOverlay(track, "Finding your friends…", 3, { picker: true, canChange: Boolean(opts.canChange) });
+  setOverlayBusy(true, el);
   let friends = [];
   try {
     friends = await bridge.fetchMutualFriendsForShare?.() || [];
@@ -1895,6 +1961,7 @@ async function showInviteSheet(track) {
   } finally {
     _inviteOpening = false;
   }
+  setOverlayBusy(false, el);
   updateOverlay(el, { sub: "Pick a friend to invite", actionsHtml: inviteListActionsHtml(friends), onAction: inviteHandler(friends, track) });
 }
 
@@ -1989,7 +2056,7 @@ export async function openLiveListenInviteWithFriend(friend, track) {
   }, track);
 }
 
-export async function openLiveListenInviteForTrack(track) {
+export async function openLiveListenInviteForTrack(track, opts = {}) {
   if (!nabadLiveListenEnabled()) return;
   if (!String(bridge.getUserId?.() || "").trim()) {
     toast("Sign in to listen together.");
@@ -2000,7 +2067,7 @@ export async function openLiveListenInviteForTrack(track) {
     toast("This song has no audio yet.");
     return;
   }
-  await showInviteSheet(track);
+  await showInviteSheet(track, opts);
 }
 
 export function decorateNowPlayingPresenceActions(overlay, presence) {

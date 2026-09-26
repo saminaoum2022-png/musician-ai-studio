@@ -15098,8 +15098,28 @@ function wireDiscoverLiveClicksOnce() {
     const id = heroBtn?.getAttribute("data-discover-listen-together") || "";
     if (id && String(document.body.getAttribute("data-route") || "") === "discover") startDiscoverListenTogether(id);
     else if (isLiveListenActive()) showToast("Leave the current listen first.");
-    else void openMessagesShareSheet({ mode: "listen", noPartner: true });
+    else {
+      // The "+": friends first, same sheet as everywhere else. The song is what you are playing (or your latest one), and can be changed.
+      const def = discoverListenDefaultTrack();
+      if (def) void openLiveListenInviteForTrack(def, { canChange: true });
+      else void openMessagesShareSheet({ mode: "listen", noPartner: true });
+    }
   });
+}
+
+/** Default song for a Listen together started without one: the current song, else the newest one with audio. */
+function discoverListenDefaultTrack() {
+  try {
+    const cur = trackRefFromCurrentPlayer();
+    if (cur && String(cur.url || "").trim()) return cur;
+  } catch {}
+  try {
+    for (const t of dmShareEligibleTracks() || []) {
+      const ref = trackRefFromSharePick(t);
+      if (ref) return ref;
+    }
+  } catch {}
+  return null;
 }
 
 function discoverFeedTrackById(id) {
@@ -40373,7 +40393,7 @@ function renderMessagesShareList(query = "") {
   list.innerHTML = tracks.map((t) => {
     const trackId = escapeHtml(String(t.id || "").trim());
     const title = escapeHtml(String(t.title || "Song").trim() || "Song");
-    const sub = escapeHtml(`${dmShareKindLabel(t.shareKind)} · ${mashupSlotSourceLabel(t)}`);
+    const sub = escapeHtml(dmShareKindLabel(t.shareKind));
     const art = escapeHtml(mashupCoverForTrack(t));
     return `
       <button type="button" class="messagesShareRow" data-messages-share-id="${trackId}" role="option">
@@ -41911,7 +41931,9 @@ async function openMessagesShareSheet({ mode, noPartner } = {}) {
   hideMessagesShareConfirm();
   resetMessagesShareSearch();
   list.innerHTML = `<div class="messagesShareEmpty">Loading your Library…</div>`;
-  await ensureUserLibraryHydrated();
+  const shareCard = sheet.querySelector(".messagesShareSheetCard");
+  shareCard?.classList.add("isLoading");
+  try { await ensureUserLibraryHydrated(); } finally { shareCard?.classList.remove("isLoading"); }
   _messagesShareAllTracks = dmShareEligibleTracks();
   if (_messagesShareMode === "publish") {
     // Only songs that aren't already on the feed.
@@ -81029,6 +81051,14 @@ try {
     messagesAvatarHtml,
     fetchMutualFriendsForShare,
     peekMutualFriends: peekMutualFriendsForShare,
+    // Who is listening right now (from the Live strip), so the picker can put them first.
+    getFriendPresence: (userId) => {
+      const uid = String(userId || "").trim();
+      if (!uid) return null;
+      const hit = (_discoverLiveFriends?.list || []).find((f) => String(f.userId) === uid);
+      return hit ? { songTitle: String(hit.presence?.songTitle || "").trim() } : null;
+    },
+    inviteToApp: () => { try { inviteFriendToListenTogether(); } catch {} },
     resolveShareableAudioUrl,
     messagesApi,
     formatTime,
@@ -81053,6 +81083,7 @@ try {
     }),
     getChatPartnerPresence: () => _chatPartnerPresence,
     pickSongForChatListen: () => openMessagesListenPicker(),
+    pickSongForListenTogether: () => { void openMessagesShareSheet({ mode: "listen", noPartner: true }); },
     openChatWithUser: (u) => {
       const userId = String(u?.userId || "").trim();
       if (!userId) return;

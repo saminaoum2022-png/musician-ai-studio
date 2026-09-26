@@ -72,9 +72,10 @@
       body.booting .header,
       body.booting .mobileTabbar,
       body.booting .footer{display:none!important}
-      .nbLock{display:flex;align-items:center;justify-content:center;gap:5px}
-      .nbLockMark{display:block;width:47px;height:50px;flex:none}
-      .nbLockWord{display:block;height:49px;width:auto}
+      /* The N is sized to the tallest letters (68% of the wordmark image) and shares their baseline. */
+      .nbLock{--nb-h:54px;display:flex;align-items:flex-end;justify-content:center;gap:calc(var(--nb-h)*.08)}
+      .nbLockMark{display:block;height:calc(var(--nb-h)*.68);width:auto;flex:none;margin-bottom:calc(var(--nb-h)*.017)}
+      .nbLockWord{display:block;height:var(--nb-h);width:auto;margin-left:calc(var(--nb-h)*-.04)}
       .nbLoader{display:flex;gap:9px;align-items:flex-end;height:46px}
       .nbLoader i{display:block;width:12px;height:46px;border-radius:6px;transform-origin:50% 100%}
       .nbLoader i:first-child{background:#7752f8;animation:nbBar1 1.3s ease-in-out infinite}

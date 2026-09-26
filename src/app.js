@@ -4014,6 +4014,7 @@ function finishSecondaryRouteEnter(route, prevRoute) {
   const wanted = String(route || "").trim();
   const prev = String(prevRoute || "").trim();
   if (prev && prev !== wanted) captureRouteScroll(prev);
+  _scrollRestoreOk = false;
   if (prev !== wanted) resetRouteEnterScroll(wanted);
   syncProfileAuraHeaderChrome(wanted);
   if (wanted === "settings") {
@@ -4149,6 +4150,9 @@ function finishTabRouteEnter(route, prevRoute) {
   const wanted = String(route || "").trim();
   const prev = String(prevRoute || "").trim();
   leaveRouteForTabSwitch(prev, wanted);
+  // Opening a page from the tab bar always starts at its first content (the window scroll is shared between pages).
+  _scrollRestoreOk = false;
+  if (prev !== wanted) resetRouteEnterScroll(wanted);
   markRouteHeavy(wanted);
 
   if (wanted === "discover") {
@@ -6057,6 +6061,7 @@ function applyRoute({ passGen } = {}) {
   if (routeApplyStale(gate)) return;
   if (prevRoute !== wanted) invalidateInFlightRouteFeedWork(prevRoute);
   const navDir = navDirectionFor(wanted);
+  _scrollRestoreOk = navDir === "back";
   const skipEnterAnim =
     _skipGenerateRouteEnter ||
     navDir === "tab" ||
@@ -13859,6 +13864,25 @@ function discoverGiftShapeSvg(kind) {
   return `<svg class="discoverMomentTileShapeIco" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.8 14.5 8.4l6.1.7-4.6 4.1 1.4 6-5.4-2.9-5.4 2.9 1.4-6-4.6-4.1 6.1-.7Z"/></svg>`;
 }
 
+let _discoverWhoForDraft = "";
+
+/** "Who's it for?" → Moments › For someone, with the typed name already filled in. */
+function startGiftForName(rawName) {
+  const name = String(rawName || "").trim().slice(0, 36);
+  if (!name) return;
+  _discoverWhoForDraft = "";
+  _homeMakeSeg = "personal";
+  openDiscoverOccasionsTab("");
+  const fill = () => {
+    const input = document.getElementById("challengePersonName");
+    if (!input) return;
+    input.value = name;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  fill();
+  window.setTimeout(fill, 120);
+}
+
 function discoverOccasionStripHtml() {
   const tiles = [
     { id: "birthday", label: "Birthday", sub: "Make it special", tone: "teal", shape: "birthday" },
@@ -13880,10 +13904,10 @@ function discoverOccasionStripHtml() {
   return `
     <section class="discoverFeedSection discoverMomentSection" aria-label="Gift a song">
       ${discoverFeedSectionHeadHtml("Gift a song", seeAll)}
-      <button type="button" class="discoverWhoFor" data-discover-who-for aria-label="Gift a song to someone">
-        <span class="discoverWhoForText">Who’s it for?</span>
-        <span class="discoverWhoForGo">Start</span>
-      </button>
+      <div class="discoverWhoFor${_discoverWhoForDraft.trim() ? " hasText" : ""}" data-discover-who-for>
+        <input class="discoverWhoForInput" type="text" maxlength="36" autocomplete="off" autocapitalize="words" enterkeyhint="go" placeholder="Who’s it for?" aria-label="Who is the song for?" value="${escapeHtml(_discoverWhoForDraft)}" data-discover-who-input />
+        <button type="button" class="discoverWhoForGo" data-discover-who-go${_discoverWhoForDraft.trim() ? "" : " hidden"}>Start</button>
+      </div>
       <div class="discoverMomentRail" role="list">
         ${cards}
       </div>
@@ -13963,8 +13987,8 @@ function renderDiscoverFeedForYou(tracks, profMap) {
   return `
     ${challengeBlock}
     ${discoverLiveNowSectionHtml()}
-    ${discoverFriendsTeaserSectionHtml()}
     ${discoverFeedVibeRailHtml()}
+    ${discoverFriendsTeaserSectionHtml()}
     ${discoverOccasionStripHtml()}
     <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final isLoading" aria-busy="true" aria-label="Top songs this week">${discoverWeeklyChartSkeletonHtml()}</section>
     ${communityBlock}
@@ -14029,7 +14053,7 @@ function openDiscoverOccasionsTab(occasionId) {
     _challengeOccasionId = id;
     _homeMakeSeg = "occasion";
   }
-  pinWindowScrollDuring(() => {
+  renderDiscoverTabFromTop(() => {
     renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), "occasions");
   });
   const panel = document.getElementById("discoverOccasionsPanel");
@@ -14126,27 +14150,18 @@ function paintDiscoverFriendsTeaser() {
     sec.innerHTML = "";
     return;
   }
-  const me = String(activeProfile?.displayName || activeProfile?.username || "S").replace(/^@/, "").trim();
-  const myAv = String(activeProfile?.avatar || "").trim();
-  const meHtml = myAv && isRealUserAvatarUrl(myAv)
-    ? `<img class="discoverSayAvImg" src="${escapeHtml(normalizeProfileAvatarForImg(myAv))}" alt="" />`
-    : `<span class="discoverSayAvImg discoverSayAvFallback">${escapeHtml(me.slice(0, 1).toUpperCase())}</span>`;
   sec.hidden = false;
   sec.innerHTML = `
     <header class="discoverFeedSectionHead">
       <h3 class="discoverFeedSectionTitle">From your friends</h3>
       <div class="discoverFeedSectionAction"><button type="button" class="discoverFeedSectionLink" data-discover-friends-all>See all</button></div>
     </header>
-    <button type="button" class="discoverSayBar" data-discover-say aria-label="Share a song with your friends">
-      <span class="discoverSayAv">${meHtml}</span>
-      <span class="discoverSayText">Share a song with your friends…</span>
-      <span class="discoverSayGo" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
-    </button>
     <div class="discoverFriendRail" role="list">${items.map((i) => discoverFriendCardHtml(i, _friendsFeedProfMap)).join("")}</div>`;
 }
 
 function discoverLiveNowSectionHtml() {
-  return `<section id="discoverLiveNow" class="discoverFeedSection discoverLiveNow" aria-label="Live now" hidden></section>`;
+  const inner = discoverLiveNowInnerHtml();
+  return `<section id="discoverLiveNow" class="discoverFeedSection discoverLiveNow" aria-label="Listen together"${inner ? "" : " hidden"}>${inner}</section>`;
 }
 
 async function refreshDiscoverLiveFriends({ force = false } = {}) {
@@ -14183,8 +14198,22 @@ async function refreshDiscoverLiveFriends({ force = false } = {}) {
 function discoverLiveNowInnerHtml() {
   const st = _discoverLiveFriends;
   const list = st.list;
+  if (!nabadLiveListenEnabled()) return "";
   if (!list.length) {
-    if (!st.hasFriends || !nabadLiveListenEnabled()) return "";
+    const signedIn = Boolean(authSession?.user?.id && getSupabaseAuthToken());
+    // Who's around isn't known yet: hold the exact height with a shimmer (no jump when the answer arrives).
+    if (signedIn && !st.at && nabadLiveListenGuestEnabled()) {
+      return `<div class="discoverLiveInvite discoverLiveInvite--skel" aria-hidden="true"><span class="discoverLiveInviteIco upmSk"></span><span class="discoverLiveInviteText"><i class="upmSk"></i><i class="upmSk short"></i></span></div>`;
+    }
+    if (!signedIn || !st.hasFriends) {
+      // New here / no friends yet: this is the moment to explain the feature and grow the circle.
+      return `
+      <button type="button" class="discoverLiveInvite" data-discover-live-invite>
+        <span class="discoverLiveInviteIco" aria-hidden="true">${LIVE_TOGETHER_ICON}</span>
+        <span class="discoverLiveInviteText"><strong>Listen together</strong><span>Invite a friend and press play at the same time</span></span>
+        <span class="discoverLiveInviteGo">Invite</span>
+      </button>`;
+    }
     return `
       <button type="button" class="discoverLiveInvite" data-discover-live-start>
         <span class="discoverLiveInviteIco" aria-hidden="true">${LIVE_TOGETHER_ICON}</span>
@@ -14377,6 +14406,15 @@ function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
   }
 }
 
+/** Switching a Discover pill tab shows the new tab from its first content, not from wherever the last one was scrolled. */
+function renderDiscoverTabFromTop(fn) {
+  try { fn(); } finally {
+    const top = () => { try { window.scrollTo(0, 0); } catch {} };
+    top();
+    requestAnimationFrame(top);
+  }
+}
+
 function pinWindowScrollDuring(fn) {
   const y = Math.max(0, Number(window.scrollY || document.documentElement.scrollTop || 0));
   try { fn(); } finally {
@@ -14400,7 +14438,7 @@ function bindDiscoverFeedTabsOnce() {
       if (!tab || tab === _discoverFeedTab) return;
     haptic("light");
     try { tabBtn.focus({ preventScroll: true }); } catch {}
-    pinWindowScrollDuring(() => {
+    renderDiscoverTabFromTop(() => {
       renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), tab);
     });
   });
@@ -14414,7 +14452,7 @@ function bindDiscoverFeedTabsOnce() {
       const tab = normalizeDiscoverFeedTab(jumpBtn.getAttribute("data-discover-feed-tab-jump") || "");
       if (!tab || tab === _discoverFeedTab) return;
       haptic("light");
-      pinWindowScrollDuring(() => {
+      renderDiscoverTabFromTop(() => {
         renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), tab);
       });
     });
@@ -14948,6 +14986,27 @@ function applyDiscoverOccasionStart(occasionId, liveChallenge) {
 }
 
 let _discoverLiveClicksWired = false;
+/** New users have no friends to listen with yet: send an invite link (native share sheet, or copy). */
+async function inviteFriendToListenTogether() {
+  if (!authSession?.user?.id) {
+    showToast("Sign in to invite a friend.", { durationMs: 2600 });
+    location.hash = "#/auth";
+    return;
+  }
+  const url = _profileShareUrl();
+  const text = "Listen to music with me at the same time on NabadAI 🎧";
+  if (navigator.share && url) {
+    try {
+      await navigator.share({ title: "Listen together on NabadAI", text, url });
+      return;
+    } catch (e) {
+      if (String(e?.name || "") === "AbortError") return;
+    }
+  }
+  const ok = await _profileCopyLink();
+  showToast(ok ? "Invite link copied — send it to a friend." : "Couldn't share right now.", { durationMs: 2600 });
+}
+
 function wireDiscoverLiveClicksOnce() {
   if (_discoverLiveClicksWired) return;
   _discoverLiveClicksWired = true;
@@ -14957,6 +15016,13 @@ function wireDiscoverLiveClicksOnce() {
       e.preventDefault();
       haptic("light");
       openDiscoverLiveFriendSheet(liveItem.getAttribute("data-discover-live"));
+      return;
+    }
+    const liveInvite = e.target?.closest?.("[data-discover-live-invite]");
+    if (liveInvite) {
+      e.preventDefault();
+      haptic("light");
+      void inviteFriendToListenTogether();
       return;
     }
     const liveStart = e.target?.closest?.("[data-discover-live-start]");
@@ -15034,6 +15100,24 @@ function bindDiscoverHubV1Once() {
   const root = document.getElementById("discoveryMainContent");
   if (!root || root.dataset.boundDiscoverHubV1 === "1") return;
   root.dataset.boundDiscoverHubV1 = "1";
+  // "Who's it for?": Start appears only once something is typed; Enter also starts.
+  root.addEventListener("input", (e) => {
+    const inp = e.target?.closest?.("[data-discover-who-input]");
+    if (!inp || !root.contains(inp)) return;
+    _discoverWhoForDraft = String(inp.value || "");
+    const wrap = inp.closest("[data-discover-who-for]");
+    const has = Boolean(_discoverWhoForDraft.trim());
+    wrap?.classList.toggle("hasText", has);
+    const go = wrap?.querySelector("[data-discover-who-go]");
+    if (go) go.hidden = !has;
+  });
+  root.addEventListener("keydown", (e) => {
+    const inp = e.target?.closest?.("[data-discover-who-input]");
+    if (!inp || e.key !== "Enter") return;
+    e.preventDefault();
+    try { inp.blur(); } catch {}
+    startGiftForName(inp.value);
+  });
   root.addEventListener("change", (e) => {
     const sortSel = e.target?.closest?.("[data-discover-templates-sort]");
     if (!sortSel || !root.contains(sortSel)) return;
@@ -15070,14 +15154,14 @@ function bindDiscoverHubV1Once() {
       location.hash = "#/messages";
       return;
     }
-    const whoBtn = e.target?.closest?.("[data-discover-who-for]");
-    if (whoBtn && root.contains(whoBtn)) {
+    const whoGo = e.target?.closest?.("[data-discover-who-go]");
+    if (whoGo && root.contains(whoGo)) {
       e.preventDefault();
       haptic("light");
-      _homeMakeSeg = "personal";
-      openDiscoverOccasionsTab("");
+      startGiftForName(whoGo.closest("[data-discover-who-for]")?.querySelector("[data-discover-who-input]")?.value);
       return;
     }
+    if (e.target?.closest?.("[data-discover-who-for]")) return; // typing area: never navigate on a tap
     const remixBtn = e.target?.closest?.("[data-discover-remix]");
     if (remixBtn && root.contains(remixBtn)) {
       e.preventDefault();
@@ -30456,6 +30540,9 @@ let _postLoginCreditsBootstrappedFor = "";
 const ROUTE_HEAVY_TTL_MS = 45000;
 const _routeHeavyAt = { profile: 0, discover: 0, friends: 0, activity: 0, user: 0, messages: 0 };
 const _routeScrollY = {};
+/** Saved scroll positions are only used when going BACK to a page. Any other way in (tab bar, a link, a button)
+ *  opens the page from its first content. */
+let _scrollRestoreOk = false;
 const ROUTE_SCROLL_CAPTURE = new Set(["discover", "friends", "activity", "profile", "user"]);
 let _lastRenderedPublicUsername = "";
 
@@ -30716,6 +30803,7 @@ function captureRouteScroll(route) {
 
 function restoreRouteScroll(route) {
   const r = String(route || "").trim();
+  if (!_scrollRestoreOk) return;
   if (r === "messages") {
     restoreMessagesInboxScroll();
     return;
@@ -51441,10 +51529,12 @@ function wireTrackOptionsSheetOnce() {
 
 function setPlaybackPending(pending) {
   _playbackPending = pending && typeof pending === "object" ? { ...pending } : null;
+  try { syncPlayerToggleUI(); } catch {}
 }
 
 function clearPlaybackPending() {
   _playbackPending = null;
+  try { syncPlayerToggleUI(); } catch {}
 }
 
 function playbackPendingMatchesUrl(trackUrl) {
@@ -77416,20 +77506,38 @@ if (els.btnPlayerStop) {
 // correct regardless of which path loaded the source.
 const PLAYER_TOGGLE_PLAY_SVG = '<svg class="ico" viewBox="0 0 24 24"><polygon points="6 3 21 12 6 21 6 3" fill="currentColor" stroke="none"/></svg>';
 const PLAYER_TOGGLE_PAUSE_SVG = '<svg class="ico" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/></svg>';
+const PLAYER_TOGGLE_LOADING_HTML = '<span class="playerToggleSpinner" aria-hidden="true"></span>';
+
+/** True from the tap until sound is actually coming out: the first load AND any later stall (network dip, seek). */
+let _playerBufferingFlag = false;
+function isPlayerBuffering() {
+  const a = playerEl;
+  if (!a || !(a.src || a.currentSrc)) return false;
+  if (a.error || a.ended) return false;
+  const wantsToPlay = !a.paused || Boolean(_playbackPending);
+  if (!wantsToPlay) return false;
+  // readyState < 3: not enough data to keep playing yet. `waiting`/`stalled` cover mid-song stalls.
+  return _playerBufferingFlag || a.readyState < 3;
+}
+
 function syncPlayerToggleUI() {
   const btn = els.btnPlayerToggle;
   if (!btn) return;
   const a = playerEl;
   const hasSrc = Boolean(a && (a.src || a.currentSrc));
-  const isPlaying = Boolean(a && !a.paused && !a.ended && hasSrc);
+  const loading = isPlayerBuffering();
+  const isPlaying = Boolean(a && !a.paused && !a.ended && hasSrc) && !loading;
   btn.disabled = !hasSrc;
   btn.classList.toggle("isPlaying", isPlaying);
+  btn.classList.toggle("isLoading", loading);
+  btn.setAttribute("aria-busy", loading ? "true" : "false");
   const icon = btn.querySelector(".playerToggleIcon");
   if (icon) {
-    const next = isPlaying ? PLAYER_TOGGLE_PAUSE_SVG : PLAYER_TOGGLE_PLAY_SVG;
+    const next = loading ? PLAYER_TOGGLE_LOADING_HTML : (isPlaying ? PLAYER_TOGGLE_PAUSE_SVG : PLAYER_TOGGLE_PLAY_SVG);
     if (icon.innerHTML !== next) icon.innerHTML = next;
   }
-  btn.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
+  btn.setAttribute("aria-label", loading ? "Loading" : (isPlaying ? "Pause" : "Play"));
+  try { document.getElementById("hubNowPlaying")?.classList.toggle("isBuffering", loading); } catch {}
   syncPlayerSkipButtons();
 }
 if (els.btnPlayerRewind) {
@@ -77477,9 +77585,19 @@ if (els.btnPlayerToggle) {
   });
   const a = ensurePlayer();
   if (a) {
-    ["play", "pause", "ended", "loadedmetadata", "emptied"].forEach((evt) => {
-      a.addEventListener(evt, syncPlayerToggleUI);
+    ["play", "pause", "ended", "loadedmetadata", "emptied", "loadstart", "canplay", "canplaythrough", "seeked", "error"].forEach((evt) => {
+      a.addEventListener(evt, () => {
+        if (evt === "canplay" || evt === "canplaythrough" || evt === "seeked" || evt === "pause" || evt === "ended" || evt === "emptied" || evt === "error") _playerBufferingFlag = false;
+        if (evt === "loadstart") _playerBufferingFlag = true;
+        syncPlayerToggleUI();
+      });
     });
+    // A stall while playing (weak network) or a seek into unbuffered audio shows the spinner again, then clears itself.
+    ["waiting", "stalled", "seeking"].forEach((evt) => {
+      a.addEventListener(evt, () => { if (!a.paused) { _playerBufferingFlag = true; syncPlayerToggleUI(); } });
+    });
+    a.addEventListener("playing", () => { _playerBufferingFlag = false; syncPlayerToggleUI(); });
+    a.addEventListener("timeupdate", () => { if (_playerBufferingFlag && a.readyState >= 3 && !a.paused) { _playerBufferingFlag = false; syncPlayerToggleUI(); } });
   }
   syncPlayerToggleUI();
 }

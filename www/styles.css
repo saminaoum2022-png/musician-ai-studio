@@ -68630,3 +68630,52 @@ body[data-route="discover"] .discoverFeaturedHeroTrack > .discoverFeaturedChalle
 body[data-route="discover"] .discoverFeaturedHeroDots{ margin: 12px 0 0; }
 body[data-route="discover"] .discoverLiveNow{ margin-top: 10px; }
 body[data-route="discover"] .discoverFeedSection--featuredChallenge + .discoverLiveNow{ margin-top: 10px; }
+body[data-route="discover"] .discoverFeaturedHeroCarousel + * , body[data-route="discover"] .discoverFeedSection--featuredChallenge + .discoverVibeSection{ margin-top: 18px; }
+
+/* Listen together row: skeleton keeps the exact height until we know who's around */
+.discoverLiveInvite--skel{ cursor: default; pointer-events: none; min-height: 72px; }
+.discoverLiveInvite--skel .discoverLiveInviteIco{ border: 0; }
+.discoverLiveInvite--skel .discoverLiveInviteText{ gap: 8px; }
+.discoverLiveInvite--skel .discoverLiveInviteText i{ display: block; height: 13px; width: 46%; border-radius: 6px; }
+.discoverLiveInvite--skel .discoverLiveInviteText i.short{ height: 10px; width: 72%; }
+.discoverLiveInvite{ min-height: 72px; }
+
+/* Gift a song › "Who's it for?": a real text field; Start appears only when there is text */
+div.discoverWhoFor{ cursor: text; padding: 0 8px 0 20px; }
+.discoverWhoForInput{
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.discoverWhoForInput::placeholder{ color: rgba(255, 255, 255, 0.55); }
+.discoverWhoFor:focus-within{ border-color: rgba(255, 255, 255, 0.4); }
+.discoverWhoForGo[hidden]{ display: none !important; }
+.discoverWhoForGo{ appearance: none; border: 1.5px solid rgba(255, 255, 255, 0.75); background: transparent; color: #fff; font: inherit; font-size: 14px; font-weight: 800; height: 40px; padding: 0 20px; border-radius: 999px; cursor: pointer; }
+
+/* Player: while audio is loading or stalled, the main button is a spinner (never a Play/Pause that does nothing) */
+.playerToggleSpinner{
+  display: block;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid rgba(11, 11, 19, 0.18);
+  border-top-color: #0b0b13;
+  animation: playerSpin 0.75s linear infinite;
+}
+@keyframes playerSpin{ to{ transform: rotate(360deg); } }
+.playerToggleBtn.isLoading{ cursor: progress; }
+/* mini player: the ring spins while buffering */
+.hubNowPlaying.isBuffering .hubNowRing{ animation: hubNowRingSpin 1s linear infinite; }
+.hubNowPlaying.isBuffering .hubNowRingFill{ stroke-dasharray: 28 72; stroke-dashoffset: 0 !important; }
+@keyframes hubNowRingSpin{ from{ transform: rotate(-90deg); } to{ transform: rotate(270deg); } }
+@media (prefers-reduced-motion: reduce){ .playerToggleSpinner{ animation-duration: 1.6s; } }

@@ -3,7 +3,18 @@ export function setProfileSegActive(segment) {
   const bar = document.querySelector(".profileSongsBlock .profileSegBar");
   if (!bar) return;
   const val = String(segment ?? "");
+  const inLibrary = val === "all" || val === "vocals" || val === "playlist";
   bar.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
+    const on = String(btn.getAttribute("data-profile-songs-segment") || "") === val;
+    btn.classList.toggle("is-active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  // Library is one tab; Songs / Studio / Playlists are the chips beneath it.
+  bar.querySelectorAll("[data-profile-lib-tab]").forEach((btn) => {
+    btn.classList.toggle("is-active", inLibrary);
+    btn.setAttribute("aria-selected", inLibrary ? "true" : "false");
+  });
+  document.querySelectorAll(".profileLibChips [data-profile-songs-segment]").forEach((btn) => {
     const on = String(btn.getAttribute("data-profile-songs-segment") || "") === val;
     btn.classList.toggle("is-active", on);
     btn.setAttribute("aria-selected", on ? "true" : "false");

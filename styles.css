@@ -69361,3 +69361,221 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay:active{ backgrou
 .pubWave{ cursor: pointer; -webkit-user-select: none; user-select: none; }
 .pubDone .pubPvNote b{ font-family: inherit; font-size: inherit; font-weight: 800; color: #fff; }
 .pubDone .pubPvMeta b{ font-size: 15px; }
+
+
+/* ===== Mini player vinyl v2: a record with the cover as its label, white progress ring, the two bars while playing (no glow) ===== */
+@media (max-width: 720px){
+  .hubNowPlaying{ --hub-vinyl-size: 56px; }
+  .hubNowVinyl, .hubNowPlaying.isPlaying .hubNowVinyl, .hubNowPlaying.isDragging .hubNowVinyl{
+    background: transparent !important; box-shadow: 0 8px 20px rgba(0,0,0,.5) !important;
+  }
+  .hubNowPlaying.isDragging .hubNowVinyl{ transform: scale(1.08); box-shadow: 0 16px 32px rgba(0,0,0,.55) !important; }
+  .hubNowDisc{
+    position: absolute; inset: 0; z-index: 1; border-radius: 50%; overflow: hidden;
+    background: repeating-radial-gradient(circle, #090a0f 0 1.2px, #161821 1.2px 2.2px), #090a0f;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.07);
+    animation: hubVinylSpin 10s linear infinite; animation-play-state: paused;
+  }
+  .hubNowDisc::before{ content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, transparent 0 18%, rgba(255,255,255,.12) 24%, transparent 32% 68%, rgba(255,255,255,.09) 74%, transparent 82%); pointer-events: none; }
+  .hubNowPlaying.isPlaying .hubNowDisc{ animation-play-state: running; }
+  .hubNowLabel{ position: absolute; left: 50%; top: 50%; width: 52%; height: 52%; transform: translate(-50%, -50%); border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 1.5px rgba(255,255,255,.85); }
+  .hubNowLabel .hubNowArt{ width: 100%; height: 100%; object-fit: cover; border-radius: 50%; animation: none !important; display: block; }
+  .hubNowSpindle{ position: absolute; left: 50%; top: 50%; width: 14%; height: 14%; transform: translate(-50%, -50%); border-radius: 50%; background: #07080c; box-shadow: 0 0 0 1px rgba(255,255,255,.35); }
+  .hubNowRingTrack{ stroke: rgba(255,255,255,.2) !important; stroke-width: 1.5 !important; }
+  .hubNowRingFill{ stroke: #fff !important; stroke-width: 1.5 !important; filter: none !important; }
+  .hubNowRing{ z-index: 3; }
+  .hubNowBadge{ position: absolute; right: -5px; bottom: -5px; z-index: 5; width: 24px; height: 24px; border-radius: 50%; display: none; place-items: center; background: #0b0d16; border: 1.5px solid rgba(255,255,255,.22); pointer-events: none; }
+  .hubNowBadge .nbBars{ --nb-purple: #8f74ff; --nb-teal: #22c5a9; }
+  .hubNowPlaying.isPlaying .hubNowBadge{ display: grid; }
+  .hubNowPlaying.isBuffering .hubNowBadge .nbBars i:first-child{ animation: nbBar1 1.3s ease-in-out infinite; }
+  .hubNowPlaying.isBuffering .hubNowBadge .nbBars i:last-child{ animation: nbBar2 1.3s ease-in-out infinite; }
+  .hubNowPlaying.isBuffering .hubNowBadge{ display: grid; }
+}
+
+
+/* ===== Now-playing strip: the mini player lives inside the tab-bar capsule. Collapses beside the dock when the bar collapses on scroll. ===== */
+@media (max-width: 720px){
+  body.hasMiniStrip:not(.tabbarCollapsed){ --tabbar-h: calc(62px + 54px + env(safe-area-inset-bottom, 0px)); }
+
+  /* the capsule grows upward to hold the strip */
+  body.hasMiniStrip:not(.tabbarCollapsed) .mobileTabbar::after{
+    top: calc(var(--tab-pad-y) + (var(--tab-pill-size) - var(--tab-tray-size)) / 2 - 54px);
+    height: calc(var(--tab-tray-size) + 54px);
+    border-radius: 30px;
+  }
+
+  .hubNowPlaying{
+    --hub-vinyl-size: 40px;
+    --strip-m: max(10px, env(safe-area-inset-bottom, 0px));
+    --strip-cs: calc((100vw - 36px) / 5);
+    left: calc(18px + (var(--strip-cs) - 46px) / 2 - 26px);
+    right: calc(18px + (var(--strip-cs) - 46px) / 2 - 26px);
+    bottom: calc(68px + var(--strip-m));
+    width: auto;
+    height: 54px;
+    display: flex; align-items: center; gap: 11px;
+    padding: 0 12px 0 10px;
+    border-radius: 30px 30px 0 0;
+    z-index: 95;
+    transform: translate3d(0, 26px, 0);
+    opacity: 0;
+    touch-action: none;
+    transition:
+      left 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      right 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      bottom 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      height 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-radius 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 240ms ease;
+  }
+  .hubNowPlaying.isVisible{ transform: translate3d(0, var(--strip-dy, 0px), 0); opacity: 1; }
+  .hubNowPlaying.isSwiping{ transition: none !important; }
+  /* divider between the strip and the tab icons */
+  .hubNowPlaying::after{
+    content: ""; position: absolute; left: 16px; right: 16px; bottom: 0; height: 1px;
+    background: rgba(255,255,255,.10); transition: opacity 240ms ease; pointer-events: none;
+  }
+  /* own glass, only visible once the bar has collapsed */
+  .hubNowPlaying::before{
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 0;
+    opacity: 0; transition: opacity 260ms ease;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.06), transparent 42%, rgba(255,255,255,.04)),
+      color-mix(in srgb, var(--bg) 64%, transparent);
+    -webkit-backdrop-filter: blur(44px) saturate(1.45); backdrop-filter: blur(44px) saturate(1.45);
+    box-shadow:
+      inset 0 0.5px 0 rgba(255,255,255,.30), inset 0 -0.5px 0 rgba(255,255,255,.18),
+      0 0 0 0.5px rgba(255,255,255,.12), 0 10px 28px rgba(0,0,0,.22);
+  }
+  .hubNowPlaying > *{ position: relative; z-index: 1; }
+
+  /* collapsed bar: the strip drops out of the capsule into its own pill beside the dock */
+  body.tabbarCollapsed .hubNowPlaying{
+    right: calc(100vw - (18px + 4 * var(--strip-cs) + (var(--strip-cs) - 52px) / 2) + 8px);
+    bottom: calc(13px + var(--strip-m));
+    height: 52px;
+    border-radius: 999px;
+  }
+  body.tabbarCollapsed .hubNowPlaying::before{ opacity: 1; background: linear-gradient(180deg, rgba(255,255,255,.06), transparent 42%, rgba(255,255,255,.04)), color-mix(in srgb, var(--bg) 88%, transparent); }
+  body.tabbarCollapsed .hubNowPlaying::after{ opacity: 0; }
+
+  /* record */
+  .hubNowVinyl, .hubNowPlaying.isPlaying .hubNowVinyl{ flex: none; box-shadow: none !important; }
+  .hubNowVinyl:active{ transform: none; }
+  .hubNowPlaying.isPlaying .hubNowBadge, .hubNowPlaying.isBuffering .hubNowBadge{ display: none !important; }
+
+  /* text */
+  .hubNowPlaying .hubNowMeta{ flex: 1; min-width: 0; display: grid; gap: 1px; text-align: left; pointer-events: none; }
+  .hubNowPlaying .hubNowTitle, .hubNowPlaying .hubNowSubtitle{
+    position: static; width: auto; height: auto; margin: 0; padding: 0; clip: auto; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; display: block; unicode-bidi: plaintext; text-align: left;
+  }
+  .hubNowPlaying .hubNowTitle{ font: 700 13.5px/1.2 var(--font-body, inherit); color: #fff; }
+  .hubNowPlaying .hubNowSubtitle{ font: 500 11px/1.2 var(--font-body, inherit); color: rgba(255,255,255,.62); }
+  .hubNowPlaying .hubNowSubtitle:empty{ display: none; }
+
+  /* play / pause: two bars while playing, white play disc while paused */
+  .hubNowToggle{
+    -webkit-appearance: none; appearance: none; flex: none; position: relative;
+    width: 36px; height: 36px; padding: 0; margin: 0; border-radius: 50%;
+    display: grid; place-items: center; cursor: pointer; color: #fff;
+    background: transparent; border: 1.5px solid rgba(255,255,255,.7);
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    transition: background 180ms ease, color 180ms ease, border-color 180ms ease, transform 120ms ease;
+  }
+  .hubNowToggle:active{ transform: scale(.94); }
+  .hubNowToggle .hubNowToggleBars{ --nb-purple: #8f74ff; --nb-teal: #22c5a9; display: none; }
+  .hubNowToggle .hubNowTogglePlay{ width: 15px; height: 15px; margin-left: 2px; display: block; }
+  .hubNowPlaying.isPlaying .hubNowToggle .hubNowToggleBars{ display: inline-flex; }
+  .hubNowPlaying.isPlaying .hubNowToggle .hubNowTogglePlay{ display: none; }
+  .hubNowPlaying:not(.isPlaying) .hubNowToggle{ background: #fff; color: #0b0b13; border-color: #fff; }
+
+  /* Create: the dock no longer needs room for a floating vinyl */
+  html.is-native-shell body[data-route="generate"]:has(.hubNowPlaying.isVisible:not(.isPlaced)) #createGenerateDock{ padding-right: 16px; }
+  body[data-route="generate"] .hubNowPlaying:not(.isPlaced){ bottom: calc(68px + var(--strip-m)); }
+  body.tabbarCollapsed[data-route="generate"] .hubNowPlaying:not(.isPlaced){ bottom: calc(13px + var(--strip-m)); }
+
+  body.imageMoodSheetOpen .hubNowPlaying, body.vibeReadSheetOpen .hubNowPlaying{ opacity: .35; pointer-events: none; }
+}
+
+
+/* ===== Profile tabs: icon capsule, the active tab names itself (same language as the tab bar). Library is one tab with Songs / Studio / Playlists chips. ===== */
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar.profileSegBar--cap{
+  display: flex !important; align-items: center; gap: 2px;
+  margin: 12px 0 10px !important; padding: 4px !important;
+  border: 1px solid rgba(255,255,255,.12) !important; border-radius: 999px !important;
+  background: rgba(255,255,255,.06) !important;
+  overflow: visible !important;
+}
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar.profileSegBar--cap::after{ display: none !important; }
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab{
+  flex: 1 1 0 !important; min-width: 0; height: 40px !important; padding: 0 !important; gap: 7px;
+  border-radius: 999px !important; opacity: 1 !important;
+  color: rgba(255,255,255,.56);
+  transition: flex-grow 260ms cubic-bezier(.22,1,.36,1), background 200ms ease, color 200ms ease, box-shadow 200ms ease;
+}
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab::before,
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab::after{ content: none !important; display: none !important; }
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegIcon{ width: 21px; height: 21px; position: static; opacity: 1 !important; flex: none; }
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegLbl{ display: none; font: 700 13px/1 inherit; font-family: inherit; white-space: nowrap; }
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab.is-active{
+  flex-grow: 2.1 !important; color: #fff;
+  background: rgba(255,255,255,.14) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 0 0 1px rgba(255,255,255,.14) !important;
+}
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab.is-active .profileSegLbl{ display: inline; }
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--dual.profileSegBar--cap .profileSegTab.is-active{ flex-grow: 1.6 !important; }
+
+.profileLibChips{ display: none; gap: 6px; margin: 0 0 12px; overflow-x: auto; scrollbar-width: none; }
+.profileLibChips::-webkit-scrollbar{ display: none; }
+body[data-profile-songs-seg="all"] .profileLibChips,
+body[data-profile-songs-seg="vocals"] .profileLibChips,
+body[data-profile-songs-seg="playlist"] .profileLibChips{ display: flex; }
+.profileLibChip{
+  -webkit-appearance: none; appearance: none; flex: none; cursor: pointer;
+  padding: 8px 15px; border-radius: 999px; background: transparent;
+  border: 1px solid rgba(255,255,255,.16); color: rgba(255,255,255,.6);
+  font: 600 13.5px/1 inherit; font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 180ms ease, border-color 180ms ease;
+}
+.profileLibChip.is-active{ color: #fff; border-color: rgba(255,255,255,.75); }
+
+html[data-theme="light"] :is(body[data-route="profile"], body[data-route="user"]) .profileSegBar.profileSegBar--cap{ background: rgba(0,0,0,.05) !important; border-color: rgba(0,0,0,.1) !important; }
+html[data-theme="light"] :is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab{ color: rgba(0,0,0,.5); }
+html[data-theme="light"] :is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab.is-active{ color: #0b0b13; background: rgba(0,0,0,.08) !important; box-shadow: 0 0 0 1px rgba(0,0,0,.1) !important; }
+html[data-theme="light"] .profileLibChip{ color: rgba(0,0,0,.55); border-color: rgba(0,0,0,.16); }
+html[data-theme="light"] .profileLibChip.is-active{ color: #0b0b13; border-color: rgba(0,0,0,.6); }
+
+/* ===== Profile tabs, final: plain icons across the width, short white line under the active one (no capsule, no pills). Library sub-choices are quiet text. ===== */
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar.profileSegBar--cap{
+  gap: 0; margin: 10px 0 8px !important; padding: 0 !important;
+  border: 0 !important; border-bottom: 1px solid rgba(255,255,255,.1) !important; border-radius: 0 !important;
+  background: none !important; box-shadow: none !important;
+}
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab,
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab.is-active{
+  flex: 1 1 0 !important; height: 46px !important; border-radius: 0 !important;
+  background: none !important; box-shadow: none !important; position: relative;
+  color: rgba(255,255,255,.5); transition: color 180ms ease;
+}
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab.is-active{ color: #fff; }
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegIcon{ width: 24px; height: 24px; }
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab .profileSegLbl,
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab.is-active .profileSegLbl{ display: none !important; }
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab.is-active::after{
+  content: "" !important; display: block !important; position: absolute; left: 50%; bottom: -1px;
+  width: 24px; height: 2px; margin-left: -12px; border-radius: 2px; background: #fff !important;
+}
+
+.profileLibChips{ gap: 22px; margin: 2px 0 12px; padding-left: 2px; }
+.profileLibChip{ padding: 6px 0; border: 0; border-radius: 0; background: none; font: 700 14px/1 inherit; font-family: inherit; color: rgba(255,255,255,.45); }
+.profileLibChip.is-active{ color: #fff; border: 0; }
+
+html[data-theme="light"] :is(body[data-route="profile"], body[data-route="user"]) .profileSegBar.profileSegBar--cap{ border-bottom-color: rgba(0,0,0,.1) !important; background: none !important; }
+html[data-theme="light"] :is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab{ color: rgba(0,0,0,.45); background: none !important; box-shadow: none !important; }
+html[data-theme="light"] :is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab.is-active{ color: #0b0b13; }
+html[data-theme="light"] :is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab.is-active::after{ background: #0b0b13 !important; }
+html[data-theme="light"] .profileLibChip{ color: rgba(0,0,0,.45); border: 0; }
+html[data-theme="light"] .profileLibChip.is-active{ color: #0b0b13; border: 0; }

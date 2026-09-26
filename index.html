@@ -3264,40 +3264,10 @@
               <div id="userPublicFeaturedCreation" class="profileFeaturedCreationMount"></div>
             </div>
             <audio id="userPublicCallingCardAudio" preload="none" playsinline></audio>
-            <nav class="profileSegBar profileSegBar--dual" id="userPublicSegBar" role="tablist" aria-label="Profile content" hidden>
-              <button type="button" class="profileSegTab is-active" role="tab" aria-selected="true" data-user-public-segment="music" id="userPublicSegMusic" aria-label="Music"><span class="profileSegIconWrap" aria-hidden="true"></span></button>
-              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-user-public-segment="posts" id="userPublicSegPosts" aria-label="Posts">
-                <span class="profileSegIconWrap" aria-hidden="true">
-                  <svg class="profileSegIcon profileSegIcon--line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false">
-                    <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-                    <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-                    <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-                    <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-                  </svg>
-                  <svg class="profileSegIcon profileSegIcon--fill" viewBox="0 0 24 24" fill="currentColor" focusable="false">
-                    <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-                    <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-                    <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-                    <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-                  </svg>
-                </span>
-              </button>
-              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-user-public-segment="reposts" id="userPublicSegReposts" aria-label="Reposts">
-                <span class="profileSegIconWrap" aria-hidden="true">
-                  <svg class="profileSegIcon profileSegIcon--line" viewBox="0 0 24 24" fill="currentColor" focusable="false">
-                    <g transform="translate(12 12) scale(0.78) translate(-12 -12)">
-                      <path d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1Z"/>
-                      <path d="M7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/>
-                    </g>
-                  </svg>
-                  <svg class="profileSegIcon profileSegIcon--fill" viewBox="0 0 24 24" fill="currentColor" focusable="false">
-                    <g transform="translate(12 12) scale(0.78) translate(-12 -12)">
-                      <path d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1Z"/>
-                      <path d="M7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/>
-                    </g>
-                  </svg>
-                </span>
-              </button>
+            <nav class="profileSegBar profileSegBar--dual profileSegBar--cap" id="userPublicSegBar" role="tablist" aria-label="Profile content" hidden>
+              <button type="button" class="profileSegTab is-active" role="tab" aria-selected="true" data-user-public-segment="music" id="userPublicSegMusic" aria-label="Music"><svg class="profileSegIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg><span class="profileSegLbl">Music</span></button>
+              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-user-public-segment="posts" id="userPublicSegPosts" aria-label="Posts"><svg class="profileSegIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg><span class="profileSegLbl">Posts</span></button>
+              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-user-public-segment="reposts" id="userPublicSegReposts" aria-label="Reposts"><svg class="profileSegIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg><span class="profileSegLbl">Reposts</span></button>
             </nav>
             <div class="userPublicSongsBlock profileSongsBlock">
               <p id="userPublicSongsCount" class="libraryCount userPublicSongsCount" hidden aria-live="polite"></p>
@@ -3563,79 +3533,17 @@
             <div id="profileFeaturedCreationWrap" class="profileFeaturedCreationWrap" hidden aria-hidden="true">
               <div id="profileFeaturedCreation" class="profileFeaturedCreationMount"></div>
             </div>
-            <nav class="profileSegBar" role="tablist" aria-label="Profile content">
-              <button type="button" class="profileSegTab is-active" role="tab" aria-selected="true" data-profile-songs-segment="music" id="profileSongsSegMusic" aria-label="Music"><span class="profileSegIconWrap" aria-hidden="true"></span></button>
-              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-profile-songs-segment="activities" id="profileSongsSegActivity" aria-label="Posts">
-                <span class="profileSegIconWrap" aria-hidden="true">
-                  <svg class="profileSegIcon profileSegIcon--line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false">
-                    <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-                    <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-                    <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-                    <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-                  </svg>
-                  <svg class="profileSegIcon profileSegIcon--fill" viewBox="0 0 24 24" fill="currentColor" focusable="false">
-                    <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-                    <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-                    <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-                    <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-                  </svg>
-                </span>
-              </button>
-              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-profile-songs-segment="all" id="profileSongsSegAll" aria-label="Songs">
-                <span class="profileSegIconWrap" aria-hidden="true">
-                  <svg class="profileSegIcon profileSegIcon--notepad" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false">
-                    <rect class="profileSegNotepadBody" x="5" y="3" width="14" height="18" rx="2"/>
-                    <path class="profileSegNotepadLine" d="M8 8h8"/>
-                    <path class="profileSegNotepadLine" d="M8 12h8"/>
-                    <path class="profileSegNotepadLine" d="M8 16h6"/>
-                  </svg>
-                </span>
-              </button>
-              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-profile-songs-segment="vocals" id="profileSongsSegVocals" aria-label="Studio">
-                <span class="profileSegIconWrap" aria-hidden="true">
-                  <svg class="profileSegIcon profileSegIcon--mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false">
-                    <rect class="profileSegMicBody" x="9" y="3" width="6" height="11" rx="3"/>
-                    <path class="profileSegMicStand" d="M5 11a7 7 0 0 0 14 0"/>
-                    <path class="profileSegMicStand" d="M12 18v3"/>
-                    <path class="profileSegMicStand" d="M8 21h8"/>
-                  </svg>
-                </span>
-              </button>
-              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-profile-songs-segment="playlist" id="profileSongsSegPlaylist" aria-label="Playlist">
-                <span class="profileSegIconWrap" aria-hidden="true">
-                  <svg class="profileSegIcon profileSegIcon--line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false">
-                    <path d="M4 6h12"/>
-                    <path d="M4 12h10"/>
-                    <path d="M4 18h7"/>
-                    <circle cx="18" cy="16.5" r="2.5"/>
-                    <path d="M20.5 16.5V9"/>
-                  </svg>
-                  <svg class="profileSegIcon profileSegIcon--fill" viewBox="0 0 24 24" fill="currentColor" focusable="false">
-                    <rect x="4" y="5.125" width="12" height="1.75" rx="0.875"/>
-                    <rect x="4" y="11.125" width="10" height="1.75" rx="0.875"/>
-                    <rect x="4" y="17.125" width="7" height="1.75" rx="0.875"/>
-                    <circle cx="18" cy="16.5" r="2.5"/>
-                    <rect x="19.125" y="9" width="1.75" height="7.5" rx="0.875"/>
-                  </svg>
-                </span>
-              </button>
-              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-profile-songs-segment="reposts" id="profileSongsSegReposts" aria-label="Reposts">
-                <span class="profileSegIconWrap" aria-hidden="true">
-                  <svg class="profileSegIcon profileSegIcon--line" viewBox="0 0 24 24" fill="currentColor" focusable="false">
-                    <g transform="translate(12 12) scale(0.78) translate(-12 -12)">
-                      <path d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1Z"/>
-                      <path d="M7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/>
-                    </g>
-                  </svg>
-                  <svg class="profileSegIcon profileSegIcon--fill" viewBox="0 0 24 24" fill="currentColor" focusable="false">
-                    <g transform="translate(12 12) scale(0.78) translate(-12 -12)">
-                      <path d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1Z"/>
-                      <path d="M7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/>
-                    </g>
-                  </svg>
-                </span>
-              </button>
+            <nav class="profileSegBar profileSegBar--cap" role="tablist" aria-label="Profile content">
+              <button type="button" class="profileSegTab is-active" role="tab" aria-selected="true" data-profile-songs-segment="music" id="profileSongsSegMusic" aria-label="Music"><svg class="profileSegIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg><span class="profileSegLbl">Music</span></button>
+              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-profile-songs-segment="activities" id="profileSongsSegActivity" aria-label="Posts"><svg class="profileSegIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg><span class="profileSegLbl">Posts</span></button>
+              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-profile-songs-segment="reposts" id="profileSongsSegReposts" aria-label="Reposts"><svg class="profileSegIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg><span class="profileSegLbl">Reposts</span></button>
+              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-profile-lib-tab="1" id="profileSongsSegLibrary" aria-label="Library"><svg class="profileSegIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><rect x="3.5" y="4" width="4.5" height="16" rx="1.2"/><rect x="10" y="4" width="4.5" height="16" rx="1.2"/><path d="M16.6 6.2l3.8-1.1 3 12.2-3.9 1z" transform="translate(-1.6 0)"/></svg><span class="profileSegLbl">Library</span></button>
             </nav>
+            <div class="profileLibChips" role="tablist" aria-label="Library">
+              <button type="button" class="profileLibChip" role="tab" aria-selected="false" data-profile-songs-segment="all" id="profileSongsSegAll">Songs</button>
+              <button type="button" class="profileLibChip" role="tab" aria-selected="false" data-profile-songs-segment="vocals" id="profileSongsSegVocals">Studio</button>
+              <button type="button" class="profileLibChip" role="tab" aria-selected="false" data-profile-songs-segment="playlist" id="profileSongsSegPlaylist">Playlists</button>
+            </div>
             <div class="profileSongsToolbar libraryHeaderRow">
               <div class="profileSongsToolbarLeading">
                 <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
@@ -5008,14 +4916,16 @@
       </nav>
       <div id="hubNowPlaying" class="hubNowPlaying" style="display:none">
         <button type="button" id="hubNowPlayPause" class="hubNowVinyl" aria-label="Open player. Long press to close.">
+          <span class="hubNowDisc" aria-hidden="true"><span class="hubNowLabel"><img id="hubNowArt" class="hubNowArt" src="./assets/icons/splash-mark.png" alt="" decoding="async" /><span class="hubNowSpindle"></span></span></span>
           <svg class="hubNowRing" viewBox="0 0 36 36" aria-hidden="true">
-            <circle class="hubNowRingTrack" cx="18" cy="18" r="15.2" fill="none" pathLength="100"/>
-            <circle id="hubNowRingFill" class="hubNowRingFill" cx="18" cy="18" r="15.2" fill="none" pathLength="100" style="stroke-dasharray:100;stroke-dashoffset:100"/>
+            <circle class="hubNowRingTrack" cx="18" cy="18" r="17.2" fill="none" pathLength="100"/>
+            <circle id="hubNowRingFill" class="hubNowRingFill" cx="18" cy="18" r="17.2" fill="none" pathLength="100" style="stroke-dasharray:100;stroke-dashoffset:100"/>
           </svg>
-          <span class="hubNowCoverWrap">
-            <img id="hubNowArt" class="hubNowArt" src="./assets/icons/splash-mark.png" alt="" decoding="async" />
-            <span class="hubNowVinylHole" aria-hidden="true"></span>
-          </span>
+        </button>
+        <span class="hubNowMeta"><span id="hubNowTitle" class="hubNowTitle">Now playing</span><span id="hubNowSubtitle" class="hubNowSubtitle"></span></span>
+        <button type="button" id="hubNowToggle" class="hubNowToggle" aria-label="Pause">
+          <span class="nbBars nbBars--play hubNowToggleBars" style="--nb-size:14px" aria-hidden="true"><i></i><i></i></span>
+          <svg class="hubNowTogglePlay" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.86l11-6.8a1 1 0 0 0 0-1.72l-11-6.8A1 1 0 0 0 8 5.2z" fill="currentColor"/></svg>
         </button>
         <button id="hubNowClose" class="hubNowClose" type="button" hidden aria-hidden="true" tabindex="-1" aria-label="Close player">
           <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
@@ -5023,8 +4933,6 @@
             <path d="M17.6 6.4 6.4 17.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>
           </svg>
         </button>
-        <span id="hubNowTitle" class="hubNowTitle">Now playing</span>
-        <span id="hubNowSubtitle" class="hubNowSubtitle" hidden></span>
         <span id="hubNowNabadBadge" class="hubNowNabadBadgeSlot" hidden></span>
         <span id="hubNowProgBar" class="hubNowProgBar" hidden style="width:0%"></span>
       </div>

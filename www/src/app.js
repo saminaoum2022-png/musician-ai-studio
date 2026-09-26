@@ -2580,6 +2580,8 @@ function syncHubNowPlayPauseUi(audible) {
   btn.classList.toggle("isPlaying", playing);
   const title = String(hubNowMeta?.title || "Now playing").trim() || "Now playing";
   btn.setAttribute("aria-label", `Open player, ${title}. Long press to close.`);
+  const tg = document.getElementById("hubNowToggle");
+  if (tg) tg.setAttribute("aria-label", playing ? "Pause" : "Play");
 }
 
 /** Audio element backing the bottom mini player (Discover uses `playerEl`). */
@@ -2597,6 +2599,11 @@ function getMiniPlayerAudio() {
   }
   return hubAudio || ensurePlayer();
 }
+
+const HUB_STRIP_PAUSED_MS = 10 * 60 * 1000;
+let hubStripPausedTimer = 0;
+let hubStripPausedExpired = false;
+let hubStripUserPaused = false;
 
 function renderHubNowPlaying() {
   if (!els.hubNowPlaying) return;
@@ -2624,9 +2631,14 @@ function renderHubNowPlaying() {
   );
 
   const discoverMiniLoading = isDiscoverStyleMiniSource() && hasMeta;
+  // Paused mid-song keeps the strip (so you can resume); it goes when the song ends,
+  // when it is closed, or after HUB_STRIP_PAUSED_MS of being paused.
+  const pausedKeep = Boolean(
+    audio && audio.paused && !audio.ended && hasMeta && hubSrc && (cur > 0 || hubStripUserPaused) && !hubStripPausedExpired,
+  );
   const showMini =
     hasMeta &&
-    (audible || discoverMiniLoading) &&
+    (audible || pausedKeep || discoverMiniLoading) &&
     (hubSrc || discoverMiniLoading) &&
     !hideHubSource &&
     !hideOnHubVisible &&
@@ -2635,7 +2647,20 @@ function renderHubNowPlaying() {
     !hideOnPlaylist &&
     !hideOnPlayer &&
     !hideOnGenerate;
-  const miniShowsPause = audible || (discoverMiniLoading && hasMeta);
+  const miniShowsPause = audible || (discoverMiniLoading && hasMeta && !pausedKeep);
+
+  document.body.classList.toggle("hasMiniStrip", Boolean(showMini));
+  if (audible || !hasMeta) hubStripUserPaused = false;
+  if (audible || !pausedKeep) {
+    hubStripPausedExpired = false;
+    if (hubStripPausedTimer) { window.clearTimeout(hubStripPausedTimer); hubStripPausedTimer = 0; }
+  } else if (!hubStripPausedTimer) {
+    hubStripPausedTimer = window.setTimeout(() => {
+      hubStripPausedTimer = 0;
+      const a = getMiniPlayerAudio();
+      if (a && a.paused) { hubStripPausedExpired = true; try { renderHubNowPlaying(); } catch {} }
+    }, HUB_STRIP_PAUSED_MS);
+  }
 
   if (!showMini) {
     els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
@@ -2726,7 +2751,7 @@ function scheduleRenderHubNowPlaying() {
 }
 
 const HUB_VINYL_DOCK_KEY = "nabad.hubVinylDock.v1";
-const HUB_VINYL_SIZE = 52;
+const HUB_VINYL_SIZE = 56;
 const HUB_VINYL_DRAG_SLOP = 16;
 const HUB_VINYL_LONG_MS = 520;
 let hubVinylIgnoreClick = false;
@@ -2797,28 +2822,29 @@ function wireHubNowVinylDrag() {
   if (!el || el.dataset.boundVinylDrag === "1") return;
   el.dataset.boundVinylDrag = "1";
   try { localStorage.removeItem(HUB_VINYL_DOCK_KEY); } catch {}
-  let dragging = false;
+  // Now-playing strip: tap opens the player, swipe down closes it, hold closes it.
+  // The play/pause button (#hubNowToggle) is its own target and never opens the player.
+  const SWIPE_SLOP = 10;
+  const SWIPE_CLOSE_PX = 44;
+  let tracking = false;
+  let swiping = false;
   let longPressed = false;
   let startX = 0;
   let startY = 0;
-  let originX = 0;
-  let originY = 0;
+  let lastDy = 0;
   let pointerId = null;
   let longTimer = 0;
 
-  const clearVinylLongPress = () => {
-    if (longTimer) {
-      window.clearTimeout(longTimer);
-      longTimer = 0;
-    }
+  const clearLong = () => {
+    if (longTimer) { window.clearTimeout(longTimer); longTimer = 0; }
   };
-
-  const endVinylPointer = () => {
+  const setDy = (dy) => { el.style.setProperty("--strip-dy", `${Math.round(dy)}px`); };
+  const endPointer = () => {
     try { if (pointerId != null) el.releasePointerCapture(pointerId); } catch {}
     window.removeEventListener("pointermove", onMove, true);
     window.removeEventListener("pointerup", onUp, true);
     window.removeEventListener("pointercancel", onUp, true);
-    el.classList.remove("isDragging");
+    el.classList.remove("isSwiping");
     pointerId = null;
   };
 
@@ -2826,42 +2852,51 @@ function wireHubNowVinylDrag() {
     if (pointerId == null || e.pointerId !== pointerId) return;
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
-    if (!dragging) {
-      if (Math.hypot(dx, dy) < HUB_VINYL_DRAG_SLOP) return;
-      dragging = true;
-      clearVinylLongPress();
+    if (!swiping) {
+      if (Math.hypot(dx, dy) < SWIPE_SLOP) return;
+      clearLong();
       hubVinylIgnoreClick = true;
-      el.classList.add("isDragging");
-      el.classList.remove("isDocked", "isDockedLeft", "isDockedRight");
-      try { haptic("light"); } catch {}
+      if (dy > 0 && Math.abs(dy) > Math.abs(dx)) {
+        swiping = true;
+        el.classList.add("isSwiping");
+      } else {
+        tracking = false;
+        return;
+      }
     }
     try { e.preventDefault(); } catch {}
-    const { size, minY, maxY } = hubVinylMetrics();
-    const nextX = Math.max(-(size * 0.35), Math.min(window.innerWidth - size * 0.65, originX + dx));
-    const nextY = Math.max(minY, Math.min(maxY, originY + dy));
-    applyHubVinylBox(nextX, nextY, { docked: false });
+    lastDy = Math.max(0, dy);
+    setDy(lastDy);
   };
 
   const onUp = (e) => {
     if (pointerId == null || e.pointerId !== pointerId) return;
     const cancelled = e.type === "pointercancel";
-    const wasDragging = dragging;
+    const wasSwiping = swiping;
     const wasLong = longPressed;
-    dragging = false;
+    const wasTracking = tracking;
+    swiping = false;
+    tracking = false;
     longPressed = false;
-    clearVinylLongPress();
-    endVinylPointer();
-    if (wasDragging) {
-      const rect = el.getBoundingClientRect();
-      const snapped = hubVinylSnapPoint(rect.left, rect.top);
-      applyHubVinylBox(snapped.x, snapped.y, { docked: true, side: snapped.side });
-      writeHubVinylDock({ side: snapped.side, yRatio: snapped.yRatio });
-      try { haptic("medium"); } catch {}
+    clearLong();
+    endPointer();
+    if (wasSwiping) {
+      const close = !cancelled && lastDy >= SWIPE_CLOSE_PX;
+      lastDy = 0;
+      if (close) {
+        try { haptic("medium"); } catch {}
+        setDy(70);
+        dismissMiniPlayer();
+        window.setTimeout(() => { el.style.removeProperty("--strip-dy"); }, 400);
+      } else {
+        setDy(0);
+        window.setTimeout(() => { el.style.removeProperty("--strip-dy"); }, 320);
+      }
       window.setTimeout(() => { hubVinylIgnoreClick = false; }, 80);
       return;
     }
     hubVinylIgnoreClick = false;
-    if (cancelled || wasLong) return;
+    if (cancelled || wasLong || !wasTracking) return;
     hubVinylTapConsumed = true;
     try { haptic("light"); } catch {}
     openMiniPlayerFullSurface();
@@ -2871,19 +2906,18 @@ function wireHubNowVinylDrag() {
   el.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (!window.matchMedia || !window.matchMedia("(max-width: 720px)").matches) return;
-    if (e.target?.closest?.("#hubNowClose")) return;
-    const rect = el.getBoundingClientRect();
+    if (e.target?.closest?.("#hubNowClose, #hubNowToggle")) return;
     startX = e.clientX;
     startY = e.clientY;
-    originX = rect.left;
-    originY = rect.top;
+    lastDy = 0;
     pointerId = e.pointerId;
-    dragging = false;
+    tracking = true;
+    swiping = false;
     longPressed = false;
-    clearVinylLongPress();
+    clearLong();
     longTimer = window.setTimeout(() => {
       longTimer = 0;
-      if (dragging) return;
+      if (swiping) return;
       longPressed = true;
       hubVinylIgnoreClick = true;
       try { haptic("medium"); } catch {}
@@ -2896,9 +2930,24 @@ function wireHubNowVinylDrag() {
     window.addEventListener("pointercancel", onUp, true);
   });
 
-  window.addEventListener("resize", () => {
-    if (hubVinylDock) restoreHubVinylDock({ force: true });
-  });
+  const tg = document.getElementById("hubNowToggle");
+  if (tg && !tg.dataset.boundToggle) {
+    tg.dataset.boundToggle = "1";
+    tg.addEventListener("click", (e) => {
+      try { e.preventDefault(); e.stopPropagation(); } catch {}
+      if (isLiveListenTransportLocked()) {
+        try { interceptLiveListenTransport(); } catch {}
+        return;
+      }
+      try { haptic("light"); } catch {}
+      const a = getMiniPlayerAudio() || hubAudio || playerEl;
+      if (!a) return;
+      if (a.paused || a.ended) { hubStripUserPaused = false; void a.play(); }
+      else { hubStripUserPaused = true; a.pause(); }
+      try { renderHubNowPlaying(); } catch {}
+      try { syncLockScreenNowPlaying({ force: true }); } catch {}
+    });
+  }
 }
 
 const LATEST_SUNO_MODEL = "V6";
@@ -5119,6 +5168,7 @@ const PROFILE_SONGS_SEGMENT_KEY = "mas:profileSongsSeg:v1";
 const USER_PUBLIC_SEGMENT_KEY = "nabad_user_public_seg:v1";
 let _profileSongsSegment = "music";
 let _profileSongsSegmentBound = false;
+let _profileLibLastSeg = "all";
 let _profileRepostsBound = false;
 let _userPublicSegment = "music";
 let _userPublicSegmentBound = false;
@@ -60871,6 +60921,7 @@ function syncProfileSongsSegmentUi() {
   const isActivities = _profileSongsSegment === "activities";
   const isMusic = _profileSongsSegment === "music";
   const isVocals = _profileSongsSegment === "vocals";
+  if (isAll || isPlaylist || isVocals) _profileLibLastSeg = _profileSongsSegment;
   const musicPanel = document.getElementById("profileMusic");
   if (musicPanel) {
     musicPanel.hidden = !isMusic;
@@ -60931,6 +60982,17 @@ function bindProfileSongsSegmentOnce() {
   wireProfileMusicOnce();
   initProfileSegTabsOnce();
   wireProfileActivitiesLoadMoreOnce();
+  document.querySelectorAll("[data-profile-lib-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const seg = _profileLibLastSeg;
+      if (seg === _profileSongsSegment) return;
+      _profileSongsSegment = seg;
+      try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, seg); } catch {}
+      haptic("light");
+      syncProfileSongsSegmentUi();
+      renderProfileSongs();
+    });
+  });
   document.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const seg = btn.getAttribute("data-profile-songs-segment");

@@ -9310,6 +9310,22 @@ const CHALLENGE_OCCASIONS = [
   },
 ];
 
+const CHALLENGE_OCCASION_ICONS = {
+  birthday: "cake",
+  anniversary: "heart",
+  wedding: "rings",
+  "mom-day": "family",
+  christmas: "snow",
+  "new-year": "burst",
+  congrats: "cap",
+  prom: "star",
+  apology: "sorry",
+  thanks: "gift",
+  "proud-of-you": "trophy",
+  "missing-you": "pin",
+  "just-because": "all",
+};
+
 const CHALLENGE_GENRES = [
   {
     id: "arabic-pop",
@@ -10155,17 +10171,29 @@ function syncHomeMakeSegUi() {
   const personal = document.getElementById("homeDeskMakePersonal");
   const versions = document.getElementById("homeDeskPresetVersions");
   const quick = document.getElementById("homeDeskOccasionQuick");
-  const hint = document.getElementById("homeDeskMakeHint");
   const isPersonal = _homeMakeSeg === "personal";
   if (personal) personal.hidden = !isPersonal;
-  if (versions) versions.hidden = !isPersonal;
-  if (quick) quick.hidden = isPersonal;
-  if (hint) {
-    hint.textContent = isPersonal
-      ? "Add their name, pick occasion and sound, then choose a version."
-      : "Pick occasion and sound — no name needed.";
+  if (versions) versions.hidden = true;
+  if (quick) quick.hidden = false;
+  const title = document.getElementById("challengePresetTitle");
+  if (title) title.textContent = isPersonal ? "Who's it for?" : "What's the moment?";
+  const alt = document.getElementById("momentAltLink");
+  if (alt) {
+    alt.innerHTML = isPersonal
+      ? `Just want an occasion song? <u>Skip the name</u>`
+      : `Want their name in it? <u>Make it for someone</u>`;
+    alt.setAttribute("data-home-make-seg", isPersonal ? "occasion" : "personal");
+  }
+  const cta = document.querySelector("[data-home-occasion-create]");
+  if (cta) {
+    const occ = CHALLENGE_OCCASIONS.find((o) => o.id === _challengeOccasionId) || CHALLENGE_OCCASIONS[0];
+    const name = String(document.getElementById("challengePersonName")?.value || "").trim();
+    cta.textContent = isPersonal
+      ? (name ? `Start song for ${name}` : "Start personal song")
+      : `Start ${String(occ?.label || "occasion").toLowerCase()} song`;
   }
   page?.querySelectorAll?.("[data-home-make-seg]")?.forEach?.((btn) => {
+    if (!btn.classList.contains("homeDeskMakeSegBtn")) return;
     const on = String(btn.getAttribute("data-home-make-seg") || "") === _homeMakeSeg;
     btn.classList.toggle("active", on);
     btn.setAttribute("aria-pressed", on ? "true" : "false");
@@ -12863,16 +12891,38 @@ function discoverFeedFilterTracks(tab, tracks) {
 
 const DISCOVER_TEMPLATES_SORT_KEY = "nabad_discover_templates_sort";
 const DISCOVER_TEMPLATES_FILTER_KEY = "nabad_discover_templates_filter";
+/** Moments line icons — one stroke family (replaces emoji). Rendered by `momentIconHtml`. */
+const MOMENT_ICON_PATHS = {
+  all: '<path d="M12 3l1.9 5.3L19.2 10l-5.3 1.9L12 17.2l-1.9-5.3L4.8 10l5.3-1.7z"/><path d="M19 16v4M17 18h4"/>',
+  cake: '<path d="M4 20h16M5 20v-6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v6"/><path d="M5 16.2c2 1.4 3.5 1.4 5 0s3-1.4 5 0 3 1.4 4 .4"/><path d="M12 12V8.5M12 5c.7.8.7 1.6 0 2.4"/>',
+  rings: '<circle cx="8.5" cy="15" r="5"/><circle cx="15.5" cy="15" r="5"/><path d="M6.5 6.5L8 4.2h2.4L12 6.5"/>',
+  heart: '<path d="M12 20s-7.2-4.5-7.2-10.2A4.1 4.1 0 0 1 12 7.2a4.1 4.1 0 0 1 7.2 2.6C19.2 15.5 12 20 12 20z"/>',
+  family: '<circle cx="8" cy="8" r="2.7"/><circle cx="16.6" cy="9.4" r="2.2"/><path d="M3.4 19c0-3.1 2-5.1 4.6-5.1s4.6 2 4.6 5.1M14.2 15.1c.8-.5 1.5-.7 2.4-.7 2.1 0 3.6 1.6 3.6 4.6"/>',
+  cap: '<path d="M2.5 9.5L12 5l9.5 4.5L12 14 2.5 9.5z"/><path d="M6.5 11.6V16c0 1.2 2.5 2.5 5.5 2.5s5.5-1.3 5.5-2.5v-4.4"/><path d="M21.5 9.5V15"/>',
+  moon: '<path d="M20 14.6A8 8 0 0 1 9.4 4a8 8 0 1 0 10.6 10.6z"/><path d="M17 4v3M15.5 5.5h3"/>',
+  trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H4.5c0 3 1.5 4.5 3.7 4.8M16 6h3.5c0 3-1.5 4.5-3.7 4.8"/><path d="M12 13v4M8.5 20h7M10 17h4"/>',
+  more: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>',
+  snow: '<path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9"/><path d="M9.5 4.5L12 6.5l2.5-2M9.5 19.5L12 17.5l2.5 2"/>',
+  burst: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
+  star: '<path d="M12 3.5l2.5 5.4 5.9.7-4.4 4 1.2 5.8L12 16.5 6.8 19.4 8 13.6l-4.4-4 5.9-.7z"/>',
+  sorry: '<path d="M12 20s-7.2-4.5-7.2-10.2A4.1 4.1 0 0 1 12 7.2a4.1 4.1 0 0 1 7.2 2.6C19.2 15.5 12 20 12 20z"/><path d="M12 8.5l-1.8 3.2 2.4 1.6-1.6 3"/>',
+  gift: '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M12 9v11M4 13h16"/><path d="M12 9c-1.2-3.4-4.6-3.6-4.6-1.4S10 9 12 9zM12 9c1.2-3.4 4.6-3.6 4.6-1.4S14 9 12 9z"/>',
+  pin: '<path d="M12 21s6.5-5.6 6.5-11a6.5 6.5 0 0 0-13 0c0 5.4 6.5 11 6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
+};
+function momentIconHtml(name, cls = "momentIcon") {
+  const d = MOMENT_ICON_PATHS[name] || MOMENT_ICON_PATHS.all;
+  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+}
 const DISCOVER_TEMPLATE_FILTERS = [
-  { id: "all", label: "All", emoji: "✦" },
-  { id: "birthday", label: "Birthday", emoji: "🎂", tokens: ["birthday", "bday", "happy birthday", "sana helwa", "dabke", "سنة حلوة", "عيد ميلاد"] },
-  { id: "wedding", label: "Wedding", emoji: "💍", tokens: ["wedding", "entrance", "first dance", "mariage", "zafaf", "زفاف", "walking in"] },
-  { id: "love", label: "Love", emoji: "💜", tokens: ["love", "anniversary", "romantic", "couple", "anniv", "all our years"] },
-  { id: "family", label: "Family", emoji: "👨‍👩‍👧", tokens: ["mom", "mama", "mother", "dad", "father", "papa", "family", "for mom", "for dad", "mom-day", "أمي", "أبي"] },
-  { id: "celebrations", label: "Celebrations", emoji: "🎓", tokens: ["graduation", "prom", "congrats", "congratulations", "new year", "new-year", "milestone", "celebration", "prom night"] },
-  { id: "holiday", label: "Holiday", emoji: "🌙", tokens: ["christmas", "ramadan", "holiday", "eid", "seasonal", "countdown", "glow"] },
-  { id: "worldcup", label: "World Cup", emoji: "🏆", tokens: ["world cup", "worldcup", "anthem", "fifa"], campaignOnly: true },
-  { id: "more", label: "More", emoji: "···", tokens: null },
+  { id: "all", label: "All", icon: "all" },
+  { id: "birthday", label: "Birthday", icon: "cake", tokens: ["birthday", "bday", "happy birthday", "sana helwa", "dabke", "سنة حلوة", "عيد ميلاد"] },
+  { id: "wedding", label: "Wedding", icon: "rings", tokens: ["wedding", "entrance", "first dance", "mariage", "zafaf", "زفاف", "walking in"] },
+  { id: "love", label: "Love", icon: "heart", tokens: ["love", "anniversary", "romantic", "couple", "anniv", "all our years"] },
+  { id: "family", label: "Family", icon: "family", tokens: ["mom", "mama", "mother", "dad", "father", "papa", "family", "for mom", "for dad", "mom-day", "أمي", "أبي"] },
+  { id: "celebrations", label: "Celebrations", icon: "cap", tokens: ["graduation", "prom", "congrats", "congratulations", "new year", "new-year", "milestone", "celebration", "prom night"] },
+  { id: "holiday", label: "Holiday", icon: "moon", tokens: ["christmas", "ramadan", "holiday", "eid", "seasonal", "countdown", "glow"] },
+  { id: "worldcup", label: "World Cup", icon: "trophy", tokens: ["world cup", "worldcup", "anthem", "fifa"], campaignOnly: true },
+  { id: "more", label: "More", icon: "more", tokens: null },
 ];
 let _discoverTemplatesSort = (() => {
   try {
@@ -13090,6 +13140,12 @@ function discoverTemplatesMetricsHtml(t) {
   return `<span class="discoverTemplatesMetrics">${bits.map((b) => `<span>${escapeHtml(b)}</span>`).join("")}</span>`;
 }
 
+/** The moment a gift song belongs to (Birthday, Wedding…), matched from its template/challenge metadata. */
+function discoverTemplateMomentForTrack(t) {
+  const hit = DISCOVER_TEMPLATE_FILTERS.find((f) => f.tokens && f.id !== "more" && discoverTrackMatchesTemplateFilterTokens(t, f.tokens));
+  return hit || null;
+}
+
 function discoverTemplatesShowcaseCardHtml(t, profMap, idx = 0) {
   const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
@@ -13097,14 +13153,17 @@ function discoverTemplatesShowcaseCardHtml(t, profMap, idx = 0) {
   const title = String(t.title || "Untitled").trim();
   const art = trackCoverArtForFeed(t);
   const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
-  const origin = discoverTemplateCardOriginText(t);
-  const tallClass = idx % 3 === 0 ? " discoverTemplatesCard--tall" : idx % 3 === 2 ? " discoverTemplatesCard--wide" : "";
+  const moment = discoverTemplateMomentForTrack(t);
+  const tag = moment
+    ? `<span class="discoverTemplatesTag">${momentIconHtml(moment.icon)}<span>${escapeHtml(moment.label)}</span></span>`
+    : "";
   return `
-    <button type="button" class="discoverTemplatesCard${tallClass}" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
+    <button type="button" class="discoverTemplatesCard" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
       <span class="discoverTemplatesCover">
         <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
         <span class="discoverTemplatesCoverShade" aria-hidden="true"></span>
-        <span class="discoverTemplatesPlay" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>
+        ${tag}
+        <span class="discoverTemplatesPlay" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z"/></svg></span>
       </span>
       <span class="discoverTemplatesBody">
         <strong class="discoverTemplatesTitle">${escapeHtml(title)}</strong>
@@ -13112,7 +13171,6 @@ function discoverTemplatesShowcaseCardHtml(t, profMap, idx = 0) {
           <span class="discoverTemplatesBy">${escapeHtml(byLine)}</span>
           ${discoverCreatorVerifiedBadgeHtml(prof)}
         </span>
-        ${origin ? `<span class="discoverTemplatesOrigin" title="${escapeHtml(origin)}">${escapeHtml(origin)}</span>` : ""}
         ${discoverTemplatesMetricsHtml(t)}
       </span>
     </button>`;
@@ -13120,20 +13178,21 @@ function discoverTemplatesShowcaseCardHtml(t, profMap, idx = 0) {
 
 function discoverTemplatesIntroHtml() {
   const sort = _discoverTemplatesSort;
+  const sortLabel = sort === "newest" ? "Newest" : sort === "trending" ? "Trending" : "Popular";
   return `
     <header class="discoverTemplatesIntro">
-      <div class="discoverTemplatesIntroCopy">
-        <h3 class="discoverTemplatesIntroTitle">Made for these moments</h3>
-        <p class="discoverTemplatesIntroSub">Hear songs people gifted for birthdays, weddings, and the people they love.</p>
+      <h3 class="discoverTemplatesIntroTitle">Made for these moments</h3>
+      <div class="discoverTemplatesIntroRow">
+        <p class="discoverTemplatesIntroSub">Songs people gifted for birthdays, weddings and the people they love.</p>
+        <label class="discoverTemplatesSort">
+          <span class="discoverTemplatesSortValue">${sortLabel}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+          <select data-discover-templates-sort aria-label="Sort gift songs">
+            <option value="popular"${sort === "popular" ? " selected" : ""}>Popular</option>
+            <option value="newest"${sort === "newest" ? " selected" : ""}>Newest</option>
+            <option value="trending"${sort === "trending" ? " selected" : ""}>Trending</option>
+          </select>
+        </label>
       </div>
-      <label class="discoverTemplatesSort">
-        <span class="discoverTemplatesSortLabel">Sort</span>
-        <select data-discover-templates-sort aria-label="Sort gift songs">
-          <option value="popular"${sort === "popular" ? " selected" : ""}>Popular</option>
-          <option value="newest"${sort === "newest" ? " selected" : ""}>Newest</option>
-          <option value="trending"${sort === "trending" ? " selected" : ""}>Trending</option>
-        </select>
-      </label>
     </header>`;
 }
 
@@ -13143,7 +13202,7 @@ function discoverTemplatesFilterChipsHtml() {
     const active = f.id === _discoverTemplatesFilter;
     return `
       <button type="button" class="discoverTemplatesChip${active ? " is-active" : ""}" data-discover-templates-filter="${escapeHtml(f.id)}" aria-pressed="${active ? "true" : "false"}">
-        <span class="discoverTemplatesChipIcon" aria-hidden="true">${escapeHtml(f.emoji)}</span>
+        <span class="discoverTemplatesChipIcon" aria-hidden="true">${momentIconHtml(f.icon)}</span>
         <span class="discoverTemplatesChipLabel">${escapeHtml(f.label)}</span>
       </button>`;
   }).join("");
@@ -15525,20 +15584,83 @@ function bindChallengesPageOnce() {
   };
   const renderFilters = () => {
     if (occasionRail) {
-      occasionRail.innerHTML = CHALLENGE_OCCASIONS.map((o) => `
-        <button type="button" class="challengeFilterChip${o.id === _challengeOccasionId ? " active" : ""}" data-challenge-occasion="${escapeHtml(o.id)}" aria-pressed="${o.id === _challengeOccasionId ? "true" : "false"}">${escapeHtml(o.label)}</button>
-      `).join("");
+      const keepScroll = occasionRail.scrollLeft;
+      occasionRail.innerHTML = CHALLENGE_OCCASIONS.map((o) => {
+        const on = o.id === _challengeOccasionId;
+        return `
+        <button type="button" class="momentTile${on ? " active" : ""}" data-challenge-occasion="${escapeHtml(o.id)}" aria-pressed="${on ? "true" : "false"}">
+          ${momentIconHtml(CHALLENGE_OCCASION_ICONS[o.id] || "all", "momentTileIcon")}
+          <b>${escapeHtml(o.label)}</b>
+        </button>`;
+      }).join("");
+      occasionRail.scrollLeft = keepScroll;
     }
-    if (genreRail) {
-      genreRail.innerHTML = CHALLENGE_GENRES.map((g) => `
-        <button type="button" class="challengeFilterChip challengeFilterChip--genre${g.id === _challengeGenreId ? " active" : ""}" data-challenge-genre="${escapeHtml(g.id)}" aria-pressed="${g.id === _challengeGenreId ? "true" : "false"}">${escapeHtml(g.label)}</button>
-      `).join("");
+    const rows = document.getElementById("momentsSettingRows");
+    if (rows) {
+      const genre = selected(CHALLENGE_GENRES, _challengeGenreId);
+      const language = selected(CHALLENGE_LANGUAGES, _challengeLanguageId);
+      const row = (key, label, value) => `
+        <button type="button" class="momentRow" data-moment-pick="${key}">
+          <span>${label}</span>
+          <b>${escapeHtml(value)}</b>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        </button>`;
+      rows.innerHTML = row("sound", "Sound", genre?.label || "") + row("language", "Language", language?.label || "");
     }
-    if (languageRail) {
-      languageRail.innerHTML = CHALLENGE_LANGUAGES.map((l) => `
-        <button type="button" class="challengeFilterChip challengeFilterChip--language${l.id === _challengeLanguageId ? " active" : ""}" data-challenge-language="${escapeHtml(l.id)}" aria-pressed="${l.id === _challengeLanguageId ? "true" : "false"}">${escapeHtml(l.label)}</button>
-      `).join("");
+    renderMomentCta();
+  };
+  const renderMomentCta = () => {
+    const cta = document.querySelector("[data-home-occasion-create]");
+    if (!cta) return;
+    const occasion = selected(CHALLENGE_OCCASIONS, _challengeOccasionId);
+    const name = nameForPrompt();
+    if (_homeMakeSeg === "personal") {
+      cta.textContent = name ? `Start song for ${name}` : "Start personal song";
+    } else {
+      const label = String(occasion?.label || "occasion").toLowerCase();
+      cta.textContent = `Start ${label} song`;
     }
+  };
+  const openMomentPicker = (kind) => {
+    const isSound = kind === "sound";
+    const list = isSound ? CHALLENGE_GENRES : CHALLENGE_LANGUAGES;
+    const current = isSound ? _challengeGenreId : _challengeLanguageId;
+    document.getElementById("momentPickSheet")?.remove();
+    const sheet = document.createElement("div");
+    sheet.id = "momentPickSheet";
+    sheet.className = "momentSheet";
+    sheet.setAttribute("role", "dialog");
+    sheet.setAttribute("aria-modal", "true");
+    sheet.innerHTML = `
+      <div class="momentSheetBackdrop" data-moment-sheet-close></div>
+      <div class="momentSheetPanel">
+        <div class="momentSheetGrab" aria-hidden="true"></div>
+        <h3 class="momentSheetTitle">${isSound ? "Sound" : "Language"}</h3>
+        <div class="momentSheetList">
+          ${list.map((item) => `
+            <button type="button" class="momentSheetOpt${item.id === current ? " active" : ""}" data-moment-opt="${escapeHtml(item.id)}">
+              <span>${escapeHtml(item.label)}</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+            </button>`).join("")}
+        </div>
+      </div>`;
+    const close = () => {
+      sheet.classList.remove("isOpen");
+      setTimeout(() => sheet.remove(), 220);
+    };
+    sheet.addEventListener("click", (e) => {
+      if (e.target.closest("[data-moment-sheet-close]")) { close(); return; }
+      const opt = e.target.closest("[data-moment-opt]");
+      if (!opt) return;
+      const id = String(opt.getAttribute("data-moment-opt") || "");
+      haptic("light");
+      if (isSound) _challengeGenreId = id;
+      else _challengeLanguageId = storeChallengeLanguageId(id);
+      renderPresetLab();
+      close();
+    });
+    document.body.appendChild(sheet);
+    requestAnimationFrame(() => sheet.classList.add("isOpen"));
   };
   const renderPresets = () => {
     if (!presetGrid) return;
@@ -15592,7 +15714,14 @@ function bindChallengesPageOnce() {
   renderHomeDesk();
   page.addEventListener("click", (e) => {
     const occCreate = e.target?.closest?.("[data-home-occasion-create]");
+    const pickBtn = e.target?.closest?.("[data-moment-pick]");
+    if (pickBtn && page.contains(pickBtn)) {
+      haptic("light");
+      openMomentPicker(String(pickBtn.getAttribute("data-moment-pick") || "sound"));
+      return;
+    }
     if (occCreate && page.contains(occCreate)) {
+      if (!requireChallengeName()) return;
       const occasion = selected(CHALLENGE_OCCASIONS, _challengeOccasionId);
       const genre = selected(CHALLENGE_GENRES, _challengeGenreId);
       if (!occasion || !genre) return;
@@ -15649,6 +15778,7 @@ function bindChallengesPageOnce() {
   nameInput?.addEventListener?.("input", () => {
     try { nameInput.closest?.(".challengeNameField")?.classList?.remove?.("isRequired"); } catch {}
     renderPresets();
+    renderMomentCta();
   });
 }
 

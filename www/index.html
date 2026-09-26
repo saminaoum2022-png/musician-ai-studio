@@ -1809,35 +1809,23 @@
               <section class="homeDeskSection homeDeskSection--occasions discoverOccasionsPicker" id="homeDeskOccasions" aria-labelledby="challengePresetTitle">
                 <header class="homeDeskSectionHead">
                   <p class="homeDeskSectionKicker">Gift a song</p>
-                  <h3 id="challengePresetTitle">Occasion &amp; dedication</h3>
+                  <h3 id="challengePresetTitle">What's the moment?</h3>
                 </header>
                 <div class="homeDeskMakeSeg" role="tablist" aria-label="Occasion mode">
                   <button type="button" class="homeDeskMakeSegBtn active" data-home-make-seg="occasion" aria-pressed="true">Occasion</button>
                   <button type="button" class="homeDeskMakeSegBtn" data-home-make-seg="personal" aria-pressed="false">For someone</button>
                 </div>
-                <section class="challengePresetLab">
-                  <p class="homeDeskMakeHint" id="homeDeskMakeHint">Pick occasion and sound — no name needed.</p>
+                <section class="challengePresetLab momentsLab">
                   <div class="homeDeskMakePersonal" id="homeDeskMakePersonal" hidden>
                     <label class="challengeNameField">
-                      <span>Who is this for?</span>
-                      <input id="challengePersonName" type="text" maxlength="36" autocomplete="off" placeholder="Their name..." />
-                      <small>We will weave their name into the lyrics.</small>
+                      <input id="challengePersonName" type="text" maxlength="36" autocomplete="off" placeholder="Their name" aria-label="Who is this for?" />
                     </label>
                   </div>
-                  <div class="challengeRailBlock">
-                    <div class="challengeRailLabel">Occasion</div>
-                    <div id="challengeOccasionRail" class="challengeFilterRail" role="tablist" aria-label="Choose occasion"></div>
-                  </div>
-                  <div class="challengeRailBlock challengeRailBlock--genre">
-                    <div class="challengeRailLabel">Sound</div>
-                    <div id="challengeGenreRail" class="challengeFilterRail" role="tablist" aria-label="Choose music style"></div>
-                  </div>
-                  <div class="challengeRailBlock challengeRailBlock--language">
-                    <div class="challengeRailLabel">Language</div>
-                    <div id="challengeLanguageRail" class="challengeFilterRail" role="tablist" aria-label="Choose lyric language"></div>
-                  </div>
+                  <div id="challengeOccasionRail" class="momentTileRail" role="tablist" aria-label="Choose occasion"></div>
+                  <div id="momentsSettingRows" class="momentRows"></div>
                   <div class="homeDeskOccasionQuick" id="homeDeskOccasionQuick">
-                    <button type="button" class="challengesPrimaryCta discoverOccasionStartCta" data-home-occasion-create>Start occasion song</button>
+                    <button type="button" class="challengesPrimaryCta discoverOccasionStartCta" data-home-occasion-create>Start birthday song</button>
+                    <button type="button" class="momentAltLink" id="momentAltLink" data-home-make-seg="personal">Want their name in it? <u>Make it for someone</u></button>
                   </div>
                   <div class="homeDeskPresetVersions" id="homeDeskPresetVersions" hidden>
                     <div id="challengePresetGrid" class="challengePresetGrid" aria-live="polite"></div>

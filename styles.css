@@ -68658,7 +68658,13 @@ div.discoverWhoFor{ cursor: text; padding: 0 8px 0 20px; }
   appearance: none;
 }
 .discoverWhoForInput::placeholder{ color: rgba(255, 255, 255, 0.55); }
-.discoverWhoFor:focus-within{ border-color: rgba(255, 255, 255, 0.4); }
+/* Focus: the container lights up (white border + soft inner line), never the input's own purple ring */
+body input.discoverWhoForInput:focus, body input.discoverWhoForInput:focus-visible{ border: 0 !important; box-shadow: none !important; outline: 0 !important; }
+body .discoverWhoFor:focus-within{
+  border-color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
 .discoverWhoForGo[hidden]{ display: none !important; }
 .discoverWhoForGo{ appearance: none; border: 1.5px solid rgba(255, 255, 255, 0.75); background: transparent; color: #fff; font: inherit; font-size: 14px; font-weight: 800; height: 40px; padding: 0 20px; border-radius: 999px; cursor: pointer; }
 
@@ -68679,3 +68685,113 @@ div.discoverWhoFor{ cursor: text; padding: 0 8px 0 20px; }
 .hubNowPlaying.isBuffering .hubNowRingFill{ stroke-dasharray: 28 72; stroke-dashoffset: 0 !important; }
 @keyframes hubNowRingSpin{ from{ transform: rotate(-90deg); } to{ transform: rotate(270deg); } }
 @media (prefers-reduced-motion: reduce){ .playerToggleSpinner{ animation-duration: 1.6s; } }
+
+/* ===== Moments redesign: line icons, tile rail, setting rows, gallery cards ===== */
+body #discoverOccasionsPanel .homeDeskSectionKicker{ font-size: 11px; font-weight: 800; letter-spacing: 0.16em; color: var(--nb-on, #23d5ab); text-transform: uppercase; margin: 0; }
+body #discoverOccasionsPanel .discoverOccasionsPicker .homeDeskSectionHead{ margin-bottom: 14px; }
+body #discoverOccasionsPanel .discoverOccasionsPicker .homeDeskSectionHead h3{ margin-top: 8px; }
+/* mode switch: neutral glass, active = lighter glass + hairline (no purple gradient) */
+body #discoverOccasionsPanel .homeDeskMakeSeg{ border-color: rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); margin-bottom: 18px; }
+body #discoverOccasionsPanel .homeDeskMakeSegBtn{ min-height: 42px; font-size: 14px; font-weight: 600; color: #9aa1b6; }
+body #discoverOccasionsPanel .homeDeskMakeSegBtn.active{ background: rgba(255,255,255,0.10); color: #f5f6fb; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.28); }
+body #discoverOccasionsPanel .momentsLab{ background: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
+body #discoverOccasionsPanel .momentsLab::before, body #discoverOccasionsPanel .momentsLab::after{ display: none !important; }
+/* name field = the "Who's it for?" pill */
+body #discoverOccasionsPanel .homeDeskMakePersonal{ margin-bottom: 18px; }
+body #discoverOccasionsPanel .challengeNameField{ display: block; flex: none; }
+body #discoverOccasionsPanel .challengeNameField input{
+  height: 52px; min-height: 52px; border-radius: 999px; padding: 0 20px;
+  border: 1.5px solid rgba(255,255,255,0.28); background: rgba(255,255,255,0.06);
+  font-size: 16px; font-weight: 600; color: #fff; text-transform: none; letter-spacing: 0; box-shadow: none;
+}
+body #discoverOccasionsPanel .challengeNameField input::placeholder{ color: rgba(255,255,255,0.55); }
+body #discoverOccasionsPanel .challengeNameField input:focus{ border-color: rgba(255,255,255,0.85) !important; background: rgba(255,255,255,0.10); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.28) !important; outline: 0; }
+body #discoverOccasionsPanel .challengeNameField.isRequired input{ border-color: rgba(248,113,113,0.85); box-shadow: none; }
+/* occasion tiles */
+.momentTileRail{ display: flex; gap: 10px; overflow-x: auto; margin: 0 -16px 16px; padding: 2px 16px 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+.momentTileRail::-webkit-scrollbar{ display: none; }
+.momentTile{
+  flex: 0 0 auto; width: 96px; height: 112px; scroll-snap-align: start;
+  display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; text-align: left;
+  padding: 12px; border-radius: 22px; border: 1px solid rgba(255,255,255,0.12); color: #9aa1b6; cursor: pointer;
+  background: linear-gradient(160deg, rgba(255,255,255,0.09), rgba(255,255,255,0.02) 70%);
+  -webkit-tap-highlight-color: transparent; font: inherit; transition: border-color .18s ease, background .18s ease, color .18s ease, transform .18s ease;
+}
+.momentTile:active{ transform: scale(0.97); }
+.momentTile b{ font-size: 13px; font-weight: 600; line-height: 1.15; color: #f5f6fb; }
+.momentTileIcon{ width: 26px; height: 26px; }
+.momentTile.active{ border-color: #23d5ab; color: #23d5ab; box-shadow: inset 0 0 0 1px rgba(35,213,171,0.55); background: linear-gradient(160deg, rgba(35,213,171,0.22), rgba(35,213,171,0.04) 70%); }
+/* Sound / Language rows */
+.momentRows{ border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); border-radius: 22px; margin-bottom: 16px; overflow: hidden; }
+.momentRow{ display: flex; align-items: center; gap: 12px; width: 100%; padding: 16px 18px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.momentRow + .momentRow{ border-top: 1px solid rgba(255,255,255,0.12); }
+.momentRow:active{ background: rgba(255,255,255,0.05); }
+.momentRow span{ font-size: 14px; color: #9aa1b6; }
+.momentRow b{ margin-left: auto; font-size: 15px; font-weight: 600; color: #f5f6fb; }
+.momentRow svg{ width: 16px; height: 16px; color: #6d748a; flex: none; }
+body #discoverOccasionsPanel .homeDeskOccasionQuick{ margin-top: 0; }
+body[data-route="discover"] #discoverOccasionsPanel .discoverOccasionStartCta{ height: 54px; border-radius: 999px; font-size: 16px; font-weight: 800; letter-spacing: 0.005em; }
+.momentAltLink{ display: block; width: 100%; margin-top: 14px; padding: 4px; border: 0; background: none; color: #9aa1b6; font: inherit; font-size: 13px; font-weight: 600; text-align: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.momentAltLink u{ color: #f5f6fb; text-decoration-color: rgba(255,255,255,0.28); text-underline-offset: 3px; }
+/* picker sheet */
+.momentSheet{ position: fixed; inset: 0; z-index: 4000; display: flex; align-items: flex-end; pointer-events: none; }
+.momentSheetBackdrop{ position: absolute; inset: 0; background: rgba(3,4,8,0.6); opacity: 0; transition: opacity .2s ease; }
+.momentSheetPanel{ position: relative; width: 100%; max-height: 72vh; overflow-y: auto; padding: 10px 16px calc(20px + env(safe-area-inset-bottom, 0px)); border-radius: 28px 28px 0 0; background: #11131c; border: 1px solid rgba(255,255,255,0.12); border-bottom: 0; transform: translateY(100%); transition: transform .24s cubic-bezier(.22,.61,.36,1); }
+.momentSheet.isOpen{ pointer-events: auto; }
+.momentSheet.isOpen .momentSheetBackdrop{ opacity: 1; }
+.momentSheet.isOpen .momentSheetPanel{ transform: none; }
+.momentSheetGrab{ width: 38px; height: 4px; border-radius: 4px; background: rgba(255,255,255,0.22); margin: 0 auto 14px; }
+.momentSheetTitle{ margin: 0 4px 10px; font-size: 20px; font-weight: 800; color: #f5f6fb; letter-spacing: -0.02em; }
+.momentSheetOpt{ display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 15px 14px; border: 0; border-radius: 16px; background: transparent; color: #cfd3e2; font: inherit; font-size: 16px; font-weight: 600; text-align: left; cursor: pointer; }
+.momentSheetOpt svg{ width: 20px; height: 20px; opacity: 0; color: #23d5ab; }
+.momentSheetOpt.active{ color: #fff; background: rgba(255,255,255,0.07); }
+.momentSheetOpt.active svg{ opacity: 1; }
+/* gallery: header, sort, filter pills */
+body #discoverOccasionsSongs .discoverTemplatesIntro{ display: block; padding: 0; margin-bottom: 16px; }
+body #discoverOccasionsSongs .discoverTemplatesIntroRow{ display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 8px; }
+body #discoverOccasionsSongs .discoverTemplatesIntroSub{ margin: 0; font-size: 14px; line-height: 1.45; color: #9aa1b6; }
+body #discoverOccasionsSongs .discoverTemplatesSort{ position: relative; flex: none; display: block; padding-bottom: 3px; }
+.discoverTemplatesSortValue{ display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #9aa1b6; white-space: nowrap; }
+.discoverTemplatesSortValue svg{ width: 14px; height: 14px; }
+body #discoverOccasionsSongs .discoverTemplatesSort select{ position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; background: none; font-size: 16px; }
+body #discoverOccasionsSongs .discoverTemplatesFilters{ margin: 0 -16px 18px; }
+body #discoverOccasionsSongs .discoverTemplatesFiltersTrack{ gap: 8px; padding: 2px 16px 4px; }
+body #discoverOccasionsSongs .discoverTemplatesChip{
+  flex-direction: row; align-items: center; gap: 8px; min-width: 0; height: 40px; padding: 0 15px 0 12px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: #9aa1b6;
+}
+body #discoverOccasionsSongs .discoverTemplatesChipIcon{ width: 18px; height: 18px; border: 0; background: none; box-shadow: none; border-radius: 0; display: grid; place-items: center; }
+body #discoverOccasionsSongs .discoverTemplatesChipIcon svg{ width: 18px; height: 18px; }
+body #discoverOccasionsSongs .discoverTemplatesChipLabel{ font-size: 14px; font-weight: 600; }
+body #discoverOccasionsSongs .discoverTemplatesChip.is-active{ color: #f5f6fb; border-color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.08); }
+body #discoverOccasionsSongs .discoverTemplatesChip.is-active .discoverTemplatesChipIcon{ background: none !important; border: 0 !important; box-shadow: none !important; color: #23d5ab; }
+body #discoverOccasionsSongs .discoverTemplatesChip.is-active .discoverTemplatesChipLabel{ font-weight: 600; }
+/* gallery: uniform cards, moment tag, white play */
+body #discoverOccasionsSongs .discoverTemplatesGrid{ gap: 16px 12px; }
+body #discoverOccasionsSongs .discoverTemplatesCover{ aspect-ratio: 1 / 1; border-radius: 22px; }
+.discoverTemplatesTag{ position: absolute; left: 9px; top: 9px; z-index: 2; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 8px; border-radius: 999px; background: rgba(10,11,18,0.5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.16); color: #fff; font-size: 11.5px; font-weight: 600; }
+.discoverTemplatesTag svg{ width: 14px; height: 14px; color: #23d5ab; }
+body #discoverOccasionsSongs .discoverTemplatesPlay{ left: auto; top: auto; right: 9px; bottom: 9px; transform: none; width: 40px; height: 40px; opacity: 1; background: #fff; color: #0b0b13; border: 0; box-shadow: 0 4px 14px rgba(0,0,0,0.35); }
+body #discoverOccasionsSongs .discoverTemplatesPlay svg{ margin-left: 2px; }
+body #discoverOccasionsSongs .discoverTemplatesCard:active .discoverTemplatesPlay{ opacity: 1; transform: scale(0.94); }
+body #discoverOccasionsSongs .discoverTemplatesTitle{ font-size: 16px; font-weight: 700; }
+
+/* Moments v2: Occasion / For someone = underline tabs (in-page), not another pill row */
+body #discoverOccasionsPanel .homeDeskMakeSeg{
+  display: flex; gap: 26px; padding: 0; margin: 0 0 18px; border: 0; border-radius: 0; background: none;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+body #discoverOccasionsPanel .homeDeskMakeSegBtn{
+  flex: 0 0 auto; min-height: 0; padding: 8px 2px 12px; border-radius: 0; background: none !important; box-shadow: none !important;
+  color: #7d8499; font-size: 16px; font-weight: 700; position: relative; margin-bottom: -1px;
+}
+body #discoverOccasionsPanel .homeDeskMakeSegBtn.active{ color: #fff; background: none !important; box-shadow: none !important; }
+body #discoverOccasionsPanel .homeDeskMakeSegBtn.active::after{
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px; background: #fff;
+}
+/* full first card: keep the side padding when scroll-snapping */
+.momentTileRail, body #discoverOccasionsSongs .discoverTemplatesFiltersTrack{ scroll-padding-inline: 16px; }
+.momentTile{ scroll-snap-align: none; }
+body #discoverOccasionsSongs .discoverTemplatesChip{ scroll-snap-align: none; }
+/* centered CTA label */
+body[data-route="discover"] #discoverOccasionsPanel .discoverOccasionStartCta{ display: flex; align-items: center; justify-content: center; text-align: center; }

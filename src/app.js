@@ -21883,6 +21883,7 @@ let _profileActivitiesShown = PROFILE_ACTIVITIES_PAGE_SIZE;
 /** Max public posts fetched for profile stats, Posts tab, and public profile link. */
 const PROFILE_PUBLIC_POSTS_LIMIT = 120;
 const OWNER_PUBLIC_POSTS_CACHE_MS = 45000;
+let _ownerPublicPostsSettled = false;
 let _ownerPublicPostsCache = null;
 
 function countFollowActsInHtml(html) {
@@ -36829,16 +36830,17 @@ function paintUserPublicMusic(cache) {
     syncUserPublicHeaderActions(cache);
     return;
   }
+  const playsKnown = Boolean(cache._playsFetched) || applyStoredPlays(tracks);
   const top = userPublicTopTracks(cache, 5);
   const hasCounts = top.some((t) => Number(t.playCount) > 0);
-  const trendingRows = top.map((t, i) => {
+  const trendingRows = !playsKnown ? "" : top.map((t, i) => {
     const { art, attrs } = userPublicMusicRowAttrs(t, cache.profMap, byLine);
     const plays = Math.max(0, Number(t.playCount) || 0);
     return `
       <div class="upmRow" role="listitem">
         <button type="button" class="upmRowPlay" ${attrs} aria-label="Play ${escapeHtml(String(t.title || "song"))}">
-          <span class="upmNo">${i + 1}</span>
-          <span class="upmArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
+          <span class="upmNo"><b>${i + 1}</b>${UPM_EQ_HTML}</span>
+          <span class="upmArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />${UPM_OVERLAY_HTML}</span>
           <span class="upmMeta"><strong dir="auto">${escapeHtml(String(t.title || "Untitled"))}</strong>${hasCounts ? `<small>${plays ? `${escapeHtml(formatStatCount(plays))} plays` : "New"}</small>` : ""}</span>
         </button>
         ${discoverSheetMenuBtnHtml(t, cache.profMap, { className: "upmMenu" })}
@@ -36849,7 +36851,7 @@ function paintUserPublicMusic(cache) {
     const isRemix = Boolean(remixAttributionForTrack(t));
     return `
       <button type="button" class="upmCard" ${attrs} aria-label="Play ${escapeHtml(String(t.title || "song"))}">
-        <span class="upmCardArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
+        <span class="upmCardArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />${UPM_OVERLAY_HTML}</span>
         <strong dir="auto">${escapeHtml(String(t.title || "Untitled"))}</strong>
         <small>${isRemix ? "Remix" : "Single"}</small>
       </button>`;
@@ -36860,10 +36862,10 @@ function paintUserPublicMusic(cache) {
     .map(([tag]) => `<span class="upmChip">${escapeHtml(tag)}</span>`).join("");
   const remixes = tracks.filter((t) => remixAttributionForTrack(t)).length;
   host.innerHTML = `
-    <section class="upmSection" aria-label="Trending now">
+    ${playsKnown ? `<section class="upmSection" aria-label="Trending now">
       <h3 class="upmH">Trending now</h3>
       <div class="upmList" role="list">${trendingRows}</div>
-    </section>
+    </section>` : trendingSkeletonSection()}
     <section class="upmSection" aria-label="Releases">
       <h3 class="upmH">Releases<span class="upmCount">${tracks.length}</span></h3>
       <div class="upmShelf">${releaseCards}</div>
@@ -36877,6 +36879,7 @@ function paintUserPublicMusic(cache) {
       </div>
     </section>`;
   try { syncDiscoveryPlayingHighlights(); } catch {}
+  try { syncMusicPanelsPlaying(); } catch {}
   syncUserPublicHeaderActions(cache);
   void paintUserPublicSimilar(cache);
 }
@@ -36919,7 +36922,9 @@ function wireUserPublicHeaderActionsOnce() {
   _userPublicActionsWired = true;
   const musicRows = () => [...document.querySelectorAll("#userPublicMusic .upmRowPlay")];
   document.getElementById("btnUserPublicPlay")?.addEventListener("click", () => {
-    const first = musicRows()[0] || document.querySelector("#userPublicMusic .upmCard");
+    // Playing one of these songs → pause it. Paused/other → resume it, or start the first.
+    const cur = document.querySelector("#userPublicMusic .upmRow.isActive .upmRowPlay, #userPublicMusic .upmCard.isActive");
+    const first = cur || musicRows()[0] || document.querySelector("#userPublicMusic .upmCard");
     if (!first) return;
     haptic("light");
     first.click();
@@ -37224,6 +37229,16 @@ function getOwnerPublicPostCount() {
   return loadLibrary().filter((t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile)).length;
 }
 
+/** The published-songs list has resolved (or failed): the Music panel may now show real content / the empty state. */
+function settleOwnerPublicPosts() {
+  _ownerPublicPostsSettled = true;
+  try {
+    if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "music") paintProfileMusic();
+  } catch {}
+}
+// Safety net: a slow or failed request must not leave the shimmer up forever.
+window.setTimeout(() => { if (!_ownerPublicPostsSettled) settleOwnerPublicPosts(); }, 9000);
+
 /** Cloud is source of truth for public posts — same list visitors see on #/u/you. */
 async function refreshOwnerPublicPostsCache(opts = {}) {
   const uid = authSession?.user?.id;
@@ -37260,6 +37275,7 @@ async function refreshOwnerPublicPostsCache(opts = {}) {
     }));
     const prevLen = _ownerPublicPostsCache?.songs?.length;
     _ownerPublicPostsCache = { at: Date.now(), songs };
+    settleOwnerPublicPosts();
     if (prevLen != null && prevLen !== songs.length) {
       _profileActSnapshot = null;
       try {
@@ -37268,6 +37284,7 @@ async function refreshOwnerPublicPostsCache(opts = {}) {
     }
     return songs;
   } catch {
+    settleOwnerPublicPosts();
     return _ownerPublicPostsCache?.songs || [];
   }
   };
@@ -46568,6 +46585,9 @@ function setUserPublicLoading(on, username = "") {
       els.userPublicSongsCount.hidden = true;
     }
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = followingActivitySkeletonHtml();
+    const _mp = document.getElementById("userPublicMusic");
+    if (_mp) { _mp.hidden = false; _mp.dataset.sig = ""; _mp.innerHTML = musicPanelSkeletonHtml(); }
+    if (els.userPublicSongs) els.userPublicSongs.hidden = true;
     if (els.userPublicEmpty) els.userPublicEmpty.style.display = "none";
   }
 }
@@ -51421,6 +51441,7 @@ function playbackPendingMatchesStudioVocal(vocalId) {
 function syncAllPlaybackRowHighlights() {
   try { syncDiscoveryPlayingHighlights(); } catch {}
   try { syncUserPublicFeedPlayingHighlights(); } catch {}
+  try { syncMusicPanelsPlaying(); } catch {}
   try { syncLibraryRowsFromPlayer(); } catch {}
   try { syncMyVocalsRowsFromPlayer(); } catch {}
   try { syncProfileHubSharedRowsFromPlayer(); } catch {}
@@ -52916,6 +52937,46 @@ function seekFriendsFeedProgress(input) {
   const next = Math.max(0, Math.min(dur, (Number(input.value || 0) / max) * dur));
   a.currentTime = next;
   syncPlayerUI();
+}
+
+const UPM_EQ_HTML = `<span class="upmEq" aria-hidden="true"><i></i><i></i><i></i></span>`;
+const UPM_OVERLAY_HTML = `<span class="upmOv" aria-hidden="true"><span class="upmOvIco upmOvIco--play">${discoverPlayBtnSvg(20)}</span><span class="upmOvIco upmOvIco--pause">${discoverPauseBtnSvg(20)}</span><span class="upmOvIco upmOvIco--load"><span class="coverArtPlaySpinner"></span></span></span>`;
+
+/** Playing state for the Music panels (own + public) and their Play buttons: works for any way the song was started. */
+function syncMusicPanelsPlaying() {
+  const roots = ["userPublicMusic", "profileMusic"].map((id) => document.getElementById(id)).filter((r) => r && !r.hidden);
+  const curRef = String(currentPlayerTrackRef?.url || "").trim();
+  const a = playerEl;
+  const dur = a ? getPlayerDuration() : 0;
+  const ct = a && Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const audibleNow = Boolean(a && !a.paused && !a.ended && (dur > 0 || ct > 0));
+  let anyPlaying = false;
+  let anyActive = false;
+  for (const root of roots) {
+    root.querySelectorAll(".upmRow, .upmCard:not(.upmCard--draft)").forEach((host) => {
+      const btn = host.matches(".upmRow") ? host.querySelector(".upmRowPlay") : host;
+      const url = btn ? decodeDiscoveryUserLibUrl(btn) : "";
+      const loading = Boolean(url && playbackPendingMatchesUrl(url));
+      const active = Boolean(url && curRef && audioUrlsEquivalent(curRef, url));
+      const playing = active && audibleNow;
+      host.classList.toggle("isPlaying", playing);
+      host.classList.toggle("isLoading", loading && !playing);
+      host.classList.toggle("isActive", (active || loading));
+      if (btn) {
+        const t = decodeDiscoverDataAttr(btn, "data-user-lib-title") || "song";
+        btn.setAttribute("aria-label", `${playing ? "Pause" : loading ? "Loading" : "Play"} ${t}`);
+      }
+      if (playing) anyPlaying = true;
+      if (active) anyActive = true;
+    });
+  }
+  for (const id of ["btnUserPublicPlay", "btnProfilePlay"]) {
+    const fab = document.getElementById(id);
+    if (!fab) continue;
+    fab.classList.toggle("isPlaying", anyPlaying);
+    fab.setAttribute("aria-label", anyPlaying ? "Pause" : id === "btnProfilePlay" ? "Play my music" : "Play");
+  }
+  return { anyPlaying, anyActive };
 }
 
 function syncUserPublicFeedPlayingHighlights() {
@@ -55548,6 +55609,8 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
         changed = true;
       }
     }
+    rememberPlays(playCountMap);
+    if (_userPublicProfileCache && !_userPublicProfileCache._playsFetched) { _userPublicProfileCache._playsFetched = true; changed = true; }
     if (changed && _userPublicProfileCache) renderUserPublicSegmentFromCache();
   });
   void hydrateRemixOriginalsForTracks(allTracks).then(() => {
@@ -59898,6 +59961,66 @@ function profileOwnPublishedTracks() {
   return rows.sort((x, y) => profileActivitiesFeedTs(y) - profileActivitiesFeedTs(x));
 }
 
+/** Shimmer placeholder for the Music panels (same silhouette as the real thing, so nothing jumps). */
+function musicPanelSkeletonHtml() {
+  const row = `<div class="upmRow upmSkelRow" aria-hidden="true"><span class="upmNo"></span><span class="upmArt upmSk"></span><span class="upmMeta"><i class="upmSk"></i><i class="upmSk short"></i></span></div>`;
+  const card = `<div class="upmCard upmSkelCard" aria-hidden="true"><span class="upmCardArt upmSk"></span><i class="upmSk"></i><i class="upmSk short"></i></div>`;
+  return `
+    <section class="upmSection upmSkeleton" aria-busy="true" aria-label="Loading music">
+      <h3 class="upmH"><i class="upmSk upmSkTitle"></i></h3>
+      <div class="upmList">${row.repeat(5)}</div>
+    </section>
+    <section class="upmSection upmSkeleton" aria-hidden="true">
+      <h3 class="upmH"><i class="upmSk upmSkTitle"></i></h3>
+      <div class="upmShelf">${card.repeat(3)}</div>
+    </section>`;
+}
+
+const PROFILE_MUSIC_SNAP_KEY = "nabad.profileMusicSnap.v1";
+function readProfileMusicSnap(uid) {
+  try {
+    const s = JSON.parse(localStorage.getItem(PROFILE_MUSIC_SNAP_KEY) || "null");
+    return s && s.uid === uid && typeof s.html === "string" ? s.html : "";
+  } catch { return ""; }
+}
+function writeProfileMusicSnap(uid, html) {
+  try { localStorage.setItem(PROFILE_MUSIC_SNAP_KEY, JSON.stringify({ uid, html })); } catch {}
+}
+
+/* Play counts persist across launches so "Trending now" is ranked correctly on the very first paint
+ * (ranked by recency it would show the Releases order for a second, then jump when the counts arrive). */
+const PLAYS_STORE_KEY = "nabad.songPlays.v1";
+let _playsStore = null;
+function playsStore() {
+  if (_playsStore) return _playsStore;
+  try { _playsStore = JSON.parse(localStorage.getItem(PLAYS_STORE_KEY) || "{}") || {}; } catch { _playsStore = {}; }
+  return _playsStore;
+}
+function rememberPlays(map) {
+  const s = playsStore();
+  let n = 0;
+  for (const [id, v] of map) { if (id) { s[String(id)] = Number(v) || 0; n++; } }
+  if (!n) return;
+  const keys = Object.keys(s);
+  if (keys.length > 600) for (const k of keys.slice(0, keys.length - 600)) delete s[k];
+  try { localStorage.setItem(PLAYS_STORE_KEY, JSON.stringify(s)); } catch {}
+}
+/** Apply stored counts to tracks; returns true when every track has a known count. */
+function applyStoredPlays(tracks) {
+  const s = playsStore();
+  let all = tracks.length > 0;
+  for (const t of tracks) {
+    const v = s[String(t.id || "")];
+    if (v == null) { all = false; continue; }
+    if (t.playCount == null || Number(t.playCount) !== v) t.playCount = v;
+  }
+  return all;
+}
+function trendingSkeletonSection() {
+  const row = `<div class="upmRow upmSkelRow" aria-hidden="true"><span class="upmNo"></span><span class="upmArt upmSk"></span><span class="upmMeta"><i class="upmSk"></i><i class="upmSk short"></i></span></div>`;
+  return `<section class="upmSection upmSkeleton" aria-busy="true" aria-label="Trending now"><h3 class="upmH">Trending now</h3><div class="upmList">${row.repeat(5)}</div></section>`;
+}
+
 const _profileMusicPlays = new Map(); // songId -> plays (kept across paints; the track objects are rebuilt on every refresh)
 let _profileMusicSig = "";
 let _profileMusicRaf = 0;
@@ -59905,6 +60028,9 @@ let _profileMusicPlayFetch = false;
 
 /** Coalesce: several refreshes in one frame paint once. */
 function paintProfileMusic() {
+  const host = document.getElementById("profileMusic");
+  // An empty panel paints right now (no waiting a frame); repeated refreshes are coalesced.
+  if (host && !host.innerHTML.trim()) { paintProfileMusicNow(); return; }
   if (_profileMusicRaf) return;
   _profileMusicRaf = requestAnimationFrame(() => {
     _profileMusicRaf = 0;
@@ -59927,10 +60053,21 @@ function paintProfileMusicNow() {
     return;
   }
   const tracks = profileOwnPublishedTracks();
+  // "Not loaded yet" is different from "you have no music": until the cloud list of published songs has arrived
+  // (or the library finished loading) never show the empty state or the drafts shelf — show the shimmer instead.
+  const publishedPending = !Array.isArray(getOwnerPublicPostsSongs()) && !_ownerPublicPostsSettled;
+  if (!tracks.length && (profileActivitiesIsHydrating() || publishedPending)) {
+    // Data isn't here yet: show last visit's panel instantly (or a shimmer) instead of an empty gap.
+    const snap = readProfileMusicSnap(uid);
+    setProfileMusicHtml(host, snap || musicPanelSkeletonHtml());
+    if (snap) { try { syncMusicPanelsPlaying(); } catch {} }
+    return;
+  }
   for (const t of tracks) {
     const n = _profileMusicPlays.get(String(t.id || ""));
     if (n != null) t.playCount = n;
   }
+  const playsKnown = applyStoredPlays(tracks) || tracks.every((t) => _profileMusicPlays.has(String(t.id || "")));
   const profMap = profileSelfProfMap(uid);
   const handle = String(activeProfile?.username || "").replace(/^@/, "");
   const byLine = handle ? `@${handle}` : "You";
@@ -59962,14 +60099,14 @@ function paintProfileMusicNow() {
   const withPlays = tracks.filter((t) => Number(t.playCount) > 0);
   const top = (withPlays.length ? [...withPlays].sort((x, y) => Number(y.playCount) - Number(x.playCount)) : tracks).slice(0, 5);
   const hasCounts = top.some((t) => Number(t.playCount) > 0);
-  const rows = top.map((t, i) => {
+  const rows = !playsKnown ? "" : top.map((t, i) => {
     const { art, attrs } = userPublicMusicRowAttrs(t, profMap, byLine);
     const plays = Math.max(0, Number(t.playCount) || 0);
     return `
       <div class="upmRow" role="listitem">
         <button type="button" class="upmRowPlay" ${attrs} aria-label="Play ${escapeHtml(String(t.title || "song"))}">
-          <span class="upmNo">${i + 1}</span>
-          <span class="upmArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
+          <span class="upmNo"><b>${i + 1}</b>${UPM_EQ_HTML}</span>
+          <span class="upmArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />${UPM_OVERLAY_HTML}</span>
           <span class="upmMeta"><strong dir="auto">${escapeHtml(String(t.title || "Untitled"))}</strong>${hasCounts ? `<small>${plays ? `${escapeHtml(formatStatCount(plays))} plays` : "New"}</small>` : ""}</span>
         </button>
         ${discoverSheetMenuBtnHtml(t, profMap, { className: "upmMenu" })}
@@ -59979,7 +60116,7 @@ function paintProfileMusicNow() {
     const { art, attrs } = userPublicMusicRowAttrs(t, profMap, byLine);
     return `
       <button type="button" class="upmCard" ${attrs} aria-label="Play ${escapeHtml(String(t.title || "song"))}">
-        <span class="upmCardArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
+        <span class="upmCardArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />${UPM_OVERLAY_HTML}</span>
         <strong dir="auto">${escapeHtml(String(t.title || "Untitled"))}</strong>
         <small>${remixAttributionForTrack(t) ? "Remix" : "Single"}</small>
       </button>`;
@@ -59989,10 +60126,10 @@ function paintProfileMusicNow() {
   const chips = [...tagCount.entries()].sort((x, y) => y[1] - x[1]).slice(0, 8).map(([tag]) => `<span class="upmChip">${escapeHtml(tag)}</span>`).join("");
   const remixes = tracks.filter((t) => remixAttributionForTrack(t)).length;
   setProfileMusicHtml(host, `
-    <section class="upmSection" aria-label="Trending now">
+    ${playsKnown ? `<section class="upmSection" aria-label="Trending now">
       <h3 class="upmH">Trending now</h3>
       <div class="upmList" role="list">${rows}</div>
-    </section>
+    </section>` : trendingSkeletonSection()}
     ${draftsHtml}
     <section class="upmSection" aria-label="Releases">
       <h3 class="upmH">Releases<span class="upmCount">${tracks.length}</span></h3>
@@ -60006,11 +60143,14 @@ function paintProfileMusicNow() {
       </div>
     </section>`);
   try { syncDiscoveryPlayingHighlights(); } catch {}
-  const missing = tracks.filter((t) => !_profileMusicPlays.has(String(t.id || "")));
+  try { syncMusicPanelsPlaying(); } catch {}
+  if (playsKnown) writeProfileMusicSnap(uid, host.innerHTML.replace(/\s+(isPlaying|isActive|isLoading)\b/g, ""));
+  const missing = tracks.filter((t) => !_profileMusicPlays.has(String(t.id || "")) || !playsKnown);
   if (missing.length && !_profileMusicPlayFetch) {
     _profileMusicPlayFetch = true;
     void fetchPlayCountsForTracks(tracks).then((map) => {
       for (const t of tracks) _profileMusicPlays.set(String(t.id || ""), map.get(String(t.id || "")) || 0);
+      rememberPlays(_profileMusicPlays);
       if (_profileSongsSegment === "music" && (document.body.getAttribute("data-route") || "") === "profile") paintProfileMusic();
     }).finally(() => { _profileMusicPlayFetch = false; });
   }
@@ -60032,7 +60172,8 @@ function wireProfileMusicOnce() {
     });
   }
   document.getElementById("btnProfilePlay")?.addEventListener("click", () => {
-    const first = document.querySelector("#profileMusic .upmRowPlay") || document.querySelector("#profileMusic .upmCard:not(.upmCard--draft)");
+    const cur = document.querySelector("#profileMusic .upmRow.isActive .upmRowPlay, #profileMusic .upmCard.isActive:not(.upmCard--draft)");
+    const first = cur || document.querySelector("#profileMusic .upmRowPlay") || document.querySelector("#profileMusic .upmCard:not(.upmCard--draft)");
     if (!first) return;
     haptic("light");
     first.click();
@@ -60051,7 +60192,11 @@ function syncProfileSongsSegmentUi() {
   const isMusic = _profileSongsSegment === "music";
   const isVocals = _profileSongsSegment === "vocals";
   const musicPanel = document.getElementById("profileMusic");
-  if (musicPanel) musicPanel.hidden = !isMusic;
+  if (musicPanel) {
+    musicPanel.hidden = !isMusic;
+    // Never show an empty gap: paint (real, last-visit snapshot, or shimmer) the moment the panel becomes visible.
+    if (isMusic && !musicPanel.innerHTML.trim()) { try { paintProfileMusic(); } catch {} }
+  }
   const repostsList = document.getElementById("profileRepostsList");
   try {
     document.body.setAttribute("data-profile-songs-seg", _profileSongsSegment);
@@ -76989,6 +77134,7 @@ try {
     supabaseUpsertProfile,
     compressAvatarFile,
     uploadAvatarHd,
+    avatarHdUrl,
     loadPersonas,
     loadPersonaSelection,
     savePersonaSelection,

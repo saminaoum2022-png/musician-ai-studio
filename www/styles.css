@@ -68502,3 +68502,110 @@ body[data-route="profile"] .profileAura{ padding-bottom: 6px !important; }
 body[data-route="user"] .userPublicAvatarWrap::after{ z-index: 3 !important; }
 /* Play button: flat, no glow */
 .userPublicPlayFab, .profilePlayFab{ box-shadow: none !important; }
+
+/* ═══ Photo framing sheet ═══ */
+body.pfOpen{ overflow: hidden; }
+.pfRoot{
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px calc(env(safe-area-inset-bottom, 0px) + 18px);
+  background: #06070c;
+  color: #fff;
+}
+.pfTop{ width: 100%; display: flex; align-items: center; justify-content: space-between; height: 48px; }
+.pfTitle{ font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
+.pfBtn{ appearance: none; border: 0; background: none; font: inherit; font-size: 16px; font-weight: 700; color: rgba(255, 255, 255, 0.7); padding: 8px 4px; min-width: 64px; cursor: pointer; }
+.pfBtn--done{ color: #23d5ab; text-align: right; }
+.pfStageWrap{ flex: 1; width: 100%; display: grid; place-items: center; min-height: 0; }
+.pfStage{
+  position: relative;
+  width: min(100%, 420px);
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 28px;
+  background: #0b0c12;
+  touch-action: none;
+  cursor: grab;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6);
+}
+.pfImg{ position: absolute; left: 0; top: 0; transform-origin: 0 0; max-width: none; user-select: none; -webkit-user-drag: none; will-change: transform; }
+/* the lower part is where the name and stats sit on the profile — a soft guide, not a mask */
+.pfGuide{ position: absolute; left: 0; right: 0; bottom: 0; height: 38%; pointer-events: none; background: linear-gradient(180deg, transparent, rgba(6, 7, 12, 0.78)); display: flex; align-items: flex-end; padding: 0 16px 12px; }
+.pfGuideName{ font-size: 11px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255, 255, 255, 0.7); }
+.pfHint{ margin: 14px 0 10px; font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.5); }
+.pfZoomRow{ width: min(100%, 420px); display: flex; align-items: center; gap: 12px; }
+.pfZoomIco{ width: 18px; text-align: center; font-size: 20px; font-weight: 700; color: rgba(255, 255, 255, 0.6); }
+.pfZoom{ flex: 1; accent-color: #23d5ab; }
+.pfReset{ appearance: none; margin-top: 14px; height: 40px; padding: 0 22px; border-radius: 20px; font: inherit; font-size: 14px; font-weight: 700; color: #fff; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); cursor: pointer; }
+.profileEditPhotoLabel--adjust[hidden]{ display: none !important; }
+.profileEditPhotoLabel--adjust{ margin-top: 2px; opacity: 0.85; }
+
+/* ═══ Music panels: consistent playing state (any way the song was started) ═══
+   playing → dimmed cover + pause glyph + moving equaliser · paused → play glyph · loading → spinner · title turns teal */
+.userPublicPlayFab .fabIcoPause, .profilePlayFab .fabIcoPause{ display: none; }
+.userPublicPlayFab.isPlaying .fabIcoPlay, .profilePlayFab.isPlaying .fabIcoPlay{ display: none; }
+.userPublicPlayFab.isPlaying .fabIcoPause, .profilePlayFab.isPlaying .fabIcoPause{ display: block; margin-left: 0; }
+.userPublicPlayFab svg.fabIcoPause{ width: 26px; height: 26px; fill: currentColor; stroke: none; }
+.upmOv{ position: absolute; inset: 0; display: grid; place-items: center; color: #fff; background: rgba(6, 8, 14, 0.5); opacity: 0; transition: opacity 0.18s ease; pointer-events: none; }
+.upmOvIco{ grid-area: 1 / 1; display: none; place-items: center; }
+.upmOvIco svg{ width: 22px; height: 22px; filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.5)); }
+.upmOvIco--play svg{ margin-left: 2px; }
+.upmOvIco .coverArtPlaySpinner{ width: 20px; height: 20px; }
+.upmRow.isActive .upmOv, .upmCard.isActive .upmOv{ opacity: 1; }
+.upmRow.isActive .upmOvIco--play, .upmCard.isActive .upmOvIco--play{ display: grid; }
+.upmRow.isPlaying .upmOvIco--play, .upmCard.isPlaying .upmOvIco--play{ display: none; }
+.upmRow.isPlaying .upmOvIco--pause, .upmCard.isPlaying .upmOvIco--pause{ display: grid; }
+.upmRow.isLoading .upmOvIco--play, .upmCard.isLoading .upmOvIco--play{ display: none; }
+.upmRow.isLoading .upmOvIco--load, .upmCard.isLoading .upmOvIco--load{ display: grid; }
+.upmRow.isActive .upmMeta strong, .upmCard.isActive strong{ color: #23d5ab; }
+/* equaliser: replaces the row number while playing */
+.upmNo{ position: relative; height: 18px; display: grid; place-items: center; }
+.upmNo b{ font-weight: 800; }
+.upmEq{ position: absolute; inset: 0; display: none; align-items: flex-end; justify-content: center; gap: 2px; padding-bottom: 1px; }
+.upmEq i{ display: block; width: 3px; height: 14px; border-radius: 2px; background: #23d5ab; transform-origin: bottom; animation: upmEqBar 0.9s ease-in-out infinite; }
+.upmEq i:nth-child(2){ animation-delay: -0.3s; }
+.upmEq i:nth-child(3){ animation-delay: -0.6s; }
+@keyframes upmEqBar{ 0%, 100%{ transform: scaleY(0.28); } 50%{ transform: scaleY(1); } }
+.upmRow.isPlaying .upmNo b{ display: none; }
+.upmRow.isPlaying .upmEq{ display: flex; }
+@media (prefers-reduced-motion: reduce){ .upmEq i{ animation: none; transform: scaleY(0.7); } }
+/* cards: equaliser badge on the cover corner while playing */
+.upmCard .upmCardArt::after{
+  content: "";
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  width: 22px;
+  height: 16px;
+  opacity: 0;
+  background:
+    linear-gradient(#23d5ab, #23d5ab) 2px 100% / 4px 100% no-repeat,
+    linear-gradient(#23d5ab, #23d5ab) 9px 100% / 4px 100% no-repeat,
+    linear-gradient(#23d5ab, #23d5ab) 16px 100% / 4px 100% no-repeat;
+}
+.upmCard.isPlaying .upmCardArt::after{ opacity: 1; animation: upmEqCard 0.9s ease-in-out infinite; }
+@keyframes upmEqCard{
+  0%, 100%{ background-size: 4px 40%, 4px 90%, 4px 60%; }
+  50%{ background-size: 4px 95%, 4px 35%, 4px 85%; }
+}
+.upmArt, .upmCardArt{ position: relative; }
+
+/* Music panel skeleton */
+.upmSk{ display: block; background: var(--skeleton-shimmer-strong, linear-gradient(110deg, rgba(255,255,255,0.08), rgba(255,255,255,0.18), rgba(255,255,255,0.08))); background-size: 200% 100%; animation: discoveryShimmer 1.15s ease-in-out infinite; }
+.upmSkTitle{ width: 132px; height: 20px; border-radius: 8px; }
+.upmSkelRow{ padding: 8px 0; display: flex; align-items: center; gap: 12px; }
+.upmSkelRow .upmNo{ width: 18px; }
+.upmSkelRow .upmArt{ width: 52px; height: 52px; border-radius: 12px; }
+.upmSkelRow .upmMeta{ flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.upmSkelRow .upmMeta i{ height: 13px; width: 55%; border-radius: 6px; }
+.upmSkelRow .upmMeta i.short{ height: 10px; width: 28%; }
+.upmSkelCard{ flex: 0 0 136px; display: flex; flex-direction: column; gap: 8px; }
+.upmSkelCard .upmCardArt{ width: 136px; height: 136px; border-radius: 20px; margin: 0; }
+.upmSkelCard i{ height: 12px; width: 80%; border-radius: 6px; }
+.upmSkelCard i.short{ height: 10px; width: 45%; }
+@media (prefers-reduced-motion: reduce){ .upmSk{ animation: none; } }

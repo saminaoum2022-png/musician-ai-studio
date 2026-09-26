@@ -2,6 +2,7 @@
  * Edit Profile — dedicated creator workspace (not Settings).
  */
 
+import { openPhotoFrame } from "./photo-frame.js";
 import { MUSIC_PREFERENCE_GENRES, parseMusicPreferencesFromProfile, markMusicPreferencesComplete, profileMusicStylesDisplaySlice } from "./music-preferences.js";
 import { USERNAME_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from "./profile-limits.js";
 
@@ -87,6 +88,7 @@ export function hydrateProfileEditDraft(profile) {
   const personaId =
     String(_deps?.loadPersonaSelection?.() || "").trim() ||
     String(_deps?.getActivePersonaId?.() || "").trim();
+  _photoFrameSrc = "";
   _draft = {
     displayName: String(p.displayName || "").trim(),
     username: String(p.username || "").trim(),
@@ -163,6 +165,8 @@ function applyAvatarToEditPhoto() {
   const handle = normalizeUsername(_draft?.username) || "na";
   const initials = handle.slice(0, 2).toUpperCase();
   if (img) {
+    const adj = qs("#btnProfileEditAdjustPhoto");
+    if (adj) adj.hidden = !av;
     if (av) {
       img.src = av;
       img.dataset.empty = "false";
@@ -506,10 +510,29 @@ async function onAvatarFileChange(file) {
     try { _draft.avatarHd = await _deps.compressAvatarFile(file, { maxSize: 1080, quality: 0.86 }); } catch { _draft.avatarHd = ""; }
     markDirty();
     renderProfileEditPage();
+    // Let the person frame it right away (Cancel keeps the automatic crop).
+    let objUrl = "";
+    try { objUrl = URL.createObjectURL(file); } catch {}
+    _photoFrameSrc = objUrl;
+    if (objUrl) await frameCurrentPhoto(objUrl);
     try { _deps?.showToast?.("Photo updated — tap Save to publish", { icon: "✓", durationMs: 1800 }); } catch {}
   } catch (e) {
     try { _deps?.showToast?.(`Could not load photo: ${e?.message || "error"}`, { icon: "!", durationMs: 2800 }); } catch {}
   }
+}
+
+let _photoFrameSrc = "";
+
+/** Open the framing sheet on `src`; on Done the framed square replaces the draft photo (small + HD). */
+async function frameCurrentPhoto(src) {
+  if (!src) return;
+  const res = await openPhotoFrame({ src });
+  if (!res) return;
+  _draft.avatar = res.small;
+  _draft.avatarHd = res.hd;
+  markDirty();
+  renderProfileEditPage();
+  try { _deps?.showToast?.("Framing updated — tap Save to publish", { icon: "✓", durationMs: 1800 }); } catch {}
 }
 
 export async function saveProfileEditDraft({ navigateBack = true } = {}) {
@@ -616,6 +639,13 @@ export function initProfileEditOnce(deps) {
     await saveProfileEditDraft({ navigateBack: true });
   });
 
+  qs("#btnProfileEditAdjustPhoto")?.addEventListener("click", async () => {
+    try { _deps?.haptic?.("light"); } catch {}
+    // Best source first: this session's original, then the stored HD copy, then the small avatar.
+    const hdUrl = _deps?.avatarHdUrl?.(_deps?.getAuthSession?.()?.user?.id, _draft?.avatar) || "";
+    const src = _photoFrameSrc || hdUrl || String(_draft?.avatar || "");
+    await frameCurrentPhoto(src);
+  });
   qs("#btnProfileEditChangePhoto")?.addEventListener("click", () => {
     try { _deps?.haptic?.("light"); } catch {}
     triggerPhotoPicker();

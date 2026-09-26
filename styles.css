@@ -68145,3 +68145,360 @@ body[data-route="profile"] .profilePersonaAvatarBadge{
 }
 body[data-route="profile"] .profilePersonaAvatarBadge svg{ width: 19px !important; height: 19px !important; }
 body[data-route="profile"] .profileAuraAvatarWrap--tappable{ cursor: default; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Public profile — artist page (Anghami / Spotify structure, Nabad finish)
+ * One saturated shape (the gradient Play button), Follow as an outline pill, quiet round secondary actions.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+body[data-route="user"] #userPublicStats{ order: 2; margin-top: 8px !important; }
+body[data-route="user"] #userPublicBio{ order: 3; margin-top: 10px !important; }
+body[data-route="user"] #userPublicFollowsYou{ order: 4; }
+body[data-route="user"] #userPublicFollowRow{ order: 5; margin-top: 16px !important; align-items: center !important; flex-wrap: nowrap !important; }
+body[data-route="user"] #userPublicFollowRow > *{ flex: 0 0 auto !important; }
+.userPublicPlayFab{
+  position: absolute;
+  right: 20px;
+  top: 318px;
+  z-index: 7;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  cursor: pointer;
+  background: var(--nabad-cta-gradient, linear-gradient(135deg, #23d5ab, #7c5cff));
+  box-shadow: 0 14px 34px rgba(124, 92, 255, 0.5);
+  -webkit-tap-highlight-color: transparent;
+}
+.userPublicPlayFab[hidden]{ display: none !important; }
+.userPublicPlayFab svg{ width: 28px; height: 28px; margin-left: 3px; fill: currentColor; stroke: none; }
+.userPublicPlayFab:active{ transform: scale(0.95); }
+/* Follow: outline pill */
+body[data-route="user"] #userPublicFollowRow #btnUserPublicFollow{
+  height: 40px !important;
+  min-width: 96px;
+  padding: 0 22px !important;
+  border-radius: 20px !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  color: #fff !important;
+  background: transparent !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.78) !important;
+  box-shadow: none !important;
+}
+body[data-route="user"] #userPublicFollowRow #btnUserPublicFollow[data-following="true"]{
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+/* Message + Shuffle: quiet round icons */
+body[data-route="user"] #userPublicFollowRow #btnUserPublicMessage,
+.userPublicIconBtn{
+  position: relative;
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  font-size: 0 !important;
+  color: #fff !important;
+  background: rgba(10, 12, 20, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  -webkit-backdrop-filter: blur(14px);
+          backdrop-filter: blur(14px);
+}
+body[data-route="user"] #userPublicFollowRow #btnUserPublicMessage::before,
+.userPublicIconBtn::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  -webkit-mask: var(--ic) center / contain no-repeat;
+          mask: var(--ic) center / contain no-repeat;
+}
+body[data-route="user"] #userPublicFollowRow #btnUserPublicMessage{ --ic: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M6.6 5.5h10.8c1.7 0 3.1 1.4 3.1 3.1v3.8c0 1.7-1.4 3.1-3.1 3.1h-6.8L7 18.6v-3.1h-.4c-1.7 0-3.1-1.4-3.1-3.1V8.6c0-1.7 1.4-3.1 3.1-3.1z'/></svg>"); }
+.userPublicShuffleBtn{ --ic: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M18 4l3 3-3 3M18 20l3-3-3-3M3 7h3a5 5 0 0 1 5 5 5 5 0 0 0 5 5h5M21 7h-5a5 5 0 0 0-5 5 5 5 0 0 1-5 5H3'/></svg>"); }
+.userPublicIconBtn[hidden], .userPublicTogetherBtn[hidden]{ display: none !important; }
+/* Listen together: labelled teal outline */
+.userPublicTogetherBtn{
+  position: relative;
+  height: 40px;
+  padding: 0 14px 0 12px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  color: #23d5ab;
+  cursor: pointer;
+  white-space: nowrap;
+  background: rgba(35, 213, 171, 0.08);
+  border: 1.5px solid rgba(35, 213, 171, 0.7);
+  -webkit-tap-highlight-color: transparent;
+}
+.userPublicTogetherIco{
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><circle cx='6' cy='12.4' r='2.3'/><circle cx='18' cy='12.4' r='2.3'/><path d='M6 10.1v-.5a6 6 0 0 1 12 0v.5'/><path d='M2.6 20c.3-2.2 1.7-3.6 3.4-3.6s3.1 1.4 3.4 3.6M14.6 20c.3-2.2 1.7-3.6 3.4-3.6s3.1 1.4 3.4 3.6'/></svg>") center / contain no-repeat;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><circle cx='6' cy='12.4' r='2.3'/><circle cx='18' cy='12.4' r='2.3'/><path d='M6 10.1v-.5a6 6 0 0 1 12 0v.5'/><path d='M2.6 20c.3-2.2 1.7-3.6 3.4-3.6s3.1 1.4 3.4 3.6M14.6 20c.3-2.2 1.7-3.6 3.4-3.6s3.1 1.4 3.4 3.6'/></svg>") center / contain no-repeat;
+}
+.userPublicTogetherBtn.isBusy .userPublicTogetherIco{ opacity: 0.25; }
+.userPublicTogetherBtn:active{ transform: scale(0.97); }
+
+/* Music panel */
+.userPublicMusic[hidden]{ display: none !important; }
+.userPublicMusic{ padding: 6px 0 24px; }
+.upmSection{ margin-top: 26px; }
+.upmSection[hidden]{ display: none !important; }
+.upmH{ margin: 0 0 12px; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; color: #fff; display: flex; align-items: baseline; gap: 8px; }
+.upmCount{ font-size: 13px; font-weight: 700; color: rgba(255, 255, 255, 0.5); }
+.upmRow{ display: flex; align-items: center; gap: 4px; }
+.upmRowPlay{
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.upmNo{ flex: none; width: 18px; text-align: center; font-size: 15px; font-weight: 800; color: rgba(255, 255, 255, 0.4); }
+.upmArt, .upmCardArt{ flex: none; display: block; overflow: hidden; background: rgba(255, 255, 255, 0.06); }
+.upmArt{ width: 52px; height: 52px; border-radius: 12px; }
+.upmArt img, .upmCardArt img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.upmMeta{ min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.upmMeta strong{ font-size: 15.5px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.upmMeta small{ font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, 0.5); }
+.upmRowPlay.discoveryRowPlaying .upmMeta strong, .upmRow.discoveryRowPlaying .upmMeta strong{ color: #23d5ab; }
+.upmMenu{ flex: none; color: rgba(255, 255, 255, 0.5); }
+.upmShelf{ display: flex; gap: 12px; overflow-x: auto; margin: 0 -20px; padding: 2px 20px 4px; scrollbar-width: none; scroll-snap-type: x proximity; }
+.upmShelf::-webkit-scrollbar{ display: none; }
+.upmCard{
+  appearance: none;
+  flex: 0 0 136px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  scroll-snap-align: start;
+  -webkit-tap-highlight-color: transparent;
+}
+.upmCardArt{ width: 136px; height: 136px; border-radius: 20px; margin-bottom: 6px; box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.6); }
+.upmCard strong{ font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.upmCard small{ font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.5); }
+.upmSim{ display: flex; gap: 16px; overflow-x: auto; margin: 0 -20px; padding: 2px 20px 4px; scrollbar-width: none; }
+.upmSim::-webkit-scrollbar{ display: none; }
+.upmSimItem{ flex: 0 0 78px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-decoration: none; color: #fff; }
+.upmSimAv{ width: 78px; height: 78px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: rgba(124, 92, 255, 0.3); font-weight: 800; }
+.upmSimAv img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.upmSimItem strong{ max-width: 78px; font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.upmAbout{ padding: 16px; border-radius: 24px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); }
+.upmChips{ display: flex; flex-wrap: wrap; gap: 8px; }
+.upmChip{ padding: 7px 13px; border-radius: 16px; font-size: 12.5px; font-weight: 700; color: rgba(255, 255, 255, 0.86); background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); }
+.upmFacts{ margin: 12px 0 0; font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.55); }
+.upmChips + .upmFacts{ margin-top: 12px; }
+/* fit the action row: Follow · Message · Listen together (Play is the big button, so no separate shuffle) */
+.userPublicShuffleBtn{ display: none !important; }
+body[data-route="user"] #userPublicFollowRow{ gap: 8px !important; }
+body[data-route="user"] #userPublicFollowRow #btnUserPublicFollow{ min-width: 0; padding: 0 18px !important; }
+.userPublicTogetherBtn{ padding: 0 12px 0 10px; font-size: 12.5px; gap: 6px; }
+.upmMenu, .userPublicMusic .discoverCardMenuBtn{
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: none !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.55) !important;
+  -webkit-backdrop-filter: none !important;
+          backdrop-filter: none !important;
+}
+body[data-route="user"] #userPublicStats .profileStatValue,
+body[data-route="user"] #userPublicStats .profileStatLabel,
+body[data-route="user"] #userPublicBio .profileHeroBioText,
+body[data-route="user"] #userPublicFollowsYou{ text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Nabad colour logic (one system, app-wide)
+ *   Gradient  → the ONE primary action on a screen (Play, Upgrade, Generate, Send, Subscribe).
+ *   Teal      → "on": the active tab / playing / live / listen together.
+ *   Outline   → secondary actions (Follow, Remix, See, Ask).
+ *   Neutral   → everything else. Covers carry the colour; UI stays grey and white.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+:root{
+  --nb-on: #23d5ab;
+  --nb-on-soft: rgba(35, 213, 171, 0.12);
+  --nb-on-line: rgba(35, 213, 171, 0.7);
+  --nb-outline: rgba(255, 255, 255, 0.72);
+  --nb-neutral-fill: rgba(255, 255, 255, 0.1);
+  --nb-neutral-line: rgba(255, 255, 255, 0.2);
+}
+/* Tab underlines: solid teal (was a decorative gradient) */
+#discoverFeedTabs .nabadTabsTab.is-active::after,
+.activityFilterBtn.is-active::after,
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegTab.is-active::after{ background: var(--nb-on) !important; }
+/* Secondary actions on Discover: outline, not another gradient */
+.discoverWhoForGo,
+.discoverRemixBtn,
+.discoverLiveInviteGo{
+  color: #fff !important;
+  background: transparent !important;
+  border: 1.5px solid var(--nb-outline) !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+.discoverLiveInviteGo{ border-color: var(--nb-on-line) !important; color: var(--nb-on) !important; }
+/* The "share a song" bar's + is a quiet teal mark, not a second CTA */
+.discoverSayGo{
+  color: var(--nb-on) !important;
+  background: var(--nb-on-soft) !important;
+  border: 1px solid var(--nb-on-line) !important;
+  box-shadow: none !important;
+}
+/* Status posts: teal edge */
+body #discoveryFollowingList .followAct--status.followAct--xstyle.followAct--friendsFeed::before{ background: var(--nb-on) !important; }
+/* Follow on public profiles: outline pill everywhere it appears (light theme too) */
+html[data-theme="light"] .userPublicFollowBtn[data-following="false"]{
+  color: var(--text-primary, #0b0b13) !important;
+  background: transparent !important;
+  border: 1.5px solid rgba(11, 11, 19, 0.6) !important;
+  box-shadow: none !important;
+}
+
+/* ── Own profile: Music-first artist page ─────────────────────────────────── */
+body[data-route="profile"] .profilePlayFab{
+  position: absolute !important;
+  right: 20px !important;
+  top: auto !important;
+  bottom: 74px !important;
+  z-index: 6;
+}
+body[data-route="profile"] .profilePlayFab[hidden]{ display: none !important; }
+/* the Featured card is replaced by "Trending now" and the Releases shelf */
+body[data-route="profile"] .profileFeaturedCreationWrap{ display: none !important; }
+body[data-route="profile"] .profileMusic[hidden]{ display: none !important; }
+body[data-route="profile"] .profileMusic{ padding: 0 6px 24px; }
+.upmCardArt{ position: relative; }
+.upmLock{
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(10, 12, 20, 0.62) center / 14px no-repeat;
+  -webkit-backdrop-filter: blur(10px);
+          backdrop-filter: blur(10px);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='5' y='11' width='14' height='9' rx='2.5'/><path d='M8 11V8a4 4 0 0 1 8 0v3'/></svg>");
+}
+.upmCard--draft small{ color: var(--nb-on, #23d5ab); font-weight: 700; }
+/* Tabs → first section: no dead space (empty toolbar hidden on Music; first section sits close to the tab line) */
+body[data-route="profile"][data-profile-songs-seg="music"] .profileSongsToolbar{ display: none !important; }
+.userPublicMusic > .upmSection:first-child,
+.profileMusic > .upmSection:first-child{ margin-top: 12px; }
+.userPublicMusic{ padding-top: 0; }
+
+/* ═══ Poster header v2: only the name lives on the photo; bio + stats sit below it on the dark page ═══
+   (readable on any cover, including very light ones) */
+body[data-route="profile"] .profileAuraTopRow{ bottom: auto !important; height: 410px !important; }
+body[data-route="profile"] .profileAuraTopRow::before{
+  background: linear-gradient(180deg, rgba(8, 10, 18, 0.5) 0%, transparent 18%, rgba(8, 10, 18, 0.5) 52%, rgba(8, 10, 18, 0.92) 84%, #080a12 100%) !important;
+}
+body[data-route="profile"] .profileAuraAvatar,
+body[data-route="profile"] .profileAuraAvatarFallback{
+  -webkit-mask-image: none !important;
+          mask-image: none !important;
+}
+body[data-route="profile"] .profileAura{ padding-top: 300px !important; }
+body[data-route="profile"] .profilePlayFab{ top: 322px !important; bottom: auto !important; }
+body[data-route="profile"] .profileDisplayNameText{ text-shadow: 0 2px 22px rgba(0, 0, 0, 0.75), 0 0 2px rgba(0, 0, 0, 0.4); }
+body[data-route="profile"] .profileHandleText{ color: rgba(255, 255, 255, 0.78) !important; }
+body[data-route="profile"] .profileHeroBioText{
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: none;
+}
+/* public profile */
+body[data-route="user"] .userPublicAvatarWrap{ height: calc(430px + env(safe-area-inset-top, 0px)) !important; }
+body[data-route="user"] .userPublicAvatarWrap::after{
+  background: linear-gradient(180deg, rgba(8, 10, 18, 0.5) 0%, transparent 18%, rgba(8, 10, 18, 0.5) 52%, rgba(8, 10, 18, 0.92) 84%, #080a12 100%) !important;
+}
+body[data-route="user"] .userPublicAvatar,
+body[data-route="user"] .userPublicAvatarFallback{ -webkit-mask-image: none !important; mask-image: none !important; }
+body[data-route="user"] .userPublicDisplayName,
+body[data-route="user"] .userPublicDisplayName[hidden] + .userPublicNameRow .userPublicName{ text-shadow: 0 2px 22px rgba(0, 0, 0, 0.75), 0 0 2px rgba(0, 0, 0, 0.4); }
+body[data-route="user"] #userPublicStats .profileStatValue,
+body[data-route="user"] #userPublicStats .profileStatLabel,
+body[data-route="user"] #userPublicBio .profileHeroBioText,
+body[data-route="user"] #userPublicFollowsYou{ text-shadow: none; }
+body[data-route="user"] #userPublicBio .profileHeroBioText{ display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Poster header v2 — layout (action row now sits under the stats, on the dark page) */
+body[data-route="profile"] .profileAuraTopRow::before{ display: none !important; content: none !important; }
+body[data-route="profile"] .profileAuraAvatarWrap::after{
+  content: "" !important;
+  display: block !important;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(8, 10, 18, 0.5) 0%, transparent 18%, rgba(8, 10, 18, 0.45) 50%, rgba(8, 10, 18, 0.9) 82%, #080a12 100%) !important;
+}
+body[data-route="profile"] .profileAuraActionRow{
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 6px;
+}
+body[data-route="profile"] .profileAuraActionRow #btnProfileAvatarEdit{
+  position: static !important;
+  flex: 1 1 auto;
+  width: auto !important;
+  max-width: 220px;
+  height: 44px !important;
+  border-radius: 22px !important;
+}
+body[data-route="profile"] .profileAuraActionRow .profilePersonaAvatarBadge{
+  position: static !important;
+  display: none !important;
+  flex: none;
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+}
+body[data-route="profile"] .profileAuraActionRow .profilePersonaAvatarBadge:not([hidden]){ display: flex !important; }
+body[data-route="profile"] .profileStatsRow{ margin-bottom: 0 !important; }
+body[data-route="profile"] .profileAuraAvatarWrap{ z-index: 0 !important; }
+body[data-route="profile"] .profileAura{ padding-bottom: 6px !important; }
+
+body[data-route="user"] .userPublicAvatarWrap::after{ z-index: 3 !important; }
+/* Play button: flat, no glow */
+.userPublicPlayFab, .profilePlayFab{ box-shadow: none !important; }

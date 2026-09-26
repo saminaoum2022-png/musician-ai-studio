@@ -502,6 +502,8 @@ async function onAvatarFileChange(file) {
     const dataUrl = await _deps.compressAvatarFile(file, { maxSize: 320, quality: 0.82 });
     if (!dataUrl) throw new Error("Could not read photo");
     _draft.avatar = dataUrl;
+    // A 1080 px copy for the poster header; uploaded on Save (the small avatar stays what feeds use).
+    try { _draft.avatarHd = await _deps.compressAvatarFile(file, { maxSize: 1080, quality: 0.86 }); } catch { _draft.avatarHd = ""; }
     markDirty();
     renderProfileEditPage();
     try { _deps?.showToast?.("Photo updated — tap Save to publish", { icon: "✓", durationMs: 1800 }); } catch {}
@@ -578,6 +580,10 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
     try {
       await _deps.supabaseUpsertProfile(payload);
     } catch {}
+  }
+  if (cloudSaved && _draft.avatarHd && _draft.avatar) {
+    // Best-effort: if this fails the header simply keeps using the small photo.
+    _deps.uploadAvatarHd?.(_draft.avatarHd, _draft.avatar).catch((err) => { try { console.warn("[avatar-hd]", err?.message || err); } catch {} });
   }
   _deps.syncProfileUi?.(payload);
   _dirty = false;

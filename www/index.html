@@ -3308,6 +3308,9 @@
                   </span>
                 </button>
               </div>
+              <button id="btnUserPublicPlay" class="userPublicPlayFab" type="button" aria-label="Play" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>
+              </button>
               <button id="btnUserPublicBack" class="nabadBackBtn userPublicBack" type="button" aria-label="Back" hidden>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
               </button>
@@ -3322,7 +3325,11 @@
             <p id="userPublicFollowsYou" class="userPublicRelationStatus" hidden></p>
             <div class="userPublicFollowRow" id="userPublicFollowRow" hidden>
               <div id="btnUserPublicFollow" class="userPublicFollowBtn" role="button" tabindex="0" hidden>Become a fan</div>
-              <button id="btnUserPublicMessage" class="userPublicMessageBtn" type="button" hidden>Message</button>
+              <button id="btnUserPublicMessage" class="userPublicMessageBtn" type="button" hidden aria-label="Message">Message</button>
+              <button id="btnUserPublicShuffle" class="userPublicIconBtn userPublicShuffleBtn" type="button" hidden aria-label="Shuffle"></button>
+              <button id="btnUserPublicTogether" class="userPublicTogetherBtn" type="button" hidden>
+                <span class="userPublicTogetherIco" aria-hidden="true"></span><span>Listen together</span>
+              </button>
             </div>
             <div class="userPublicStats profileStatsRow" id="userPublicStats"></div>
             <div id="userPublicMusicStyles" class="profileMusicStylesInline userPublicMusicStyles" hidden aria-hidden="true">
@@ -3333,7 +3340,8 @@
             </div>
             <audio id="userPublicCallingCardAudio" preload="none" playsinline></audio>
             <nav class="profileSegBar profileSegBar--dual" id="userPublicSegBar" role="tablist" aria-label="Profile content" hidden>
-              <button type="button" class="profileSegTab is-active" role="tab" aria-selected="true" data-user-public-segment="posts" id="userPublicSegPosts" aria-label="Posts">
+              <button type="button" class="profileSegTab is-active" role="tab" aria-selected="true" data-user-public-segment="music" id="userPublicSegMusic" aria-label="Music"><span class="profileSegIconWrap" aria-hidden="true"></span></button>
+              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-user-public-segment="posts" id="userPublicSegPosts" aria-label="Posts">
                 <span class="profileSegIconWrap" aria-hidden="true">
                   <svg class="profileSegIcon profileSegIcon--line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false">
                     <rect x="3" y="3" width="7" height="7" rx="1.5"/>
@@ -3369,7 +3377,8 @@
             <div class="userPublicSongsBlock profileSongsBlock">
               <p id="userPublicSongsCount" class="libraryCount userPublicSongsCount" hidden aria-live="polite"></p>
               <p id="userPublicRepostsCount" class="libraryCount userPublicRepostsCount" hidden aria-live="polite"></p>
-              <div id="userPublicSongs" class="userPublicSongs profileActivitiesList followActStack"></div>
+              <div id="userPublicMusic" class="userPublicMusic" hidden></div>
+              <div id="userPublicSongs" class="userPublicSongs profileActivitiesList followActStack" hidden></div>
               <div id="userPublicRepostsList" class="userPublicRepostsList profileActivitiesList followActStack" hidden aria-live="polite"></div>
             </div>
             <div id="userPublicEmpty" class="hint userPublicEmpty" style="display:none"></div>
@@ -3400,26 +3409,7 @@
                   <span id="profileAvatarFallback" class="profileAuraAvatarFallback" aria-hidden="true">Na</span>
                   <span class="profileAuraAvatarSkeleton" aria-hidden="true"></span>
                   <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
-                  <span id="profilePersonaAvatarBadge" class="profilePersonaAvatarBadge" hidden aria-hidden="true" title="Persona voice saved">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/>
-                      <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M19 11a7 7 0 0 1-14 0"/>
-                    </svg>
-                  </span>
                   <span id="profileProAvatarPill" class="profileProAvatarPill" hidden aria-hidden="true" title="NabadAi Pro">Pro</span>
-                  <button
-                    type="button"
-                    id="btnProfileAvatarEdit"
-                    class="profileAvatarEditBtn nabadGlassCtrl nabadGlassCtrl--round"
-                    hidden
-                    aria-label="Edit profile"
-                    title="Edit profile"
-                  >
-                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M12 20h9"/>
-                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
-                    </svg>
-                  </button>
                 </div>
               </div>
 
@@ -3503,6 +3493,28 @@
                 </div>
               </div>
 
+              <div class="profileAuraActionRow" id="profileAuraActionRow">
+                  <button
+                    type="button"
+                    id="btnProfileAvatarEdit"
+                    class="profileAvatarEditBtn nabadGlassCtrl nabadGlassCtrl--round"
+                    hidden
+                    aria-label="Edit profile"
+                    title="Edit profile"
+                  >
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 20h9"/>
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                    </svg>
+                  </button>
+                  <span id="profilePersonaAvatarBadge" class="profilePersonaAvatarBadge" hidden aria-hidden="true" title="Persona voice saved">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/>
+                      <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M19 11a7 7 0 0 1-14 0"/>
+                    </svg>
+                  </span>
+
+              </div>
               <div id="profileMusicStylesInline" class="profileMusicStylesInline" hidden aria-hidden="true">
                 <button type="button" id="profileMusicStylesBtn" class="profileMusicStylesLine" aria-label="Music styles"></button>
               </div>
@@ -3534,6 +3546,9 @@
                 </button>
               </div>
 
+              <button id="btnProfilePlay" class="userPublicPlayFab profilePlayFab" type="button" aria-label="Play my music" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>
+              </button>
               <div id="authLoggedInEmailInline" class="profileAuraEmail hint" style="display:none"></div>
 
               <!-- Legacy nodes kept for DOM stability; genres stay off
@@ -3621,7 +3636,8 @@
               <div id="profileFeaturedCreation" class="profileFeaturedCreationMount"></div>
             </div>
             <nav class="profileSegBar" role="tablist" aria-label="Profile content">
-              <button type="button" class="profileSegTab is-active" role="tab" aria-selected="true" data-profile-songs-segment="activities" id="profileSongsSegActivity" aria-label="Posts">
+              <button type="button" class="profileSegTab is-active" role="tab" aria-selected="true" data-profile-songs-segment="music" id="profileSongsSegMusic" aria-label="Music"><span class="profileSegIconWrap" aria-hidden="true"></span></button>
+              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-profile-songs-segment="activities" id="profileSongsSegActivity" aria-label="Posts">
                 <span class="profileSegIconWrap" aria-hidden="true">
                   <svg class="profileSegIcon profileSegIcon--line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false">
                     <rect x="3" y="3" width="7" height="7" rx="1.5"/>
@@ -3712,6 +3728,7 @@
             <div id="libraryList" class="libraryList profileHubSharedList"></div>
             <div id="profileVocalsList" class="studioVocalsList" hidden aria-live="polite"></div>
             <div id="profileRepostsList" class="profileRepostsList profileActivitiesList followActStack" hidden aria-live="polite"></div>
+            <div id="profileMusic" class="profileMusic userPublicMusic" hidden></div>
             <div id="profileActivitiesList" class="profileActivitiesList followActStack" hidden aria-live="polite"></div>
             <div id="profileActivitiesLoadMoreWrap" class="profileReleasesLoadMoreRow profileActLoadMoreRow" hidden>
               <button type="button" id="profileActivitiesLoadMore" class="profileReleasesLoadMore profileActLoadMore" aria-label="Load more posts">

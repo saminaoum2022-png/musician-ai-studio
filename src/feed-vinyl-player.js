@@ -55,13 +55,10 @@ export function feedPostMediaLayoutForTrack(track) {
   return "";
 }
 
+/** Every music post gets the sleeve ⇄ record switch; only photo posts, custom photo covers and videos stay plain covers. */
 export function feedVinylPlayerUsesLightPrototype(track, activityType, { xstyle = false } = {}) {
   if (!xstyle) return false;
-  const layout = feedPostMediaLayoutForTrack(track);
-  if (layout === "cover") return false;
-  if (layout === "vinyl") return publishTrackEligibleForVinylChoice(track);
-  // Legacy posts without postMediaLayout: keep cover layout. Vinyl is opt-in at publish only.
-  return false;
+  return publishTrackEligibleForVinylChoice(track);
 }
 
 /** @param {{ artSafe: string, encUrl: string, encTitle: string, encArt: string, encBy: string, playData: string, safeTitle: string, centerPlayIconsHtml: string, durLabel?: string, durSec?: number }} opts */
@@ -177,10 +174,10 @@ function tickFeedVinylSpin() {
   let keepSpinning = false;
 
   for (const root of feedVinylRoots()) {
-    root.querySelectorAll(".feedVinylWrap[data-feed-vinyl].isPlaying").forEach((wrap) => {
+    root.querySelectorAll(".feedRecWrap[data-feed-vinyl].isPlaying").forEach((wrap) => {
       if (!wrap.classList.contains("isInView")) return;
       if (!audible) return;
-      const rotor = wrap.querySelector(".feedVinylRotor");
+      const rotor = wrap.querySelector(".feedRecRotor");
       if (!rotor) return;
       applyFeedVinylRotorDeg(rotor, deg);
       keepSpinning = true;
@@ -201,7 +198,7 @@ function stopFeedVinylSpinLoopIfIdle() {
   if (_feedVinylSpinRaf) return;
   let anyPlaying = false;
   for (const root of feedVinylRoots()) {
-    if (root.querySelector(".feedVinylWrap[data-feed-vinyl].isPlaying.isInView")) {
+    if (root.querySelector(".feedRecWrap[data-feed-vinyl].isPlaying.isInView")) {
       anyPlaying = true;
       break;
     }
@@ -222,6 +219,30 @@ function ensureFeedVinylIntersectionObserver() {
     },
     { root: null, rootMargin: "80px 0px", threshold: 0.08 },
   );
+}
+
+/**
+ * Auto-switch: when a post's song becomes the active one its record slides out of the sleeve; when another song
+ * takes over it slides back in. A manual Sleeve/Record tap wins until the song stops being active.
+ */
+function autoSwitchFeedRecordSide(wrap, active) {
+  const wasActive = wrap.dataset.recActive === "1";
+  if (active && !wasActive) {
+    wrap.dataset.recActive = "1";
+    if (wrap.dataset.recManual !== "1") wrap.classList.add("isRecordSide");
+  } else if (!active && wasActive) {
+    delete wrap.dataset.recActive;
+    delete wrap.dataset.recManual;
+    wrap.classList.remove("isRecordSide");
+  } else {
+    return;
+  }
+  const btn = wrap.querySelector("[data-feed-flip]");
+  if (btn) {
+    const on = wrap.classList.contains("isRecordSide");
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.setAttribute("aria-label", on ? "Slide the record back into the sleeve" : "Slide the record out");
+  }
 }
 
 export function observeFeedVinylPlayerWrap(wrap) {
@@ -270,7 +291,7 @@ export function syncFeedVinylPlayers(deps) {
   let needsSpinLoop = false;
 
   for (const root of roots) {
-    root.querySelectorAll(".feedVinylWrap[data-feed-vinyl]").forEach((wrap) => {
+    root.querySelectorAll(".feedRecWrap[data-feed-vinyl]").forEach((wrap) => {
       observeFeedVinylPlayerWrap(wrap);
       const trackUrl = decodeDiscoveryPlayUrl(wrap);
       const active = Boolean(curRef && trackUrl && audioUrlsEquivalent(curRef, trackUrl));
@@ -281,8 +302,9 @@ export function syncFeedVinylPlayers(deps) {
 
       wrap.classList.toggle("isActive", active);
       wrap.classList.toggle("isPlaying", active && liveAudible);
+      autoSwitchFeedRecordSide(wrap, active);
 
-      const rotor = wrap.querySelector(".feedVinylRotor");
+      const rotor = wrap.querySelector(".feedRecRotor");
       if (!shouldSpin) {
         applyFeedVinylRotation(rotor, { spinning: false, cur: active ? liveCur : 0, reduced });
         try {

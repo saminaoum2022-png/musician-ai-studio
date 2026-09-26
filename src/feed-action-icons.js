@@ -49,3 +49,30 @@ export function feedActIconAnalytics(klass = "followActActIco followActActIco--a
   const cls = String(klass || "followActActIco followActActIco--analytics").trim() || "followActActIco followActActIco--analytics";
   return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.5 16V11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 16V7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16.5 16V9.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
 }
+
+/* ---------------------------------------------------------------------
+ * Post-row icons (Friends, profiles): one 24 grid, round caps, same optical size.
+ * Stroke width and colour come from CSS so liked / gifted states can recolour them.
+ * ------------------------------------------------------------------- */
+function postIcon(klass, fallback, body) {
+  const cls = String(klass || fallback).trim() || fallback;
+  return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">${body}</svg>`;
+}
+export function postActIconLike(klass) {
+  return postIcon(klass, "followActActIco followActActIco--like", '<path d="M12 20.2s-7.4-4.6-7.4-10.3A4.3 4.3 0 0 1 12 7.1a4.3 4.3 0 0 1 7.4 2.8c0 5.7-7.4 10.3-7.4 10.3z"/>');
+}
+export function postActIconComment(klass) {
+  return postIcon(klass, "followActActIco followActActIco--comment", '<path d="M5 5.2h14a1.8 1.8 0 0 1 1.8 1.8v8.2a1.8 1.8 0 0 1-1.8 1.8h-7.2L7.4 20.6v-3.6H5a1.8 1.8 0 0 1-1.8-1.8V7A1.8 1.8 0 0 1 5 5.2z"/>');
+}
+export function postActIconRepost(klass) {
+  return postIcon(klass, "followActActIco followActActIco--repost", '<path d="M16.5 3.5l3 3-3 3"/><path d="M4.5 11.5v-1.2A3.8 3.8 0 0 1 8.3 6.5h11.2"/><path d="M7.5 20.5l-3-3 3-3"/><path d="M19.5 12.5v1.2a3.8 3.8 0 0 1-3.8 3.8H4.5"/>');
+}
+export function postActIconGift(klass) {
+  return postIcon(klass, "followActActIco followActActIco--gift", '<rect x="4" y="9.5" width="16" height="10.5" rx="2"/><path d="M12 9.5V20M4 14h16"/><path d="M12 9.5c-1.3-3.6-5-3.8-5-1.5 0 1.4 2.4 1.5 5 1.5zM12 9.5c1.3-3.6 5-3.8 5-1.5 0 1.4-2.4 1.5-5 1.5z"/>');
+}
+export function postActIconPlays(klass) {
+  return postIcon(klass, "followActActIco followActActIco--plays", '<path d="M8.2 6.2v11.6a.8.8 0 0 0 1.2.7l9-5.8a.8.8 0 0 0 0-1.4l-9-5.8a.8.8 0 0 0-1.2.7z"/>');
+}
+export function postActIconAnalytics(klass) {
+  return postIcon(klass, "followActActIco followActActIco--analytics", '<path d="M5 20h14"/><path d="M8 16.5v-5M12 16.5V7M16 16.5v-8"/>');
+}

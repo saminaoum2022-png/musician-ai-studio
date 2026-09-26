@@ -190,7 +190,7 @@ import {
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
 import { openCoverStudio, configureCoverStudio } from "./cover-studio.js";
 import { portrait916CropRect } from "./cover-art/portrait-normalize.js";
-import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays, feedActIconRepost, feedActIconShare } from "./feed-action-icons.js";
+import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays, feedActIconRepost, feedActIconShare, postActIconAnalytics, postActIconComment, postActIconGift, postActIconLike, postActIconPlays, postActIconRepost } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetForTarget, openGiftSheetFromButton } from "./gifts.js";
 import {
   initProSinger,
@@ -17159,15 +17159,24 @@ function bindFeedStyleTagBrowseOnce() {
   }, true);
 }
 
-function friendsFeedReleaseCaptionHtml(track) {
+function friendsFeedReleaseCaptionHtml(track, handle = "") {
   const caption = releaseCaptionForTrack(track);
   if (!caption) return "";
   const clamp = caption.length > 96 || caption.split(/\s+/).length > 16;
-  const body = userTextWithMentionsHtml(caption, {
-    tag: "p",
-    className: "followActCaption followActCaption--friends followActCaption--releaseNote",
-    escapeHtml,
-  });
+  const h = String(handle || "").replace(/^@/, "").trim();
+  let body;
+  if (h) {
+    // Handle in front, like a photo post; the paragraph follows the note's own direction.
+    const inner = userTextWithMentionsHtml(caption, { tag: "span", className: "followActCaptionText", escapeHtml });
+    const dir = inner.includes('dir="rtl"') ? "rtl" : "ltr";
+    body = `<p class="followActCaption followActCaption--friends followActCaption--releaseNote" dir="${dir}"><b class="followActCaptionHandle">${escapeHtml(h)}</b> ${inner}</p>`;
+  } else {
+    body = userTextWithMentionsHtml(caption, {
+      tag: "p",
+      className: "followActCaption followActCaption--friends followActCaption--releaseNote",
+      escapeHtml,
+    });
+  }
   const moreBtn = clamp
     ? `<button type="button" class="followActCaptionMore" data-friends-caption-more aria-label="Show full release note">more</button>`
     : "";
@@ -17176,11 +17185,21 @@ function friendsFeedReleaseCaptionHtml(track) {
 
 /** The one progress bar for feed posts (vinyl and cover): elapsed · sliding bar · total.
  *  `.feedSeek` keeps the classes the feed already drives (progress %, hook marker, seek input). */
-function feedSeekBarHtml(track, encUrl) {
+function feedSeekBarHtml(track, encUrl, { line = false } = {}) {
   const durSec = discoverTrackDurationSec(track);
   const hookSec = feedHookStartFromTrack(track);
   const hookAttr = hookSec > 0 ? ` data-feed-hook-sec="${hookSec}"` : "";
   const durAttr = durSec > 0 ? ` data-feed-hook-dur="${durSec}"` : "";
+  if (line) {
+    // Hairline on the bottom edge of the cover (edge-to-edge posts). Times live in the meta line.
+    return `
+              <div class="feedSeek feedSeek--line followActRealtimeProgress" data-user-lib-url="${encUrl}" data-feed-seek-dur="${durSec > 0 ? durSec : 0}"${hookAttr}${durAttr}>
+                <span class="feedSeekTrack" aria-hidden="true"><span class="feedSeekFill"></span></span>
+                <span class="feedSeekThumb" aria-hidden="true"></span>
+                <span class="feedHookMarker" aria-hidden="true"></span>
+                <input class="followActRealtimeSeek followActRealtimeSeek--ghost" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" />
+              </div>`;
+  }
   return `
               <div class="feedSeekRow">
                 <span class="feedSeekTime" data-feed-seek-cur>${escapeHtml(formatTime(0))}</span>
@@ -17262,6 +17281,175 @@ function friendsFeedCompactMediaHtml({
               </div>
             </button>
             <div class="followActMediaDock">${feedSeekBarHtml(track, encUrl)}
+            </div>
+          </div>`;
+}
+
+let _feedEdgeFlipWired = false;
+/** Sleeve ⇄ record. Capture phase so the host feed handlers never see the tap as a play/open. */
+function wireFeedEdgeFlipOnce() {
+  if (_feedEdgeFlipWired) return;
+  _feedEdgeFlipWired = true;
+  document.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("[data-feed-flip]");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const wrap = btn.closest(".feedEdge");
+    if (!wrap) return;
+    haptic("light");
+    const on = !wrap.classList.contains("isRecordSide");
+    wrap.classList.toggle("isRecordSide", on);
+    // The listener's choice sticks until this song stops being the active one.
+    wrap.dataset.recManual = "1";
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.setAttribute("aria-label", on ? "Slide the record back into the sleeve" : "Slide the record out");
+    try { syncFriendsFeedProgressBars(); } catch {}
+  }, true);
+}
+const FEED_EDGE_FLIP_ICON_RECORD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2"/><path d="M12 3a9 9 0 0 1 9 9" opacity=".5"/></svg>';
+const FEED_EDGE_FLIP_ICON_SLEEVE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.5"/><circle cx="12" cy="12" r="4.6" opacity=".55"/></svg>';
+const FEED_EDGE_KIND_ICON_REMIX = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5M4 20l17-17M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>';
+const FEED_EDGE_KIND_ICON_MASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg>';
+
+/**
+ * Style tags for the cover line. Tags the creator chose at publish always win. Without them we only accept short,
+ * tag-like fragments (never a generation prompt), and a remix borrows its original's tags.
+ */
+function feedEdgeTagList(track, orig = null) {
+  const explicit = (t) => (Array.isArray(t?.meta?.styleTags) ? t.meta.styleTags.map((s) => String(s || "").trim()).filter(Boolean) : []);
+  const tagLike = (s) => s.length <= 18 && s.split(/\s+/).length <= 2;
+  let tags = explicit(track).filter((s) => s.length <= 24);
+  if (!tags.length) tags = trackStyleTagsList(track, 8).filter(tagLike);
+  if (!tags.length && orig) {
+    tags = explicit(orig).filter((s) => s.length <= 24);
+    if (!tags.length) tags = trackStyleTagsList(orig, 8).filter(tagLike);
+  }
+  return tags.slice(0, 3);
+}
+function feedEdgeSubTagsHtml(track, orig = null) {
+  const tags = feedEdgeTagList(track, orig);
+  if (!tags.length) return "";
+  return `<span class="feedEdgeTags"> <span class="feedEdgeDot" aria-hidden="true">·</span> ${escapeHtml(tags.map((tg) => truncateStyleTag(tg, 18)).join(" · "))}</span>`;
+}
+
+/** Attribute string that makes an element play `source` (remix original / mashup source). */
+function feedEdgeSourcePlayAttrs(source, profMap) {
+  if (!source || !String(source.url || "").trim()) return "";
+  const by = source.username ? `@${source.username}` : "Source";
+  const o = followingActivityPlayAttrs(source, profMap, by, { useThumb: true });
+  return `data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(by)}" ${o.playData}`;
+}
+
+/** Friends / profile post media: edge-to-edge cover with a hairline line. Vinyl, remix and mashup posts add a record that slides out of the sleeve. */
+function feedEdgeMediaHtml({ artSafe, encUrl, encTitle, encArt, encBy, playData, safeTitle, track, vinyl = false, kind = "", orig = null, srcA = null, srcB = null, profMap = null }) {
+  const isRemix = kind === "remix" && Boolean(orig);
+  const isMash = kind === "mashup" && Boolean(srcA && srcB);
+  const recordable = vinyl || isRemix || isMash;
+  const subTags = feedEdgeSubTagsHtml(track, orig);
+  const durSec = discoverTrackDurationSec(track);
+  const attrs = `data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}`;
+  const kickerHtml = isPhotoMoodTrack(track) ? `<span class="feedEdgeKicker">Created with Photo Mood</span>` : "";
+  const srcArt = (s) => escapeHtml(resolveFeedSourceCoverArt(s) || DEFAULT_SONG_COVER_URL);
+  const srcBy = (s) => (s?.username ? `@${escapeHtml(s.username)}` : "Original");
+
+  // Cover (the sleeve): one image, or two halves for a mashup.
+  const coverHtml = isMash
+    ? `<span class="feedEdgeSplit" aria-hidden="true"><img class="feedEdgeSplitA" src="${srcArt(srcA)}" alt="" decoding="async" loading="lazy" /><img class="feedEdgeSplitB" src="${srcArt(srcB)}" alt="" decoding="async" loading="lazy" /></span>`
+    : `<img class="feedEdgeImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />`;
+  const labelHtml = isMash
+    ? `<span class="feedEdgeRecLabel feedEdgeRecLabel--two"><img src="${srcArt(srcA)}" alt="" /><img src="${srcArt(srcB)}" alt="" /></span>`
+    : `<span class="feedEdgeRecLabel" style="background-image:url('${escapeHtml(artSafe)}')"></span>`;
+
+  // Side sleeves that appear next to the record: the original (remix) or the two sources (mashup).
+  let sideSleevesHtml = "";
+  if (isRemix) {
+    const oa = feedEdgeSourcePlayAttrs(orig, profMap);
+    const inner = `<img src="${srcArt(orig)}" alt="" decoding="async" loading="lazy" />`;
+    sideSleevesHtml = (oa
+      ? `<button type="button" class="feedEdgeSide feedEdgeSide--orig" ${oa} aria-label="Play original ${escapeHtml(String(orig.title || ""))}">${inner}</button>`
+      : `<div class="feedEdgeSide feedEdgeSide--orig">${inner}</div>`)
+      + `<span class="feedEdgeSideLbl" aria-hidden="true">Original</span>`;
+  } else if (isMash) {
+    const one = (s, cls) => {
+      const sa = feedEdgeSourcePlayAttrs(s, profMap);
+      const inner = `<img src="${srcArt(s)}" alt="" decoding="async" loading="lazy" />`;
+      return sa
+        ? `<button type="button" class="feedEdgeSide ${cls}" ${sa} aria-label="Play ${escapeHtml(String(s.title || "source"))}">${inner}</button>`
+        : `<div class="feedEdgeSide ${cls}">${inner}</div>`;
+    };
+    sideSleevesHtml = one(srcA, "feedEdgeSide--a") + one(srcB, "feedEdgeSide--b");
+  }
+
+  const kindTagHtml = isRemix
+    ? `<span class="feedEdgeKind">${FEED_EDGE_KIND_ICON_REMIX}<span>Remix</span></span>`
+    : isMash
+      ? `<span class="feedEdgeKind">${FEED_EDGE_KIND_ICON_MASH}<span>Mashup</span></span>`
+      : "";
+
+  // The strip under the cover that names what this post was made from.
+  let srcStripHtml = "";
+  if (isRemix) {
+    const oa = feedEdgeSourcePlayAttrs(orig, profMap);
+    srcStripHtml = `
+                <div class="feedEdgeSrc">
+                  <span class="feedEdgeMini"><img src="${srcArt(orig)}" alt="" loading="lazy" decoding="async" /></span>
+                  <span class="feedEdgeSrcText"><small>Remix of</small><b dir="auto">${escapeHtml(String(orig.title || "Original song"))}</b><span>${srcBy(orig)}</span></span>
+                  ${oa ? `<button type="button" class="feedEdgeSrcPlay" ${oa} aria-label="Play original"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg></button>` : ""}
+                </div>`;
+  } else if (isMash) {
+    const half = (s) => {
+      const sa = feedEdgeSourcePlayAttrs(s, profMap);
+      const body = `<span class="feedEdgeMini"><img src="${srcArt(s)}" alt="" loading="lazy" decoding="async" /></span><span class="feedEdgeSrcText"><b dir="auto">${escapeHtml(String(s.title || "Track"))}</b><span>${srcBy(s)}</span></span>`;
+      return sa
+        ? `<button type="button" class="feedEdgeSrcHalf" ${sa} aria-label="Play ${escapeHtml(String(s.title || "source"))}">${body}</button>`
+        : `<div class="feedEdgeSrcHalf">${body}</div>`;
+    };
+    srcStripHtml = `
+                <div class="feedEdgeSrc feedEdgeSrc--two">${half(srcA)}<span class="feedEdgeSrcX" aria-hidden="true">×</span>${half(srcB)}</div>`;
+  }
+
+  const recordHtml = recordable ? `
+        <div class="feedRecPlatter feedEdgeRecord" ${attrs} aria-label="Play ${safeTitle}" role="button" tabindex="-1">
+          <div class="feedRecRotor" aria-hidden="true">
+            <span class="feedEdgeRecBase"></span>
+            <span class="feedEdgeRecSheen"></span>
+            ${labelHtml}
+          </div>
+        </div>
+        <svg class="feedEdgeRing" viewBox="0 0 100 100" aria-hidden="true"><circle class="feedEdgeRingTrack" cx="50" cy="50" r="49" /><circle class="feedEdgeRingFill" cx="50" cy="50" r="49" pathLength="100" /></svg>
+        ${sideSleevesHtml}
+        <button type="button" class="feedEdgeFlip" data-feed-flip aria-label="Slide the record out" aria-pressed="false">
+          <span class="feedEdgeFlipIco feedEdgeFlipIco--rec">${FEED_EDGE_FLIP_ICON_RECORD}</span>
+          <span class="feedEdgeFlipIco feedEdgeFlipIco--sleeve">${FEED_EDGE_FLIP_ICON_SLEEVE}</span>
+          <span class="feedEdgeFlipTxt feedEdgeFlipTxt--rec">Record</span>
+          <span class="feedEdgeFlipTxt feedEdgeFlipTxt--sleeve">Sleeve</span>
+        </button>` : "";
+  const swapClass = isRemix || isMash ? " feedEdge--swap" : "";
+  return `
+          <div class="feedEdge${recordable ? " feedRecWrap" : ""}${swapClass}${isMash ? " feedEdge--mash" : ""}"${recordable ? ` data-feed-vinyl="1"` : ""} data-user-lib-url="${encUrl}">
+            <div class="feedEdgeStage">
+              ${recordable ? `<span class="feedEdgeAmb" style="background-image:url('${escapeHtml(artSafe)}')" aria-hidden="true"></span><span class="feedEdgeAmbDim" aria-hidden="true"></span>` : ""}
+              ${recordHtml}
+              <button type="button" class="feedEdgeSleeve" ${attrs} aria-label="Play ${safeTitle}">
+                ${coverHtml}
+                <span class="feedEdgeWear" aria-hidden="true"></span>
+                <span class="feedEdgeShade" aria-hidden="true"></span>
+              </button>
+              ${isMash ? `<span class="feedEdgeXBadge" aria-hidden="true">×</span>` : ""}
+              ${kindTagHtml}
+              <div class="feedEdgeBottom">
+                ${srcStripHtml}
+                <div class="feedEdgeMeta">
+                  <div class="feedEdgeMetaText">
+                    <strong class="feedEdgeTitle" dir="auto">${safeTitle}</strong>
+                    <span class="feedEdgeSub"><span class="feedEdgeTime"><span data-feed-seek-cur>${escapeHtml(formatTime(0))}</span><span class="feedEdgeTimeTotal"> / <span data-feed-seek-total>${durSec > 0 ? escapeHtml(formatTime(durSec)) : ""}</span></span></span>${subTags}</span>
+                    ${kickerHtml}
+                  </div>
+                  <button type="button" class="feedEdgePlay" ${attrs} aria-label="Play ${safeTitle}">${coverArtPlayStateIconsHtml(20)}</button>
+                </div>
+              </div>
+              ${feedSeekBarHtml(track, encUrl, { line: true })}
             </div>
           </div>`;
 }
@@ -17899,6 +18087,14 @@ function profileActivitiesDomMatchesFeed(listEl, feedItems) {
 
 function patchFollowActStylePills(article, track) {
   if (!article) return false;
+  if (article.classList.contains("followAct--edge")) {
+    const sub = article.querySelector(".feedEdgeSub");
+    if (!sub) return false;
+    sub.querySelectorAll(".feedEdgeTags").forEach((n) => n.remove());
+    const html = feedEdgeSubTagsHtml(track, track?._remixOriginal || null);
+    if (html) sub.insertAdjacentHTML("beforeend", html);
+    return Boolean(html);
+  }
   article.querySelector(":scope > .followActStylePills")?.remove();
   const html = feedStyleTagPillsHtml(track);
   if (!html) return false;
@@ -17975,7 +18171,7 @@ function logFriendsFeedPatch(kind, detail) {
   } catch {}
 }
 
-const FOLLOW_ACT_MEDIA_SEL = ".followActQuoteRow, .followActRemixPair, .followActRemixFlow, .followActMashup, .followActMediaWrap";
+const FOLLOW_ACT_MEDIA_SEL = ".followActQuoteRow, .followActRemixPair, .followActRemixFlow, .followActMashup, .followActMediaWrap, .feedEdge";
 
 /** Top-level post media only — nested `.followActMediaWrap` inside remix/mashup must not patch separately. */
 function followActTopLevelMediaNodes(root) {
@@ -18155,11 +18351,15 @@ function patchFollowActRowMedia(article, track, profMap, idx, opts = {}) {
     } else if (sub) {
       sub.remove();
     }
+    const edgeNext = nextArticle.classList.contains("followAct--edge");
+    article.classList.toggle("followAct--edge", edgeNext);
     const nextCaption = nextArticle.querySelector(":scope > .followActReleaseCaption");
     if (nextCaption) {
-      article.querySelector(":scope > .followActTop")?.insertAdjacentElement("afterend", nextCaption.cloneNode(true));
+      // Edge-to-edge posts keep the caption under the action row; older layouts keep it above the media.
+      if (edgeNext) article.querySelector(":scope > .followActActionsBar")?.insertAdjacentElement("afterend", nextCaption.cloneNode(true));
+      else article.querySelector(":scope > .followActTop")?.insertAdjacentElement("afterend", nextCaption.cloneNode(true));
     }
-    const nextPills = nextArticle.querySelector(":scope > .followActStylePills");
+    const nextPills = edgeNext ? null : nextArticle.querySelector(":scope > .followActStylePills");
     if (nextPills) {
       const pillsAnchor =
         article.querySelector(":scope > .followActReleaseCaption") ||
@@ -20132,7 +20332,7 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
   const playsBlock =
     kind === "music"
       ? `<span class="followActAct followActAct--stat" data-friends-act="plays" data-play-count-pending="${pending ? "1" : "0"}" aria-label="${escapeHtml(playsAria)}">
-        ${feedActIconPlays()}
+        ${postActIconPlays()}
         <span class="followActActCount">${escapeHtml(playsLabel)}</span>
       </span>`
       : `<span class="followActAct followActAct--stat" aria-hidden="true"></span>`;
@@ -20142,7 +20342,7 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
   const analyticsBlock =
     kind === "music" && isOwner
       ? `<button type="button" class="followActAct followActAct--analytics${analyticsLocked ? " isProLocked" : ""}" data-friends-act="analytics" aria-label="Song analytics">
-        ${feedActIconAnalytics()}
+        ${postActIconAnalytics()}
         ${analyticsLocked ? '<span class="webProFeaturePill webProFeaturePill--act" aria-hidden="true">Pro</span>' : ""}
       </button>`
       : "";
@@ -20150,7 +20350,7 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
   const repostBlock =
     kind === "music" && !isOwner
       ? `<button type="button" class="followActAct followActAct--repost" data-friends-act="repost" aria-label="Repost" aria-pressed="false">
-        ${repostIconSvgHtml("followActActIco")}
+        ${postActIconRepost()}
         <span class="followActActCount" data-friends-act-count="repost"></span>
       </button>`
       : "";
@@ -20160,17 +20360,17 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
   const giftBlock =
     kind === "music" && !isOwner && myId
       ? `<button type="button" class="followActAct followActAct--gift" data-friends-act="gift" aria-label="Gift credits">
-        ${feedActIconGift()}
+        ${postActIconGift()}
       </button>`
       : "";
   return `
     <div class="followActActions" data-friends-act-row="1" data-friends-act-kind="${safeKind}" data-friends-act-target-kind="${safeTargetKind}" data-friends-act-id="${safeId}" data-friends-act-uid="${safeUid}">
       <button type="button" class="followActAct" data-friends-act="reply" aria-label="Reply">
-        ${feedActIconComment()}
+        ${postActIconComment()}
         <span class="followActActCount" data-friends-act-count="reply"></span>
       </button>
       <button type="button" class="followActAct" data-friends-act="like" aria-label="Like" aria-pressed="false">
-        ${feedActIconLike()}
+        ${postActIconLike()}
         <span class="followActActCount" data-friends-act-count="like"></span>
       </button>
       ${repostBlock}
@@ -20820,31 +21020,28 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
     menuBtnHtml: songMenuBtn,
     ariaLabel: `Play ${rawTitle}`,
   });
-  const mediaBlockHtml = feedVinylPlayerUsesLightPrototype(t, type, { xstyle })
-    ? feedVinylPlayerBlockHtml({
-        artSafe: escapeHtml(artSafe),
+  const vinylPost = feedVinylPlayerUsesLightPrototype(t, type, { xstyle });
+  // Remix / mashup posts share the edge-to-edge sleeve + record design (sources become small strips).
+  const mashA = mashupOf ? (t._mashupSourceA || mashupSourceFromMetaEntry(mashupOf.a)) : null;
+  const mashB = mashupOf ? (t._mashupSourceB || mashupSourceFromMetaEntry(mashupOf.b)) : null;
+  const edgeKind = xstyle ? (mashupBlockHtml && mashA && mashB ? "mashup" : (orig ? "remix" : "")) : "";
+  const mediaBlockHtml = (edgeKind || vinylPost || friendsFeed)
+    ? feedEdgeMediaHtml({
+        kind: edgeKind,
+        orig,
+        srcA: mashA,
+        srcB: mashB,
+        profMap,
+        artSafe,
         encUrl,
         encTitle,
         encArt,
         encBy,
         playData,
         safeTitle,
-        centerPlayIconsHtml: coverArtPlayStateIconsHtml(18),
-        durSec: discoverTrackDurationSec(t),
-        durLabel: escapeHtml(formatTime(discoverTrackDurationSec(t) || 0)),
-        seekHtml: feedSeekBarHtml(t, encUrl),
+        track: t,
+        vinyl: vinylPost,
       })
-    : friendsFeed
-      ? friendsFeedCompactMediaHtml({
-          artSafe,
-          encUrl,
-          encTitle,
-          encArt,
-          encBy,
-          playData,
-          safeTitle,
-          track: t,
-        })
       : `
           <div class="followActMediaWrap">
             <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
@@ -20866,11 +21063,15 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   if (xstyle) {
     const badgeHtml = orig || mashupBlockHtml ? "" : (followingActivityBadgeHtml("music", type) || "");
     const friendsExtraClass = friendsFeed ? " followAct--friendsFeed" : "";
-    const stylePillsHtml = feedStyleTagPillsHtml(t);
-    const releaseCaptionHtml = caption ? friendsFeedReleaseCaptionHtml(t) : "";
+    const edgeMedia = Boolean(edgeKind || (!mashupBlockHtml && !remixPairHtml && (vinylPost || friendsFeed)));
+    const stylePillsHtml = edgeMedia ? "" : feedStyleTagPillsHtml(t);
+    const captionBlockHtml = caption ? friendsFeedReleaseCaptionHtml(t, edgeMedia ? handle : "") : "";
+    // Edge-to-edge posts: caption sits under the actions (like a photo post); other layouts keep it above the media.
+    const releaseCaptionHtml = edgeMedia ? "" : captionBlockHtml;
+    const captionAfterHtml = edgeMedia ? captionBlockHtml : "";
     const legacyCaptionBlock = "";
     return `
-      <article class="followAct followAct--music followAct--xstyle${friendsExtraClass}" data-feed-layout="${PROFILE_POSTS_LAYOUT_VER}" data-follow-act="${type}" data-profile-act-song-id="${escapeHtml(String(t.id || ""))}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
+      <article class="followAct followAct--music followAct--xstyle${friendsExtraClass}${edgeMedia ? " followAct--edge" : ""}" data-feed-layout="${PROFILE_POSTS_LAYOUT_VER}" data-follow-act="${type}" data-profile-act-song-id="${escapeHtml(String(t.id || ""))}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
         ${followActXstyleTopHtml({
           profileHref,
           userId: t.userId,
@@ -20890,7 +21091,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
         ${releaseCaptionHtml}
         ${legacyCaptionBlock}
         ${stylePillsHtml}
-        ${mashupBlockHtml || remixPairHtml || mediaBlockWithProgressHtml}
+        ${edgeKind ? mediaBlockWithProgressHtml : (mashupBlockHtml || remixPairHtml || mediaBlockWithProgressHtml)}
         <div class="followActActionsBar">
           ${followActActionsRowHtml({
             kind: "music",
@@ -20906,6 +21107,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
             togetherId,
           })}
         </div>
+        ${captionAfterHtml}
       </article>`;
   }
   const playFootLabel = playsPending
@@ -23075,14 +23277,14 @@ function bindFriendsPageOnce() {
         return;
       }
       if (e.target.closest(".followActAvatar")) return;
-      const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActQuoteCard, .feedVinylPlatter");
+      const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActQuoteCard, .feedRecPlatter");
       if (pl?.classList?.contains?.("followActUserLink")) return;
       if (!pl || !friendsPage.contains(pl)) return;
       e.preventDefault();
       if (
         pl.classList.contains("followActMedia")
         || pl.classList.contains("followActQuoteCard")
-        || pl.classList.contains("feedVinylPlatter")
+        || pl.classList.contains("feedRecPlatter")
         || pl.hasAttribute("data-user-lib-play")
       ) {
         playDiscoverTarget(pl);
@@ -36050,11 +36252,6 @@ function ensurePublishReleaseSheet() {
         <div class="publishReleaseLabel">Style tags <span>(shown on your post)</span></div>
         <p class="publishReleaseTagsHint">Tap to include or remove — they appear exactly like this on your release.</p>
         <div id="publishReleaseTagsRow" class="followActStylePills publishReleaseTagsRow" role="group" aria-label="Style tags to publish"></div>
-      </div>
-      <div id="publishReleasePostDesign" class="publishReleasePostDesign" hidden>
-        <div class="publishReleaseLabel">Post design</div>
-        <p class="publishReleasePostDesignHint">How your release looks in Friends and on your profile.</p>
-        <div id="publishReleasePostDesignRow" class="publishReleasePostDesignRow" role="radiogroup" aria-label="Post design"></div>
       </div>
       <div id="publishReleaseHookBlock" class="publishReleaseHook">
         <div class="publishReleaseLabel">Post start <span>(feed hook)</span></div>
@@ -49905,8 +50102,8 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
     loadPublicConfigFromCache();
   }
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_post_media_layout:meta->>postMediaLayout,meta_deleted_at:meta->>deletedAt";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_post_media_layout:meta->>postMediaLayout,meta_deleted_at:meta->>deletedAt";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_style_tags:meta->styleTags,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_post_media_layout:meta->>postMediaLayout,meta_deleted_at:meta->>deletedAt";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_style_tags:meta->styleTags,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_post_media_layout:meta->>postMediaLayout,meta_deleted_at:meta->>deletedAt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -49960,6 +50157,9 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
               ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
               ...(String(s.meta_style || "").trim() ? { styleInput: String(s.meta_style).trim() } : {}),
               ...(String(s.meta_style_sent || "").trim() ? { styleSent: String(s.meta_style_sent).trim() } : {}),
+              ...(Array.isArray(s.meta_style_tags) && s.meta_style_tags.length
+                ? { styleTags: s.meta_style_tags.map((t) => String(t || "").trim()).filter(Boolean) }
+                : {}),
               ...(String(s.meta_template_id || "").trim() ? { searchTemplateId: String(s.meta_template_id).trim() } : {}),
               ...(String(s.meta_template_title || "").trim() ? { searchTemplateTitle: String(s.meta_template_title).trim() } : {}),
               ...(String(s.meta_dialect || "").trim() ? { dialect: String(s.meta_dialect).trim() } : {}),
@@ -53118,14 +53318,19 @@ function syncFriendsFeedProgressBars() {
       input.style.setProperty("--feedSeekPct", pct);
       wrap.style.setProperty("--feedSeekPct", pct);
       wrap.style.setProperty("--feedWavePct", pct);
-      const seekRow = wrap.closest(".feedSeekRow");
+      try {
+        const edge = wrap.closest(".feedEdge");
+        if (edge) edge.style.setProperty("--feedSeekNum", String(active && dur > 0 ? (value / max) * 100 : 0));
+      } catch {}
+      const seekRow = wrap.closest(".feedSeekRow") || wrap.closest(".feedEdge");
       if (seekRow) {
         const curEl = seekRow.querySelector("[data-feed-seek-cur]");
         const totalEl = seekRow.querySelector("[data-feed-seek-total]");
         if (curEl) curEl.textContent = formatTime(active ? cur : 0);
         if (totalEl) {
           const known = Number(wrap.getAttribute("data-feed-seek-dur") || 0);
-          totalEl.textContent = formatTime(active && dur > 0 ? dur : known);
+          const totalSec = active && dur > 0 ? dur : known;
+          totalEl.textContent = seekRow.classList.contains("feedEdge") && !(totalSec > 0) ? "" : formatTime(totalSec);
         }
       }
       const followAct = wrap.closest(".followAct");
@@ -60587,7 +60792,7 @@ function bindProfileSongsSegmentOnce() {
         else if (kind === "analytics") void openSongAnalyticsSheet(actBtn);
         return;
       }
-      const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActQuoteCard, .feedVinylPlatter");
+      const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActQuoteCard, .feedRecPlatter");
       if (!pl || !actList.contains(pl)) return;
       e.preventDefault();
       playDiscoverTarget(pl);
@@ -68725,6 +68930,7 @@ if (typeof document !== "undefined") {
     try { initNabadVerificationUi(); } catch {}
     try { initCoverImageFallbackOnce(); } catch {}
     try { initFeedVinylPlayerSystem(); } catch {}
+    try { wireFeedEdgeFlipOnce(); } catch {}
     try { wirePlayerConfirmOnce(); } catch {}
   };
   if (document.readyState === "loading") {

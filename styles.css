@@ -68795,3 +68795,184 @@ body #discoverOccasionsPanel .homeDeskMakeSegBtn.active::after{
 body #discoverOccasionsSongs .discoverTemplatesChip{ scroll-snap-align: none; }
 /* centered CTA label */
 body[data-route="discover"] #discoverOccasionsPanel .discoverOccasionStartCta{ display: flex; align-items: center; justify-content: center; text-align: center; }
+
+/* ===== Friends v3: edge-to-edge covers, sleeve ⇄ record, hairline line ===== */
+.followAct--edge .feedEdge{ position: relative; width: 100vw; margin: 10px calc(50% - 50vw) 0; }
+.feedEdgeStage{ position: relative; aspect-ratio: 4 / 5; overflow: hidden; background: #0b0c12; isolation: isolate; }
+/* the sleeve (cover). Fills the stage; when the record is out it steps aside, tilted */
+.feedEdgeSleeve{
+  position: absolute; z-index: 2; left: 0; top: 0; width: 100%; height: 100%; padding: 0; margin: 0; border: 0; border-radius: 0;
+  background: #0b0c12; overflow: hidden; cursor: pointer; display: block; -webkit-tap-highlight-color: transparent;
+  transition: left .6s cubic-bezier(.22,.61,.36,1), top .6s cubic-bezier(.22,.61,.36,1), width .6s cubic-bezier(.22,.61,.36,1), height .6s cubic-bezier(.22,.61,.36,1), border-radius .6s ease, transform .6s cubic-bezier(.22,.61,.36,1), box-shadow .6s ease;
+}
+.feedEdgeImg{ display: block; width: 100%; height: 100%; object-fit: cover; }
+.feedEdgeShade{ position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0,0,0,.28), transparent 26%, transparent 46%, rgba(0,0,0,.74)); transition: opacity .4s ease; }
+.feedEdgeWear{ display: none; }
+.feedRecWrap .feedEdgeWear{ display: block; position: absolute; left: 50%; top: 44%; width: 76%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; border: 1.5px solid rgba(255,255,255,.07); box-shadow: inset 0 0 0 10px rgba(255,255,255,.012), 0 0 0 6px rgba(255,255,255,.02); pointer-events: none; transition: opacity .4s ease; }
+.feedEdgeAmb{ position: absolute; z-index: 0; inset: -20%; background-size: cover; background-position: center; filter: blur(38px) saturate(1.2); opacity: 0; transition: opacity .5s ease; }
+.feedEdgeAmbDim{ position: absolute; z-index: 1; inset: 0; background: rgba(6,7,12,.55); opacity: 0; transition: opacity .5s ease; }
+/* the record */
+.feedEdgeRecord{
+  position: absolute; z-index: 3; width: 66%; aspect-ratio: 1; left: 27%; top: 10%; border-radius: 50%; cursor: pointer;
+  box-shadow: 0 18px 40px rgba(0,0,0,.6), inset 0 0 0 2px rgba(255,255,255,.05);
+  opacity: 0; transform: translateX(-40%) scale(.94); pointer-events: none;
+  transition: opacity .35s ease, transform .6s cubic-bezier(.22,.61,.36,1);
+}
+.feedRecRotor{ position: absolute; inset: 0; border-radius: 50%; overflow: hidden; }
+.feedEdgeRecBase{ position: absolute; inset: 0; border-radius: 50%; background: repeating-radial-gradient(circle at center, #0a0b10 0 2px, #151720 2px 3px), #0a0b10; }
+.feedEdgeRecSheen{ position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, transparent 0 18%, rgba(255,255,255,.10) 24%, transparent 32% 68%, rgba(255,255,255,.08) 74%, transparent 82%); }
+.feedEdgeRecLabel{ position: absolute; left: 50%; top: 50%; width: 36%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 0 0 3px rgba(255,255,255,.85); }
+.feedEdgeRecLabel::after{ content: ""; position: absolute; left: 50%; top: 50%; width: 9%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: #07080e; }
+.feedEdgeRing{ position: absolute; z-index: 4; left: 27%; top: 10%; width: 66%; height: auto; transform: rotate(-90deg); pointer-events: none; opacity: 0; transition: opacity .4s ease .2s; overflow: visible; }
+.feedEdgeRing circle{ fill: none; stroke-width: 1.2; stroke-linecap: round; }
+.feedEdgeRingTrack{ stroke: rgba(255,255,255,.14); }
+.feedEdgeRingFill{ stroke: #fff; stroke-dasharray: var(--feedSeekNum, 0) 100; }
+/* record side */
+.feedEdge.isRecordSide .feedEdgeSleeve{ left: -17%; top: 20%; width: 58%; height: 46.4%; border-radius: 6px; transform: rotate(-5deg); box-shadow: 8px 10px 30px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.1); }
+.feedEdge.isRecordSide .feedEdgeShade, .feedEdge.isRecordSide .feedEdgeWear{ opacity: 0; }
+.feedEdge.isRecordSide .feedEdgeAmb{ opacity: .75; }
+.feedEdge.isRecordSide .feedEdgeAmbDim{ opacity: 1; }
+.feedEdge.isRecordSide .feedEdgeRecord{ opacity: 1; transform: none; pointer-events: auto; transition-delay: .12s, .12s; }
+.feedEdge.isRecordSide .feedEdgeRing{ opacity: 1; }
+/* flip button */
+.feedEdgeFlip{
+  position: absolute; z-index: 7; top: 14px; right: 14px; height: 36px; padding: 0 13px 0 10px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 7px; color: #fff; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  background: rgba(10,11,18,.5); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.18);
+  -webkit-tap-highlight-color: transparent;
+}
+.feedEdgeFlip svg{ width: 18px; height: 18px; color: #23d5ab; display: block; }
+.feedEdgeFlipIco--sleeve, .feedEdgeFlipTxt--sleeve{ display: none; }
+.feedEdge.isRecordSide .feedEdgeFlipIco--rec, .feedEdge.isRecordSide .feedEdgeFlipTxt--rec{ display: none; }
+.feedEdge.isRecordSide .feedEdgeFlipIco--sleeve{ display: inline-flex; }
+.feedEdge.isRecordSide .feedEdgeFlipTxt--sleeve{ display: inline; }
+/* title / meta / play */
+.feedEdgeMeta{ position: absolute; z-index: 5; left: 16px; right: 16px; bottom: 22px; display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; pointer-events: none; transition: gap .3s ease; }
+.feedEdgeMetaText{ min-width: 0; }
+.feedEdgeTitle{ display: block; margin: 0 0 6px; font-family: var(--dz-display, inherit); font-size: 26px; font-weight: 800; line-height: 1.05; letter-spacing: -0.01em; color: #fff; text-wrap: balance; text-shadow: 0 2px 14px rgba(0,0,0,.45); }
+.feedEdgeSub{ display: block; font-size: 13px; font-weight: 500; color: rgba(255,255,255,.8); text-shadow: 0 1px 8px rgba(0,0,0,.5); }
+.feedEdgeTime{ font-variant-numeric: tabular-nums; }
+.feedEdgeKicker{ display: block; margin-top: 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.7); }
+.feedEdgePlay{ flex: none; position: relative; width: 52px; height: 52px; padding: 0; border: 0; border-radius: 50%; background: #fff; color: #0b0b13; display: grid; place-items: center; pointer-events: auto; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.4); -webkit-tap-highlight-color: transparent; }
+.feedEdgePlay:active{ transform: scale(.95); }
+.feedEdgePlay .coverArtPlayIco{ display: none; place-items: center; }
+.feedEdgePlay .coverArtPlayIco--play{ display: grid; }
+.feedEdgePlay .coverArtPlayIco--play svg{ margin-left: 2px; }
+.followAct.discoveryRowPlaying .feedEdgePlay .coverArtPlayIco--play{ display: none; }
+.followAct.discoveryRowPlaying .feedEdgePlay .coverArtPlayIco--pause{ display: grid; }
+.followAct.discoveryRowLoading .feedEdgePlay .coverArtPlayIco--play, .followAct.discoveryRowLoading .feedEdgePlay .coverArtPlayIco--pause{ display: none; }
+.followAct.discoveryRowLoading .feedEdgePlay .coverArtPlayIco--loading{ display: grid; }
+.feedEdgePlay .coverArtPlaySpinner{ display: block; width: 22px; height: 22px; border-radius: 50%; border: 3px solid rgba(11,11,19,.18); border-top-color: #0b0b13; animation: playerSpin .75s linear infinite; }
+.feedEdge.isRecordSide .feedEdgeMeta{ flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+.feedEdge.isRecordSide .feedEdgeTitle{ font-size: 22px; margin-bottom: 4px; }
+/* the hairline on the bottom edge of the image */
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--edge .feedSeek.feedSeek--line.followActRealtimeProgress{
+  position: absolute !important; left: 0 !important; right: 0 !important; bottom: 0 !important; top: auto !important; width: auto !important;
+  height: 26px; margin: 0 !important; padding: 0 !important; z-index: 6; flex: none;
+}
+.feedSeek--line .feedSeekTrack{ top: auto; bottom: 0; margin-top: 0; height: 3px; border-radius: 0; background: rgba(255,255,255,.22); transition: height .18s ease; }
+.feedSeek--line .feedSeekFill{ border-radius: 0; }
+.feedSeek--line .feedSeekThumb{ top: auto; bottom: 0; margin: 0 0 -7.5px -9px; width: 18px; height: 18px; transform: scale(0); }
+.feedSeek--line.isActive .feedSeekThumb{ transform: scale(0); }
+.feedSeek--line.isActive .feedSeekTrack{ height: 3px; margin-top: 0; }
+.feedSeek--line:active .feedSeekTrack{ height: 8px; }
+.feedSeek--line:active .feedSeekThumb{ transform: scale(1); margin-bottom: -5px; }
+.feedSeek--line .feedHookMarker{ top: auto; bottom: 6px; }
+@media (prefers-reduced-motion: reduce){
+  .feedEdgeSleeve, .feedEdgeRecord, .feedEdgeAmb, .feedEdgeAmbDim, .feedEdgeRing{ transition-duration: .01s; transition-delay: 0s; }
+}
+/* the actions bar sits on the dark page, under the image */
+.followAct--edge .followActActionsBar{ margin-top: 2px; }
+
+.feedEdgeTimeTotal:has([data-feed-seek-total]:empty){ display: none; }
+
+/* ===== Friends v3.1: remix + mashup on the same sleeve/record, source strips ===== */
+.feedEdgeBottom{ position: absolute; z-index: 5; left: 16px; right: 16px; bottom: 22px; display: grid; gap: 12px; pointer-events: none; }
+.feedEdgeBottom .feedEdgeMeta{ position: static; inset: auto; }
+.feedEdge.isRecordSide .feedEdgeSrc{ display: none; }
+.feedRecWrap.isPlaying .feedEdgeFlipIco svg{ animation: playerSpin 3s linear infinite; }
+.feedEdge--swap .feedEdgeWear{ display: none; }
+/* kind tag (Remix / Mashup) top-left, same glass as the Record button */
+.feedEdgeKind{ position: absolute; z-index: 7; top: 14px; left: 14px; height: 30px; padding: 0 12px 0 9px; border-radius: 999px; display: inline-flex; align-items: center; gap: 7px; color: #fff; font-size: 11.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; background: rgba(10,11,18,.5); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.18); pointer-events: none; }
+.feedEdgeKind svg{ width: 15px; height: 15px; color: #23d5ab; }
+/* strip that names the source(s) */
+.feedEdgeSrc{ display: flex; align-items: center; gap: 11px; padding: 8px; border-radius: 20px; background: rgba(10,11,18,.5); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.16); color: #fff; pointer-events: none; }
+.feedEdgeMini{ flex: none; width: 44px; height: 44px; border-radius: 5px; overflow: hidden; transform: rotate(-4deg); box-shadow: 3px 4px 10px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.14); }
+.feedEdgeMini img{ display: block; width: 100%; height: 100%; object-fit: cover; }
+.feedEdgeSrcText{ min-width: 0; flex: 1; display: block; text-align: left; }
+.feedEdgeSrcText small{ display: block; font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.6); margin-bottom: 2px; }
+.feedEdgeSrcText b{ display: block; font-size: 14.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.feedEdgeSrcText span{ display: block; font-size: 12px; color: rgba(255,255,255,.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.feedEdgeSrcPlay{ flex: none; width: 38px; height: 38px; padding: 0; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.75); background: transparent; color: #fff; display: grid; place-items: center; pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.feedEdgeSrcPlay svg{ width: 14px; height: 14px; margin-left: 2px; }
+.feedEdgeSrc--two{ display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; }
+.feedEdgeSrcHalf{ display: flex; align-items: center; gap: 9px; min-width: 0; padding: 0; margin: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+div.feedEdgeSrcHalf{ pointer-events: none; cursor: default; }
+.feedEdgeSrc--two .feedEdgeMini{ width: 38px; height: 38px; }
+.feedEdgeSrc--two .feedEdgeSrcText b{ font-size: 13px; }
+.feedEdgeSrc--two .feedEdgeSrcText span{ font-size: 11px; }
+.feedEdgeSrcX{ width: 22px; text-align: center; color: rgba(255,255,255,.6); font-size: 15px; font-weight: 600; }
+/* mashup: split cover + × badge */
+.feedEdgeSplit{ position: absolute; inset: 0; display: block; }
+.feedEdgeSplit img{ position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.feedEdgeSplitA{ clip-path: polygon(0 0, 60% 0, 40% 100%, 0 100%); }
+.feedEdgeSplitB{ clip-path: polygon(60% 0, 100% 0, 100% 100%, 40% 100%); }
+.feedEdgeXBadge{ position: absolute; z-index: 4; left: 50%; top: 41%; transform: translate(-50%, -50%); width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 24px; font-weight: 600; background: rgba(10,11,18,.55); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1.5px solid rgba(255,255,255,.45); pointer-events: none; transition: opacity .35s ease; }
+.feedEdge.isRecordSide .feedEdgeXBadge{ opacity: 0; }
+.feedEdgeRecLabel--two{ overflow: hidden; }
+.feedEdgeRecLabel--two img{ position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.feedEdgeRecLabel--two img:first-child{ clip-path: polygon(0 0, 58% 0, 42% 100%, 0 100%); }
+.feedEdgeRecLabel--two img:last-child{ clip-path: polygon(58% 0, 100% 0, 100% 100%, 42% 100%); }
+/* the cover steps aside (fades) and the source sleeve(s) take its place next to the record */
+.feedEdge--swap .feedEdgeSleeve{ transition: left .6s cubic-bezier(.22,.61,.36,1), top .6s cubic-bezier(.22,.61,.36,1), width .6s cubic-bezier(.22,.61,.36,1), height .6s cubic-bezier(.22,.61,.36,1), border-radius .6s ease, transform .6s cubic-bezier(.22,.61,.36,1), box-shadow .6s ease, opacity .4s ease; }
+.feedEdge--swap.isRecordSide .feedEdgeSleeve{ opacity: 0; pointer-events: none; }
+.feedEdgeSide{ position: absolute; z-index: 2; width: 58%; aspect-ratio: 1; padding: 0; margin: 0; border: 0; border-radius: 6px; overflow: hidden; display: block; cursor: pointer; opacity: 0; pointer-events: none; box-shadow: 8px 10px 30px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.1); transition: opacity .45s ease .1s; -webkit-tap-highlight-color: transparent; }
+div.feedEdgeSide{ cursor: default; }
+.feedEdgeSide img{ display: block; width: 100%; height: 100%; object-fit: cover; }
+.feedEdgeSide::after{ content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,.14), transparent 40%, rgba(0,0,0,.25)); pointer-events: none; }
+.feedEdge.isRecordSide .feedEdgeSide{ opacity: 1; pointer-events: auto; }
+div.feedEdgeSide, .feedEdge.isRecordSide div.feedEdgeSide{ pointer-events: none; }
+.feedEdgeSide--orig{ left: -17%; top: 20%; transform: rotate(-5deg); }
+.feedEdgeSide--a{ left: -14%; top: 22%; transform: rotate(-9deg); z-index: 1; }
+.feedEdgeSide--b{ left: -19%; top: 25%; transform: rotate(3deg); z-index: 2; }
+.feedEdgeSideChip{ position: absolute; z-index: 3; left: 9px; top: 9px; padding: 4px 8px; border-radius: 999px; background: rgba(10,11,18,.6); border: 1px solid rgba(255,255,255,.18); color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.feedEdgeSideLbl{ position: absolute; z-index: 6; left: 12px; top: 69%; padding: 4px 9px; border-radius: 999px; background: rgba(10,11,18,.6); border: 1px solid rgba(255,255,255,.18); color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; opacity: 0; pointer-events: none; transition: opacity .45s ease .15s; }
+.feedEdge.isRecordSide .feedEdgeSideLbl{ opacity: 1; }
+
+/* ===== Friends v3.2: one 16pt edge, full-white release note and actions ===== */
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle .followActTop{
+  padding-left: 16px !important; padding-right: 8px !important;
+}
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle .followActActionsBar{
+  padding: 0 !important; margin: 4px 0 0 !important;
+}
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle .followActActions{
+  padding: 0 16px 0 11px !important; gap: 2px !important; width: 100% !important; box-sizing: border-box;
+}
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle .followActActions .followActAct:not(.isLiked):not(.isGifted):not(.isReposted):not(.followActAct--stat){
+  color: #fff !important;
+}
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle .followActActions .followActAct--stat{
+  color: rgba(255,255,255,.7) !important; margin-left: auto;
+}
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle .followActActIco{
+  stroke-width: 1.9 !important;
+}
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle .followActActCount{
+  font-size: 14px; font-weight: 600;
+}
+/* release note */
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle .followActReleaseCaption{
+  padding: 0 16px !important; margin: 4px 0 0 !important; box-sizing: border-box;
+}
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle .followActReleaseCaption .followActCaption{
+  margin: 0 !important; padding: 0 !important; color: #fff !important; font-size: 16px !important; font-weight: 600 !important; line-height: 1.42 !important; text-wrap: pretty;
+}
+.followActCaptionHandle{ font-weight: 800; color: #fff; }
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle .followActReleaseCaption .followActCaptionText{ color: #fff; }
+/* header, action row and note each span the viewport (same trick as the cover) so the page gutter never offsets them from the 16pt edge */
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActTop,
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActActionsBar,
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActReleaseCaption{
+  width: 100vw !important; max-width: 100vw !important; margin-left: calc(50% - 50vw) !important; margin-right: calc(50% - 50vw) !important; box-sizing: border-box !important;
+}

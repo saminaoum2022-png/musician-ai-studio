@@ -13933,7 +13933,8 @@ function renderDiscoverFeedForYou(tracks, profMap) {
     12,
   );
   const featuredPacks = discoverFeaturedChallengePacksForForYou(tracks);
-  const tonightHtml = discoverTonightHeroHtml(discoverTonightPickTrack(tracks, prefs), profMap);
+  // The song pick no longer leads the carousel (a user photo/cover must never be the full-bleed hero): designed slides only.
+  const tonightHtml = "";
   const challengeBlock = (featuredPacks.length || tonightHtml)
     ? discoverFeedFeaturedHeroCarouselHtml(featuredPacks, tracks, tonightHtml)
     : "";

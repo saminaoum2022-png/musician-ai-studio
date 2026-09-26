@@ -68609,3 +68609,24 @@ body.pfOpen{ overflow: hidden; }
 .upmSkelCard i{ height: 12px; width: 80%; border-radius: 6px; }
 .upmSkelCard i.short{ height: 10px; width: 45%; }
 @media (prefers-reduced-motion: reduce){ .upmSk{ animation: none; } }
+
+/* Discover hero: designed slides only → shorter card, text anchored at the bottom (no empty lower half) */
+body[data-route="discover"] .discoverFeaturedHeroCarousel .discoverFeaturedChallengeHero{
+  min-height: clamp(292px, 78vw, 330px);
+  display: flex;
+}
+body[data-route="discover"] .discoverFeaturedHeroCarousel .discoverFeaturedChallengeHeroBody{
+  flex: 1;
+  min-height: 0;
+  justify-content: flex-end;
+  padding: 22px 20px 20px;
+  gap: 8px;
+}
+body[data-route="discover"] .discoverFeaturedChallengeHeroTitle{ font-size: clamp(30px, 8.6vw, 36px); line-height: 1.02; }
+body[data-route="discover"] .discoverFeaturedChallengeHeroSub{ max-width: 88%; }
+body[data-route="discover"] .discoverFeaturedChallengeHeroCta{ margin-top: 6px; }
+body[data-route="discover"] .discoverFeaturedHeroTrack > .discoverFeaturedChallengeHero{ display: flex !important; align-items: stretch; min-height: clamp(292px, 78vw, 330px) !important; }
+body[data-route="discover"] .discoverFeaturedHeroTrack > .discoverFeaturedChallengeHero > .discoverFeaturedChallengeHeroBody{ flex: 1 1 auto !important; width: 100%; min-height: 0 !important; height: auto !important; justify-content: flex-end !important; }
+body[data-route="discover"] .discoverFeaturedHeroDots{ margin: 12px 0 0; }
+body[data-route="discover"] .discoverLiveNow{ margin-top: 10px; }
+body[data-route="discover"] .discoverFeedSection--featuredChallenge + .discoverLiveNow{ margin-top: 10px; }

@@ -26935,6 +26935,7 @@ function teardownPublishHookUi() {
     try { ui.previewAudio.src = ""; } catch {}
   }
   if (ui.previewTimer) window.clearInterval(ui.previewTimer);
+  ui.sheet?.classList.remove("isFindingHook");
 }
 
 function hookSourceLabel(source) {
@@ -26951,14 +26952,26 @@ function syncPublishHookRangeUi(ui) {
     ? 0
     : normalizeHookStartSec(Number(ui.range.value || 0), dur);
   ui.timeLabel.textContent = formatTime(sec);
-  if (ui.sourceLabel) {
+  const auto = Number(ui.autoHookSec || 0);
+  const atChorus = !ui.fromStart && auto > 0 && Math.abs(sec - auto) < 0.35;
+  if (ui.sourceLabel && ui.autoResolved) {
     ui.sourceLabel.textContent = ui.fromStart
-      ? "Starts at 0:00 in feeds"
-      : `${hookSourceLabel(ui.autoSource)} · ${formatTime(sec)}`;
+      ? "Feeds start at 0:00"
+      : atChorus ? "Chorus found" : "Your choice";
   }
+  if (ui.autoResolved) ui.sheet?.classList.remove("isFindingHook");
   if (ui.useChorusBtn) {
-    const auto = Number(ui.autoHookSec || 0);
-    ui.useChorusBtn.hidden = ui.fromStart || !auto || Math.abs(sec - auto) < 0.35;
+    ui.useChorusBtn.disabled = !auto;
+    ui.useChorusBtn.classList.toggle("on", atChorus);
+  }
+  ui.sheet?.querySelector("#pubChipStart")?.classList.toggle("on", Boolean(ui.fromStart));
+  // marker + brighter bars from the marker on (that is what the feed plays)
+  const pct = ui.durationSec > 0 ? Math.max(0, Math.min(1, sec / ui.durationSec)) : 0;
+  const marker = ui.sheet?.querySelector("#pubMarker");
+  if (marker) marker.style.left = `${pct * 100}%`;
+  if (ui.waveBars) {
+    const idx = Math.floor(pct * ui.waveBars.length);
+    ui.waveBars.forEach((b, i) => b.classList.toggle("on", i >= idx));
   }
 }
 
@@ -26984,7 +26997,10 @@ async function initPublishHookUi(sheet, track) {
   const fromStart = existingSource === "beginning" || existingSec === 0;
   fromStartToggle.checked = fromStart;
   picker.hidden = fromStart;
-  if (sourceLabel) sourceLabel.textContent = "Finding the best hook…";
+  if (sourceLabel) sourceLabel.textContent = "Finding the best part";
+  sheet.classList.add("isFindingHook");
+  renderPublishWaveBars({ sheet, waveBars: null }, null);
+  sheet.querySelector("#pubWave")?.classList.add("isLoading");
 
   const previewAudio = new Audio();
   previewAudio.preload = "metadata";
@@ -27011,12 +27027,34 @@ async function initPublishHookUi(sheet, track) {
     previewTimer: null,
   };
   _publishHookUi = ui;
+  ui.waveBars = [...(sheet.querySelector("#pubWaveBars")?.children || [])];
 
   const onRangeInput = () => {
     ui.userTouched = true;
+    // dragging the marker means you want a moment, not the beginning
+    if (ui.fromStart) { ui.fromStart = false; fromStartToggle.checked = false; }
     syncPublishHookRangeUi(ui);
   };
   range.addEventListener("input", onRangeInput);
+  // iOS only moves a range slider when its thumb is grabbed, so the waveform handles the touch itself.
+  const wave = sheet.querySelector("#pubWave");
+  if (wave && wave.dataset.boundPointer !== "1") {
+    wave.dataset.boundPointer = "1";
+    const setFromX = (clientX) => {
+      const r = wave.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (clientX - r.left) / Math.max(1, r.width)));
+      range.value = String(pct * Number(range.max || 0));
+      range.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    let dragging = false;
+    wave.addEventListener("pointerdown", (e) => {
+      dragging = true;
+      try { wave.setPointerCapture(e.pointerId); } catch {}
+      setFromX(e.clientX);
+    });
+    wave.addEventListener("pointermove", (e) => { if (dragging) setFromX(e.clientX); });
+    ["pointerup", "pointercancel"].forEach((t) => wave.addEventListener(t, () => { dragging = false; }));
+  }
 
   fromStartToggle.addEventListener("change", () => {
     ui.fromStart = fromStartToggle.checked;
@@ -27071,10 +27109,16 @@ async function initPublishHookUi(sheet, track) {
   range.max = String(Math.max(1, ui.durationSec));
   range.step = "0.1";
 
+  // the waveform loads in parallel with the chorus search; if it cannot be read the bar stays plain
+  void loadPublishWavePeaks(url).then((peaks) => {
+    if (_publishHookUi !== ui) return;
+    renderPublishWaveBars(ui, peaks);
+  });
   const auto = await resolveAutoHookForTrack(track, ui.durationSec);
   if (_publishHookUi !== ui) return;
   ui.autoHookSec = Number(auto.hookStartSec || 0);
   ui.autoSource = auto.hookSource || "default";
+  ui.autoResolved = true;
 
   let startSec = ui.autoHookSec;
   if (existingSource === "beginning") startSec = 0;
@@ -36239,6 +36283,93 @@ function dismissPublishReleaseKeyboard() {
   applyPublishReleaseKeyboardInset(0);
 }
 
+function publishPreviewSub(sheet) {
+  const tags = readPublishReleaseSelectedTags(sheet).slice(0, 3);
+  return tags.length ? tags.join(" · ") : "Your song";
+}
+
+/** The post as it will look in the feed: cover, title, tags line and your note. */
+function refreshPublishPreview(sheet) {
+  if (!sheet) return;
+  const text = String(sheet.querySelector("#publishReleaseCaption")?.value || "").trim();
+  const noteEl = sheet.querySelector("#pubPvText");
+  if (noteEl) {
+    noteEl.textContent = text || "Your note appears here";
+    noteEl.classList.toggle("isPlaceholder", !text);
+  }
+  const sub = sheet.querySelector("#pubPvSub");
+  if (sub) sub.textContent = publishPreviewSub(sheet);
+  const count = sheet.querySelector("#pubCapCount");
+  if (count) count.textContent = `${text.length} / 160 · @ to mention a fan`;
+}
+
+function showPublishDone(sheet, pending) {
+  const title = sheet.querySelector("#pubDoneTitle");
+  const text = sheet.querySelector("#pubDoneText");
+  const share = sheet.querySelector("#pubDoneShare");
+  if (title) title.textContent = pending ? "Publishing" : "Published";
+  if (text) text.textContent = pending
+    ? "Saving your song. We will tell you the moment it is live."
+    : "It is on your profile and in your fans' feeds.";
+  // Sharing needs the public copy, which is not there yet while it is still being saved.
+  if (share) share.hidden = Boolean(pending);
+  const done = sheet.querySelector("#pubPvDone");
+  const pv = sheet.querySelector("#pubPv");
+  if (done && pv) done.innerHTML = pv.innerHTML;
+  sheet.classList.add("isDone");
+}
+
+const PUBLISH_WAVE_BARS = 56;
+
+function renderPublishWaveBars(ui, peaks) {
+  const host = ui?.sheet?.querySelector("#pubWaveBars");
+  if (!host) return;
+  const n = PUBLISH_WAVE_BARS;
+  let html = "";
+  for (let i = 0; i < n; i++) {
+    const h = peaks ? Math.max(10, Math.round(peaks[i] * 100)) : 34;
+    html += `<i style="height:${h}%"></i>`;
+  }
+  host.innerHTML = html;
+  ui.waveBars = [...host.children];
+  ui.sheet.querySelector("#pubWave")?.classList.remove("isLoading");
+  ui.sheet.querySelector("#pubWave")?.classList.toggle("isPlain", !peaks);
+  syncPublishHookRangeUi(ui);
+}
+
+/** Read the song's loudness shape. Any failure (no CORS, too big, undecodable) returns null and the bar stays plain. */
+async function loadPublishWavePeaks(url) {
+  const n = PUBLISH_WAVE_BARS;
+  const ctrl = new AbortController();
+  const timer = window.setTimeout(() => ctrl.abort(), 9000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) return null;
+    if (Number(res.headers.get("content-length") || 0) > 14 * 1024 * 1024) return null;
+    const buf = await res.arrayBuffer();
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    const ac = new Ctx();
+    const audio = await new Promise((ok, bad) => { try { ac.decodeAudioData(buf, ok, bad); } catch (e) { bad(e); } });
+    try { ac.close(); } catch {}
+    const ch = audio.getChannelData(0);
+    const step = Math.max(1, Math.floor(ch.length / n));
+    const raw = [];
+    for (let i = 0; i < n; i++) {
+      let max = 0;
+      const stride = Math.max(1, Math.floor(step / 200));
+      for (let j = i * step; j < Math.min(ch.length, (i + 1) * step); j += stride) max = Math.max(max, Math.abs(ch[j]));
+      raw.push(max);
+    }
+    const top = Math.max(...raw, 0.0001);
+    return raw.map((v) => Math.pow(v / top, 0.7));
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 function ensurePublishReleaseSheet() {
   let sheet = document.getElementById("publishReleaseSheet");
   if (sheet) return sheet;
@@ -36248,57 +36379,65 @@ function ensurePublishReleaseSheet() {
   sheet.hidden = true;
   sheet.innerHTML = `
     <div class="publishReleaseBackdrop" data-publish-release-close="1"></div>
-    <div class="publishReleaseCard" role="dialog" aria-modal="true" aria-labelledby="publishReleaseTitle">
+    <div class="publishReleaseCard pubCard" role="dialog" aria-modal="true" aria-labelledby="publishReleaseTitle">
+      <i class="pubHairline" aria-hidden="true"></i>
       <div class="publishReleaseGrab" aria-hidden="true"></div>
-      <button type="button" class="publishReleaseClose" data-publish-release-close="1" aria-label="Close">×</button>
-      <div class="publishReleaseHead">
-        <img id="publishReleaseArt" class="publishReleaseArt" alt="" />
-        <div class="publishReleaseHeadText">
-          <div class="publishReleaseKicker">Publish Release</div>
-          <div id="publishReleaseTitle" class="publishReleaseTitle">Release this song</div>
-          <div id="publishReleaseSub" class="publishReleaseSub">This becomes part of your public sound.</div>
+      <div class="pubBody">
+        <div class="pubHead">
+          <img id="publishReleaseArt" class="pubHeadArt" alt="" />
+          <div class="pubHeadText"><small>Publish</small><b id="publishReleaseTitle">Release this song</b></div>
+          <button type="button" class="pubClose" data-publish-release-close="1" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         </div>
-      </div>
-      <label class="publishReleaseLabel" for="publishReleaseCaption">Release note <span>(optional)</span></label>
-      <textarea id="publishReleaseCaption" class="publishReleaseCaption" rows="3" maxlength="160" placeholder="Say something about the mood, story, or moment… Mention mutual fans with @username"></textarea>
-      <div class="publishReleasePermits" role="group" aria-label="Collaboration permissions">
-        <label class="publishReleasePermit">
-          <input id="publishAllowRemix" class="publishReleaseCheck" type="checkbox" checked />
-          <span>Allow others to remix this song</span>
-        </label>
-        <label class="publishReleasePermit">
-          <input id="publishAllowMashup" class="publishReleaseCheck" type="checkbox" checked />
-          <span>Allow others to use it in mashups</span>
-        </label>
-      </div>
-      <div id="publishReleaseTags" class="publishReleaseTags" hidden>
-        <div class="publishReleaseLabel">Style tags <span>(shown on your post)</span></div>
-        <p class="publishReleaseTagsHint">Tap to include or remove — they appear exactly like this on your release.</p>
-        <div id="publishReleaseTagsRow" class="followActStylePills publishReleaseTagsRow" role="group" aria-label="Style tags to publish"></div>
-      </div>
-      <div id="publishReleaseHookBlock" class="publishReleaseHook">
-        <div class="publishReleaseLabel">Post start <span>(feed hook)</span></div>
-        <p class="publishReleaseHookSub">In Discover and Friends, listeners hear your song from this moment first. The full track still plays in the player.</p>
-        <label class="publishReleasePermit publishReleaseHookToggle">
-          <input id="publishHookFromStart" class="publishReleaseCheck" type="checkbox" />
-          <span>Start from the beginning</span>
-        </label>
-        <div id="publishReleaseHookPicker" class="publishReleaseHookPicker">
-          <div class="publishReleaseHookTimeRow">
-            <span id="publishHookTimeLabel" class="publishReleaseHookTime">0:00</span>
-            <span id="publishHookSourceLabel" class="publishReleaseHookBadge">Finding hook…</span>
+        <p id="publishReleaseSub" class="pubLead">This puts the song on your profile and in your fans' feeds.</p>
+        <div class="pubPv" id="pubPv" aria-hidden="true">
+          <div class="pubPvCover"><img id="pubPvImg" alt="" />
+            <div class="pubPvMeta"><b id="pubPvTitle"></b><span id="pubPvSub"></span></div>
+            <span class="pubPvPlay"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M8.2 5.6v12.8a.8.8 0 0 0 1.2.7l10-6.4a.8.8 0 0 0 0-1.4l-10-6.4a.8.8 0 0 0-1.2.7z" fill="currentColor"/></svg></span>
           </div>
-          <input id="publishHookRange" class="publishReleaseHookRange" type="range" min="0" max="100" step="0.1" value="0" aria-label="Post start time" />
-          <div class="publishReleaseHookActions">
-            <button type="button" class="publishReleaseHookPreview" id="publishHookPreview">Preview hook</button>
-            <button type="button" class="publishReleaseHookReset" id="publishHookUseChorus" hidden>Use chorus</button>
+          <div class="pubPvNote"><b id="pubPvHandle"></b> <span id="pubPvText"></span></div>
+        </div>
+        <div class="pubCap">
+          <textarea id="publishReleaseCaption" class="publishReleaseCaption pubCapInput" rows="2" maxlength="160" placeholder="Say something about the mood, the story, the moment" aria-label="Release note"></textarea>
+          <small id="pubCapCount" class="pubCapCount">0 / 160 · @ to mention a fan</small>
+        </div>
+        <div id="publishReleaseTags" class="publishReleaseTags pubTags" hidden>
+          <div class="pubLb">Style tags</div>
+          <div id="publishReleaseTagsRow" class="followActStylePills publishReleaseTagsRow" role="group" aria-label="Style tags to publish"></div>
+        </div>
+        <div id="publishReleaseHookBlock" class="publishReleaseHook pubHook">
+          <div class="pubHookHead"><b>Where the feed starts</b><span id="publishHookTimeLabel" class="pubHookTime">0:00</span></div>
+          <div class="pubFind"><span class="nbBars nbBars--load pubFindBars" aria-hidden="true"><i></i><i></i></span><span id="publishHookSourceLabel" class="pubFindText">Finding the best part</span></div>
+          <span id="publishReleaseHookPicker" hidden></span>
+          <div class="pubWave isLoading" id="pubWave">
+            <span class="pubWaveBars" id="pubWaveBars" aria-hidden="true"></span>
+            <u class="pubMarker" id="pubMarker" aria-hidden="true"></u>
+            <input id="publishHookRange" class="pubRange" type="range" min="0" max="100" step="0.1" value="0" aria-label="Where the feed starts" />
+          </div>
+          <div class="pubHookFoot">
+            <button type="button" class="pubChip" id="publishHookUseChorus">Chorus</button>
+            <label class="pubChip pubChipStart" id="pubChipStart"><input id="publishHookFromStart" class="pubChipCheck" type="checkbox" /><span>Start</span></label>
+            <button type="button" class="pubPrev" id="publishHookPreview"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8.2 5.6v12.8a.8.8 0 0 0 1.2.7l10-6.4a.8.8 0 0 0 0-1.4l-10-6.4a.8.8 0 0 0-1.2.7z" fill="currentColor"/></svg>Preview</button>
           </div>
         </div>
+        <div class="pubGroup" role="group" aria-label="Collaboration permissions">
+          <label class="pubSwitchRow"><span class="pubSwitchText"><b>Allow remixes</b><small>Others can build on your song</small></span><input id="publishAllowRemix" class="pubSwitch" type="checkbox" checked /></label>
+          <label class="pubSwitchRow"><span class="pubSwitchText"><b>Allow mashups</b><small>Others can blend it with theirs</small></span><input id="publishAllowMashup" class="pubSwitch" type="checkbox" checked /></label>
+        </div>
+        <div id="publishReleaseMeta" class="publishReleaseMeta pubMeta" hidden></div>
+        <div class="pubActions">
+          <button type="button" class="pubBtn pubBtn--cancel" data-publish-release-close="1" id="publishReleaseCancel">Cancel</button>
+          <button type="button" class="pubBtn pubBtn--publish" id="publishReleaseConfirm">Publish</button>
+        </div>
       </div>
-      <div id="publishReleaseMeta" class="publishReleaseMeta" hidden></div>
-      <div class="publishReleaseActions">
-        <button type="button" class="publishReleaseBtn publishReleaseBtn--cancel" data-publish-release-close="1">Cancel</button>
-        <button type="button" class="publishReleaseBtn publishReleaseBtn--publish" id="publishReleaseConfirm">Publish</button>
+      <div class="pubDone" aria-live="polite">
+        <span class="pubDoneIco"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+        <b id="pubDoneTitle">Published</b>
+        <p id="pubDoneText">It is on your profile and in your fans' feeds.</p>
+        <div class="pubPv pubPv--done" id="pubPvDone" aria-hidden="true"></div>
+        <div class="pubActions">
+          <button type="button" class="pubBtn pubBtn--cancel" id="pubDoneShare">Share it</button>
+          <button type="button" class="pubBtn pubBtn--done" id="pubDoneClose" data-publish-release-close="1">Done</button>
+        </div>
       </div>
     </div>
   `;
@@ -36313,26 +36452,53 @@ function ensurePublishReleaseSheet() {
   bindPublishReleaseTagsOnce(sheet);
   bindPublishReleasePostDesignOnce(sheet);
   wireBottomSheetKeyboardOnce();
+  sheet.querySelector("#publishReleaseCaption")?.addEventListener("input", () => refreshPublishPreview(sheet));
+  sheet.querySelector("#publishReleaseTagsRow")?.addEventListener("click", () => window.setTimeout(() => refreshPublishPreview(sheet), 0));
+  sheet.querySelector("#pubDoneShare")?.addEventListener("click", () => {
+    const t = loadLibrary().find((x) => String(x.id) === String(sheet.dataset.trackId || ""));
+    if (!t) return;
+    void shareTrackLinkExternally({ url: t.url, title: t.title, songId: String(t.id || ""), byLine: activeProfile?.username ? `@${String(activeProfile.username).replace(/^@/, "")}` : "" });
+  });
   const confirm = sheet.querySelector("#publishReleaseConfirm");
   if (confirm) {
-    confirm.addEventListener("click", () => {
+    confirm.addEventListener("click", async () => {
       const id = String(sheet.dataset.trackId || "").trim();
-      if (!id) return;
+      if (!id || sheet.classList.contains("isPublishing")) return;
       const caption = String(sheet.querySelector("#publishReleaseCaption")?.value || "").trim();
       const allowRemix = sheet.querySelector("#publishAllowRemix")?.checked !== false;
       const allowMashup = sheet.querySelector("#publishAllowMashup")?.checked !== false;
       const styleTags = readPublishReleaseSelectedTags(sheet);
       const postMediaLayout = readPublishReleasePostDesign(sheet);
       const hookPayload = readPublishHookPayload(sheet);
-      closePublishReleaseSheet();
-      void setLibraryTrackPublicOnProfile(id, true, {
-        releaseCaption: caption,
-        allowRemix,
-        allowMashup,
-        styleTags,
-        postMediaLayout,
-        ...hookPayload,
-      });
+      // Publishing state: hairline on, button shows the two bars, everything else is locked.
+      teardownPublishHookUi();
+      dismissPublishReleaseKeyboard();
+      sheet.classList.add("isPublishing");
+      confirm.innerHTML = `<span class="nbBars nbBars--load pubBtnBars" aria-hidden="true"><i></i><i></i></span><span>Publishing</span>`;
+      sheet.querySelectorAll("textarea, input, button").forEach((el) => { if (el !== confirm) el.disabled = true; });
+      confirm.disabled = true;
+      let result = { ok: false };
+      try {
+        result = await setLibraryTrackPublicOnProfile(id, true, {
+          releaseCaption: caption,
+          allowRemix,
+          allowMashup,
+          styleTags,
+          postMediaLayout,
+          ...hookPayload,
+        }) || { ok: false };
+      } catch (e) {
+        console.warn("[publish] failed", e);
+      }
+      sheet.classList.remove("isPublishing");
+      sheet.querySelectorAll("textarea, input, button").forEach((el) => { el.disabled = false; });
+      confirm.disabled = false;
+      confirm.textContent = "Publish";
+      if (!result.ok) {
+        showToast("Could not publish. Try again.", { icon: "!", durationMs: 3000 });
+        return;
+      }
+      showPublishDone(sheet, Boolean(result.pending));
     });
   }
   return sheet;
@@ -36378,7 +36544,15 @@ function openPublishReleaseSheet(trackId, opts = {}) {
   const metaEl = sheet.querySelector("#publishReleaseMeta");
   if (artEl) artEl.src = art;
   if (titleEl) titleEl.textContent = title;
-  if (subEl) subEl.textContent = "Move this from your private studio to your public sound.";
+  if (subEl) subEl.textContent = "This puts the song on your profile and in your fans' feeds.";
+  sheet.classList.remove("isDone", "isPublishing");
+  sheet.querySelectorAll("textarea, input, button").forEach((el) => { el.disabled = false; });
+  const pvImg = sheet.querySelector("#pubPvImg");
+  if (pvImg) pvImg.src = art;
+  const pvTitle = sheet.querySelector("#pubPvTitle");
+  if (pvTitle) pvTitle.textContent = title;
+  const pvHandle = sheet.querySelector("#pubPvHandle");
+  if (pvHandle) pvHandle.textContent = String(activeProfile?.username || "you").replace(/^@/, "");
   if (caption) {
     caption.value = String(track?.meta?.releaseCaption || "").trim();
     applyUserTextInputDir(caption);
@@ -36392,6 +36566,7 @@ function openPublishReleaseSheet(trackId, opts = {}) {
   if (mashupToggle) mashupToggle.checked = trackAllowsMashup(track);
   renderPublishReleaseTags(sheet, track);
   renderPublishReleasePostDesign(sheet, track, art);
+  refreshPublishPreview(sheet);
   if (metaEl) {
     if (remixOf) {
       metaEl.hidden = false;

@@ -68979,10 +68979,13 @@ body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profile
 
 /* ===== First run v3: bar-loader launch, tap-through onboarding, sign-in ===== */
 /* --- onboarding (3 pages, no Next button) --- */
-body.isOnboarding .onboardingScreen.ob3{
-  border-radius: 0 !important;
-  background: radial-gradient(90% 45% at 100% 0%, rgba(119,82,248,.16), transparent 60%), radial-gradient(90% 45% at 0% 100%, rgba(34,197,169,.13), transparent 60%), #05070d !important;
+/* the glow is a full-screen layer behind the app, so it runs edge to edge (under the status bar and home indicator) */
+body.isOnboarding::before{
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(90% 45% at 100% 0%, rgba(119,82,248,.16), transparent 60%), radial-gradient(90% 45% at 0% 100%, rgba(34,197,169,.13), transparent 60%), #05070d;
 }
+body.isOnboarding .app{ position: relative; z-index: 1; background: transparent; }
+body.isOnboarding .onboardingScreen.ob3{ border-radius: 0 !important; background: transparent !important; }
 .ob3Inner{ padding: 0 !important; overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 .ob3Segs{ position: absolute; z-index: 3; left: 22px; right: 22px; top: 14px; display: flex; gap: 6px; }
 .ob3Segs i{ position: relative; flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.18); overflow: hidden; }

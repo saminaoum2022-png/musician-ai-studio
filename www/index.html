@@ -72,6 +72,17 @@
       body.booting .header,
       body.booting .mobileTabbar,
       body.booting .footer{display:none!important}
+      .nbLock{display:flex;align-items:center;justify-content:center;gap:5px}
+      .nbLockMark{display:block;width:47px;height:50px;flex:none}
+      .nbLockWord{display:block;height:49px;width:auto}
+      .nbLoader{display:flex;gap:9px;align-items:flex-end;height:46px}
+      .nbLoader i{display:block;width:12px;height:46px;border-radius:6px;transform-origin:50% 100%}
+      .nbLoader i:first-child{background:#7752f8;animation:nbBar1 1.3s ease-in-out infinite}
+      .nbLoader i:last-child{background:#22c5a9;animation:nbBar2 1.3s ease-in-out infinite}
+      @keyframes nbBar1{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+      @keyframes nbBar2{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.35)}}
+      @media (prefers-reduced-motion:reduce){.nbLoader i{animation-duration:2.6s}}
+      .bootSplashLock{display:flex;flex-direction:column;align-items:center;gap:34px;padding-bottom:40px}
       .bootSplashMark{
         display:block;
         width:min(26vw,108px);
@@ -273,7 +284,7 @@
 </head>
   <body class="booting">
     <div id="bootSplash" class="bootSplash" aria-hidden="true">
-      <div class="bootSplashInner" id="bootSplashAnim"></div>
+      <div class="bootSplashInner" id="bootSplashAnim"><div class="bootSplashLock"><div class="nbLock" role="img" aria-label="NabadAi"><svg class="nbLockMark" viewBox="0 0 90 96" aria-hidden="true"><rect x="0" y="0" width="23" height="96" rx="11.5" fill="#7752f8"/><rect x="67" y="0" width="23" height="96" rx="11.5" fill="#22c5a9"/><path d="M11.5 11.5 L78.5 84.5" stroke="#7752f8" stroke-width="23" stroke-linecap="round" fill="none"/></svg><img class="nbLockWord" src="./assets/splash/nabad-wordmark-suffix.png" alt="" decoding="async"></div><div class="nbLoader" aria-hidden="true"><i></i><i></i></div></div></div>
     </div>
     <div id="loginSettlingOverlay" class="loginSettlingOverlay" hidden aria-hidden="true" aria-label="Signing you in">
       <div class="loginSettlingInner">
@@ -438,144 +449,70 @@
           </div>
         </section>
 
-        <section class="card wide onboardingScreen" data-route="onboarding" data-onboarding-root>
-          <div class="onboardingInner">
-            <button type="button" id="btnOnboardingSkip" class="onboardingSkip">Skip</button>
-            <div class="onboardingSlides">
-              <article class="onboardingSlide is-active" data-onboarding-slide="0" aria-hidden="false">
-                <div class="onboardingMock onboardingMock--create" aria-hidden="true">
-                  <div class="onboardingMockTabs">
-                    <span>Photo</span><span>Hum</span><span class="is-on">Lyrics</span>
+        <section class="card wide onboardingScreen ob3" data-route="onboarding" data-onboarding-root>
+          <div class="onboardingInner ob3Inner">
+            <div class="ob3Segs" aria-hidden="true"><i data-ob3-seg="0"></i><i data-ob3-seg="1"></i><i data-ob3-seg="2"></i></div>
+            <button type="button" id="btnOnboardingSkip" class="ob3Skip">Skip</button>
+            <div class="ob3Slides">
+              <article class="ob3Slide is-active" data-onboarding-slide="0" aria-hidden="false">
+                <div class="ob3Scene ob3Scene--create" aria-hidden="true">
+                  <div class="ob3Glass ob3Composer">
+                    <small>What's the song?</small>
+                    <p>A warm dabke for Mama's birthday, something we can all clap to<span class="ob3Caret"></span></p>
+                    <div class="ob3Chips"><span class="ob3Chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/></svg>Hum</span><span class="ob3Chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M4 17l5-4.5 4 3.5 3-2.5 4 3.5"/></svg>Photo</span><span class="ob3Chip is-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h9"/></svg>Words</span></div>
                   </div>
-                  <div class="onboardingMockField">
-                    <span class="onboardingMockFieldGlow" aria-hidden="true"></span>
-                    <span class="onboardingMockFieldLine"></span>
-                    <span class="onboardingMockFieldLine onboardingMockFieldLine--short"></span>
-                  </div>
-                  <div class="onboardingMockChips">
-                    <span class="onboardingMoodChip onboardingMoodChip--chill">Chill</span>
-                    <span class="onboardingMoodChip onboardingMoodChip--happy is-on">Happy</span>
-                    <span class="onboardingMoodChip onboardingMoodChip--dreamy">Dreamy</span>
-                  </div>
+                  <div class="ob3Sleeve ob3Sleeve--warm" style="left:10px;top:196px;width:132px;height:132px;transform:rotate(-4deg)"></div>
+                  <div class="ob3Rec ob3Spin" style="left:92px;top:180px;width:160px;height:160px"><span class="ob3Lab ob3Sleeve--warm"></span></div>
                 </div>
-                <h2 class="onboardingTitle">Create music inspired by you</h2>
-                <p class="onboardingLead">Turn a hum, a photo, or a few words into a full, studio-quality song that sounds like you.</p>
+                <h2 class="ob3Title">Turn a feeling into a song</h2>
+                <p class="ob3Lead">Hum a melody, drop a photo, or type a few words. NabadAI writes and produces it for you.</p>
               </article>
-              <article class="onboardingSlide" data-onboarding-slide="1" aria-hidden="true">
-                <div class="onboardingMock onboardingMock--mashup" aria-hidden="true">
-                  <div class="homeDeskMashupTileWrap onboardingMashupTileWrap">
-                    <span class="homeDeskMashupPulse" aria-hidden="true"></span>
-                    <div class="homeDeskMashupTile">
-                      <span class="homeDeskMashupDisc homeDeskMashupDisc--a" aria-hidden="true"></span>
-                      <span class="homeDeskMashupDisc homeDeskMashupDisc--b" aria-hidden="true"></span>
-                    </div>
-                  </div>
+              <article class="ob3Slide" data-onboarding-slide="1" aria-hidden="true">
+                <div class="ob3Scene ob3Scene--together" aria-hidden="true">
+                  <svg class="ob3Arc" viewBox="0 0 320 130" fill="none"><path d="M36 18 C 80 130, 240 130, 284 18" stroke="#23d5ab" stroke-width="2" stroke-dasharray="3 7" stroke-linecap="round" opacity=".7"/></svg>
+                  <span class="ob3Av">SN</span><span class="ob3Av ob3Av--b">NK</span>
+                  <span class="ob3AvName">You</span><span class="ob3AvName ob3AvName--b">Nour</span>
+                  <div class="ob3Rec ob3Spin" style="left:50%;top:92px;width:160px;height:160px;margin-left:-80px"><span class="ob3Lab ob3Sleeve--cool"></span></div>
+                  <span class="ob3Live"><i></i>Nour is listening with you</span>
                 </div>
-                <h2 class="onboardingTitle">Remix and reshape your sound</h2>
-                <p class="onboardingLead">Blend two tracks into something new — weave hooks, energy, and mood into one fresh song.</p>
+                <h2 class="ob3Title">Press play, together</h2>
+                <p class="ob3Lead">See who is listening right now, then start a song at the same moment as a friend, wherever they are.</p>
               </article>
-              <article class="onboardingSlide" data-onboarding-slide="2" aria-hidden="true">
-                <div class="onboardingMock onboardingMock--friends" aria-hidden="true">
-                  <div class="onboardingFriendRow">
-                    <span class="onboardingFriendAv onboardingFriendAv--purple"></span>
-                    <div class="onboardingFriendBody">
-                      <span class="onboardingFriendBadge onboardingFriendBadge--drop">New song</span>
-                      <span class="onboardingFriendLine"></span>
-                    </div>
+              <article class="ob3Slide" data-onboarding-slide="2" aria-hidden="true">
+                <div class="ob3Scene ob3Scene--gift" aria-hidden="true">
+                  <div class="ob3Tiles">
+                    <span class="ob3Tile is-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16M5 20v-6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v6"/><path d="M5 16.2c2 1.4 3.5 1.4 5 0s3-1.4 5 0 3 1.4 4 .4"/><path d="M12 12V8.5M12 5c.7.8.7 1.6 0 2.4"/></svg><b>Birthday</b></span>
+                    <span class="ob3Tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8.5" cy="15" r="5"/><circle cx="15.5" cy="15" r="5"/><path d="M6.5 6.5L8 4.2h2.4L12 6.5"/></svg><b>Wedding</b></span>
+                    <span class="ob3Tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="9.5" width="16" height="10.5" rx="2"/><path d="M12 9.5V20M4 14h16"/><path d="M12 9.5c-1.3-3.6-5-3.8-5-1.5 0 1.4 2.4 1.5 5 1.5zM12 9.5c1.3-3.6 5-3.8 5-1.5 0 1.4-2.4 1.5-5 1.5z"/></svg><b>Thank you</b></span>
                   </div>
-                  <div class="onboardingFriendRow">
-                    <span class="onboardingFriendAv onboardingFriendAv--teal"></span>
-                    <div class="onboardingFriendBody">
-                      <span class="onboardingFriendBadge onboardingFriendBadge--drop">Drop</span>
-                      <span class="onboardingFriendLine onboardingFriendLine--short"></span>
-                    </div>
-                  </div>
-                  <div class="onboardingFriendRow">
-                    <span class="onboardingFriendAv onboardingFriendAv--pink"></span>
-                    <div class="onboardingFriendBody">
-                      <span class="onboardingFriendLine"></span>
-                    </div>
-                  </div>
+                  <div class="ob3Who">For Mama<span class="ob3Caret"></span></div>
+                  <p class="ob3Made">A birthday song for Mama</p>
+                  <p class="ob3Made2">Her name woven into the lyrics</p>
                 </div>
-                <h2 class="onboardingTitle">React and connect with others</h2>
-                <p class="onboardingLead">Share drops, react to friends, and connect with a community built for creators — not noise.</p>
-              </article>
-              <article class="onboardingSlide" data-onboarding-slide="3" aria-hidden="true">
-                <div class="onboardingMock onboardingMock--persona" aria-hidden="true">
-                  <div class="onboardingPersonaScene">
-                    <span class="onboardingPersonaWaves" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-                    <div class="onboardingPersonaSilhouette" aria-hidden="true">
-                      <span class="onboardingPersonaHead"></span>
-                      <span class="onboardingPersonaShoulders"></span>
-                    </div>
-                    <span class="onboardingPersonaLabel">Your voice</span>
-                  </div>
-                </div>
-                <h2 class="onboardingTitle">Build your music identity</h2>
-                <p class="onboardingLead">Save your voice once and carry it across every track — your signature sound inside Nabad.</p>
-              </article>
-              <article class="onboardingSlide" data-onboarding-slide="4" aria-hidden="true">
-                <div class="onboardingMock onboardingMock--coach" aria-hidden="true">
-                  <div class="onboardingCoachChat">
-                    <div class="onboardingCoachBubble onboardingCoachBubble--user">Review my verse — does the flow work?</div>
-                    <div class="onboardingCoachRow">
-                      <span class="onboardingCoachOrbMini" aria-hidden="true">
-                        <svg viewBox="0 0 100 100" aria-hidden="true">
-                          <defs>
-                            <linearGradient id="onboardingCoachOrbG" x1="26" y1="24" x2="74" y2="80" gradientUnits="userSpaceOnUse">
-                              <stop offset="0" stop-color="#36e7c0"/>
-                              <stop offset=".42" stop-color="#3f73f0"/>
-                              <stop offset="1" stop-color="#6a23da"/>
-                            </linearGradient>
-                          </defs>
-                          <circle cx="50" cy="50" r="45" fill="url(#onboardingCoachOrbG)"/>
-                        </svg>
-                      </span>
-                      <div class="onboardingCoachBubble onboardingCoachBubble--coach">
-                        Strong hook — try tightening line 3 so the syllables land on the beat.
-                      </div>
-                    </div>
-                  </div>
-                  <div class="onboardingCoachFabMock" aria-hidden="true">
-                    <span class="onboardingCoachFabPill">Need help? 🎵</span>
-                    <span class="onboardingCoachFabOrb">
-                      <svg viewBox="0 0 100 100" aria-hidden="true">
-                        <circle cx="50" cy="50" r="45" fill="url(#onboardingCoachOrbG)"/>
-                      </svg>
-                    </span>
-                  </div>
-                </div>
-                <h2 class="onboardingTitle">Meet NabadAi Coach</h2>
-                <p class="onboardingLead">Get lyric feedback, Arabic prosody tips, and answers about the app — tap the orb anytime or chat in Messages.</p>
+                <h2 class="ob3Title">Give someone a song</h2>
+                <p class="ob3Lead">Birthdays, weddings, an apology. Pick the moment, add a name, and we write it with you.</p>
               </article>
             </div>
-            <footer class="onboardingFooter">
-              <div class="onboardingDots" role="tablist" aria-label="Onboarding progress">
-                <button type="button" class="onboardingDot is-active" data-onboarding-dot="0" aria-current="step" aria-label="Slide 1 of 5"></button>
-                <button type="button" class="onboardingDot" data-onboarding-dot="1" aria-label="Slide 2 of 5"></button>
-                <button type="button" class="onboardingDot" data-onboarding-dot="2" aria-label="Slide 3 of 5"></button>
-                <button type="button" class="onboardingDot" data-onboarding-dot="3" aria-label="Slide 4 of 5"></button>
-                <button type="button" class="onboardingDot" data-onboarding-dot="4" aria-label="Slide 5 of 5"></button>
-              </div>
-              <button type="button" id="btnOnboardingNext" class="onboardingPrimaryBtn">Next</button>
-            </footer>
+            <p class="ob3Hint" id="ob3Hint">Tap the screen to continue</p>
+            <button type="button" id="btnOnboardingGetStarted" class="ob3Cta authPrimaryBtn" hidden>Get started</button>
           </div>
         </section>
 
         <section class="card wide authScreen" data-route="auth">
           <div class="authInner">
             <div class="authBrand" aria-label="NabadAi">
-              <div class="authBrandAnim" id="authBrandAnim"></div>
+              <div class="authBrandAnim" id="authBrandAnim"><div class="nbLock" role="img" aria-label="NabadAi"><svg class="nbLockMark" viewBox="0 0 90 96" aria-hidden="true"><rect x="0" y="0" width="23" height="96" rx="11.5" fill="#7752f8"/><rect x="67" y="0" width="23" height="96" rx="11.5" fill="#22c5a9"/><path d="M11.5 11.5 L78.5 84.5" stroke="#7752f8" stroke-width="23" stroke-linecap="round" fill="none"/></svg><img class="nbLockWord" src="./assets/splash/nabad-wordmark-suffix.png" alt="" decoding="async"></div></div>
             </div>
             <h1 class="authTagline" id="authTagline" aria-label="Create. Share. Connect.">
-              <span id="authTaglineTyped"></span><span class="authTaglineCaret" aria-hidden="true"></span>
+              <span id="authTaglineTyped">Create.<br>Share.<br>Connect.</span><span class="authTaglineCaret" aria-hidden="true"></span>
             </h1>
             <div class="authHandoffRest" id="authHandoffRest">
-            <p class="authSub">The social platform for AI music creators.</p>
+            <p class="authTogether">Hear it together.</p>
+            <p class="authSub">The social platform for music creators.</p>
             <div class="authActions">
               <div class="authGateChoices" id="authGateChoices">
                 <button id="btnAuthSignupPrimary" class="authPrimaryBtn authPrimaryBtn--signup" type="button" aria-controls="authEmailForm">
-                  <span class="authBtnLabel">Sign up free</span>
+                  <span class="authBtnLabel">Sign up with email</span>
                 </button>
                 <button
                   id="btnAuthGateApple"
@@ -666,10 +603,7 @@
                 <button id="btnAuthToggleMode" class="authEmailToggle" type="button">Already have an account? Sign in</button>
               </form>
             </div>
-            <label class="rightsCheck authTermsCheck" id="authTermsCheckLabel">
-              <input id="authTermsCheck" type="checkbox" />
-              <span>I agree to the <a href="./terms.html" data-legal-link="terms">Terms</a> and <a href="./privacy.html" data-legal-link="privacy">Privacy Policy</a>, including rules for uploads, voice samples, and AI-generated content.</span>
-            </label>
+            <p class="authTermsLine" id="authTermsLine">By continuing you agree to the <a href="./terms.html" data-legal-link="terms">Terms</a> and <a href="./privacy.html" data-legal-link="privacy">Privacy Policy</a>, including the rules for uploads, voice samples and AI-generated content.</p>
             </div>
           </div>
         </section>
@@ -5687,7 +5621,7 @@
         }
         if (!h) {
           if (bootUid && needsOnboarding) h = "onboarding";
-          else h = hasSessionEarly ? "challenges" : (guestMode ? "challenges" : "auth");
+          else h = hasSessionEarly ? "challenges" : (guestMode ? "challenges" : (done ? "auth" : "onboarding"));
         }
         if (/^onboarding\/\d+$/.test(h)) h = "onboarding";
         var ok = /^(intro|onboarding|music-preferences|first-song|auth|generate|challenges|activity|discover|friends|profile|profile-edit|settings|player|sounds|user|vocal|stems|studio|advanced|credits|mentor)$/.test(h);
@@ -5699,7 +5633,7 @@
               var rawFb = localStorage.getItem("mas:supabase:session:v1");
               hasSessionFallback = !!(rawFb && rawFb.indexOf("access_token") !== -1);
             } catch (e) {}
-            h = hasSessionFallback ? "challenges" : (guestMode ? "challenges" : "auth");
+            h = hasSessionFallback ? "challenges" : (guestMode ? "challenges" : (done ? "auth" : "onboarding"));
           }
         }
         document.body.setAttribute("data-route", h);
@@ -5713,35 +5647,31 @@
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
     <script type="module">
-      import { createNabadSplash } from "./src/nabad-splash.js";
       const mount = document.getElementById("bootSplashAnim");
       if (!mount) {
         window.__nabadBootSplashEnded = true;
       } else {
-        const motion = createNabadSplash(mount, {
-          wordmarkSrc: "./assets/splash/nabad-wordmark.png",
-        });
-        window.__nabadBootSplash = motion;
-        const play = () => {
-          Promise.resolve(motion.play())
-            .catch(() => ({ cancelled: true }))
-            .then((result) => {
-              if (result && result.cancelled) return result;
-              // Hold the finished N + NabadAi wordmark so it can actually be read.
-              return new Promise((resolve) => {
-                window.setTimeout(() => resolve(result), 500);
-              });
-            })
-            .then(() => {
-              window.__nabadBootSplashEnded = true;
-              if (typeof window.__nabadOnBootSplashEnded === "function") {
-                window.__nabadOnBootSplashEnded();
-              }
-            });
+        // The launch screen is the lockup with the two bars moving under it (no drawing animation).
+        // A short minimum keeps it from flashing when the app is ready instantly.
+        window.__nabadBootSplash = {
+          element: mount,
+          play: () => Promise.resolve({ cancelled: false }),
+          showFinal() {},
+          detach() {},
+          destroy() {},
         };
-        // Native LaunchScreen hides on first web paint. Two frames later the
-        // overlay is visible, then the 1100ms motion starts.
-        requestAnimationFrame(() => requestAnimationFrame(play));
+        const MIN_MS = 800;
+        const start = performance.now();
+        const finish = () => {
+          window.__nabadBootSplashEnded = true;
+          if (typeof window.__nabadOnBootSplashEnded === "function") {
+            window.__nabadOnBootSplashEnded();
+          }
+        };
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          const left = Math.max(0, MIN_MS - (performance.now() - start));
+          window.setTimeout(finish, left);
+        }));
       }
       // Dynamic import so the giant app module does not block the first dots.
       import("./src/app.js?v=20260925-164812");

@@ -68976,3 +68976,85 @@ body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profile
 body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActReleaseCaption{
   width: 100vw !important; max-width: 100vw !important; margin-left: calc(50% - 50vw) !important; margin-right: calc(50% - 50vw) !important; box-sizing: border-box !important;
 }
+
+/* ===== First run v3: bar-loader launch, tap-through onboarding, sign-in ===== */
+/* --- onboarding (3 pages, no Next button) --- */
+body.isOnboarding .onboardingScreen.ob3{
+  border-radius: 0 !important;
+  background: radial-gradient(90% 45% at 100% 0%, rgba(119,82,248,.16), transparent 60%), radial-gradient(90% 45% at 0% 100%, rgba(34,197,169,.13), transparent 60%), #05070d !important;
+}
+.ob3Inner{ padding: 0 !important; overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+.ob3Segs{ position: absolute; z-index: 3; left: 22px; right: 22px; top: 14px; display: flex; gap: 6px; }
+.ob3Segs i{ position: relative; flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.18); overflow: hidden; }
+.ob3Segs i::after{ content: ""; position: absolute; inset: 0; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }
+.ob3Segs i.is-done::after{ transform: scaleX(1); }
+.ob3Segs i.is-current::after{ animation: ob3Fill 6s linear forwards; }
+.ob3Segs i.is-last::after{ transform: scaleX(1); animation: none; }
+.ob3Inner.is-paused .ob3Segs i.is-current::after{ animation-play-state: paused; }
+@keyframes ob3Fill{ from{ transform: scaleX(0); } to{ transform: scaleX(1); } }
+.ob3Skip{ position: absolute; z-index: 4; right: 16px; top: 26px; border: 0; background: transparent; color: #9aa1b6; font: inherit; font-size: 15px; font-weight: 600; padding: 8px 8px; cursor: pointer; }
+.ob3Skip[hidden]{ display: none; }
+.ob3Slides{ position: relative; flex: 1 1 auto; min-height: 0; }
+.ob3Slide{ position: absolute; inset: 0; padding: 62px 22px 0; opacity: 0; pointer-events: none; transition: opacity .28s ease; }
+.ob3Slide.is-active{ opacity: 1; pointer-events: auto; }
+.ob3Scene{ position: relative; height: 380px; margin: 6px -22px 0; }
+.ob3Title{ margin: 0 0 12px; font-family: var(--dz-display, inherit); font-size: clamp(30px, 8.6vw, 34px); font-weight: 800; line-height: 1.06; letter-spacing: -0.015em; color: #f5f6fb; text-wrap: balance; text-align: left; }
+.ob3Lead{ margin: 0; max-width: 34ch; font-size: 16px; line-height: 1.5; color: #9aa1b6; text-align: left; }
+.ob3Hint{ position: absolute; left: 0; right: 0; bottom: 26px; margin: 0; text-align: center; font-size: 13px; font-weight: 600; color: #9aa1b6; pointer-events: none; }
+.ob3Hint[hidden]{ display: none; }
+.ob3Cta{ position: absolute; left: 22px; right: 22px; width: auto; bottom: 26px; height: 56px; font-size: 17px; }
+.ob3Cta[hidden]{ display: none; }
+/* scenes */
+.ob3Glass{ background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 26px; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.ob3Composer{ position: absolute; left: 22px; right: 22px; top: 10px; padding: 18px 18px 16px; text-align: left; }
+.ob3Composer small{ display: block; font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: #9aa1b6; }
+.ob3Composer p{ margin: 10px 0 16px; font-size: 19px; font-weight: 600; line-height: 1.35; color: #f5f6fb; }
+.ob3Caret{ display: inline-block; width: 2px; height: 20px; margin-left: 2px; vertical-align: -4px; background: #fff; animation: ob3Blink 1s steps(1) infinite; }
+@keyframes ob3Blink{ 50%{ opacity: 0; } }
+.ob3Chips{ display: flex; gap: 8px; }
+.ob3Chip{ display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px 0 11px; border-radius: 999px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); font-size: 14px; font-weight: 600; color: #9aa1b6; }
+.ob3Chip svg{ width: 18px; height: 18px; }
+.ob3Chip.is-on{ color: #f5f6fb; border-color: rgba(255,255,255,.75); background: rgba(255,255,255,.08); }
+.ob3Chip.is-on svg{ color: #23d5ab; }
+.ob3Sleeve--warm{ background: radial-gradient(70% 60% at 75% 30%, #f1c26a, transparent 60%), radial-gradient(70% 70% at 15% 85%, #8c3a2a, transparent 65%), #1d1210; }
+.ob3Sleeve--cool{ background: radial-gradient(70% 60% at 25% 25%, #2fd0b0, transparent 60%), radial-gradient(70% 70% at 80% 85%, #7a3a9a, transparent 66%), #0a1622; }
+.ob3Sleeve{ position: absolute; border-radius: 7px; box-shadow: 8px 10px 30px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.1); }
+.ob3Rec{ position: absolute; border-radius: 50%; background: repeating-radial-gradient(circle, #0a0b10 0 2px, #151720 2px 3px), #0a0b10; box-shadow: 0 18px 40px rgba(0,0,0,.6), inset 0 0 0 2px rgba(255,255,255,.05); }
+.ob3Rec::before{ content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, transparent 0 18%, rgba(255,255,255,.10) 24%, transparent 32% 68%, rgba(255,255,255,.08) 74%, transparent 82%); }
+.ob3Spin{ animation: ob3Turn 10s linear infinite; }
+@keyframes ob3Turn{ to{ transform: rotate(360deg); } }
+.ob3Lab{ position: absolute; left: 50%; top: 50%; width: 36%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: 0 0 0 3px rgba(255,255,255,.85); }
+.ob3Lab::after{ content: ""; position: absolute; left: 50%; top: 50%; width: 9%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: #07080e; }
+.ob3Arc{ position: absolute; left: 30px; top: 58px; width: calc(100% - 60px); height: auto; }
+.ob3Av{ position: absolute; left: 26px; top: 6px; width: 74px; height: 74px; border-radius: 50%; display: grid; place-items: center; font-family: var(--dz-display, inherit); font-size: 22px; font-weight: 700; color: #fff; border: 3px solid #23d5ab; background: linear-gradient(135deg, #2c3a6e, #23d5ab); }
+.ob3Av--b{ left: auto; right: 26px; border-color: #7b66ff; background: linear-gradient(135deg, #4b2fa8, #c05ad0); }
+.ob3AvName{ position: absolute; left: 26px; top: 86px; width: 74px; text-align: center; font-size: 13px; font-weight: 600; color: #9aa1b6; }
+.ob3AvName--b{ left: auto; right: 26px; }
+.ob3Live{ position: absolute; left: 0; right: 0; top: 276px; margin: 0 auto; width: max-content; display: inline-flex; align-items: center; gap: 9px; height: 38px; padding: 0 16px; border-radius: 999px; border: 1.5px solid #23d5ab; color: #23d5ab; font-size: 14px; font-weight: 700; }
+.ob3Live i{ width: 8px; height: 8px; border-radius: 50%; background: #23d5ab; display: block; }
+.ob3Tiles{ position: absolute; left: 22px; right: 22px; top: 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ob3Tile{ height: 120px; border-radius: 24px; border: 1px solid rgba(255,255,255,.12); background: linear-gradient(160deg, rgba(255,255,255,.09), rgba(255,255,255,.02) 70%); padding: 13px; display: flex; flex-direction: column; justify-content: space-between; color: #9aa1b6; text-align: left; }
+.ob3Tile svg{ width: 28px; height: 28px; }
+.ob3Tile b{ font-size: 14px; font-weight: 600; color: #f5f6fb; }
+.ob3Tile.is-on{ border-color: #23d5ab; color: #23d5ab; box-shadow: inset 0 0 0 1px rgba(35,213,171,.55); background: linear-gradient(160deg, rgba(35,213,171,.22), rgba(35,213,171,.04) 70%); }
+.ob3Who{ position: absolute; left: 22px; right: 22px; top: 168px; height: 54px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.85); background: rgba(255,255,255,.10); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); display: flex; align-items: center; padding: 0 20px; font-size: 17px; font-weight: 600; color: #f5f6fb; text-align: left; }
+.ob3Made{ position: absolute; left: 22px; right: 22px; top: 246px; margin: 0; text-align: center; font-size: 16px; font-weight: 600; color: #f5f6fb; }
+.ob3Made2{ position: absolute; left: 22px; right: 22px; top: 274px; margin: 0; text-align: center; font-size: 14px; color: #9aa1b6; }
+@media (prefers-reduced-motion: reduce){ .ob3Spin, .ob3Caret{ animation: none; } .ob3Segs i.is-current::after{ animation-duration: 6s; } }
+
+/* --- sign-in (full logo, slogan, buttons under the copy, agreement line) --- */
+body .authScreen{ align-items: flex-start !important; justify-content: flex-start !important; overflow-y: auto; }
+body .authScreen .authInner{ max-width: none; width: 100%; min-height: 100%; align-items: stretch; text-align: left; padding: 40px 22px 16px; }
+body .authScreen .authBrand{ align-items: flex-start; margin: 0; width: auto; }
+body .authScreen .authBrandAnim{ width: auto; max-width: none; aspect-ratio: auto; overflow: visible; }
+body .authScreen .authBrandAnim .nbLock{ justify-content: flex-start; }
+body .authScreen .authTagline{ margin: 30px 0 10px; text-align: left; font-family: var(--dz-display, inherit); font-size: clamp(38px, 11.2vw, 44px); font-weight: 800; line-height: 1.04; letter-spacing: -0.02em; color: #f5f6fb; }
+body .authScreen .authTagline .authTaglineCaret{ display: none !important; }
+body .authScreen .authTaglineDot, body .authScreen .authTagline span{ color: inherit !important; }
+body .authScreen .authTogether{ margin: 0 0 8px; text-align: left; font-family: var(--dz-display, inherit); font-size: 19px; font-weight: 700; color: #23d5ab; }
+body .authScreen .authSub{ margin: 0 0 32px; text-align: left; font-size: 16px; color: #9aa1b6; }
+body .authScreen .authHandoffRest{ flex: 1 1 auto; align-items: stretch; opacity: 1 !important; pointer-events: auto !important; }
+body .authScreen .authActions{ width: 100%; }
+body .authScreen .authLoginPrompt{ margin: 22px 0 0; text-align: center; }
+body .authScreen .authTermsLine{ margin: auto 0 0; padding-top: 22px; text-align: left; font-size: 12px; line-height: 1.5; color: #6d748a; }
+body .authScreen .authTermsLine a{ color: #f5f6fb; text-decoration: underline; text-decoration-color: rgba(255,255,255,.28); text-underline-offset: 3px; }

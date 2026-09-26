@@ -121,6 +121,7 @@ import {
 } from "./feed-vinyl-player.js";
 import {
   getInitialBootHash,
+  consumeFirstRunLanding,
   getPostOnboardingHash,
   initOnboarding,
   ONBOARDING_ACTIVE_KEY,
@@ -5259,7 +5260,8 @@ function resolveEmptyHashRoute() {
     return DEFAULT_LOGGED_IN_ROUTE;
   }
   if (isGuestModeEnabled()) return DEFAULT_LOGGED_IN_ROUTE;
-  return "auth";
+  // First launch on this device: a few tap-through pages before sign-in.
+  return shouldShowOnboardingForUser("") ? "onboarding" : "auth";
 }
 
 /** Logged-in users who haven't finished the current feature tour → #/onboarding. */
@@ -5904,7 +5906,8 @@ function applyRoute({ passGen } = {}) {
     }
   }
   if (wanted === "onboarding" && !isLoggedIn && !hasAuthToken) {
-    if (!shouldHoldSplashForOAuth()) {
+    // Signed-out first run is allowed to stay on onboarding; once it is done the block below sends them to sign-in.
+    if (!shouldHoldSplashForOAuth() && !shouldShowOnboardingForUser("")) {
       wanted = "auth";
       replaceLoggedOutAuthHash();
     }
@@ -19946,7 +19949,9 @@ async function finishPostAuthNavigation() {
   ) {
     trySignupCoachWelcomeAfterAuth(postAuthUid);
   }
-  const target = authSession?.user?.id ? DEFAULT_LOGGED_IN_ROUTE : "auth";
+  // First run: after the tap-through pages and sign-in, land on the Create page as it is.
+  const firstRunLanding = Boolean(authSession?.user?.id) && consumeFirstRunLanding();
+  const target = authSession?.user?.id ? (firstRunLanding ? "challenges" : DEFAULT_LOGGED_IN_ROUTE) : "auth";
   try {
     location.hash = `#/${target}`;
   } catch {}
@@ -34427,7 +34432,10 @@ function setTermsAccepted() {
 }
 
 function authTermsCheckboxChecked() {
-  return Boolean(document.getElementById("authTermsCheck")?.checked);
+  const box = document.getElementById("authTermsCheck");
+  // The sign-in screen shows an agreement line instead of a checkbox: continuing is the agreement.
+  if (!box) return true;
+  return Boolean(box.checked);
 }
 
 function syncAuthTermsCheckbox() {
@@ -34715,21 +34723,11 @@ function stopAuthTaglineType() {
   }
 }
 
-function paintAuthTaglineChars(count) {
+function paintAuthTaglineChars(_count) {
+  // Static, three lines: Create. / Share. / Connect. (the typing animation is retired).
   const host = document.getElementById("authTaglineTyped");
   if (!host) return;
-  let html = "";
-  const n = Math.max(0, Math.min(AUTH_TAGLINE_TEXT.length, count | 0));
-  for (let i = 0; i < n; i++) {
-    const ch = AUTH_TAGLINE_TEXT[i];
-    if (ch === ".") {
-      const kind = i === 6 ? "create" : i === 13 ? "share" : "connect";
-      html += `<span class="authTaglineDot authTaglineDot--${kind}" aria-hidden="true">.</span>`;
-    } else {
-      html += ch === " " ? " " : ch;
-    }
-  }
-  host.innerHTML = html;
+  host.innerHTML = "Create.<br>Share.<br>Connect.";
 }
 
 function typeAuthTagline() {
@@ -34830,6 +34828,9 @@ function prefersAuthHandoffMotionReduce() {
 }
 
 function shouldHandoffSplashToAuth() {
+  // Retired: the launch screen is a static lockup, so it fades out instead of flying onto the sign-in screen.
+  return false;
+  // eslint-disable-next-line no-unreachable
   if (shouldHoldSplashForOAuth()) return false;
   if (isAppLoggedIn() || getSupabaseAuthToken()) return false;
   const route = document.body.getAttribute("data-route") || "";

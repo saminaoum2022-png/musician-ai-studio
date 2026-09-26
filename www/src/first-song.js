@@ -30,6 +30,9 @@ function firstSongDoneKey(userId) {
 }
 
 export function shouldShowFirstSongActivation(userId) {
+  // Retired: new users land on the Create page directly, with nothing decided for them.
+  return false;
+  // eslint-disable-next-line no-unreachable
   const uid = String(userId || "").trim();
   if (!uid) return false;
   try {

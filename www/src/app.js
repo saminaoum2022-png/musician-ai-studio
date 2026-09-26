@@ -14101,10 +14101,10 @@ function renderDiscoverFeedForYou(tracks, profMap) {
   const suggestedFollowBlock = discoverFeedSuggestedFollowBlockHtml(tracks, profMap);
   return `
     ${challengeBlock}
-    ${discoverLiveNowSectionHtml()}
+    ${discoverOccasionStripHtml()}
     ${discoverFeedVibeRailHtml()}
     ${discoverFriendsTeaserSectionHtml()}
-    ${discoverOccasionStripHtml()}
+    ${discoverLiveNowSectionHtml()}
     <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final isLoading" aria-busy="true" aria-label="Top songs this week">${discoverWeeklyChartSkeletonHtml()}</section>
     ${communityBlock}
     <section class="discoverFeedSection">

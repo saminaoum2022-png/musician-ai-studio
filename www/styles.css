@@ -69579,3 +69579,22 @@ html[data-theme="light"] :is(body[data-route="profile"], body[data-route="user"]
 html[data-theme="light"] :is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab.is-active::after{ background: #0b0b13 !important; }
 html[data-theme="light"] .profileLibChip{ color: rgba(0,0,0,.45); border: 0; }
 html[data-theme="light"] .profileLibChip.is-active{ color: #0b0b13; border: 0; }
+
+/* Gift a song: section title matches every other Discover section (full white, same size and weight) */
+body[data-route="discover"] .discoverMomentSection .discoverFeedSectionHead{ margin: 0 0 13px; }
+body[data-route="discover"] .discoverMomentSection .discoverFeedSectionTitle{
+  font-size: 21px; font-weight: 800; letter-spacing: -0.03em; opacity: 1; color: #fff; -webkit-text-fill-color: #fff;
+}
+html[data-theme="light"] body[data-route="discover"] .discoverMomentSection .discoverFeedSectionTitle{ color: var(--text-primary); -webkit-text-fill-color: var(--text-primary); }
+
+/* Discover first screen: shorter hero + tighter rhythm so the whole Gift a song section sits above the bottom bar on open */
+body[data-route="discover"] .discoverFeaturedHeroCarousel .discoverFeaturedChallengeHero,
+body[data-route="discover"] .discoverFeaturedHeroTrack > .discoverFeaturedChallengeHero{ min-height: clamp(232px, 58vw, 248px) !important; }
+body[data-route="discover"] .discoverFeaturedHeroCarousel .discoverFeaturedChallengeHeroBody{ padding: 18px 20px 18px; gap: 6px; }
+body[data-route="discover"] .discoverFeaturedHeroDots{ margin: 10px 0 0; }
+body[data-route="discover"] .discoverFeaturedHeroCarousel + .discoverMomentSection,
+body[data-route="discover"] .discoverFeedSection--featuredChallenge + .discoverMomentSection{ margin-top: 16px; }
+body[data-route="discover"] .discoverFeaturedHeroCarousel + .discoverMomentSection,
+body[data-route="discover"] .discoverFeedSection--featuredChallenge + .discoverMomentSection{ margin-top: 6px; }
+body[data-route="discover"] .discoverMomentSection{ margin-bottom: 0; }
+body[data-route="discover"] .discoverMomentSection + .discoverVibeSection{ margin-top: 22px; }

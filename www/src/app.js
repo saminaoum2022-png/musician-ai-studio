@@ -318,7 +318,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260927-151545";
+const APP_BUILD = "20260927-203649";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -30901,6 +30901,42 @@ function syncArtistAvatarBackFace() {
   const src = String(activeProfile?.artistAvatar || "").trim();
   if (back && src) back.src = src;
 }
+/** The flip badge's own content: a live thumbnail of whichever photo ISN'T
+ *  the big one right now — front showing → badge previews the Artist Avatar;
+ *  flipped to the Artist Avatar → badge previews the normal photo. Seeing an
+ *  actual second photo peeking out reads as "there's something else here"
+ *  on its own, no wand icon or copy needed. */
+function syncArtistAvatarBadgeThumb() {
+  const thumb = document.getElementById("aaFlipBadgeThumb");
+  const flip = document.getElementById("aaFlip");
+  if (!thumb || !flip) return;
+  const isBack = flip.classList.contains("isFlipped");
+  const frontSrc = String(document.getElementById("profilePreviewAvatar")?.getAttribute("src") || "").trim();
+  const backSrc = String(document.getElementById("aaBackImg")?.getAttribute("src") || "").trim();
+  const next = isBack ? frontSrc : backSrc;
+  if (next && thumb.getAttribute("src") !== next) thumb.src = next;
+}
+/** Pins the badge's vertical center to the display-name row instead of a
+ *  hardcoded photo offset, so it reads as part of the identity line — same
+ *  row as the name, not floating separately higher up in the cover. Falls
+ *  back to the @handle line if there's no display name yet. Re-run on
+ *  resize/rotate and whenever the name re-renders since line count/width
+ *  can change (right offset stays fixed in CSS; only top moves here). */
+function syncArtistAvatarBadgePosition() {
+  const badge = document.getElementById("aaFlipBadge");
+  const wrap = document.getElementById("profileAuraAvatarWrap");
+  if (!badge || !wrap || badge.hidden) return;
+  const nameLine = document.getElementById("profileDisplayNameLine");
+  const handleLine = document.getElementById("profileIdentityLine");
+  const anchor = (nameLine && !nameLine.hidden) ? nameLine : ((handleLine && !handleLine.hidden) ? handleLine : null);
+  if (!anchor) return;
+  const wrapRect = wrap.getBoundingClientRect();
+  const anchorRect = anchor.getBoundingClientRect();
+  if (!wrapRect.height || !anchorRect.height) return;
+  const centerY = anchorRect.top + anchorRect.height / 2 - wrapRect.top;
+  const size = badge.offsetHeight || 34;
+  badge.style.top = `${Math.max(0, Math.round(centerY - size / 2))}px`;
+}
 let _artistAvatarFlipBound = false;
 function wireArtistAvatarFlipOnce() {
   if (_artistAvatarFlipBound) return;
@@ -30913,9 +30949,11 @@ function wireArtistAvatarFlipOnce() {
     flip.classList.toggle("isFlipped");
     const isBack = flip.classList.contains("isFlipped");
     badge?.setAttribute("aria-label", isBack ? "Flip back to your photo" : "Flip to your Artist Avatar");
+    syncArtistAvatarBadgeThumb();
   };
   flip.addEventListener("click", toggle);
   badge?.addEventListener("click", (e) => { e.stopPropagation(); toggle(); });
+  window.addEventListener("resize", () => { try { syncArtistAvatarBadgePosition(); } catch {} });
 }
 function syncArtistAvatarFlipVisibility() {
   const flip = document.getElementById("aaFlip");
@@ -30927,7 +30965,10 @@ function syncArtistAvatarFlipVisibility() {
   if (backFace) backFace.hidden = !on;
   flip?.classList.toggle("aaHasRealAvatar", hasAvatar);
   if (!on) flip?.classList.remove("isFlipped");
-  if (on) { try { wireArtistAvatarFlipOnce(); syncArtistAvatarBackFace(); } catch {} }
+  if (on) {
+    try { wireArtistAvatarFlipOnce(); syncArtistAvatarBackFace(); syncArtistAvatarBadgeThumb(); } catch {}
+    requestAnimationFrame(() => { try { syncArtistAvatarBadgePosition(); } catch {} });
+  }
 }
 
 /** "Create your Artist Avatar" promo banner — visible only for the owner,
@@ -60474,6 +60515,7 @@ function renderProfileIdentityLine() {
     stack?.classList.remove("profileAuraNameStack--hasDisplayName");
   }
   renderProfileNabadCertBadge();
+  requestAnimationFrame(() => { try { syncArtistAvatarBadgePosition(); } catch {} });
 }
 
 /* =================================================================

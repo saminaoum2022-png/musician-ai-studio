@@ -17778,7 +17778,7 @@ function followActXstyleTopHtml(opts) {
             <span class="followActAvatarRing" aria-hidden="true"></span>
             ${avatarSrc
               ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
-              : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
+              : emptyProfileAvatarHtml("followActAvatarFallback")}
           </a>
           <div class="followActHeadStack">
             <div class="followActMetaPrimary">${userPrimary}</div>
@@ -17949,7 +17949,7 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
           <span class="followActAvatarRing" aria-hidden="true"></span>
           ${avatarSrc
             ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
-            : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
+            : emptyProfileAvatarHtml("followActAvatarFallback")}
         </a>
         <div class="followActTopText">
           <div class="followActWhoLine">
@@ -21207,7 +21207,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
           <span class="followActAvatarRing" aria-hidden="true"></span>
           ${avatarSrc
             ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
-            : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
+            : emptyProfileAvatarHtml("followActAvatarFallback")}
         </a>
         <div class="followActTopText">
           <div class="followActWhoLine">
@@ -21909,7 +21909,7 @@ function feedReplyRowHtml(reply) {
       <a class="feedReplyAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="${escapeHtml(feedActorProfileLabel(handle, replyProf))}">
         ${avatarSrc
           ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="36" height="36" decoding="async" loading="lazy" />`
-          : `<span class="feedReplyAvatarFallback">${escapeHtml(initials)}</span>`}
+          : emptyProfileAvatarHtml("feedReplyAvatarFallback")}
       </a>
       <div class="feedReplyMain">
         <div class="feedReplyMeta">
@@ -22124,7 +22124,7 @@ function songAnalyticsRowHtml(listener) {
       <a class="songAnalyticsAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="${handle ? `@${safeHandle} profile` : "Listener"}">
         ${avatarSrc
           ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
-          : `<span class="songAnalyticsAvatarFallback">${escapeHtml(initials)}</span>`}
+          : emptyProfileAvatarHtml("songAnalyticsAvatarFallback")}
       </a>
       <a class="songAnalyticsName" href="${escapeHtml(href)}" data-route-link="user">${handle ? `@${safeHandle}` : "A listener"}</a>
       <span class="songAnalyticsPlays">${escapeHtml(playsLabel)}</span>
@@ -42697,8 +42697,7 @@ function messagesAvatarHtml(avatarUrl, username, cls = "messagesRowAvatar") {
   if (isRealUserAvatarUrl(raw)) {
     return `<img class="${cls}" src="${escapeHtml(normalizeProfileAvatarForImg(raw))}" alt="" decoding="async" />`;
   }
-  const letter = handle.replace(/^@/, "").slice(0, 1).toUpperCase() || "?";
-  return `<span class="${cls} messagesAvatarFallback" aria-hidden="true">${escapeHtml(letter)}</span>`;
+  return emptyProfileAvatarHtml(`${cls} messagesAvatarFallback`);
 }
 
 function syncFriendsMessagesBtn() {
@@ -47657,6 +47656,14 @@ function isRealUserAvatarUrl(raw) {
   return !/nabadai-logo\.png|splash-mark\.png/i.test(s);
 }
 
+/** Same person mark as an empty profile photo. */
+const EMPTY_PROFILE_AVATAR_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.4" r="3.7" fill="currentColor"/><path d="M4.4 19.6c.9-3.6 4-5.8 7.6-5.8s6.7 2.2 7.6 5.8c.1.5-.3.9-.8.9H5.2c-.5 0-.9-.4-.8-.9Z" fill="currentColor"/></svg>`;
+
+function emptyProfileAvatarHtml(cls = "") {
+  const classes = ["emptyProfileAvatar", cls].filter(Boolean).join(" ");
+  return `<span class="${classes}" aria-hidden="true">${EMPTY_PROFILE_AVATAR_SVG}</span>`;
+}
+
 /** Other-user profile avatar: real photo when available; person silhouette otherwise — never the app logo. */
 function applyUserPublicAvatar(url, displayName = "", userId = "") {
   const img = els.userPublicAvatar;
@@ -48400,13 +48407,13 @@ function paintActivityFilterTabsActive(tab = _activityFilterTab) {
   });
 }
 
-/** Avatar for an activity/notification row — real photo when available, blank circle otherwise. */
+/** Avatar for an activity/notification row — real photo, or the empty-profile mark. */
 function activityActorAvatarHtml(n, cls) {
   const raw = String(n?.metadata?.actor_avatar || "").trim();
   if (isRealUserAvatarUrl(raw)) {
     return `<img class="${cls}" src="${escapeHtml(normalizeProfileAvatarForImg(raw))}" alt="" loading="lazy" decoding="async" data-activity-avatar="1" />`;
   }
-  return `<span class="${cls} activityRowAvatar--blank" aria-hidden="true"></span>`;
+  return emptyProfileAvatarHtml(cls);
 }
 
 const ACTIVITY_ACTOR_TYPES = new Set([
@@ -49693,8 +49700,9 @@ function bindActivityPageOnce() {
     const img = ev.target;
     if (!(img instanceof HTMLImageElement) || !img.dataset.activityAvatar) return;
     const blank = document.createElement("span");
-    blank.className = "activityRowAvatar activityRowAvatar--blank";
+    blank.className = `${img.className} emptyProfileAvatar`.replace(/\s+/g, " ").trim();
     blank.setAttribute("aria-hidden", "true");
+    blank.innerHTML = EMPTY_PROFILE_AVATAR_SVG;
     img.replaceWith(blank);
   }, true);
   els.activityFeed?.addEventListener("click", (ev) => {
@@ -68332,16 +68340,67 @@ async function syncPlayerCreatorChrome(subtitle = "") {
   void syncPlayerSocialCreatorAvatar();
 }
 
+let _playerCreatorAvatarGen = 0;
+
+function paintPlayerCreatorAvatar(hasPhoto) {
+  const img = els.playerSocialCreatorAvatarImg;
+  const fb = document.getElementById("playerSocialCreatorAvatarFallback");
+  const wrap = els.playerSocialCreatorAvatar;
+  if (!img || !wrap) return;
+  if (hasPhoto) {
+    img.hidden = false;
+    if (fb) fb.hidden = true;
+    delete wrap.dataset.empty;
+  } else {
+    img.hidden = true;
+    img.removeAttribute("src");
+    if (fb) fb.hidden = false;
+    wrap.dataset.empty = "1";
+  }
+}
+
+async function syncPlayerCreatorFollowPlus(gen, userId, handle) {
+  const plus = document.getElementById("playerSocialCreatorFollow");
+  const wrap = els.playerSocialCreatorAvatar;
+  if (!plus) return;
+  const uid = String(userId || "").trim();
+  const mine = String(authSession?.user?.id || "").trim();
+  plus.dataset.targetUserId = uid;
+  plus.dataset.handle = String(handle || "").trim();
+  if (!wrap || wrap.hidden || !uid || (mine && uid === mine)) {
+    plus.hidden = true;
+    return;
+  }
+  if (!mine) {
+    plus.hidden = false;
+    plus.dataset.following = "0";
+    return;
+  }
+  try {
+    const ids = await fetchFollowingUserIdsForFeed();
+    if (gen !== _playerCreatorAvatarGen) return;
+    const following = ids.includes(uid);
+    plus.dataset.following = following ? "1" : "0";
+    plus.hidden = following;
+  } catch {
+    if (gen !== _playerCreatorAvatarGen) return;
+    plus.hidden = false;
+    plus.dataset.following = "0";
+  }
+}
+
 async function syncPlayerSocialCreatorAvatar() {
   const wrap = els.playerSocialCreatorAvatar;
   const img = els.playerSocialCreatorAvatarImg;
   if (!wrap || !img) return;
+  const gen = ++_playerCreatorAvatarGen;
 
   const t = currentPlayerTrackRef || {};
   const ownerId = String(t.ownerUserId || t.userId || "").trim();
   const mine = String(authSession?.user?.id || "").trim();
   let avatarUrl = "";
   let handle = String(t.byLine || t.creator || "").trim().replace(/^@/, "");
+  let resolvedUserId = ownerId;
 
   if (ownerId) {
     if (mine && ownerId === mine) {
@@ -68349,29 +68408,70 @@ async function syncPlayerSocialCreatorAvatar() {
       handle = handle || String(activeProfile?.username || "").trim();
     } else {
       const prof = await fetchPublicProfileRowByUserId(ownerId);
+      if (gen !== _playerCreatorAvatarGen) return;
       avatarUrl = String(prof?.avatar || "").trim();
       handle = handle || String(prof?.username || "").trim();
     }
   } else if (handle) {
     const prof = await fetchPublicProfileRowByUsername(handle.replace(/^@/, ""));
+    if (gen !== _playerCreatorAvatarGen) return;
     avatarUrl = String(prof?.avatar || "").trim();
     handle = handle || String(prof?.username || "").trim();
+    resolvedUserId = String(prof?.user_id || "").trim();
   } else if (mine) {
     avatarUrl = String(activeProfile?.avatar || "").trim();
     handle = handle || String(activeProfile?.username || "").trim();
+    resolvedUserId = mine;
   }
 
+  if (gen !== _playerCreatorAvatarGen) return;
   wrap.dataset.userHandle = handle;
-  wrap.dataset.userId = ownerId || mine || "";
+  wrap.dataset.userId = resolvedUserId || "";
 
-  if (!avatarUrl || avatarUrl === "./assets/icons/splash-mark.png") {
+  if (!handle && !resolvedUserId) {
     wrap.hidden = true;
-    img.removeAttribute("src");
+    paintPlayerCreatorAvatar(false);
+    void syncPlayerCreatorFollowPlus(gen, "", "");
     return;
   }
 
-  setCoverImageSrc(img, avatarUrl);
+  const hasPhoto = isRealUserAvatarUrl(avatarUrl);
+  paintPlayerCreatorAvatar(hasPhoto);
+  if (hasPhoto) setCoverImageSrc(img, avatarUrl);
   wrap.hidden = false;
+  void syncPlayerCreatorFollowPlus(gen, resolvedUserId, handle);
+}
+
+async function handlePlayerCreatorFollowPlus(btn) {
+  const targetUserId = String(btn?.dataset.targetUserId || "").trim();
+  const handle = String(btn?.dataset.handle || "").trim();
+  if (!targetUserId || btn?.dataset.following === "1") return;
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast(FAN_COPY.signIn);
+    try { location.hash = "#/auth"; } catch {}
+    return;
+  }
+  btn.disabled = true;
+  try {
+    await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({ action: "follow", targetUserId }),
+    });
+    _followingListCache = null;
+    _followingListCacheAt = 0;
+    btn.dataset.following = "1";
+    btn.hidden = true;
+    showToast(FAN_COPY.toastBecameFan(handle));
+    const fanBtn = els.btnPlayerBecomeFan;
+    if (fanBtn && String(fanBtn.dataset.targetUserId || "") === targetUserId) {
+      fanBtn.textContent = FAN_COPY.ctaActive;
+      fanBtn.dataset.following = "1";
+    }
+  } catch (e) {
+    showToast(e?.message || FAN_COPY.toastError);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function handlePlayerBecomeFanClick() {
@@ -69030,6 +69130,13 @@ function wirePlayerSocialRailOnce() {
   ensurePlayerSocialRailIcons();
   wirePlayerCoverDoubleTapLikeOnce();
   card.addEventListener("click", (e) => {
+    const followPlus = e.target.closest(".playerSocialCreatorFollow");
+    if (followPlus && els.playerSocialActions?.contains(followPlus)) {
+      e.preventDefault();
+      e.stopPropagation();
+      void handlePlayerCreatorFollowPlus(followPlus);
+      return;
+    }
     const avatarBtn = e.target.closest(".playerSocialCreatorAvatar");
     if (avatarBtn && els.playerSocialActions?.contains(avatarBtn)) {
       e.preventDefault();

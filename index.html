@@ -2993,9 +2993,15 @@
               <aside id="playerSocialRail" class="playerSocialRail" hidden aria-label="Song interactions">
                 <div id="playerSocialActions" class="followActActions playerSocialActions" data-friends-act-row="1" data-friends-act-kind="music" data-friends-act-target-kind="song" data-friends-act-id="" data-friends-act-uid="">
                   <div class="playerSocialLikeStack">
-                    <button type="button" id="playerSocialCreatorAvatar" class="playerSocialCreatorAvatar" hidden aria-label="Creator profile">
-                      <img id="playerSocialCreatorAvatarImg" class="playerSocialCreatorAvatarImg" src="" alt="" />
-                    </button>
+                    <div class="playerSocialCreatorSlot">
+                      <button type="button" id="playerSocialCreatorAvatar" class="playerSocialCreatorAvatar" hidden aria-label="Creator profile">
+                        <img id="playerSocialCreatorAvatarImg" class="playerSocialCreatorAvatarImg" src="" alt="" />
+                        <span id="playerSocialCreatorAvatarFallback" class="emptyProfileAvatar playerSocialCreatorAvatarFallback" hidden aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.7" fill="currentColor"/><path d="M4.4 19.6c.9-3.6 4-5.8 7.6-5.8s6.7 2.2 7.6 5.8c.1.5-.3.9-.8.9H5.2c-.5 0-.9-.4-.8-.9Z" fill="currentColor"/></svg></span>
+                      </button>
+                      <button type="button" id="playerSocialCreatorFollow" class="playerSocialCreatorFollow" hidden aria-label="Become a fan">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11 4.5h2v15h-2zM4.5 11h15v2h-15z"/></svg>
+                      </button>
+                    </div>
                     <button type="button" class="followActAct playerSocialAct playerSocialAct--like" data-friends-act="like" aria-label="Like" aria-pressed="false">
                       <span class="playerSocialActIco" data-player-social-ico="like" aria-hidden="true"></span>
                       <span class="followActActCount" data-friends-act-count="like"></span>

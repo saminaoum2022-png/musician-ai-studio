@@ -69832,6 +69832,21 @@ body[data-route="profile"] .aaFlipBadgeThumb{
 }
 body[data-route="profile"] .aaFlipBadge[hidden]{ display: none !important; }
 body[data-route="profile"] .aaFlipBadge:active{ transform: scale(.92); animation-play-state: paused; }
+/* Before an Artist Avatar exists: the badge is offered anyway (owner may not
+   have noticed the "Create your Artist Avatar" promo banner further down),
+   showing a plain "+" instead of a photo — nothing to preview yet — on a
+   muted dashed-glass fill instead of the solid brand gradient, so it reads
+   as "add" rather than "here's your content". Tapping it opens the editor
+   directly (see wireArtistAvatarFlipOnce) instead of flipping. */
+body[data-route="profile"] .aaFlipBadge.aaFlipBadge--empty{
+  background: rgba(18, 18, 28, 0.55);
+  border: 1.5px dashed rgba(255, 255, 255, 0.65);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.55);
+}
+body[data-route="profile"] .aaFlipBadgePlus{ display: none; color: rgba(255, 255, 255, 0.9); }
+body[data-route="profile"] .aaFlipBadge.aaFlipBadge--empty .aaFlipBadgeThumb{ display: none; }
+body[data-route="profile"] .aaFlipBadge.aaFlipBadge--empty .aaFlipBadgePlus{ display: block; }
 @keyframes aaFlipBadgePulse{
   0%, 100%{ transform: scale(1); box-shadow: 0 4px 18px -4px rgba(124,92,255,.75), 0 0 0 1px rgba(0,0,0,.08); }
   50%{ transform: scale(1.08); box-shadow: 0 4px 24px -2px rgba(124,92,255,.95), 0 0 0 1px rgba(0,0,0,.08); }

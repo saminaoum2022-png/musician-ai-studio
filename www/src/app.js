@@ -4027,6 +4027,7 @@ function enterProfileRouteHooks({ skipHeavy = false } = {}) {
   try { syncMobileTabbarProfileAvatar(); } catch {}
   try { setProfileEditing(false); } catch {}
   scheduleProfileSongsRender();
+  try { syncArtistAvatarFlipVisibility(); } catch {}
   if (skipHeavy || shouldSkipRouteHeavy("profile")) {
     try {
       setProfileHeaderLoading(shouldShowProfileHeaderSkeleton());
@@ -30944,6 +30945,7 @@ function wireArtistAvatarFlipOnce() {
   const flip = document.getElementById("aaFlip");
   const badge = document.getElementById("aaFlipBadge");
   if (!flip) return;
+  const hasAvatarNow = () => Boolean(String(activeProfile?.artistAvatar || "").trim());
   const toggle = () => {
     try { haptic("light"); } catch {}
     flip.classList.toggle("isFlipped");
@@ -30951,24 +30953,56 @@ function wireArtistAvatarFlipOnce() {
     badge?.setAttribute("aria-label", isBack ? "Flip back to your photo" : "Flip to your Artist Avatar");
     syncArtistAvatarBadgeThumb();
   };
-  flip.addEventListener("click", toggle);
-  badge?.addEventListener("click", (e) => { e.stopPropagation(); toggle(); });
+  // Tapping the photo itself only flips once there's something to flip to;
+  // before that it's a no-op there (the badge below is the CTA instead).
+  flip.addEventListener("click", () => { if (hasAvatarNow()) toggle(); });
+  badge?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (hasAvatarNow()) { toggle(); return; }
+    // No Artist Avatar yet — the badge is a "create one" CTA in this state,
+    // same destination as the profile promo banner.
+    try { haptic("light"); } catch {}
+    try { openArtistAvatarEditorFromProfile(); } catch {}
+  });
   window.addEventListener("resize", () => { try { syncArtistAvatarBadgePosition(); } catch {} });
 }
+/** The badge itself is now always offered on your own profile — not just
+ *  once an Artist Avatar exists. Before you've made one it shows an empty
+ *  "+" placeholder (syncArtistAvatarFlipVisibility toggles .aaFlipBadge--empty)
+ *  and tapping it jumps straight to the Artist Avatar editor instead of
+ *  flipping, since there's nothing generated to flip to yet. */
 function syncArtistAvatarFlipVisibility() {
   const flip = document.getElementById("aaFlip");
   const badge = document.getElementById("aaFlipBadge");
   const backFace = document.getElementById("aaFlipBack");
   const hasAvatar = Boolean(String(activeProfile?.artistAvatar || "").trim());
-  const on = hasAvatar && String(document.body.getAttribute("data-route") || "") === "profile";
-  if (badge) { badge.hidden = !on; badge.setAttribute("aria-hidden", on ? "false" : "true"); }
-  if (backFace) backFace.hidden = !on;
+  const onProfileRoute = String(document.body.getAttribute("data-route") || "") === "profile";
+  if (badge) {
+    badge.hidden = !onProfileRoute;
+    badge.setAttribute("aria-hidden", onProfileRoute ? "false" : "true");
+    badge.classList.toggle("aaFlipBadge--empty", !hasAvatar);
+    if (!hasAvatar) badge.setAttribute("aria-label", "Create your Artist Avatar");
+  }
+  if (backFace) backFace.hidden = !hasAvatar;
   flip?.classList.toggle("aaHasRealAvatar", hasAvatar);
-  if (!on) flip?.classList.remove("isFlipped");
-  if (on) {
-    try { wireArtistAvatarFlipOnce(); syncArtistAvatarBackFace(); syncArtistAvatarBadgeThumb(); } catch {}
+  if (!hasAvatar) flip?.classList.remove("isFlipped");
+  if (onProfileRoute) {
+    try { wireArtistAvatarFlipOnce(); } catch {}
     requestAnimationFrame(() => { try { syncArtistAvatarBadgePosition(); } catch {} });
   }
+  if (hasAvatar) {
+    try { syncArtistAvatarBackFace(); syncArtistAvatarBadgeThumb(); } catch {}
+  }
+  // `document.body`'s data-route attribute can lag one tick behind the tab
+  // switch that triggered this call (this function is also invoked from a
+  // couple of async profile-data-loaded paths that race the route change),
+  // which previously left the badge stuck hidden until some later, unrelated
+  // re-render happened to fire this again. Re-check shortly after on our own
+  // so a same-tick stale read never sticks.
+  requestAnimationFrame(() => {
+    const nowOnProfile = String(document.body.getAttribute("data-route") || "") === "profile";
+    if (nowOnProfile !== onProfileRoute) { try { syncArtistAvatarFlipVisibility(); } catch {} }
+  });
 }
 
 /** "Create your Artist Avatar" promo banner — visible only for the owner,

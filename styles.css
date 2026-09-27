@@ -7690,6 +7690,32 @@ body.hubJumpingToTop #hubList .hubRow{
   border-radius: 14px;
   overflow: hidden;
   isolation: isolate;
+  touch-action: manipulation;
+}
+.playerLikeFly{
+  position: fixed;
+  z-index: 80;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+.playerLikeFly svg{
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+.playerLikeFly .followActActIco--like{
+  width: 100%;
+  height: 100%;
+  fill: url(#nabadLikeFlyGrad);
+  stroke: url(#nabadLikeFlyGrad);
+}
+.playerSocialAct--like.isLikeFlying .playerSocialActIco,
+.playerSocialAct--like.isLikeFlying .followActActIco--like{
+  opacity: 0;
 }
 .playerArtWrap.isNowPlaying{
   border-color: rgba(var(--cover-glow-rgb), 0.32);
@@ -21821,9 +21847,58 @@ body.trackSheetOpen .footer{
     );
   }
   body[data-route="player"] .playerTitleRow{
+    display: flex;
+    width: 100%;
     justify-content: flex-start;
-    gap: 6px;
+    align-items: center;
+    gap: 10px;
   }
+  body[data-route="player"] .playerTitleCluster{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+  }
+  body[data-route="player"] .playerTitleCluster .playerTitle{
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  body[data-route="player"] .playerTitleActions{
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex: none;
+    margin-right: -6px;
+  }
+  body[data-route="player"] .playerTitleActions:not(:has(button:not([hidden]))){
+    display: none;
+  }
+  body[data-route="player"] .playerTitleAct{
+    appearance: none;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.92);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body[data-route="player"] .playerTitleAct[hidden]{ display: none !important; }
+  body[data-route="player"] .playerTitleAct .playerSocialActIco,
+  body[data-route="player"] .playerTitleAct .followActActIco{
+    width: 22px;
+    height: 22px;
+    color: #fff;
+    display: block;
+  }
+  body[data-route="player"] .playerTitleAct:active{ transform: scale(0.92); }
   body[data-route="player"] .playerTitle{
     margin-top: 0;
     font-size: 16.5px;

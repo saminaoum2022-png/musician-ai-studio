@@ -3009,20 +3009,24 @@
                     <span class="playerSocialActIco" data-player-social-ico="gift" aria-hidden="true"></span>
                     <span class="followActActCount" data-friends-act-count="gift"></span>
                   </button>
-                  <button type="button" class="followActAct playerSocialAct playerSocialAct--share" data-friends-act="share" aria-label="Share">
-                    <span class="playerSocialActIco" data-player-social-ico="share" aria-hidden="true"></span>
-                  </button>
-                  <button type="button" class="followActAct playerSocialAct playerSocialAct--together" id="playerSocialTogether" data-player-together aria-label="Listen together" hidden>
-                    <span class="playerSocialActIco" data-player-social-ico="together" aria-hidden="true"></span>
-                  </button>
                 </div>
               </aside>
             </div>
             </div>
             <div class="playerMeta">
               <div class="playerTitleRow">
-                <div id="playerTitle" class="playerTitle">No track loaded</div>
-                <span id="playerNabadBadge" class="playerNabadBadgeSlot" hidden></span>
+                <div class="playerTitleCluster">
+                  <div id="playerTitle" class="playerTitle">No track loaded</div>
+                  <span id="playerNabadBadge" class="playerNabadBadgeSlot" hidden></span>
+                </div>
+                <div class="playerTitleActions" id="playerTitleActions">
+                  <button type="button" class="playerTitleAct" data-friends-act="share" aria-label="Share">
+                    <span class="playerSocialActIco" data-player-social-ico="share" aria-hidden="true"></span>
+                  </button>
+                  <button type="button" class="playerTitleAct" id="playerSocialTogether" data-player-together aria-label="Listen together" hidden>
+                    <span class="playerSocialActIco" data-player-social-ico="together" aria-hidden="true"></span>
+                  </button>
+                </div>
               </div>
               <div class="playerCreatorRow" id="playerCreatorRow">
                 <div class="playerCreatorInline">

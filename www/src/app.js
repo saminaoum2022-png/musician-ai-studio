@@ -68624,13 +68624,21 @@ function playerOwnSongIsUnpublished() {
   return !track.publicOnProfile;
 }
 
+function setPlayerTitleShareVisible(on) {
+  const shareBtn = document.querySelector("#playerTitleActions [data-friends-act='share']");
+  if (shareBtn) shareBtn.hidden = !on;
+}
+
 async function syncPlayerSocialRail() {
   const rail = els.playerSocialRail;
   const row = els.playerSocialActions;
   if (!rail || !row) return;
+  ensurePlayerSocialRailIcons();
   if (playerOwnSongIsUnpublished()) {
     rail.hidden = true;
     rail.closest(".playerArtWrap")?.classList.add("playerArtWrap--noSocialRail");
+    setPlayerTitleShareVisible(false);
+    row.setAttribute("data-friends-act-id", "");
     return;
   }
   const target = playerSocialTargetFromRef();
@@ -68639,6 +68647,8 @@ async function syncPlayerSocialRail() {
     target?.songId || currentPlayerTrackRef?.songId || currentPlayerTrackRef?.cloudSongId || "",
   ).trim();
   if (!isShareUuid(songId)) {
+    setPlayerTitleShareVisible(false);
+    row.setAttribute("data-friends-act-id", "");
     if (!reelMode) {
       rail.hidden = true;
       rail.closest(".playerArtWrap")?.classList.add("playerArtWrap--noSocialRail");
@@ -68661,9 +68671,8 @@ async function syncPlayerSocialRail() {
   row.setAttribute("data-friends-act-uid", recipientUserId);
   ensurePlayerSocialRailIcons(songId);
   const giftBtn = row.querySelector('[data-friends-act="gift"]');
-  const shareBtn = row.querySelector('[data-friends-act="share"]');
   if (giftBtn) giftBtn.hidden = !canGift;
-  if (shareBtn) shareBtn.hidden = false;
+  setPlayerTitleShareVisible(true);
   rail.hidden = false;
   rail.closest(".playerArtWrap")?.classList.remove("playerArtWrap--noSocialRail");
   void syncPlayerSocialCreatorAvatar();
@@ -68889,11 +68898,137 @@ function wirePlayerDiscoverReelSwipeOnce() {
   });
 }
 
+function playPlayerLikeFly(likeBtn) {
+  const ico = likeBtn?.querySelector(".followActActIco--like") || likeBtn?.querySelector("svg");
+  const stage = document.querySelector(".playerArtStage");
+  if (!ico || !stage) return;
+  const end = ico.getBoundingClientRect();
+  if (end.width < 4 || end.height < 4) return;
+  const stageRect = stage.getBoundingClientRect();
+  const startCx = stageRect.left + stageRect.width / 2;
+  const startCy = stageRect.top + stageRect.height * 0.46;
+  const endCx = end.left + end.width / 2;
+  const endCy = end.top + end.height / 2;
+  document.querySelector(".playerLikeFly")?.remove();
+  const fly = document.createElement("div");
+  fly.className = "playerLikeFly";
+  fly.setAttribute("aria-hidden", "true");
+  const svg = ico.cloneNode(true);
+  svg.setAttribute("aria-hidden", "true");
+  const ns = "http://www.w3.org/2000/svg";
+  const defs = document.createElementNS(ns, "defs");
+  const grad = document.createElementNS(ns, "linearGradient");
+  grad.setAttribute("id", "nabadLikeFlyGrad");
+  grad.setAttribute("x1", "0");
+  grad.setAttribute("y1", "0");
+  grad.setAttribute("x2", "1");
+  grad.setAttribute("y2", "1");
+  [["0%", "#A78BFA"], ["46%", "#7752F8"], ["100%", "#22C5A9"]].forEach(([offset, color]) => {
+    const stop = document.createElementNS(ns, "stop");
+    stop.setAttribute("offset", offset);
+    stop.setAttribute("stop-color", color);
+    grad.appendChild(stop);
+  });
+  defs.appendChild(grad);
+  svg.insertBefore(defs, svg.firstChild);
+  const path = svg.querySelector("path");
+  if (path) {
+    path.setAttribute("fill", "url(#nabadLikeFlyGrad)");
+    path.setAttribute("stroke", "url(#nabadLikeFlyGrad)");
+  }
+  fly.appendChild(svg);
+  fly.style.left = `${startCx}px`;
+  fly.style.top = `${startCy}px`;
+  fly.style.transform = "translate(-50%, -50%) scale(0.45)";
+  document.body.appendChild(fly);
+  likeBtn.classList.add("isLikeFlying");
+  const land = `translate(calc(-50% + ${endCx - startCx}px), calc(-50% + ${endCy - startCy}px)) scale(1)`;
+  const fromColors = ["#A78BFA", "#7752F8", "#22C5A9"];
+  const toColor = [255, 77, 90];
+  const stops = [...grad.querySelectorAll("stop")];
+  const fromRgb = fromColors.map((hex) => {
+    const h = hex.slice(1);
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  });
+  requestAnimationFrame(() => {
+    fly.style.transition = "transform 160ms cubic-bezier(0.2, 0.85, 0.2, 1), opacity 120ms ease";
+    fly.style.opacity = "1";
+    fly.style.transform = "translate(-50%, -50%) scale(2.7)";
+    window.setTimeout(() => {
+      fly.style.transition = "transform 520ms cubic-bezier(0.4, 0.02, 0.2, 1)";
+      fly.style.transform = land;
+      const t0 = performance.now();
+      const morphMs = 620;
+      const step = (now) => {
+        if (!fly.isConnected) return;
+        const t = Math.min(1, (now - t0) / morphMs);
+        const e = t * t * (3 - 2 * t);
+        stops.forEach((stop, i) => {
+          const c = fromRgb[i].map((v, k) => Math.round(v + (toColor[k] - v) * e));
+          stop.setAttribute("stop-color", `rgb(${c[0]}, ${c[1]}, ${c[2]})`);
+        });
+        if (t < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }, 180);
+    window.setTimeout(() => {
+      likeBtn.classList.remove("isLikeFlying");
+      fly.remove();
+    }, 920);
+  });
+}
+
+let _playerDoubleTapLikeAt = 0;
+function likePlayerFromDoubleTap() {
+  const now = Date.now();
+  if (now - _playerDoubleTapLikeAt < 900) return;
+  const row = els.playerSocialActions;
+  const likeBtn = row?.querySelector('[data-friends-act="like"]');
+  if (!row || !likeBtn) return;
+  const targetKind = row.getAttribute("data-friends-act-target-kind") || "";
+  const targetId = row.getAttribute("data-friends-act-id") || "";
+  if (!targetKind || !targetId) return;
+  _playerDoubleTapLikeAt = now;
+  const prev = getFeedSocialStat(targetKind, targetId);
+  const signedIn = Boolean(authSession?.user?.id && getSupabaseAuthToken());
+  if (signedIn) playPlayerLikeFly(likeBtn);
+  if (prev.liked) {
+    try { hapticHeartbeat(); } catch {}
+    return;
+  }
+  void handleFeedLikeTap(likeBtn);
+}
+
+function wirePlayerCoverDoubleTapLikeOnce() {
+  const stage = document.querySelector(".playerArtStage");
+  if (!stage || stage.dataset.doubleTapLike === "1") return;
+  stage.dataset.doubleTapLike = "1";
+  let lastAt = 0;
+  let lastX = 0;
+  let lastY = 0;
+  stage.addEventListener("dblclick", (e) => {
+    if (e.target?.closest?.("button, a, input, .playerLyricsChip")) return;
+    likePlayerFromDoubleTap();
+  });
+  stage.addEventListener("touchend", (e) => {
+    const t = e.changedTouches?.[0];
+    if (!t) return;
+    if (e.target?.closest?.("button, a, input, .playerLyricsChip, .playerCoverToolsRail, .playerSocialRail")) return;
+    const now = Date.now();
+    const repeat = now - lastAt < 320 && Math.abs(t.clientX - lastX) < 28 && Math.abs(t.clientY - lastY) < 28;
+    lastAt = repeat ? 0 : now;
+    lastX = t.clientX;
+    lastY = t.clientY;
+    if (repeat) likePlayerFromDoubleTap();
+  }, { passive: true });
+}
+
 function wirePlayerSocialRailOnce() {
   const card = document.querySelector(".playerCard");
   if (!card || card.dataset.playerSocialWired === "1") return;
   card.dataset.playerSocialWired = "1";
   ensurePlayerSocialRailIcons();
+  wirePlayerCoverDoubleTapLikeOnce();
   card.addEventListener("click", (e) => {
     const avatarBtn = e.target.closest(".playerSocialCreatorAvatar");
     if (avatarBtn && els.playerSocialActions?.contains(avatarBtn)) {
@@ -68903,7 +69038,9 @@ function wirePlayerSocialRailOnce() {
       return;
     }
     const actBtn = e.target.closest("[data-friends-act]");
-    if (!actBtn || !els.playerSocialActions?.contains(actBtn)) return;
+    const inRail = Boolean(actBtn && els.playerSocialActions?.contains(actBtn));
+    const inTitle = Boolean(actBtn && actBtn.closest("#playerTitleActions"));
+    if (!actBtn || (!inRail && !inTitle)) return;
     const kind = actBtn.getAttribute("data-friends-act");
     if (kind === "plays") return;
     e.preventDefault();

@@ -872,11 +872,9 @@ function triggerPhotoPicker() {
 async function onAvatarFileChange(file) {
   if (!file || !_draft) return;
   try {
-    const dataUrl = await _deps.compressAvatarFile(file, { maxSize: 320, quality: 0.82 });
+    const dataUrl = await _deps.compressAvatarFile(file, { maxSize: 720, quality: 0.86 });
     if (!dataUrl) throw new Error("Could not read photo");
     _draft.avatar = dataUrl;
-    // A 1080 px copy for the poster header; uploaded on Save (the small avatar stays what feeds use).
-    try { _draft.avatarHd = await _deps.compressAvatarFile(file, { maxSize: 1080, quality: 0.86 }); } catch { _draft.avatarHd = ""; }
     markDirty();
     renderProfileEditPage();
     // Let the person frame it right away (Cancel keeps the automatic crop).
@@ -892,13 +890,12 @@ async function onAvatarFileChange(file) {
 
 let _photoFrameSrc = "";
 
-/** Open the framing sheet on `src`; on Done the framed square replaces the draft photo (small + HD). */
+/** Open the framing sheet on `src`; on Done the framed square replaces the draft photo. */
 async function frameCurrentPhoto(src) {
   if (!src) return;
   const res = await openPhotoFrame({ src });
   if (!res) return;
-  _draft.avatar = res.small;
-  _draft.avatarHd = res.hd;
+  _draft.avatar = res.avatar;
   markDirty();
   renderProfileEditPage();
   try { _deps?.showToast?.("Framing updated — tap Save to publish", { icon: "✓", durationMs: 1800 }); } catch {}
@@ -960,14 +957,8 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
       _deps.els.sunoPersonaId.value = _draft.personaId || "";
     }
   }
-  // Everything the person sees is saved locally by now. Update the UI and leave immediately; the cloud work
-  // (profile row, HD photo) continues in the background instead of making them wait on the network.
-  const hdDraft = _draft.avatarHd;
-  const smallDraft = _draft.avatar;
-  if (hdDraft && smallDraft) {
-    // The HD copy is already on this device: show it in the header right away, no download needed.
-    try { _deps.rememberLocalAvatarHd?.(smallDraft, hdDraft); } catch {}
-  }
+  // Everything the person sees is saved locally by now. Update the UI and leave immediately; the cloud
+  // profile row sync continues in the background instead of making them wait on the network.
   _deps.syncProfileUi?.(payload);
   _dirty = false;
   syncSaveButton();
@@ -977,10 +968,6 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
     try { _deps.applyRoute?.(); } catch {}
   }
   void (async () => {
-    if (hdDraft && smallDraft) {
-      // Runs in parallel with the profile upsert; a failure only means the header keeps using the small photo.
-      _deps.uploadAvatarHd?.(hdDraft, smallDraft).catch((err) => { try { console.warn("[avatar-hd]", err?.message || err); } catch {} });
-    }
     let cloudSaved = false;
     try {
       await _deps.supabaseUpsertProfile(payload);
@@ -1021,9 +1008,8 @@ export function initProfileEditOnce(deps) {
 
   qs("#btnProfileEditAdjustPhoto")?.addEventListener("click", async () => {
     try { _deps?.haptic?.("light"); } catch {}
-    // Best source first: this session's original, then the stored HD copy, then the small avatar.
-    const hdUrl = _deps?.avatarHdUrl?.(_deps?.getAuthSession?.()?.user?.id, _draft?.avatar) || "";
-    const src = _photoFrameSrc || hdUrl || String(_draft?.avatar || "");
+    // Best source first: this session's original file, otherwise the saved avatar.
+    const src = _photoFrameSrc || String(_draft?.avatar || "");
     await frameCurrentPhoto(src);
   });
   qs("#btnProfileEditChangePhoto")?.addEventListener("click", () => {

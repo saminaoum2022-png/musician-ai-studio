@@ -28834,92 +28834,11 @@ function extFromCoverMime(mime) {
 }
 
 
-/* ── HD profile photo ───────────────────────────────────────────────────────────────────────────────────────
- * The profile row keeps the small (320 px) avatar that every feed row uses. The big poster header needs more pixels,
- * so a 1080 px copy is stored in the public `song_covers` bucket at a key derived from the small avatar itself
- * (no database change; a new photo automatically gets a new key, so nothing is ever stale). Viewers compute the
- * same key, try the HD image, and quietly fall back to the small one when it doesn't exist (older photos). */
-function avatarHdHash(smallAvatar) {
-  const s = String(smallAvatar || "");
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i += 7) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
-  return `${(h >>> 0).toString(36)}${s.length.toString(36)}`;
-}
-
-function avatarHdUrl(userId, smallAvatar) {
-  const uid = String(userId || "").trim();
-  const small = String(smallAvatar || "").trim();
-  if (!uid || !small || !SUPABASE_URL) return "";
-  return `${String(SUPABASE_URL).replace(/\/+$/, "")}/storage/v1/object/public/song_covers/${uid}/avatar-${avatarHdHash(small)}.jpg`;
-}
-
-async function uploadAvatarHd(hdDataUrl, smallAvatar) {
-  const token = getSupabaseAuthToken();
-  const uid = String(authSession?.user?.id || "").trim();
-  if (!hdDataUrl || !token || !uid || !SUPABASE_URL) return false;
-  const blob = await dataUrlToBlob(hdDataUrl);
-  const key = `${uid}/avatar-${avatarHdHash(smallAvatar)}.jpg`;
-  const r = await nativeSafeFetch(`${SUPABASE_URL}/storage/v1/object/song_covers/${key}`, {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "image/jpeg",
-      "x-upsert": "true",
-      "Cache-Control": "public, max-age=31536000, immutable",
-    },
-    body: blob,
-  });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`Photo upload failed (${r.status}): ${t.slice(0, 120)}`);
-  }
-  return true;
-}
-
-const AVATAR_HD_LOCAL_KEY = "nabad.avatarHdLocal.v1";
-/** The HD copy the person just framed is already on this device: keep the latest so the header never waits on a download. */
-function rememberLocalAvatarHd(smallAvatar, hdDataUrl) {
-  try { localStorage.setItem(AVATAR_HD_LOCAL_KEY, JSON.stringify({ h: avatarHdHash(smallAvatar), d: hdDataUrl })); } catch {}
-}
-function localAvatarHd(smallAvatar) {
-  try {
-    const s = JSON.parse(localStorage.getItem(AVATAR_HD_LOCAL_KEY) || "null");
-    return s && s.h === avatarHdHash(smallAvatar) && typeof s.d === "string" ? s.d : "";
-  } catch { return ""; }
-}
-
-/** Swap an <img> to the HD photo. Order: the copy already on this device (instant) → the stored HD file (retrying
- *  a few times, since it may still be uploading) → stay on the small photo. */
-function upgradeAvatarToHd(imgEl, userId, smallAvatar, opts = {}) {
-  if (!imgEl) return;
-  const mine = String(authSession?.user?.id || "") === String(userId || "");
-  if (mine) {
-    const local = localAvatarHd(smallAvatar);
-    if (local) {
-      imgEl.dataset.hdUrl = avatarHdUrl(userId, smallAvatar);
-      imgEl.dataset.hdLoaded = "1";
-      if (imgEl.src !== local) imgEl.src = local;
-      return;
-    }
-  }
-  const url = avatarHdUrl(userId, smallAvatar);
-  if (!url) return;
-  const attempt = Number(opts.attempt || 0);
-  if (attempt === 0 && imgEl.dataset.hdUrl === url) return;
-  imgEl.dataset.hdUrl = url;
-  const probe = new Image();
-  probe.decoding = "async";
-  probe.onload = () => { if (imgEl.dataset.hdUrl === url) { imgEl.src = url; imgEl.dataset.hdLoaded = "1"; } };
-  probe.onerror = () => {
-    // Not there (yet): the HD file may still be uploading. Retry a few times, then give up quietly.
-    const waits = [2500, 6000, 15000];
-    if (attempt < waits.length && imgEl.dataset.hdUrl === url) {
-      window.setTimeout(() => { if (imgEl.dataset.hdUrl === url) upgradeAvatarToHd(imgEl, userId, smallAvatar, { attempt: attempt + 1 }); }, waits[attempt]);
-    }
-  };
-  probe.src = attempt ? `${url}?r=${attempt}` : url;
-}
+/* Profile photo: framed once (src/photo-frame.js) into a single ~720 px JPEG and saved as `avatar`.
+ * There used to be a second, separate "HD" copy uploaded to a derived storage key with an async swap
+ * once it finished uploading. That added a failure mode: any photo that never got an HD copy (older
+ * photos, or an upload that silently failed) stayed on a blurry small placeholder forever — which read
+ * as "stuck loading". Removed in favor of one right-sized photo, uploaded once, used everywhere. */
 
 async function dataUrlToBlob(dataUrl) {
   const r = await fetch(String(dataUrl || ""));
@@ -47763,10 +47682,8 @@ function applyUserPublicAvatar(url, displayName = "", userId = "") {
   if (isRealUserAvatarUrl(normalized)) {
     img.alt = handle ? `${handle} avatar` : "Profile avatar";
     img.dataset.empty = "true";
-    img.dataset.hdUrl = "";
     img.src = normalized;
     if (img.complete && img.naturalWidth > 0) revealPhoto();
-    if (userId) upgradeAvatarToHd(img, userId, String(url || "").trim());
   } else {
     img.alt = handle ? `${handle} profile` : "Profile";
     showFallback();
@@ -60885,15 +60802,8 @@ function renderProfilePreviewFromInputs() {
     const isReal = raw && !/nabadai-logo\.png(?:$|\?)|splash-mark\.png(?:$|\?)/.test(raw);
     const url = isReal ? normalizeProfileAvatarForImg(raw) : "";
     if (url) {
-      const _hd = avatarHdUrl(authSession?.user?.id, raw);
       const _img = els.profilePreviewAvatar;
-      // Already showing the HD copy of this exact photo: leave it (no flicker back to the small one).
-      if (!(_hd && _img.dataset.hdUrl === _hd && _img.dataset.hdLoaded === "1")) {
-        _img.src = url;
-        _img.dataset.hdUrl = "";
-        _img.dataset.hdLoaded = "";
-        upgradeAvatarToHd(_img, authSession?.user?.id, raw);
-      }
+      if (_img.src !== url) _img.src = url;
       els.profilePreviewAvatar.removeAttribute("data-empty");
     } else {
       els.profilePreviewAvatar.removeAttribute("src");
@@ -78563,9 +78473,6 @@ try {
     saveProfile,
     supabaseUpsertProfile,
     compressAvatarFile,
-    uploadAvatarHd,
-    avatarHdUrl,
-    rememberLocalAvatarHd,
     scheduleProfileCloudSync,
     loadPersonas,
     loadPersonaSelection,
@@ -80889,7 +80796,7 @@ if (els.profileAvatarFile) {
     if (!f) return;
     if ((document.body.getAttribute("data-route") || "") === "profile-edit") return;
     try {
-      const dataUrl = await compressAvatarFile(f, { maxSize: 320, quality: 0.82 });
+      const dataUrl = await compressAvatarFile(f, { maxSize: 720, quality: 0.86 });
       if (!dataUrl) throw new Error("Could not read photo");
       activeProfile.avatar = dataUrl;
       // Persist to localStorage IMMEDIATELY so a PWA close doesn't

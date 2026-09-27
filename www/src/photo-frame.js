@@ -1,11 +1,12 @@
 /**
  * Photo framing — a small full-screen sheet to position a profile photo inside the square that becomes the
- * profile header. Drag to move, pinch or use the slider to zoom. The result is baked into two JPEGs
- * (1080 px for the header, 320 px for feeds), so nothing else in the app needs to know about framing.
+ * profile header. Drag to move, pinch or use the slider to zoom. The result is baked into a single JPEG at
+ * a resolution sharp enough for the full-bleed cover header without being wasteful on tiny feed/chat avatars.
+ * (There used to be a separate small/HD pair with an async "upgrade" swap; that added a failure mode where
+ * older or HD-less photos got stuck showing the blurry small copy forever. One size, uploaded once, no swap.)
  */
 
-const HD = 1080;
-const SMALL = 320;
+const AVATAR_SIZE = 720;
 const MAX_ZOOM = 4;
 
 function clamp(v, lo, hi) {
@@ -37,7 +38,7 @@ function renderSquare(img, crop, size, quality) {
 
 /**
  * @param {{ src: string, title?: string }} opts
- * @returns {Promise<{ small: string, hd: string } | null>} null when cancelled
+ * @returns {Promise<{ avatar: string } | null>} null when cancelled
  */
 export function openPhotoFrame({ src, title = "Frame your photo" } = {}) {
   return new Promise(async (resolve) => {
@@ -182,7 +183,7 @@ export function openPhotoFrame({ src, title = "Frame your photo" } = {}) {
         const size = V() / s; // side of the visible square, in source pixels
         const crop = { x: -tx / s, y: -ty / s, size };
         try {
-          close({ hd: renderSquare(img, crop, HD, 0.86), small: renderSquare(img, crop, SMALL, 0.82) });
+          close({ avatar: renderSquare(img, crop, AVATAR_SIZE, 0.86) });
         } catch {
           close(null); // e.g. a tainted canvas: keep whatever the caller already had
         }

@@ -317,7 +317,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260927-150700";
+const APP_BUILD = "20260927-151545";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -37683,7 +37683,7 @@ function paintOurMusicArt(el, pairKey) {
   el.style.setProperty("--om-h2", h2);
 }
 
-const OUR_MUSIC_COVER_CACHE_PREFIX = "nabad_om_cover:";
+const OUR_MUSIC_COVER_CACHE_PREFIX = "nabad_om_cover:v2:";
 /** The cover's visual "tier" grows the longer a pair stays in sync — mirrors the
  *  thresholds in api/_lib/our-music-stats.js (server is the real source of truth;
  *  this copy is only used client-side to know when to bust the localStorage cache

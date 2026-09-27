@@ -3294,27 +3294,25 @@
                    name on cold opens until the real data resolves. -->
               <div class="profileAuraTopRow profileAuraTopRowCentered" id="profileAuraTopRow" data-loading="false">
                 <div class="profileAuraAvatarWrap profileAuraAvatarWrapNeon" id="profileAuraAvatarWrap">
+                  <!-- The real photo stays a direct child of the cover, exactly where it was before the
+                       Artist Avatar flip existed. Nesting it inside the flip faces made WKWebView composite
+                       it through the flip's opacity/filter stack, which painted a large photo with a soft
+                       wavy "still loading" look. Only the generated portrait lives inside the flip. -->
+                  <span class="profileAuraRing profileAuraRingPulse" aria-hidden="true"></span>
+                  <img
+                    id="profilePreviewAvatar"
+                    class="profileAuraAvatar"
+                    alt="Your avatar"
+                    draggable="false"
+                  />
+                  <span id="profileAvatarFallback" class="profileAuraAvatarFallback" aria-hidden="true">Na</span>
+                  <span class="profileAuraAvatarSkeleton" aria-hidden="true"></span>
+                  <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
+                  <span id="profileProAvatarPill" class="profileProAvatarPill" hidden aria-hidden="true" title="NabadAi Pro">Pro</span>
                   <div class="aaFlip" id="aaFlip">
-                    <div class="aaFlipInner" id="aaFlipInner">
-                      <div class="aaFlipFace aaFlipFace--front">
-                        <span class="profileAuraRing profileAuraRingPulse" aria-hidden="true"></span>
-                        <img
-                          id="profilePreviewAvatar"
-                          class="profileAuraAvatar"
-                          alt="Your avatar"
-                          draggable="false"
-                        />
-                        <span id="profileAvatarFallback" class="profileAuraAvatarFallback" aria-hidden="true">Na</span>
-                        <span class="profileAuraAvatarSkeleton" aria-hidden="true"></span>
-                        <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
-                        <span id="profileProAvatarPill" class="profileProAvatarPill" hidden aria-hidden="true" title="NabadAi Pro">Pro</span>
-                      </div>
-                      <!-- Artist Avatar back face — tap the photo to flip. Duotone filter over the
-                           real photo stands in for the real generated avatar for this preview. -->
-                      <div class="aaFlipFace aaFlipFace--back" id="aaFlipBack" hidden>
-                        <img id="aaBackImg" class="profileAuraAvatar aaBackImg" alt="Your Artist Avatar" draggable="false" />
-                        <span class="aaBackKick">ARTIST AVATAR</span>
-                      </div>
+                    <div class="aaFlipFace aaFlipFace--back" id="aaFlipBack" hidden>
+                      <img id="aaBackImg" class="profileAuraAvatar aaBackImg" alt="Your Artist Avatar" draggable="false" />
+                      <span class="aaBackKick">ARTIST AVATAR</span>
                     </div>
                   </div>
                   <button type="button" id="aaFlipBadge" class="aaFlipBadge" hidden aria-label="Flip to your Artist Avatar">

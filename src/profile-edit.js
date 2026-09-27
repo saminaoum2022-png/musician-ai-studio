@@ -872,7 +872,7 @@ function triggerPhotoPicker() {
 async function onAvatarFileChange(file) {
   if (!file || !_draft) return;
   try {
-    const dataUrl = await _deps.compressAvatarFile(file, { maxSize: 720, quality: 0.86 });
+    const dataUrl = await _deps.compressAvatarFile(file, { maxSize: 720, type: "image/png" });
     if (!dataUrl) throw new Error("Could not read photo");
     _draft.avatar = dataUrl;
     markDirty();

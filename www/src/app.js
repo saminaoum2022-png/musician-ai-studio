@@ -32027,8 +32027,10 @@ async function mergeActiveProfileFromCloud(opts = {}) {
  *  stored the raw camera/library photo as a multi-MB base64 string,
  *  which then bloated the profile JSON in localStorage and made boot
  *  slow because `loadProfile()` had to parse that on every open.
- *  320 px square at JPEG q=0.82 is plenty for a 96 px avatar. */
-async function compressAvatarFile(file, { maxSize = 320, quality = 0.82 } = {}) {
+ *  Pass `type: "image/png"` for photos shown full-bleed (the profile cover):
+ *  JPEG's compression ripples in skin and backgrounds read there as a wavy
+ *  "still loading" shimmer. `quality` only applies to the JPEG output. */
+async function compressAvatarFile(file, { maxSize = 320, quality = 0.82, type = "image/jpeg" } = {}) {
   if (!file) return "";
   if (typeof createImageBitmap !== "function" || typeof OffscreenCanvas === "undefined") {
     return await new Promise((res, rej) => {
@@ -32046,7 +32048,9 @@ async function compressAvatarFile(file, { maxSize = 320, quality = 0.82 } = {}) 
     const canvas = new OffscreenCanvas(w, h);
     const ctx = canvas.getContext("2d");
     ctx.drawImage(bmp, 0, 0, w, h);
-    const blob = await canvas.convertToBlob({ type: "image/jpeg", quality });
+    const blob = await canvas.convertToBlob(
+      type === "image/png" ? { type: "image/png" } : { type: "image/jpeg", quality },
+    );
     return await new Promise((res, rej) => {
       const fr = new FileReader();
       fr.onload = () => res(String(fr.result || ""));
@@ -60395,7 +60399,11 @@ function shouldShowProfileHeaderSkeleton() {
   if (localId === "guest" || localId !== uid) return true;
   const u = String(activeProfile?.username || "").trim().toLowerCase();
   if (!u || u === "guest") return true;
-  if (isPlaceholderUsername(u) && !_profileCloudMergedAt) return true;
+  // Until the cloud merge lands, the header can only show whatever was last saved
+  // on the device — the photo and display name often arrive a beat later. Cover
+  // that gap with the shimmer for every signed-in account, not just placeholder
+  // handles, so a slow connection shows a skeleton instead of the initials flash.
+  if (!_profileCloudMergedAt) return true;
   return false;
 }
 
@@ -80796,7 +80804,7 @@ if (els.profileAvatarFile) {
     if (!f) return;
     if ((document.body.getAttribute("data-route") || "") === "profile-edit") return;
     try {
-      const dataUrl = await compressAvatarFile(f, { maxSize: 720, quality: 0.86 });
+      const dataUrl = await compressAvatarFile(f, { maxSize: 720, type: "image/png" });
       if (!dataUrl) throw new Error("Could not read photo");
       activeProfile.avatar = dataUrl;
       // Persist to localStorage IMMEDIATELY so a PWA close doesn't
@@ -81158,6 +81166,12 @@ syncActiveProfileIdFromSession();
 try { syncOwnProfileSocialStatsUi(); } catch {}
 loadProfile();
 try { refreshProfileHandleFromActiveProfile(); } catch {}
+// Paint the saved name, handle and photo before the first frame. Otherwise a cold
+// open — especially on a slow connection — renders the header while `activeProfile`
+// is still empty: initials instead of the photo and no display name at all, until the
+// cloud merge lands seconds later. The data is already on the device, so show it now.
+try { renderProfileIdentityLine(); } catch {}
+try { renderProfilePreviewFromInputs(); } catch {}
 renderAuthStatus();
 const _bootOAuthCodePending = hasOAuthCodeInUrl();
 if (_bootOAuthCodePending) {

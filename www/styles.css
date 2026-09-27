@@ -18008,12 +18008,11 @@ html[data-theme="light"] .profileStatCol + .profileStatCol{
 .profileAuraNameSkeleton{
   display: none;
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 140px;
+  left: 0;
+  top: 6px;
+  width: 180px;
   max-width: 60%;
-  height: 18px;
+  height: 22px;
   border-radius: 9px;
   background: linear-gradient(90deg,
     rgba(255,255,255,0.04) 0%,
@@ -69765,25 +69764,19 @@ html[data-theme="light"] .omSpotTitle{ color: #0b0b13; }
    for record/sleeve posts. Demo-only wiring for now (see wireArtistAvatarFlipOnce) —
    the back face is a duotone filter over the real photo, standing in for a real
    generated avatar until that pipeline exists. ===== */
+/* The flip only ever holds the generated Artist Avatar. It stays inert (no hit area,
+   nothing painted) until flipped, so the real photo underneath renders exactly as it
+   did before this feature — a plain <img> composited on its own, with none of the
+   opacity/filter stacking that made WKWebView draw it soft and wavy. */
 body[data-route="profile"] .aaFlip{
-  position: absolute; inset: 0; cursor: pointer;
+  position: absolute; inset: 0; z-index: 4; pointer-events: none;
 }
-body[data-route="profile"] .aaFlipInner{ position: absolute; inset: 0; }
+body[data-route="profile"] .aaFlip.isFlipped{ pointer-events: auto; cursor: pointer; }
 body[data-route="profile"] .aaFlipFace{
-  position: absolute; inset: 0; pointer-events: none;
+  position: absolute; inset: 0;
 }
-/* The opacity toggle targets the actual image/fallback nodes, not the wrapping
-   face div — the mask-image already forced onto .profileAuraAvatar elsewhere
-   creates its own compositing layer in WKWebView that doesn't reliably pick up
-   an ancestor's opacity, so hiding the parent div alone left the photo visible. */
-body[data-route="profile"] .aaFlipFace > *{ opacity: 0; transition: opacity 380ms ease; }
-body[data-route="profile"] .aaFlipFace--front > *{ opacity: 1; }
-body[data-route="profile"] .aaFlip.isFlipped .aaFlipFace--front > *{ opacity: 0; }
-body[data-route="profile"] .aaFlip.isFlipped .aaFlipFace--back > *{ opacity: 1; }
-body[data-route="profile"] .aaFlipFace--back[hidden]{ display: block !important; }
-body[data-route="profile"] .aaFlipFace--back{ z-index: 1; }
-body[data-route="profile"] .aaFlip.isFlipped .aaFlipFace--front{ z-index: 0; }
-body[data-route="profile"] .aaFlip.isFlipped .aaFlipFace--back{ z-index: 2; }
+body[data-route="profile"] .aaFlipFace--back{ z-index: 2; visibility: hidden; }
+body[data-route="profile"] .aaFlip.isFlipped .aaFlipFace--back{ visibility: visible; }
 /* filter goes on the wrapping face div, not the <img> itself — the img already
    carries a -webkit-mask-image (the fade-to-transparent gradient) elsewhere in
    this file, and WKWebView silently drops one of the two when both land on the
@@ -69818,11 +69811,11 @@ body[data-route="profile"] .aaBackKick{
    pulse still read as "tap me". */
 body[data-route="profile"] .aaFlipBadge{
   position: absolute; right: 14px; top: 296px; z-index: 6;
-  width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85);
+  width: 52px; height: 52px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85);
   overflow: hidden; padding: 0;
   background: linear-gradient(135deg, #8f74ff, #22C5A9);
   color: #fff; display: grid; place-items: center;
-  box-shadow: 0 4px 18px -4px rgba(124,92,255,.75), 0 0 0 1px rgba(0,0,0,.08);
+  box-shadow: 0 2px 8px rgba(0,0,0,.45);
   -webkit-tap-highlight-color: transparent;
   animation: aaFlipBadgePulse 2.8s ease-in-out infinite;
 }
@@ -69848,8 +69841,8 @@ body[data-route="profile"] .aaFlipBadgePlus{ display: none; color: rgba(255, 255
 body[data-route="profile"] .aaFlipBadge.aaFlipBadge--empty .aaFlipBadgeThumb{ display: none; }
 body[data-route="profile"] .aaFlipBadge.aaFlipBadge--empty .aaFlipBadgePlus{ display: block; }
 @keyframes aaFlipBadgePulse{
-  0%, 100%{ transform: scale(1); box-shadow: 0 4px 18px -4px rgba(124,92,255,.75), 0 0 0 1px rgba(0,0,0,.08); }
-  50%{ transform: scale(1.08); box-shadow: 0 4px 24px -2px rgba(124,92,255,.95), 0 0 0 1px rgba(0,0,0,.08); }
+  0%, 100%{ transform: scale(1); }
+  50%{ transform: scale(1.06); }
 }
 @media (prefers-reduced-motion: reduce){
   body[data-route="profile"] .aaFlipBadge{ animation: none; }

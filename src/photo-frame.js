@@ -1,7 +1,9 @@
 /**
  * Photo framing — a small full-screen sheet to position a profile photo inside the square that becomes the
- * profile header. Drag to move, pinch or use the slider to zoom. The result is baked into a single JPEG at
+ * profile header. Drag to move, pinch or use the slider to zoom. The result is baked into a single PNG at
  * a resolution sharp enough for the full-bleed cover header without being wasteful on tiny feed/chat avatars.
+ * PNG (not JPEG) because JPEG's compression ripples in smooth areas like skin and backgrounds read as a
+ * permanent wavy "still loading" shimmer once the photo is blown up to full-bleed cover size.
  * (There used to be a separate small/HD pair with an async "upgrade" swap; that added a failure mode where
  * older or HD-less photos got stuck showing the blurry small copy forever. One size, uploaded once, no swap.)
  */
@@ -24,7 +26,7 @@ function loadImage(src) {
   });
 }
 
-function renderSquare(img, crop, size, quality) {
+function renderSquare(img, crop, size) {
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -33,7 +35,7 @@ function renderSquare(img, crop, size, quality) {
   ctx.fillStyle = "#0b0c12";
   ctx.fillRect(0, 0, size, size);
   ctx.drawImage(img, crop.x, crop.y, crop.size, crop.size, 0, 0, size, size);
-  return canvas.toDataURL("image/jpeg", quality);
+  return canvas.toDataURL("image/png");
 }
 
 /**
@@ -183,7 +185,7 @@ export function openPhotoFrame({ src, title = "Frame your photo" } = {}) {
         const size = V() / s; // side of the visible square, in source pixels
         const crop = { x: -tx / s, y: -ty / s, size };
         try {
-          close({ avatar: renderSquare(img, crop, AVATAR_SIZE, 0.86) });
+          close({ avatar: renderSquare(img, crop, AVATAR_SIZE) });
         } catch {
           close(null); // e.g. a tainted canvas: keep whatever the caller already had
         }

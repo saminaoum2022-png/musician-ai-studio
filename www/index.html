@@ -3380,12 +3380,6 @@
                 placeholder="Add a short bio to introduce your music style."
               ></textarea>
 
-              <!-- Bio quote — view-mode only; edit mode uses the textarea above. -->
-              <div id="profileHeroBio" class="profileHeroBio" hidden>
-                <span class="profileHeroBioQuote" aria-hidden="true">"</span>
-                <p id="profileAboutText" class="profileHeroBioText"></p>
-              </div>
-
               <div class="profileStatsRow" id="profileStatsPills" aria-live="polite" hidden>
                 <div class="profileStatCol" data-stat="posts">
                   <strong class="profileStatValue" id="profileStatPillSongsValue">0</strong>
@@ -3538,6 +3532,27 @@
             <div id="profilePersonaDetails" class="profilePersonaSignaturePanel profilePersonaDetails" hidden>
               <div id="settingsVoicesList" class="settingsVoicesList" role="list"></div>
               <p id="settingsVoicesEmpty" class="settingsVoicesEmpty" hidden>No voices saved yet. Tap Record — voices sync to your account and return on a new phone.</p>
+            </div>
+          </section>
+
+          <!-- Promo for creating a Nabad Artist Avatar — a real banner, not a
+               tiny badge someone has to notice on their own. Hides for good
+               once the owner has one (the cover-photo flip badge takes over). -->
+          <a href="#/profile-edit" id="profileArtistAvatarPromo" class="profileArtistAvatarPromo" hidden aria-hidden="true">
+            <span class="profileArtistAvatarPromoIcon" aria-hidden="true">✦</span>
+            <span class="profileArtistAvatarPromoBody">
+              <span class="profileArtistAvatarPromoTitle">Create your Artist Avatar</span>
+              <span class="profileArtistAvatarPromoSub">A stylized portrait made from your photos</span>
+            </span>
+            <svg class="profileArtistAvatarPromoChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+          </a>
+
+          <!-- Bio moved off the cover photo (used to sit right under the handle,
+               crowding the name/username/stats) into its own labeled section. -->
+          <section id="profileAboutSection" class="profileAboutSection" hidden aria-labelledby="profileAboutSectionLabel">
+            <h2 id="profileAboutSectionLabel" class="profileAboutSectionLabel">About</h2>
+            <div id="profileHeroBio" class="profileHeroBio">
+              <p id="profileAboutText" class="profileHeroBioText"></p>
             </div>
           </section>
 

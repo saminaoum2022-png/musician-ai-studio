@@ -266,6 +266,7 @@ import {
   initProfileEditOnce,
   onProfileEditRouteActive,
   openProfileEditPage,
+  openArtistAvatarEditorFromProfile,
 } from "./profile-edit.js";
 import { USERNAME_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from "./profile-limits.js";
 import {
@@ -1388,6 +1389,8 @@ const els = {
   userPublicFeaturedCreation: document.getElementById("userPublicFeaturedCreation"),
   profileIdentityLine: document.getElementById("profileIdentityLine"),
   profileHeroBio: document.getElementById("profileHeroBio"),
+  profileAboutSection: document.getElementById("profileAboutSection"),
+  profileArtistAvatarPromo: document.getElementById("profileArtistAvatarPromo"),
   // Spotify-x-Nabad redesign nodes
   profileActionRow: document.getElementById("profileActionRow"),
   profileActionShare: document.getElementById("profileActionShare"),
@@ -30870,6 +30873,7 @@ function updateProfilePersonaRow() {
   renderActivePersonaBanner();
   syncProfilePersonaAvatarBadge();
   try { syncArtistAvatarFlipVisibility(); } catch {}
+  try { syncArtistAvatarPromoBanner(); } catch {}
   try { renderSingerPersonaRow(); } catch {}
 }
 
@@ -30924,6 +30928,27 @@ function syncArtistAvatarFlipVisibility() {
   flip?.classList.toggle("aaHasRealAvatar", hasAvatar);
   if (!on) flip?.classList.remove("isFlipped");
   if (on) { try { wireArtistAvatarFlipOnce(); syncArtistAvatarBackFace(); } catch {} }
+}
+
+/** "Create your Artist Avatar" promo banner — visible only for the owner,
+ *  only until they've actually made one (the cover-photo flip badge above
+ *  is the discovery mechanism from that point on). */
+let _artistAvatarPromoBound = false;
+function syncArtistAvatarPromoBanner() {
+  const el = els.profileArtistAvatarPromo;
+  if (!el) return;
+  if (!_artistAvatarPromoBound) {
+    _artistAvatarPromoBound = true;
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      openArtistAvatarEditorFromProfile();
+    });
+  }
+  const hasAvatar = Boolean(String(activeProfile?.artistAvatar || "").trim());
+  const on = !hasAvatar && String(document.body.getAttribute("data-route") || "") === "profile";
+  el.hidden = !on;
+  el.setAttribute("aria-hidden", on ? "false" : "true");
 }
 
 /**
@@ -60457,19 +60482,19 @@ function renderProfileIdentityLine() {
  *  only when there's a real bio (not the legacy placeholder string).
  * ================================================================= */
 function renderProfileHeroBio() {
-  const wrap = els.profileHeroBio;
+  const section = els.profileAboutSection;
   const text = els.profileAboutText;
-  if (!wrap || !text) return;
+  if (!section || !text) return;
   const raw = String(activeProfile?.bio || "").trim();
   const cleaned = /^add a short bio/i.test(raw) ? "" : raw;
   if (!cleaned) {
-    wrap.hidden = true;
+    section.hidden = true;
     text.textContent = "";
     text.dir = "";
     text.classList.remove("userTextBidi--rtl");
     return;
   }
-  wrap.hidden = false;
+  section.hidden = false;
   applyUserTextBidi(text, screenshotSanitizeCopy(cleaned));
 }
 

@@ -1029,3 +1029,19 @@ export function openProfileEditPage() {
   try { location.hash = "#/profile-edit"; } catch {}
   try { _deps?.applyRoute?.(); } catch {}
 }
+
+/** Entry point for the "Create your Artist Avatar" promo banner on the main
+ *  profile page — jumps straight to Edit Profile AND pops the Artist Avatar
+ *  editor open, instead of making someone land on the list and hunt for the
+ *  row themselves. applyRoute() hydrates the draft synchronously (see
+ *  onProfileEditRouteActive), so it's already ready by the time we open it. */
+export function openArtistAvatarEditorFromProfile() {
+  // applyRoute() is scheduled via requestAnimationFrame (see scheduleApplyRoute
+  // in app.js) — it would hydrate the draft too late for the sheet we're about
+  // to open. initProfileEditOnce() already ran at boot (module-level init, not
+  // route-gated) so the sheet's DOM and dismiss handlers are ready regardless;
+  // hydrate the draft ourselves right now instead of waiting on that pipeline.
+  hydrateProfileEditDraft(_deps?.getActiveProfile?.());
+  openProfileEditPage();
+  openArtistAvatarEditor();
+}

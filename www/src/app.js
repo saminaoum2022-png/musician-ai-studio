@@ -37611,6 +37611,8 @@ function syncUserPublicHeaderActions(cache) {
   if (shuf) shuf.hidden = !has;
   const tog = document.getElementById("btnUserPublicTogether");
   if (tog) tog.hidden = !(has && mine && target && mine !== target && nabadLiveListenEnabled());
+  const om = document.getElementById("btnUserPublicOurMusic");
+  if (om) om.hidden = !(mine && target && mine !== target);
 }
 
 let _userPublicActionsWired = false;
@@ -37646,6 +37648,153 @@ function wireUserPublicHeaderActionsOnce() {
       { url: t.url, title: String(t.title || "Song"), artUrl: trackCoverArtForDisplay(t), songId: String(t.id || ""), ownerUserId: String(t.userId || currentUserPublicProfileId || "") },
     );
   });
+  document.getElementById("btnUserPublicOurMusic")?.addEventListener("click", () => {
+    const cache = _userPublicProfileCache;
+    const targetId = String(currentUserPublicProfileId || cache?.prof?.user_id || "").trim();
+    if (!targetId) return;
+    haptic("light");
+    void openOurMusicSheet(targetId, { handle: cache?.publicHandle || "", avatar: cache?.prof?.avatar || "" });
+  });
+}
+
+/* ── "Our Music Together" — a friends-only summary of shared Listen Together
+   history, presented as a small generated "album" instead of a stats list.
+   Built as a plain overlay sheet (not a router route) to keep this additive
+   and low-risk on top of the existing route logic. ── */
+const OUR_MUSIC_ALBUM_TITLES = {
+  "arabic pop": ["Late Night, Same Song", "Habibi, on Repeat", "Two Phones, One Playlist"],
+  "romantic": ["Slow Dance, No Music Video", "Say It in a Song Instead", "The Playlist We Don't Explain"],
+  "piano": ["Keys Between Us", "Soft Hours"],
+  "sad": ["We Cried to the Same Track", "Rainy Day Duet"],
+  "dabke": ["Same Beat, Different Room", "Dabke at 1AM"],
+  "default": ["An Album Only We Have", "Vol. 1: Us", "The Playlist That Started It"],
+};
+function ourMusicAlbumTitle(sharedTags, seed) {
+  const key = String(sharedTags?.[0] || "").trim().toLowerCase();
+  const bank = OUR_MUSIC_ALBUM_TITLES[key] || OUR_MUSIC_ALBUM_TITLES.default;
+  const idx = Math.abs(hashStringToInt(seed)) % bank.length;
+  return bank[idx];
+}
+function hashStringToInt(s) {
+  const str = String(s || "");
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return h;
+}
+/** Deterministic, free (no AI call) cover for v1 — two hues picked from a fixed hash of the pair, so
+ *  the same two people always get the same look. Swapping this for a real generated cover (the same
+ *  Visual Director pipeline used for song covers) is a deliberate follow-up, not done here. */
+function paintOurMusicArt(el, pairKey) {
+  if (!el) return;
+  const h1 = ((hashStringToInt(pairKey) % 360) + 360) % 360;
+  const h2 = (h1 + 130 + (Math.abs(hashStringToInt(pairKey + "b")) % 60)) % 360;
+  el.style.setProperty("--om-h1", h1);
+  el.style.setProperty("--om-h2", h2);
+}
+let _ourMusicSheetBound = false;
+function bindOurMusicSheetOnce() {
+  if (_ourMusicSheetBound) return;
+  _ourMusicSheetBound = true;
+  const sheet = document.getElementById("ourMusicSheet");
+  document.getElementById("omDim")?.addEventListener("click", closeOurMusicSheet);
+  document.getElementById("omClose")?.addEventListener("click", closeOurMusicSheet);
+  sheet?.addEventListener("click", (e) => {
+    const row = e.target?.closest?.("[data-om-play]");
+    if (!row) return;
+    const url = decodeURIComponent(row.getAttribute("data-om-play") || "");
+    const title = decodeURIComponent(row.getAttribute("data-om-title") || "Song");
+    const art = decodeURIComponent(row.getAttribute("data-om-art") || "");
+    if (!url) return;
+    haptic("light");
+    void playLibraryUrlOnPlayer(url, title, art, { openPlayer: false });
+  });
+}
+function closeOurMusicSheet() {
+  const sheet = document.getElementById("ourMusicSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+}
+async function openOurMusicSheet(targetUserId, partner = {}) {
+  bindOurMusicSheetOnce();
+  const sheet = document.getElementById("ourMusicSheet");
+  if (!sheet) return;
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  const statusEl = document.getElementById("omStatus");
+  const contentEl = document.getElementById("omContent");
+  if (statusEl) { statusEl.hidden = false; statusEl.textContent = "Loading your album…"; }
+  if (contentEl) contentEl.hidden = true;
+  const myId = String(authSession?.user?.id || "").trim();
+  const pairKey = [myId, targetUserId].sort().join(":");
+  paintOurMusicArt(document.getElementById("omArt"), pairKey);
+  const handle = String(partner.handle || "").replace(/^@/, "");
+  const byEl = document.getElementById("omBy");
+  if (byEl) byEl.textContent = handle ? `You & @${handle}` : "You & your friend";
+  const titleEl = document.getElementById("omTitle");
+  if (titleEl) titleEl.textContent = "Your Album";
+
+  let data = null;
+  try {
+    const token = getSupabaseAuthToken();
+    const r = await fetch(apiUrl(`/api/music/our-music?userId=${encodeURIComponent(targetUserId)}`), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (r.ok) data = await r.json().catch(() => null);
+  } catch {}
+
+  if (!data) {
+    if (statusEl) statusEl.textContent = "Couldn't load your album — check your connection and try again.";
+    return;
+  }
+
+  if (titleEl) titleEl.textContent = ourMusicAlbumTitle(data.sharedTags, pairKey);
+  if (statusEl) statusEl.hidden = true;
+  if (contentEl) contentEl.hidden = false;
+
+  const tracklistEl = document.getElementById("omTracklist");
+  const emptyEl = document.getElementById("omEmptyTracks");
+  const tracks = Array.isArray(data.tracklist) ? data.tracklist : [];
+  if (tracklistEl) {
+    tracklistEl.innerHTML = tracks.map((t, i) => {
+      const url = String(t.url || "").trim();
+      const attrs = url
+        ? `data-om-play="${encodeURIComponent(url)}" data-om-title="${encodeURIComponent(t.title || "Song")}" data-om-art="${encodeURIComponent(t.cover || "")}"`
+        : "";
+      return `
+      <div class="omTrk${url ? "" : " omTrk--noPlay"}" ${attrs}>
+        <span class="omTrkNo">${i + 1}</span>
+        <span class="omTrkArt" style="background:${t.cover ? `url('${escapeHtml(t.cover)}') center/cover` : "linear-gradient(135deg,#402030,#a04a6a)"}"></span>
+        <span class="omTrkTxt">${escapeHtml(t.title || "Song")}</span>
+        <span class="omTrkCount">${t.count}×</span>
+      </div>`;
+    }).join("");
+    tracklistEl.hidden = !tracks.length;
+  }
+  if (emptyEl) emptyEl.hidden = Boolean(tracks.length);
+
+  const pct = Math.max(0, Math.min(100, Number(data.matchPct) || 0));
+  const circ = 2 * Math.PI * 26;
+  const arc = document.getElementById("omMatchArc");
+  if (arc) arc.style.strokeDasharray = `${(circ * pct / 100).toFixed(1)} ${circ.toFixed(1)}`;
+  const pctEl = document.getElementById("omMatchPct");
+  if (pctEl) pctEl.textContent = `${pct}%`;
+  const tagsEl = document.getElementById("omMatchTags");
+  if (tagsEl) {
+    const tags = Array.isArray(data.sharedTags) ? data.sharedTags : [];
+    tagsEl.innerHTML = tags.length
+      ? tags.map((t) => `<span class="omTag">${escapeHtml(t)}</span>`).join("")
+      : `<span class="omTag omTag--muted">Not enough shared plays yet</span>`;
+  }
+
+  const listenBtn = document.getElementById("omListenTogether");
+  if (listenBtn && !listenBtn.dataset.boundOm) {
+    listenBtn.dataset.boundOm = "1";
+    listenBtn.addEventListener("click", () => {
+      closeOurMusicSheet();
+      document.getElementById("btnUserPublicTogether")?.click();
+    });
+  }
 }
 
 function syncUserPublicSegmentUi() {

@@ -69605,3 +69605,89 @@ body[data-route="discover"] .discoverFeaturedHeroCarousel + .discoverMomentSecti
 body[data-route="discover"] .discoverFeedSection--featuredChallenge + .discoverMomentSection{ margin-top: 6px; }
 body[data-route="discover"] .discoverMomentSection{ margin-bottom: 0; }
 body[data-route="discover"] .discoverMomentSection + .discoverVibeSection{ margin-top: 22px; }
+
+/* ===== "Our Music Together": a small "+" neighbor to Listen together on a friend's profile, and the album-style sheet it opens. ===== */
+.userPublicIconBtn[hidden], .userPublicOurMusicBtn[hidden]{ display: none !important; }
+.userPublicOurMusicBtn{
+  position: relative;
+  height: 40px;
+  padding: 0 14px 0 12px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  color: #cbbcff;
+  cursor: pointer;
+  white-space: nowrap;
+  background: rgba(143, 116, 255, 0.1);
+  border: 1.5px solid rgba(143, 116, 255, 0.55);
+  -webkit-tap-highlight-color: transparent;
+}
+.userPublicOurMusicBtn:active{ transform: scale(0.97); }
+.userPublicOurMusicIco{ font-size: 13px; line-height: 1; }
+
+@media (max-width: 720px){
+  .userPublicOurMusicBtn{ padding: 0 12px 0 10px; font-size: 12.5px; gap: 6px; }
+}
+
+.ourMusicSheet{ position: fixed; inset: 0; z-index: 500; }
+.ourMusicSheet[hidden]{ display: none !important; }
+.omDim{ position: absolute; inset: 0; background: rgba(4, 4, 10, 0.72); }
+.omPanel{
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  background: #05060c; overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+.omArt{
+  position: relative; height: 46vh; min-height: 300px; max-height: 420px; flex: none; overflow: hidden;
+  background: #0e0a1c;
+  --om-h1: 255; --om-h2: 165;
+}
+.omBlob{ position: absolute; border-radius: 50%; filter: blur(52px); opacity: .85; }
+.omB1{ width: 60vw; height: 60vw; left: -14vw; top: -8vw; background: radial-gradient(circle, hsla(var(--om-h1), 90%, 68%, .85), transparent 65%); }
+.omB2{ width: 54vw; height: 54vw; right: -12vw; bottom: 6vw; background: radial-gradient(circle, hsla(var(--om-h2), 80%, 58%, .68), transparent 65%); }
+.omB3{ width: 36vw; height: 36vw; left: 38%; top: 32%; background: radial-gradient(circle, rgba(255,255,255,.16), transparent 70%); }
+.omOverlay{
+  position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between;
+  background: linear-gradient(180deg, rgba(5,4,12,.2) 0%, transparent 32%, transparent 55%, rgba(5,4,12,.92) 100%);
+}
+.omTop{ display: flex; justify-content: flex-end; padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 0; }
+.omClose{
+  width: 34px; height: 34px; border-radius: 50%; border: 0; display: grid; place-items: center;
+  background: rgba(0,0,0,.4); color: #fff; font-size: 14px; -webkit-tap-highlight-color: transparent;
+}
+.omBottom{ padding: 0 20px 20px; }
+.omKick{ font: 800 9.5px/1 var(--font-body, inherit); letter-spacing: .14em; color: rgba(255,255,255,.7); }
+.omTitle{ font: 800 28px/1.12 var(--font-display, inherit); color: #fff; margin-top: 6px; text-wrap: balance; }
+.omBy{ font: 600 12.5px var(--font-body, inherit); color: rgba(255,255,255,.78); margin-top: 8px; }
+.omBody{ flex: 1; padding: 18px 18px calc(env(safe-area-inset-bottom, 0px) + 28px); }
+.omStatus{ color: rgba(255,255,255,.6); font-size: 13px; text-align: center; padding: 30px 0; }
+.omSecLabel{ font: 800 10.5px var(--font-body, inherit); letter-spacing: .12em; color: rgba(255,255,255,.5); margin-top: 22px; }
+.omTlHead{ display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.omTlHead b{ font: 800 15px var(--font-display, inherit); color: #fff; }
+.omTlHead small{ color: rgba(255,255,255,.5); font-size: 11px; }
+.omTrk{ display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,.07); cursor: pointer; }
+.omTrk--noPlay{ cursor: default; opacity: .7; }
+.omTrkNo{ width: 14px; color: rgba(255,255,255,.5); font: 700 11px var(--font-body, inherit); }
+.omTrkArt{ width: 38px; height: 38px; border-radius: 8px; flex: none; background-size: cover; }
+.omTrkTxt{ flex: 1; font: 700 13px var(--font-body, inherit); color: #fff; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.omTrkCount{ color: rgba(255,255,255,.5); font-size: 11px; }
+.omEmptyTracks{ color: rgba(255,255,255,.55); font-size: 12.5px; padding: 10px 0; }
+.omMatchRow{ display: flex; align-items: center; gap: 14px; margin-top: 8px; }
+.omMatchRing{ position: relative; width: 64px; height: 64px; flex: none; display: grid; place-items: center; }
+.omMatchRing svg{ position: absolute; inset: 0; }
+.omMatchPct{ position: relative; font: 800 14px var(--font-display, inherit); color: #fff; }
+.omMatchTags{ display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+.omTag{ font: 700 10.5px var(--font-body, inherit); background: rgba(255,255,255,.08); color: rgba(255,255,255,.85); border-radius: 999px; padding: 5px 10px; }
+.omTag--muted{ color: rgba(255,255,255,.5); }
+.omListenBtn{
+  width: 100%; margin-top: 22px; border: 0; border-radius: 999px; padding: 13px 0;
+  background: #fff; color: #0b0b13; font: 800 13.5px var(--font-body, inherit);
+  -webkit-tap-highlight-color: transparent;
+}
+.omListenBtn:active{ transform: scale(.98); }
+html[data-theme="light"] .ourMusicSheet .omPanel{ background: #fff; }
+html[data-theme="light"] .omTrkTxt{ color: #0b0b13; }
+html[data-theme="light"] .omTag{ background: rgba(0,0,0,.06); color: #0b0b13; }

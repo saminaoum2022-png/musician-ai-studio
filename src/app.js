@@ -3980,7 +3980,7 @@ function leaveRouteForTabSwitch(prevRoute, nextRoute) {
   }
   if (prev === "messages" && next !== "messages") {
     stopMessagesInboxPoll();
-    stopMessagesInboxRealtime();
+    if (next !== "messages-thread") stopMessagesInboxRealtime();
   }
   if (prev === "hub" && next !== "hub") {
     try { pauseHubForRouteChange(); } catch {}
@@ -6061,7 +6061,12 @@ function applyRoute({ passGen } = {}) {
   }
   if (prevRoute === "messages" && wanted !== "messages") {
     stopMessagesInboxPoll();
-    stopMessagesInboxRealtime();
+    // Opening a conversation is not "leaving DMs" — keep the inbox realtime
+    // subscription alive so a message in a DIFFERENT thread still updates the
+    // chat list / unread badge while you're inside this one. Without this,
+    // every open conversation silently killed it until the next tab switch
+    // or app foreground re-armed it.
+    if (wanted !== "messages-thread") stopMessagesInboxRealtime();
   }
   if (wanted === "challenges" && hasActiveCreateSession() && !_createHubExitBypassSessionPin && !isOnCreateHubRoute()) {
     if (createSessionIsGenerating()) {

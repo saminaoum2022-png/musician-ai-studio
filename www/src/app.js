@@ -37608,8 +37608,14 @@ function paintUserPublicMusic(cache) {
   if (!host) return;
   const byLine = `@${cache.publicHandle}`;
   const tracks = cache.postItems.map((it) => it.track).filter((t) => String(t?.url || "").trim());
+  const aboutHtml = musicAboutCardHtml({
+    bio: cache.prof?.bio,
+    styles: parseMusicPreferencesFromProfile(cache.prof),
+    releases: tracks.length,
+    remixes: tracks.filter((t) => remixAttributionForTrack(t)).length,
+  });
   if (!tracks.length) {
-    host.innerHTML = `<div class="profileActEmpty"><p class="profileActEmptyTitle">No music yet</p><p class="profileActEmptyText">Published songs from @${escapeHtml(cache.publicHandle)} will show up here.</p></div>`;
+    host.innerHTML = `<div class="profileActEmpty"><p class="profileActEmptyTitle">No music yet</p><p class="profileActEmptyText">Published songs from @${escapeHtml(cache.publicHandle)} will show up here.</p></div>${aboutHtml}`;
     syncUserPublicHeaderActions(cache);
     return;
   }
@@ -37638,11 +37644,6 @@ function paintUserPublicMusic(cache) {
         <small>${isRemix ? "Remix" : "Single"}</small>
       </button>`;
   }).join("");
-  const tagCount = new Map();
-  for (const t of tracks) for (const tag of trackStyleTagsList(t, 8)) tagCount.set(tag, (tagCount.get(tag) || 0) + 1);
-  const styleChips = [...tagCount.entries()].sort((x, y) => y[1] - x[1]).slice(0, 8)
-    .map(([tag]) => `<span class="upmChip">${escapeHtml(tag)}</span>`).join("");
-  const remixes = tracks.filter((t) => remixAttributionForTrack(t)).length;
   host.innerHTML = `
     ${playsKnown ? `<section class="upmSection" aria-label="Trending now">
       <h3 class="upmH">Trending now</h3>
@@ -37653,13 +37654,7 @@ function paintUserPublicMusic(cache) {
       <div class="upmShelf">${releaseCards}</div>
     </section>
     <section class="upmSection" id="upmSimilar" aria-label="Fans also like" hidden></section>
-    <section class="upmSection" aria-label="About">
-      <h3 class="upmH">About</h3>
-      <div class="upmAbout">
-        ${styleChips ? `<div class="upmChips">${styleChips}</div>` : ""}
-        <p class="upmFacts">${tracks.length} ${tracks.length === 1 ? "release" : "releases"}${remixes ? ` · ${remixes} ${remixes === 1 ? "remix" : "remixes"}` : ""}</p>
-      </div>
-    </section>`;
+    ${aboutHtml}`;
   try { syncDiscoveryPlayingHighlights(); } catch {}
   try { syncMusicPanelsPlaying(); } catch {}
   syncUserPublicHeaderActions(cache);
@@ -60483,40 +60478,29 @@ function renderProfileIdentityLine() {
  *  only when there's a real bio (not the legacy placeholder string).
  * ================================================================= */
 function renderProfileHeroBio() {
+  // Biography no longer sits at the bottom of Posts. It lives in the Music tab's About.
   const section = els.profileAboutSection;
+  if (section) section.hidden = true;
   const text = els.profileAboutText;
-  if (!section || !text) return;
-  const raw = String(activeProfile?.bio || "").trim();
-  const cleaned = /^add a short bio/i.test(raw) ? "" : raw;
-  if (!cleaned) {
-    section.hidden = true;
+  if (text) {
     text.textContent = "";
     text.dir = "";
     text.classList.remove("userTextBidi--rtl");
-    return;
   }
-  section.hidden = false;
-  applyUserTextBidi(text, screenshotSanitizeCopy(cleaned));
 }
 
-function renderUserPublicBio(bioRaw) {
+function renderUserPublicBio(_bioRaw) {
+  // Biography lives in the Music tab's About, same as the owner's profile.
   const wrap = els.userPublicBio;
   const text = els.userPublicBioText || wrap;
   if (!wrap) return;
-  const cleaned = String(bioRaw || "").trim();
-  if (!cleaned || /^add a short bio/i.test(cleaned)) {
-    wrap.hidden = true;
-    wrap.style.display = "none";
-    if (text) {
-      text.textContent = "";
-      text.dir = "";
-      text.classList.remove("userTextBidi--rtl");
-    }
-    return;
+  wrap.hidden = true;
+  wrap.style.display = "none";
+  if (text && text !== wrap) {
+    text.textContent = "";
+    text.dir = "";
+    text.classList.remove("userTextBidi--rtl");
   }
-  wrap.hidden = false;
-  wrap.style.display = "";
-  applyUserTextBidi(text, cleaned);
 }
 
 /* =================================================================
@@ -61380,6 +61364,39 @@ function setProfileMusicHtml(host, html) {
   host.innerHTML = html;
 }
 
+function cleanProfileBioText(raw) {
+  const t = String(raw || "").trim();
+  return /^add a short bio/i.test(t) ? "" : t;
+}
+
+/** Music-tab About: the musician's own words, then the styles they sing. */
+function musicAboutCardHtml({ bio, styles, releases = 0, remixes = 0, editable = false } = {}) {
+  const bioClean = screenshotSanitizeCopy(cleanProfileBioText(bio));
+  const styleList = (styles || []).map((s) => String(s || "").trim()).filter(Boolean);
+  const bioHtml = bioClean
+    ? `<p class="upmBio" dir="auto">${escapeHtml(bioClean)}</p>`
+    : (editable ? `<button type="button" class="upmBioInvite" data-upm-edit="bio">Write your biography</button>` : "");
+  const chips = styleList.map((label) => `<span class="upmChip">${escapeHtml(label)}</span>`).join("");
+  const stylesHtml = chips
+    ? `<div class="upmSound"><span class="upmSoundLabel">Sound</span><div class="upmChips">${chips}</div></div>`
+    : (editable ? `<button type="button" class="upmSoundInvite" data-upm-edit="styles">Add the styles you sing</button>` : "");
+  const n = Math.max(0, Number(releases) || 0);
+  const r = Math.max(0, Number(remixes) || 0);
+  const facts = n
+    ? `<p class="upmFacts">${n} ${n === 1 ? "release" : "releases"}${r ? ` · ${r} ${r === 1 ? "remix" : "remixes"}` : ""}</p>`
+    : "";
+  if (!bioHtml && !stylesHtml && !facts) return "";
+  return `
+    <section class="upmSection upmSection--about" aria-label="Biography">
+      <h3 class="upmH">Biography</h3>
+      <div class="upmAbout">
+        ${bioHtml}
+        ${stylesHtml}
+        ${facts}
+      </div>
+    </section>`;
+}
+
 function paintProfileMusicNow() {
   const host = document.getElementById("profileMusic");
   if (!host) return;
@@ -61424,12 +61441,19 @@ function paintProfileMusicNow() {
         </button>`;
       }).join("")}</div>
     </section>` : "";
+  const aboutHtml = musicAboutCardHtml({
+    bio: activeProfile?.bio,
+    styles: parseMusicPreferencesFromProfile(activeProfile),
+    releases: tracks.length,
+    remixes: tracks.filter((t) => remixAttributionForTrack(t)).length,
+    editable: true,
+  });
   if (!tracks.length) {
     setProfileMusicHtml(host, `
       <div class="profileActEmpty">
         <p class="profileActEmptyTitle">Your music lives here</p>
         <p class="profileActEmptyText">Publish a song and it appears on your artist page.</p>
-      </div>${draftsHtml}`);
+      </div>${draftsHtml}${aboutHtml}`);
     return;
   }
   const withPlays = tracks.filter((t) => Number(t.playCount) > 0);
@@ -61456,10 +61480,6 @@ function paintProfileMusicNow() {
         <small>${remixAttributionForTrack(t) ? "Remix" : "Single"}</small>
       </button>`;
   }).join("");
-  const tagCount = new Map();
-  for (const t of tracks) for (const tag of trackStyleTagsList(t, 8)) tagCount.set(tag, (tagCount.get(tag) || 0) + 1);
-  const chips = [...tagCount.entries()].sort((x, y) => y[1] - x[1]).slice(0, 8).map(([tag]) => `<span class="upmChip">${escapeHtml(tag)}</span>`).join("");
-  const remixes = tracks.filter((t) => remixAttributionForTrack(t)).length;
   setProfileMusicHtml(host, `
     ${playsKnown ? `<section class="upmSection" aria-label="Trending now">
       <h3 class="upmH">Trending now</h3>
@@ -61470,13 +61490,7 @@ function paintProfileMusicNow() {
       <h3 class="upmH">Releases<span class="upmCount">${tracks.length}</span></h3>
       <div class="upmShelf">${cards}</div>
     </section>
-    <section class="upmSection" aria-label="About">
-      <h3 class="upmH">About</h3>
-      <div class="upmAbout">
-        ${chips ? `<div class="upmChips">${chips}</div>` : ""}
-        <p class="upmFacts">${tracks.length} ${tracks.length === 1 ? "release" : "releases"}${remixes ? ` · ${remixes} ${remixes === 1 ? "remix" : "remixes"}` : ""}</p>
-      </div>
-    </section>`);
+    ${aboutHtml}`);
   try { syncDiscoveryPlayingHighlights(); } catch {}
   try { syncMusicPanelsPlaying(); } catch {}
   if (playsKnown) writeProfileMusicSnap(uid, host.innerHTML.replace(/\s+(isPlaying|isActive|isLoading)\b/g, ""));
@@ -61499,6 +61513,14 @@ function wireProfileMusicOnce() {
   if (host) {
     wireUserPublicFollowActHostOnce(host);
     host.addEventListener("click", (e) => {
+      const edit = e.target.closest("[data-upm-edit]");
+      if (edit && host.contains(edit)) {
+        e.preventDefault();
+        if (!authSession?.user?.id) return;
+        haptic("light");
+        openProfileEditPage();
+        return;
+      }
       const pub = e.target.closest("[data-profile-publish]");
       if (!pub) return;
       e.preventDefault();

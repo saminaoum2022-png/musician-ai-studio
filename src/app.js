@@ -317,7 +317,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260927-143437";
+const APP_BUILD = "20260927-150700";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -37611,8 +37611,6 @@ function syncUserPublicHeaderActions(cache) {
   if (shuf) shuf.hidden = !has;
   const tog = document.getElementById("btnUserPublicTogether");
   if (tog) tog.hidden = !(has && mine && target && mine !== target && nabadLiveListenEnabled());
-  const om = document.getElementById("btnUserPublicOurMusic");
-  if (om) om.hidden = !(mine && target && mine !== target);
 }
 
 let _userPublicActionsWired = false;
@@ -37647,13 +37645,6 @@ function wireUserPublicHeaderActionsOnce() {
       { userId: String(currentUserPublicProfileId || cache.prof?.user_id || ""), username: cache.publicHandle, avatar: cache.prof?.avatar || "" },
       { url: t.url, title: String(t.title || "Song"), artUrl: trackCoverArtForDisplay(t), songId: String(t.id || ""), ownerUserId: String(t.userId || currentUserPublicProfileId || "") },
     );
-  });
-  document.getElementById("btnUserPublicOurMusic")?.addEventListener("click", () => {
-    const cache = _userPublicProfileCache;
-    const targetId = String(currentUserPublicProfileId || cache?.prof?.user_id || "").trim();
-    if (!targetId) return;
-    haptic("light");
-    void openOurMusicSheet(targetId, { handle: cache?.publicHandle || "", avatar: cache?.prof?.avatar || "" });
   });
 }
 
@@ -37693,19 +37684,55 @@ function paintOurMusicArt(el, pairKey) {
 }
 
 const OUR_MUSIC_COVER_CACHE_PREFIX = "nabad_om_cover:";
-/** Real Gemini-generated "Our Music Together" cover, cached per friend pair + shared-tag
- *  signature so Gemini only runs once per pair (until their shared tags actually change).
- *  Gemini only — deliberately no Pollinations/Cloudflare fallback; on any failure the
- *  gradient blobs from paintOurMusicArt() stay as the cover. */
-async function loadOurMusicGeneratedCover(imgEl, pairKey, otherId, sharedTags) {
+/** The cover's visual "tier" grows the longer a pair stays in sync — mirrors the
+ *  thresholds in api/_lib/our-music-stats.js (server is the real source of truth;
+ *  this copy is only used client-side to know when to bust the localStorage cache
+ *  and re-fetch a richer cover). */
+const OUR_MUSIC_TIERS = [
+  { id: "spark", minDays: 0, label: "Spark" },
+  { id: "glow", minDays: 7, label: "Glow" },
+  { id: "constellation", minDays: 30, label: "Constellation" },
+  { id: "aurora", minDays: 90, label: "Aurora" },
+];
+function ourMusicTierForDays(daysInSync) {
+  const d = Math.max(0, Number(daysInSync) || 0);
+  let cur = OUR_MUSIC_TIERS[0];
+  for (const t of OUR_MUSIC_TIERS) if (d >= t.minDays) cur = t;
+  return cur;
+}
+function ourMusicNextTier(daysInSync) {
+  const d = Math.max(0, Number(daysInSync) || 0);
+  return OUR_MUSIC_TIERS.find((t) => t.minDays > d) || null;
+}
+/** Small "Glow · 3 days to Constellation" pill over the art, so the tier system
+ *  (the payoff for staying in sync) is actually visible, not just a hidden prompt tweak. */
+function syncOurMusicTierBadge(daysInSync) {
+  const el = document.getElementById("omTierBadge");
+  if (!el) return;
+  const tier = ourMusicTierForDays(daysInSync);
+  const next = ourMusicNextTier(daysInSync);
+  const hint = next ? ` · ${Math.max(0, next.minDays - Math.max(0, Number(daysInSync) || 0))}d to ${next.label}` : " · fully unlocked";
+  el.textContent = `${tier.label}${hint}`;
+  el.hidden = false;
+}
+/** Real Gemini-generated "Our Music Together" cover, cached per friend pair + a
+ *  signature of (shared tags + tier) so Gemini only re-runs when their shared taste
+ *  actually changes OR they cross into a new tier. Gemini only — deliberately no
+ *  Pollinations/Cloudflare fallback; on any failure the gradient blobs from
+ *  paintOurMusicArt() stay as the cover. */
+async function loadOurMusicGeneratedCover(imgEl, pairKey, otherId, data) {
   if (!imgEl || !otherId) return;
-  const tagsKey = (Array.isArray(sharedTags) ? sharedTags : []).slice().sort().join(",");
+  const sharedTags = Array.isArray(data?.sharedTags) ? data.sharedTags : [];
+  const tagsKey = sharedTags.slice().sort().join(",");
+  const tierId = ourMusicTierForDays(data?.daysInSync).id;
+  syncOurMusicTierBadge(data?.daysInSync);
   const cacheKey = `${OUR_MUSIC_COVER_CACHE_PREFIX}${pairKey}`;
+  const sig = `${tagsKey}|${tierId}`;
   try {
     const cachedRaw = localStorage.getItem(cacheKey);
     if (cachedRaw) {
       const cached = JSON.parse(cachedRaw);
-      if (cached?.dataUrl && cached?.tagsKey === tagsKey) {
+      if (cached?.dataUrl && cached?.sig === sig) {
         imgEl.style.backgroundImage = `url('${cached.dataUrl}')`;
         imgEl.classList.add("omArtImg--visible");
         return;
@@ -37716,20 +37743,122 @@ async function loadOurMusicGeneratedCover(imgEl, pairKey, otherId, sharedTags) {
   try {
     const token = getSupabaseAuthToken();
     const r = await fetch(
-      apiUrl(`/api/music/our-music-cover?userId=${encodeURIComponent(otherId)}&tags=${encodeURIComponent(tagsKey)}`),
+      apiUrl(`/api/music/our-music-cover?userId=${encodeURIComponent(otherId)}`),
       { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     );
     if (!r.ok) return;
-    const data = await r.json().catch(() => null);
-    if (!data?.ok || !data?.dataUrl) return;
-    imgEl.style.backgroundImage = `url('${data.dataUrl}')`;
+    const resp = await r.json().catch(() => null);
+    if (!resp?.ok || !resp?.dataUrl) return;
+    imgEl.style.backgroundImage = `url('${resp.dataUrl}')`;
     imgEl.classList.add("omArtImg--visible");
     try {
-      localStorage.setItem(cacheKey, JSON.stringify({ dataUrl: data.dataUrl, tagsKey, ts: Date.now() }));
+      localStorage.setItem(cacheKey, JSON.stringify({ dataUrl: resp.dataUrl, sig, ts: Date.now() }));
     } catch {}
   } catch (e) {
     console.warn("[our-music] cover skipped", e?.message || e);
   }
+}
+
+function ourMusicCachedCoverDataUrl(pairKey) {
+  try {
+    const raw = localStorage.getItem(`${OUR_MUSIC_COVER_CACHE_PREFIX}${pairKey}`);
+    if (!raw) return "";
+    const parsed = JSON.parse(raw);
+    return String(parsed?.dataUrl || "");
+  } catch {
+    return "";
+  }
+}
+
+/** Rasterize the offscreen #omShareCard template (cover/gradient + stats) into a real PNG. */
+async function buildOurMusicShareCardDataUrl({ title, by, pairKey, data }) {
+  const card = document.getElementById("omShareCard");
+  if (!card) return "";
+
+  const bg = document.getElementById("omShareCardBg");
+  const coverDataUrl = ourMusicCachedCoverDataUrl(pairKey);
+  if (bg) {
+    if (coverDataUrl) {
+      bg.style.backgroundImage = `url('${coverDataUrl}')`;
+    } else {
+      const h1 = ((hashStringToInt(pairKey) % 360) + 360) % 360;
+      const h2 = (h1 + 130 + (Math.abs(hashStringToInt(pairKey + "b")) % 60)) % 360;
+      bg.style.backgroundImage = "none";
+      bg.style.background = `radial-gradient(circle at 25% 20%, hsl(${h1} 85% 55%), transparent 60%),` +
+        `radial-gradient(circle at 80% 70%, hsl(${h2} 75% 50%), transparent 60%), #0e0a1c`;
+    }
+  }
+  const titleEl = document.getElementById("omShareCardTitle");
+  if (titleEl) titleEl.textContent = title || "Your Album";
+  const byEl = document.getElementById("omShareCardBy");
+  if (byEl) byEl.textContent = by || "us";
+  const daysEl = document.getElementById("omShareCardDays");
+  if (daysEl) daysEl.textContent = String(Math.max(0, Number(data?.daysInSync) || 0));
+  const sessEl = document.getElementById("omShareCardSessions");
+  if (sessEl) sessEl.textContent = String(Math.max(0, Number(data?.sessionCount) || 0));
+  const streakEl = document.getElementById("omShareCardStreak");
+  if (streakEl) streakEl.textContent = String(Math.max(0, Number(data?.streakWeeks) || 0));
+  const tagsEl = document.getElementById("omShareCardTags");
+  if (tagsEl) {
+    const tags = (Array.isArray(data?.sharedTags) ? data.sharedTags : []).slice(0, 3);
+    tagsEl.innerHTML = tags.map((t) => `<span class="omTag">${escapeHtml(t)}</span>`).join("");
+  }
+
+  const mod = await import(/* webpackIgnore: true */ "https://esm.sh/html-to-image@1.11.11");
+  const toPng = mod?.toPng;
+  if (typeof toPng !== "function") throw new Error("toPng unavailable");
+  return await toPng(card, { pixelRatio: 3, cacheBust: true, backgroundColor: "#0e0a1c" });
+}
+
+/** "Share the album" — a real rendered card (cover + stats). Native iOS goes through
+ *  the Capacitor Share plugin (write to disk, then present the system share sheet) —
+ *  the same proven path the video/song share flows already use; raw navigator.share
+ *  with a File does not reliably work inside this app's WKWebView shell. Falls back
+ *  to plain text if the card can't be built or nothing above works. */
+async function shareOurMusicAlbum({ title, by, pairKey, data }) {
+  const text = `${title} — ${by}, ${Math.max(0, Number(data?.daysInSync) || 0)} days in sync on NabadAi 🎵`;
+  let dataUrl = "";
+  try {
+    dataUrl = await buildOurMusicShareCardDataUrl({ title, by, pairKey, data });
+  } catch (e) {
+    console.warn("[our-music] share card build failed", e?.message || e);
+  }
+
+  if (dataUrl) {
+    try {
+      const blob = await dataUrlToBlob(dataUrl);
+      if (isCapacitorNativeAuth()) {
+        const { filePath } = await writeBlobToNativeCache(blob, "our-music-together.png");
+        await presentNativeIosShareSheetForFile(filePath);
+        return;
+      }
+      const file = new File([blob], "our-music-together.png", { type: "image/png" });
+      if (navigator.share && (typeof navigator.canShare !== "function" || navigator.canShare({ files: [file] }))) {
+        await navigator.share({ files: [file], title, text });
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = "our-music-together.png";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showToast?.("Saved — ready to share.", { durationMs: 2400 });
+      return;
+    } catch (e) {
+      if (shareSheetCanceledError(e)) return;
+      console.warn("[our-music] image share failed, falling back to text", e?.message || e);
+    }
+  }
+
+  try {
+    if (navigator.share) {
+      await navigator.share({ title, text });
+    } else {
+      await navigator.clipboard?.writeText(text);
+      showToast?.("Copied to share", { durationMs: 2200 });
+    }
+  } catch {}
 }
 let _ourMusicSheetBound = false;
 function bindOurMusicSheetOnce() {
@@ -37788,7 +37917,7 @@ async function openOurMusicSheet(targetUserId, partner = {}) {
     return;
   }
 
-  void loadOurMusicGeneratedCover(document.getElementById("omArtImg"), pairKey, targetUserId, data.sharedTags);
+  void loadOurMusicGeneratedCover(document.getElementById("omArtImg"), pairKey, targetUserId, data);
 
   if (titleEl) titleEl.textContent = ourMusicAlbumTitle(data.sharedTags, pairKey);
   if (statusEl) statusEl.hidden = true;
@@ -37876,17 +38005,14 @@ async function openOurMusicSheet(targetUserId, partner = {}) {
 
   const shareBtn = document.getElementById("omShare");
   if (shareBtn) {
-    // No generated share image yet (that needs its own design pass) — for now this
-    // shares the same facts as plain text/link, which still works everywhere.
     shareBtn.onclick = () => {
       haptic("light");
-      const title = String(titleEl?.textContent || "Our Album").trim();
-      const text = `${title} — ${byEl?.textContent || "us"}, ${data.daysInSync} days in sync on NabadAi 🎵`;
-      if (navigator.share) {
-        navigator.share({ title, text }).catch(() => {});
-      } else {
-        try { navigator.clipboard?.writeText(text); showToast("Copied to share", { durationMs: 2200 }); } catch {}
-      }
+      void shareOurMusicAlbum({
+        title: String(titleEl?.textContent || "Our Album").trim(),
+        by: String(byEl?.textContent || "us").trim(),
+        pairKey,
+        data,
+      });
     };
   }
 }
@@ -43909,10 +44035,15 @@ function syncCoachThreadClearBtn(show = isCoachThreadId(_conversationId)) {
 function syncMessagesThreadMoreSheet(coach = isCoachThreadId(_conversationId) || _chatHeaderUser?.userId === COACH_SENDER_ID) {
   const isCoach = Boolean(coach);
   const profileRow = document.getElementById("messagesThreadMoreProfile");
+  const ourMusicRow = document.getElementById("messagesThreadMoreOurMusic");
   const clearRow = document.getElementById("messagesThreadMoreClear");
   if (profileRow) {
     profileRow.hidden = isCoach;
     profileRow.setAttribute("aria-hidden", isCoach ? "true" : "false");
+  }
+  if (ourMusicRow) {
+    ourMusicRow.hidden = isCoach;
+    ourMusicRow.setAttribute("aria-hidden", isCoach ? "true" : "false");
   }
   if (clearRow) {
     clearRow.hidden = !isCoach;
@@ -47064,6 +47195,14 @@ function bindMessagesPageOnce() {
       closeMessagesThreadMoreSheet();
       if (action === "profile") {
         openChatPartnerProfile();
+        return;
+      }
+      if (action === "our-music") {
+        const u = _chatHeaderUser;
+        const targetId = String(u?.userId || "").trim();
+        if (!targetId || targetId === COACH_SENDER_ID) return;
+        try { haptic("light"); } catch {}
+        void openOurMusicSheet(targetId, { handle: u?.username || "", avatar: u?.avatarUrl || "" });
         return;
       }
       if (action === "clear") {

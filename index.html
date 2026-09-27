@@ -233,7 +233,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260927-143437" />
+    <link rel="stylesheet" href="./styles.css?v=20260927-150700" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -3255,9 +3255,6 @@
               <button id="btnUserPublicTogether" class="userPublicTogetherBtn" type="button" hidden>
                 <span class="userPublicTogetherIco" aria-hidden="true"></span><span>Listen together</span>
               </button>
-              <button id="btnUserPublicOurMusic" class="userPublicOurMusicBtn" type="button" hidden>
-                <span class="userPublicOurMusicIco" aria-hidden="true">✦</span><span>Our Music</span>
-              </button>
             </div>
             <div class="userPublicStats profileStatsRow" id="userPublicStats"></div>
             <div id="userPublicMusicStyles" class="profileMusicStylesInline userPublicMusicStyles" hidden aria-hidden="true">
@@ -5120,6 +5117,13 @@
               <span>Open their page</span>
             </span>
           </button>
+          <button type="button" class="messagesComposerSheetRow" id="messagesThreadMoreOurMusic" data-messages-thread-more="our-music" role="menuitem">
+            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--ourMusic" aria-hidden="true">✦</span>
+            <span class="messagesComposerSheetCopy">
+              <strong>Our Music</strong>
+              <span>Your album together</span>
+            </span>
+          </button>
           <button type="button" class="messagesComposerSheetRow" id="messagesThreadMoreClear" data-messages-thread-more="clear" role="menuitem" hidden>
             <span class="messagesComposerSheetIcon messagesComposerSheetIcon--planList" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-2.64-6.36"/><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M21 3v6h-6"/></svg>
@@ -5589,7 +5593,7 @@
         }));
       }
       // Dynamic import so the giant app module does not block the first dots.
-      import("./src/app.js?v=20260927-143437");
+      import("./src/app.js?v=20260927-150700");
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
   
@@ -5600,7 +5604,10 @@
           <div class="omBlob omB1"></div><div class="omBlob omB2"></div><div class="omBlob omB3"></div>
           <div class="omArtImg" id="omArtImg" aria-hidden="true"></div>
           <div class="omOverlay">
-            <div class="omTop"><button type="button" id="omClose" class="omClose" aria-label="Close">✕</button></div>
+            <div class="omTop">
+              <div class="omTierBadge" id="omTierBadge" hidden></div>
+              <button type="button" id="omClose" class="omClose" aria-label="Close">✕</button>
+            </div>
             <div class="omBottom">
               <div class="omKick">AN ALBUM MADE FROM YOUR NABAD</div>
               <div class="omTitle" id="omTitle">Your Album</div>
@@ -5639,6 +5646,26 @@
             <button type="button" id="omShare" class="omShareBtn">Share the album</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Offscreen template rasterized to a real PNG for "Share the album" (html-to-image). -->
+    <div id="omShareCard" class="omShareCard" aria-hidden="true">
+      <div class="omShareCardBg" id="omShareCardBg"></div>
+      <div class="omShareCardOverlay"></div>
+      <div class="omShareCardKick">AN ALBUM MADE FROM YOUR NABAD</div>
+      <div class="omShareCardBottom">
+        <div class="omShareCardTitle" id="omShareCardTitle">Your Album</div>
+        <div class="omShareCardBy" id="omShareCardBy"></div>
+        <div class="omShareCardStats">
+          <div class="omShareCardStat"><b id="omShareCardDays">0</b><span>days in sync</span></div>
+          <div class="omShareCardDot"></div>
+          <div class="omShareCardStat"><b id="omShareCardSessions">0</b><span>sessions</span></div>
+          <div class="omShareCardDot"></div>
+          <div class="omShareCardStat"><b id="omShareCardStreak">0</b><span>week streak</span></div>
+        </div>
+        <div class="omShareCardTags" id="omShareCardTags"></div>
+        <div class="omShareCardMark">NabadAi</div>
       </div>
     </div>
   </body>

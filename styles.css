@@ -41550,6 +41550,11 @@ body.coachComposerMode .messagesComposerSheetListDm{
   background: rgba(255, 196, 92, 0.16);
   color: #ffd78a;
 }
+.messagesComposerSheetIcon--ourMusic{
+  background: rgba(236, 72, 153, 0.16);
+  color: #f9a8d4;
+  font-size: 17px;
+}
 .messagesComposerSheetCopy{
   display: flex;
   flex-direction: column;
@@ -60861,6 +60866,10 @@ html[data-theme="light"] .messagesComposerSheetIcon--listen{
   background: rgba(217, 119, 6, 0.12);
   color: #c2410c;
 }
+html[data-theme="light"] .messagesComposerSheetIcon--ourMusic{
+  background: rgba(219, 39, 119, 0.12);
+  color: #db2777;
+}
 html[data-theme="light"] .messagesComposerSheetCopy strong{
   color: var(--text-primary);
 }
@@ -69606,33 +69615,7 @@ body[data-route="discover"] .discoverFeedSection--featuredChallenge + .discoverM
 body[data-route="discover"] .discoverMomentSection{ margin-bottom: 0; }
 body[data-route="discover"] .discoverMomentSection + .discoverVibeSection{ margin-top: 22px; }
 
-/* ===== "Our Music Together": a small "+" neighbor to Listen together on a friend's profile, and the album-style sheet it opens. ===== */
-.userPublicIconBtn[hidden], .userPublicOurMusicBtn[hidden]{ display: none !important; }
-.userPublicOurMusicBtn{
-  position: relative;
-  height: 40px;
-  padding: 0 14px 0 12px;
-  border-radius: 20px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  color: #cbbcff;
-  cursor: pointer;
-  white-space: nowrap;
-  background: rgba(143, 116, 255, 0.1);
-  border: 1.5px solid rgba(143, 116, 255, 0.55);
-  -webkit-tap-highlight-color: transparent;
-}
-.userPublicOurMusicBtn:active{ transform: scale(0.97); }
-.userPublicOurMusicIco{ font-size: 13px; line-height: 1; }
-
-@media (max-width: 720px){
-  .userPublicOurMusicBtn{ padding: 0 12px 0 10px; font-size: 12.5px; gap: 6px; }
-}
-
+/* ===== "Our Music Together": album-style sheet, opened from a DM's "⋯" chat options menu. ===== */
 .ourMusicSheet{ position: fixed; inset: 0; z-index: 500; }
 .ourMusicSheet[hidden]{ display: none !important; }
 .omDim{ position: absolute; inset: 0; background: rgba(4, 4, 10, 0.72); }
@@ -69660,11 +69643,22 @@ body[data-route="discover"] .discoverMomentSection + .discoverVibeSection{ margi
   position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between;
   background: linear-gradient(180deg, rgba(5,4,12,.2) 0%, transparent 32%, transparent 55%, rgba(5,4,12,.92) 100%);
 }
-.omTop{ display: flex; justify-content: flex-end; padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 0; }
+.omTop{ display: flex; justify-content: space-between; align-items: center; padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 0; }
 .omClose{
   width: 34px; height: 34px; border-radius: 50%; border: 0; display: grid; place-items: center;
   background: rgba(0,0,0,.4); color: #fff; font-size: 14px; -webkit-tap-highlight-color: transparent;
 }
+.omTierBadge{
+  font: 800 10.5px/1 var(--font-body, inherit);
+  letter-spacing: .03em;
+  color: rgba(255,255,255,.92);
+  background: rgba(236, 72, 153, 0.28);
+  border: 1px solid rgba(249, 168, 212, 0.55);
+  padding: 6px 11px;
+  border-radius: 20px;
+  backdrop-filter: blur(6px);
+}
+.omTierBadge[hidden]{ display: none !important; }
 .omBottom{ padding: 0 20px 20px; }
 .omKick{ font: 800 9.5px/1 var(--font-body, inherit); letter-spacing: .14em; color: rgba(255,255,255,.7); }
 .omTitle{ font: 800 28px/1.12 var(--font-display, inherit); color: #fff; margin-top: 6px; text-wrap: balance; }
@@ -69730,3 +69724,31 @@ html[data-theme="light"] .omTag{ background: rgba(0,0,0,.06); color: #0b0b13; }
 .omShareBtn:active{ transform: scale(.98); }
 html[data-theme="light"] .omHeroStat b{ color: #0b0b13; }
 html[data-theme="light"] .omSpotTitle{ color: #0b0b13; }
+
+/* "Share the album" card — kept off-screen at a fixed 9:16 size and rasterized with
+   html-to-image on tap; never shown to the user directly. Always dark (independent of
+   light/data-theme) since it's a shareable image, not in-app UI. */
+.omShareCard{
+  position: fixed; left: -9999px; top: 0; width: 360px; height: 640px; overflow: hidden;
+  background: #0e0a1c; font-family: var(--font-body, inherit);
+}
+.omShareCardBg{ position: absolute; inset: 0; background-size: cover; background-position: center; }
+.omShareCardOverlay{
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(5,4,12,.15) 0%, rgba(5,4,12,.1) 38%, rgba(5,4,12,.96) 100%);
+}
+.omShareCardKick{
+  position: absolute; top: 28px; left: 26px; right: 26px;
+  font: 800 11px/1 var(--font-body, inherit); letter-spacing: .14em; color: rgba(255,255,255,.75);
+}
+.omShareCardBottom{ position: absolute; left: 26px; right: 26px; bottom: 30px; }
+.omShareCardTitle{ font: 800 32px/1.14 var(--font-display, inherit); color: #fff; text-wrap: balance; }
+.omShareCardBy{ font: 600 14px var(--font-body, inherit); color: rgba(255,255,255,.8); margin-top: 8px; }
+.omShareCardStats{ display: flex; align-items: center; gap: 10px; margin-top: 20px; }
+.omShareCardStat{ display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.omShareCardStat b{ font: 800 22px var(--font-display, inherit); color: #fff; line-height: 1; }
+.omShareCardStat span{ font: 700 9.5px var(--font-body, inherit); letter-spacing: .04em; text-transform: uppercase; color: rgba(255,255,255,.55); }
+.omShareCardDot{ width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,.3); }
+.omShareCardTags{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.omShareCardTags .omTag{ font: 700 10.5px var(--font-body, inherit); background: rgba(255,255,255,.1); color: rgba(255,255,255,.9); border-radius: 999px; padding: 5px 10px; }
+.omShareCardMark{ font: 800 12px var(--font-display, inherit); color: rgba(255,255,255,.55); letter-spacing: .06em; margin-top: 22px; }

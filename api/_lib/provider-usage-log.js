@@ -12,6 +12,7 @@ const USAGE_RATES = Object.freeze({
     lyrics: Number(process.env.GEMINI_USD_LYRICS || process.env.GEMINI_USD_PER_REQUEST || "0.003"),
     cover_scene: Number(process.env.GEMINI_USD_COVER_SCENE || "0.002"),
     cover_image: Number(process.env.GEMINI_USD_COVER_IMAGE || "0.04"),
+    artist_avatar: Number(process.env.GEMINI_USD_ARTIST_AVATAR || "0.04"),
     image_mood: Number(process.env.GEMINI_USD_IMAGE_MOOD || "0.002"),
     maqam: Number(process.env.GEMINI_USD_MAQAM || "0.002"),
     transcribe: Number(process.env.GEMINI_USD_TRANSCRIBE || "0.004"),

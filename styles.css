@@ -69643,10 +69643,17 @@ body[data-route="discover"] .discoverMomentSection + .discoverVibeSection{ margi
   position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between;
   background: linear-gradient(180deg, rgba(5,4,12,.2) 0%, transparent 32%, transparent 55%, rgba(5,4,12,.92) 100%);
 }
-.omTop{ display: flex; justify-content: space-between; align-items: center; padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 0; }
+.omTop{ display: flex; justify-content: flex-start; align-items: center; padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 0; }
+/* Fixed to the sheet, not the scrolling cover, so it's reachable no matter how far
+   down the album you've scrolled — see the markup comment above #omClose. */
 .omClose{
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  right: 16px;
+  z-index: 10;
   width: 34px; height: 34px; border-radius: 50%; border: 0; display: grid; place-items: center;
-  background: rgba(0,0,0,.4); color: #fff; font-size: 14px; -webkit-tap-highlight-color: transparent;
+  background: rgba(0,0,0,.5); color: #fff; font-size: 14px; -webkit-tap-highlight-color: transparent;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 .omTierBadge{
   font: 800 10.5px/1 var(--font-body, inherit);
@@ -69752,3 +69759,127 @@ html[data-theme="light"] .omSpotTitle{ color: #0b0b13; }
 .omShareCardTags{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
 .omShareCardTags .omTag{ font: 700 10.5px var(--font-body, inherit); background: rgba(255,255,255,.1); color: rgba(255,255,255,.9); border-radius: 999px; padding: 5px 10px; }
 .omShareCardMark{ font: 800 12px var(--font-display, inherit); color: rgba(255,255,255,.55); letter-spacing: .06em; margin-top: 22px; }
+
+/* ===== Artist Avatar flip on the profile hero photo: tap flips between the real photo
+   and the stylized Artist Avatar, reusing the same "flip to reveal" idea already used
+   for record/sleeve posts. Demo-only wiring for now (see wireArtistAvatarFlipOnce) —
+   the back face is a duotone filter over the real photo, standing in for a real
+   generated avatar until that pipeline exists. ===== */
+body[data-route="profile"] .aaFlip{
+  position: absolute; inset: 0; cursor: pointer;
+}
+body[data-route="profile"] .aaFlipInner{ position: absolute; inset: 0; }
+body[data-route="profile"] .aaFlipFace{
+  position: absolute; inset: 0; pointer-events: none;
+}
+/* The opacity toggle targets the actual image/fallback nodes, not the wrapping
+   face div — the mask-image already forced onto .profileAuraAvatar elsewhere
+   creates its own compositing layer in WKWebView that doesn't reliably pick up
+   an ancestor's opacity, so hiding the parent div alone left the photo visible. */
+body[data-route="profile"] .aaFlipFace > *{ opacity: 0; transition: opacity 380ms ease; }
+body[data-route="profile"] .aaFlipFace--front > *{ opacity: 1; }
+body[data-route="profile"] .aaFlip.isFlipped .aaFlipFace--front > *{ opacity: 0; }
+body[data-route="profile"] .aaFlip.isFlipped .aaFlipFace--back > *{ opacity: 1; }
+body[data-route="profile"] .aaFlipFace--back[hidden]{ display: block !important; }
+body[data-route="profile"] .aaFlipFace--back{ z-index: 1; }
+body[data-route="profile"] .aaFlip.isFlipped .aaFlipFace--front{ z-index: 0; }
+body[data-route="profile"] .aaFlip.isFlipped .aaFlipFace--back{ z-index: 2; }
+/* filter goes on the wrapping face div, not the <img> itself — the img already
+   carries a -webkit-mask-image (the fade-to-transparent gradient) elsewhere in
+   this file, and WKWebView silently drops one of the two when both land on the
+   same element. */
+body[data-route="profile"] .aaFlipFace--back{
+  filter: grayscale(1) contrast(1.15) brightness(.9);
+}
+body[data-route="profile"] .aaFlipFace--back::after{
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(119,82,248,.85), transparent 55%),
+              linear-gradient(315deg, rgba(34,197,169,.8), transparent 55%);
+  mix-blend-mode: color; pointer-events: none;
+}
+body[data-route="profile"] .aaBackKick{
+  position: absolute; left: 14px; top: calc(env(safe-area-inset-top, 0px) + 62px);
+  font: 800 10.5px/1 var(--font-body, inherit); letter-spacing: .14em; color: rgba(255,255,255,.9);
+  background: rgba(0,0,0,.4); border-radius: 999px; padding: 7px 12px; z-index: 3;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+body[data-route="profile"] .aaFlipBadge{
+  position: absolute; right: 14px; top: calc(env(safe-area-inset-top, 0px) + 14px); z-index: 6;
+  width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.35);
+  background: linear-gradient(135deg, rgba(143,116,255,.35), rgba(46,224,192,.28));
+  color: #fff; font-size: 14px; display: grid; place-items: center;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  -webkit-tap-highlight-color: transparent;
+}
+body[data-route="profile"] .aaFlipBadge[hidden]{ display: none !important; }
+body[data-route="profile"] .aaFlipBadge:active{ transform: scale(.92); }
+/* Once a REAL generated avatar is set, it already carries the brand rim-light
+   treatment baked in by Gemini — the grayscale/duotone above was only ever a
+   stand-in filter over a copy of the real photo for the flip preview. */
+body[data-route="profile"] .aaFlip.aaHasRealAvatar .aaFlipFace--back{ filter: none; }
+body[data-route="profile"] .aaFlip.aaHasRealAvatar .aaFlipFace--back::after{ display: none; }
+
+/* ── Nabad Artist Avatar setup (consent → upload → generate → pick) —
+   rendered inside the existing #profileEditSheet chrome, same as the
+   Persona/Genres editors, not a standalone sheet. ── */
+.aaStepKick{
+  font: 800 10.5px/1 var(--font-body, inherit); letter-spacing: .14em; text-transform: uppercase;
+  color: rgba(143,116,255,.9); margin-bottom: 10px;
+}
+.aaStepTitle{ font: 800 22px/1.25 var(--font-display, inherit); color: #fff; margin: 0 0 12px; }
+.aaStepBody{ font: 500 13.5px/1.5 var(--font-body, inherit); color: rgba(255,255,255,.65); margin: 0 0 18px; }
+.aaConsentRow{
+  display: flex; align-items: flex-start; gap: 10px; padding: 14px; margin-bottom: 20px;
+  border-radius: 16px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+  font: 600 12px/1.5 var(--font-body, inherit); color: rgba(255,255,255,.75); cursor: pointer;
+}
+.aaConsentRow input{ margin-top: 2px; flex: none; width: 18px; height: 18px; accent-color: #8f74ff; }
+.aaPrimaryBtn{
+  width: 100%; border: 0; border-radius: 999px; padding: 14px 0;
+  background: #fff; color: #0b0b13; font: 800 13.5px var(--font-body, inherit);
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.aaPrimaryBtn:active{ transform: scale(.98); }
+.aaPrimaryBtn:disabled{ opacity: .4; }
+.aaSecondaryBtn{
+  width: 100%; margin-top: 10px; border-radius: 999px; padding: 13px 0;
+  background: transparent; border: 1.5px solid rgba(255,255,255,.24); color: #fff;
+  font: 800 13px var(--font-body, inherit);
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.aaSecondaryBtn:active{ transform: scale(.98); }
+.aaThumbGrid{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+.aaThumb{ position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; background-size: cover; background-position: center; background-color: rgba(255,255,255,.06); }
+.aaThumbRemove{
+  position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: 0;
+  background: rgba(0,0,0,.6); color: #fff; font-size: 11px; display: grid; place-items: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.aaThumbAdd{
+  aspect-ratio: 1; border-radius: 14px; border: 1.5px dashed rgba(255,255,255,.25);
+  display: grid; place-items: center; color: rgba(255,255,255,.5); font-size: 22px;
+  -webkit-tap-highlight-color: transparent;
+}
+.aaStep--generating{ display: flex; flex-direction: column; align-items: center; padding: 30px 0 10px; text-align: center; }
+.aaSpinner{
+  width: 46px; height: 46px; border-radius: 50%; margin-bottom: 20px;
+  border: 3px solid rgba(255,255,255,.14); border-top-color: #8f74ff;
+  animation: aaSpin 900ms linear infinite;
+}
+@keyframes aaSpin{ to{ transform: rotate(360deg); } }
+.aaOptionsGrid{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+.aaOption{
+  position: relative; aspect-ratio: 1; border-radius: 16px; overflow: hidden; background-size: cover;
+  background-position: center; border: 2.5px solid transparent; -webkit-tap-highlight-color: transparent;
+}
+.aaOption.isChosen{ border-color: #8f74ff; box-shadow: 0 0 0 1px rgba(143,116,255,.4); }
+.aaOption.isChosen::after{
+  content: "✓"; position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 50%;
+  background: #8f74ff; color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center;
+}
+html[data-theme="light"] .aaSheetPanel{ background: #fff; }
+html[data-theme="light"] .aaStepTitle{ color: #0b0b13; }
+html[data-theme="light"] .aaStepBody{ color: rgba(11,11,19,.6); }
+html[data-theme="light"] .aaConsentRow{ color: rgba(11,11,19,.7); background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.08); }

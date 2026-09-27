@@ -30869,6 +30869,7 @@ function updateProfilePersonaRow() {
   try { renderSettingsVoicesHub(); } catch {}
   renderActivePersonaBanner();
   syncProfilePersonaAvatarBadge();
+  try { syncArtistAvatarFlipVisibility(); } catch {}
   try { renderSingerPersonaRow(); } catch {}
 }
 
@@ -30882,6 +30883,47 @@ function syncProfilePersonaAvatarBadge() {
     badge.hidden = true;
     badge.setAttribute("aria-hidden", "true");
   }
+}
+
+/* ── Artist Avatar flip on the profile hero photo ────────────────────────────
+ * Reuses the record/sleeve "flip to reveal" pattern instead of a second
+ * floating avatar or replacing the real photo outright. Flip is only offered
+ * once the owner has actually generated+picked an Artist Avatar (Edit profile
+ * → AI → Artist Avatar); the back face shows that real generated portrait,
+ * which already carries the brand rim-light house style baked in by Gemini —
+ * see .aaHasRealAvatar in styles.css for why no CSS filter is layered on it. */
+function syncArtistAvatarBackFace() {
+  const back = document.getElementById("aaBackImg");
+  const src = String(activeProfile?.artistAvatar || "").trim();
+  if (back && src) back.src = src;
+}
+let _artistAvatarFlipBound = false;
+function wireArtistAvatarFlipOnce() {
+  if (_artistAvatarFlipBound) return;
+  _artistAvatarFlipBound = true;
+  const flip = document.getElementById("aaFlip");
+  const badge = document.getElementById("aaFlipBadge");
+  if (!flip) return;
+  const toggle = () => {
+    try { haptic("light"); } catch {}
+    flip.classList.toggle("isFlipped");
+    const isBack = flip.classList.contains("isFlipped");
+    badge?.setAttribute("aria-label", isBack ? "Flip back to your photo" : "Flip to your Artist Avatar");
+  };
+  flip.addEventListener("click", toggle);
+  badge?.addEventListener("click", (e) => { e.stopPropagation(); toggle(); });
+}
+function syncArtistAvatarFlipVisibility() {
+  const flip = document.getElementById("aaFlip");
+  const badge = document.getElementById("aaFlipBadge");
+  const backFace = document.getElementById("aaFlipBack");
+  const hasAvatar = Boolean(String(activeProfile?.artistAvatar || "").trim());
+  const on = hasAvatar && String(document.body.getAttribute("data-route") || "") === "profile";
+  if (badge) { badge.hidden = !on; badge.setAttribute("aria-hidden", on ? "false" : "true"); }
+  if (backFace) backFace.hidden = !on;
+  flip?.classList.toggle("aaHasRealAvatar", hasAvatar);
+  if (!on) flip?.classList.remove("isFlipped");
+  if (on) { try { wireArtistAvatarFlipOnce(); syncArtistAvatarBackFace(); } catch {} }
 }
 
 /**
@@ -35971,8 +36013,9 @@ async function supabaseUpsertProfile(profile) {
   let outgoingInstagram = String(profile.links?.instagram || "").trim();
   let outgoingYoutube = String(profile.links?.youtube || "").trim();
   let outgoingTiktok = String(profile.links?.tiktok || "").trim();
+  let outgoingArtistAvatar = String(profile.artistAvatar || "").trim();
   const needsCloudPeek =
-    (!outgoingAvatar || !outgoingBio || !outgoingGenres || !outgoingDisplayName || !outgoingInstagram || !outgoingYoutube || !outgoingTiktok) &&
+    (!outgoingAvatar || !outgoingBio || !outgoingGenres || !outgoingDisplayName || !outgoingInstagram || !outgoingYoutube || !outgoingTiktok || !outgoingArtistAvatar) &&
     authSession?.user?.id;
   if (needsCloudPeek) {
     try {
@@ -35980,6 +36023,9 @@ async function supabaseUpsertProfile(profile) {
       if (existing) {
         if (!outgoingAvatar && String(existing.avatar || "").trim()) {
           outgoingAvatar = String(existing.avatar).trim();
+        }
+        if (!outgoingArtistAvatar && String(existing.artistAvatar || "").trim()) {
+          outgoingArtistAvatar = String(existing.artistAvatar).trim();
         }
         if (!outgoingBio && String(existing.bio || "").trim()) {
           outgoingBio = String(existing.bio).trim();
@@ -36015,6 +36061,13 @@ async function supabaseUpsertProfile(profile) {
     instagram: outgoingInstagram,
     youtube: outgoingYoutube,
     tiktok: outgoingTiktok,
+    artist_avatar: outgoingArtistAvatar || null,
+    artist_avatar_updated_at: profile.artistAvatarUpdatedAt
+      ? new Date(profile.artistAvatarUpdatedAt).toISOString()
+      : undefined,
+    artist_avatar_consented_at: profile.artistAvatarConsentedAt
+      ? new Date(profile.artistAvatarConsentedAt).toISOString()
+      : undefined,
     is_public: profile.isPublic !== false,
     calling_card_url: profile.callingCardUrl || null,
     calling_card_updated_at: profile.callingCardUpdatedAt
@@ -36106,6 +36159,9 @@ async function supabaseLoadProfile(opts = {}) {
     bio: p.bio || "",
     avatar: p.avatar || "",
     genres: p.genres || "",
+    artistAvatar: p.artist_avatar || "",
+    artistAvatarUpdatedAt: p.artist_avatar_updated_at ? Date.parse(p.artist_avatar_updated_at) || 0 : 0,
+    artistAvatarConsentedAt: p.artist_avatar_consented_at ? Date.parse(p.artist_avatar_consented_at) || 0 : 0,
     links: {
       instagram: p.instagram || "",
       youtube: p.youtube || "",
@@ -60736,6 +60792,7 @@ function renderProfilePreviewFromInputs() {
       els.profilePreviewAvatar.removeAttribute("src");
       els.profilePreviewAvatar.setAttribute("data-empty", "true");
     }
+    try { syncArtistAvatarBackFace(); } catch {}
   }
   applyProfileAuraVisualTint();
   renderProfileOwnStats();
@@ -78409,6 +78466,10 @@ try {
     getActivePersonaId,
     personaTypeLabel,
     getAuthSession: () => authSession,
+    getAuthToken: () => getSupabaseAuthToken(),
+    apiUrl,
+    showOutOfCreditsPrompt,
+    setCreditsBalance,
     checkUsernameAvailable: (handle, original) => isUsernameAvailableForCurrentUser(handle, original),
     getUsernameChangeBlockedUntil: (profile, nextHandle) => getUsernameChangeBlockedUntil(profile, nextHandle),
     isUsernameChangeOnCooldown,

@@ -223,4 +223,12 @@ module.exports = {
   geminiRegenFallbackEnabled,
   tryGeminiCoverImage,
   buildGeminiCoverImagePrompt,
+  // Shared low-level Gemini image helpers, reused by gemini-avatar-image.js
+  // (image-conditioned generation) so both call sites share one model-
+  // discovery/retry implementation instead of drifting apart.
+  listGeminiGenerateModels,
+  pickGeminiImageModels,
+  postGeminiGenerateContent,
+  extractGeminiImagePart,
+  geminiFailureReason,
 };

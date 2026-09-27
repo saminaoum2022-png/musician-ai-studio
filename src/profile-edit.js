@@ -43,6 +43,7 @@ function emptyDraft() {
     genres: [],
     links: { instagram: "", tiktok: "", youtube: "", spotify: "" },
     personaId: "",
+    artistAvatar: "",
   };
 }
 
@@ -79,6 +80,11 @@ function profileFromDraft(base = {}) {
       youtube: String(_draft.links?.youtube || "").trim(),
       spotify: String(_draft.links?.spotify || "").trim(),
     },
+    artistAvatar: String(_draft.artistAvatar || base.artistAvatar || "").trim(),
+    artistAvatarUpdatedAt: _draft.artistAvatar && _draft.artistAvatar !== base.artistAvatar
+      ? Date.now()
+      : Number(base.artistAvatarUpdatedAt || 0),
+    artistAvatarConsentedAt: _draft.artistAvatarConsentedAt || Number(base.artistAvatarConsentedAt || 0),
   };
 }
 
@@ -102,6 +108,8 @@ export function hydrateProfileEditDraft(profile) {
       spotify: String(p.links?.spotify || "").trim(),
     },
     personaId,
+    artistAvatar: String(p.artistAvatar || "").trim(),
+    artistAvatarConsentedAt: Number(p.artistAvatarConsentedAt || 0),
   };
   _dirty = false;
   _genresTouched = false;
@@ -156,6 +164,10 @@ function personaPreview() {
   const list = _deps?.loadPersonas?.() || [];
   const hit = list.find((x) => String(x.personaId) === id);
   return String(hit?.label || hit?.personaId || "Selected voice");
+}
+
+function artistAvatarPreview() {
+  return _draft?.artistAvatar ? "Ready ✦" : "Not set up";
 }
 
 function applyAvatarToEditPhoto() {
@@ -214,6 +226,7 @@ function renderProfileEditPage() {
   setVal("#profileEditBioVal", bioPreview(), !cleanBio(_draft.bio));
   setVal("#profileEditGenresVal", genresPreview(), !_draft.genres.length);
   setVal("#profileEditPersonaVal", personaPreview(), !_draft.personaId);
+  setVal("#profileEditArtistAvatarVal", artistAvatarPreview(), !_draft.artistAvatar);
   SOCIAL_FIELDS.forEach(({ key }) => {
     setVal(`#profileEditSocialVal-${key}`, socialPreview(key), !String(_draft.links?.[key] || "").trim());
   });
@@ -494,6 +507,221 @@ function openPersonaEditor() {
   });
 }
 
+/* ── Nabad Artist Avatar: consent → upload → generate → pick one ────────── */
+const AA_MIN_PHOTOS = 3;
+const AA_MAX_PHOTOS = 5;
+const AA_COST = 15;
+let _aaStep = "intro"; // intro | upload | generating | pick | error
+let _aaPhotos = [];    // data URLs, compressed
+let _aaOptions = [];   // data URLs returned by the server
+let _aaChosenIndex = -1;
+let _aaConsent = false;
+let _aaErrorMessage = "";
+
+function resetArtistAvatarState() {
+  _aaStep = "intro";
+  _aaPhotos = [];
+  _aaOptions = [];
+  _aaChosenIndex = -1;
+  _aaConsent = false;
+  _aaErrorMessage = "";
+}
+
+function aaThumbGridHtml() {
+  const thumbs = _aaPhotos.map((src, i) => `
+    <div class="aaThumb" style="background-image:url('${src}')">
+      <button type="button" class="aaThumbRemove" data-aa-remove="${i}" aria-label="Remove photo">✕</button>
+    </div>`).join("");
+  const canAddMore = _aaPhotos.length < AA_MAX_PHOTOS;
+  const addTile = canAddMore ? `<button type="button" class="aaThumbAdd" id="aaAddTile" aria-label="Add photo">+</button>` : "";
+  return thumbs + addTile;
+}
+
+function renderArtistAvatarStep() {
+  const body = qs("#profileEditSheetBody");
+  if (!body) return;
+
+  if (_aaStep === "intro") {
+    const replacing = Boolean(_draft.artistAvatar);
+    body.innerHTML = `
+      <div class="aaStepKick">NABAD ARTIST AVATAR</div>
+      <h2 class="aaStepTitle">${replacing ? "Replace your Artist Avatar" : "Your music, your face,<br />one house style"}</h2>
+      <p class="aaStepBody">Upload 3–5 clear photos of your face. Nabad generates three stylized portrait options in one consistent look — pick your favorite and it becomes your Artist Avatar, ready to flip to on your profile.</p>
+      <label class="aaConsentRow" for="aaConsentCheck">
+        <input type="checkbox" id="aaConsentCheck" ${_aaConsent ? "checked" : ""} />
+        <span>I consent to Nabad using these photos only to generate my Artist Avatar. Photos aren't shared or shown publicly.</span>
+      </label>
+      <button type="button" id="aaChoosePhotosBtn" class="aaPrimaryBtn" ${_aaConsent ? "" : "disabled"}>${replacing ? "Choose new photos" : "Choose photos"}</button>
+      <input type="file" id="aaPhotoInput" accept="image/*" multiple hidden />
+    `;
+    qs("#aaConsentCheck", body)?.addEventListener("change", (e) => {
+      _aaConsent = Boolean(e.target.checked);
+      const btn = qs("#aaChoosePhotosBtn", body);
+      if (btn) btn.disabled = !_aaConsent;
+    });
+    qs("#aaChoosePhotosBtn", body)?.addEventListener("click", () => {
+      qs("#aaPhotoInput", body)?.click();
+    });
+    qs("#aaPhotoInput", body)?.addEventListener("change", (e) => onArtistAvatarFilesChosen(e.target.files));
+    return;
+  }
+
+  if (_aaStep === "upload") {
+    const ready = _aaPhotos.length >= AA_MIN_PHOTOS && _aaPhotos.length <= AA_MAX_PHOTOS;
+    body.innerHTML = `
+      <div class="aaStepKick">YOUR PHOTOS</div>
+      <p class="aaStepBody">Add ${AA_MIN_PHOTOS}–${AA_MAX_PHOTOS} clear photos — different angles help. (${_aaPhotos.length}/${AA_MAX_PHOTOS})</p>
+      <div class="aaThumbGrid" id="aaThumbGrid">${aaThumbGridHtml()}</div>
+      <input type="file" id="aaPhotoInput" accept="image/*" multiple hidden />
+      <button type="button" id="aaGenerateBtn" class="aaPrimaryBtn" ${ready ? "" : "disabled"}>Generate my Avatar · ${AA_COST} credits</button>
+    `;
+    qs("#aaAddTile", body)?.addEventListener("click", () => qs("#aaPhotoInput", body)?.click());
+    qs("#aaPhotoInput", body)?.addEventListener("change", (e) => onArtistAvatarFilesChosen(e.target.files));
+    body.querySelectorAll("[data-aa-remove]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const i = Number(btn.getAttribute("data-aa-remove"));
+        _aaPhotos.splice(i, 1);
+        renderArtistAvatarStep();
+      });
+    });
+    qs("#aaGenerateBtn", body)?.addEventListener("click", () => void startArtistAvatarGeneration());
+    return;
+  }
+
+  if (_aaStep === "generating") {
+    body.innerHTML = `
+      <div class="aaStep--generating">
+        <div class="aaSpinner" aria-hidden="true"></div>
+        <p class="aaStepBody">Creating your Nabad Artist Avatar…</p>
+      </div>
+    `;
+    return;
+  }
+
+  if (_aaStep === "pick") {
+    const options = _aaOptions.map((src, i) => `
+      <button type="button" class="aaOption${i === _aaChosenIndex ? " isChosen" : ""}" style="background-image:url('${src}')" data-aa-pick="${i}" aria-label="Option ${i + 1}"></button>
+    `).join("");
+    body.innerHTML = `
+      <div class="aaStepKick">PICK ONE</div>
+      <p class="aaStepBody">These are yours now — choose the one that feels most you.</p>
+      <div class="aaOptionsGrid" id="aaOptionsGrid">${options}</div>
+      <button type="button" id="aaUseChosenBtn" class="aaPrimaryBtn" ${_aaChosenIndex >= 0 ? "" : "disabled"}>Use this one</button>
+      <button type="button" id="aaRegenBtn" class="aaSecondaryBtn">Try different photos</button>
+    `;
+    body.querySelectorAll("[data-aa-pick]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        _aaChosenIndex = Number(btn.getAttribute("data-aa-pick"));
+        try { _deps?.haptic?.("light"); } catch {}
+        renderArtistAvatarStep();
+      });
+    });
+    qs("#aaUseChosenBtn", body)?.addEventListener("click", () => confirmArtistAvatarChoice());
+    qs("#aaRegenBtn", body)?.addEventListener("click", () => {
+      _aaStep = "upload";
+      _aaPhotos = [];
+      _aaOptions = [];
+      _aaChosenIndex = -1;
+      renderArtistAvatarStep();
+    });
+    return;
+  }
+
+  if (_aaStep === "error") {
+    body.innerHTML = `
+      <p class="aaStepBody">${escapeHtml(_aaErrorMessage || "Something went wrong — try again.")}</p>
+      <button type="button" id="aaErrorRetryBtn" class="aaPrimaryBtn">Try again</button>
+    `;
+    qs("#aaErrorRetryBtn", body)?.addEventListener("click", () => {
+      _aaStep = "upload";
+      renderArtistAvatarStep();
+    });
+    return;
+  }
+}
+
+async function onArtistAvatarFilesChosen(fileList) {
+  const files = Array.from(fileList || []).slice(0, AA_MAX_PHOTOS - _aaPhotos.length);
+  if (!files.length) return;
+  for (const f of files) {
+    try {
+      const dataUrl = await _deps.compressAvatarFile(f, { maxSize: 768, quality: 0.85 });
+      if (dataUrl) _aaPhotos.push(dataUrl);
+    } catch {}
+  }
+  _aaStep = "upload";
+  renderArtistAvatarStep();
+}
+
+async function startArtistAvatarGeneration() {
+  if (_aaPhotos.length < AA_MIN_PHOTOS) return;
+  _aaStep = "generating";
+  renderArtistAvatarStep();
+  try {
+    const token = _deps?.getAuthToken?.();
+    const r = await fetch(_deps.apiUrl("/api/music/artist-avatar-generate"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ consent: true, photos: _aaPhotos.slice(0, AA_MAX_PHOTOS) }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 402 || d?.code === "insufficient_credits") {
+      const need = Number(d?.needed ?? AA_COST);
+      const have = Number(d?.balance || 0);
+      try { _deps?.showOutOfCreditsPrompt?.({ needed: need, balance: have }); } catch {}
+      _aaStep = "upload";
+      renderArtistAvatarStep();
+      return;
+    }
+    if (r.status === 401) {
+      _aaErrorMessage = "Sign in to create your Artist Avatar.";
+      _aaStep = "error";
+      renderArtistAvatarStep();
+      return;
+    }
+    if (!r.ok || !d?.ok || !Array.isArray(d?.options) || !d.options.length) {
+      _aaErrorMessage = d?.error === "not_enough_photos"
+        ? `Add at least ${AA_MIN_PHOTOS} clear photos of your face.`
+        : "Couldn't generate your avatar this time — try again.";
+      _aaStep = "error";
+      renderArtistAvatarStep();
+      return;
+    }
+    if (Number.isFinite(Number(d?.balance)) && _deps?.setCreditsBalance) {
+      try { _deps.setCreditsBalance(Number(d.balance)); } catch {}
+    }
+    _aaOptions = d.options;
+    _aaChosenIndex = -1;
+    _aaStep = "pick";
+    renderArtistAvatarStep();
+  } catch (e) {
+    _aaErrorMessage = "Network hiccup — try again.";
+    _aaStep = "error";
+    renderArtistAvatarStep();
+  }
+}
+
+function confirmArtistAvatarChoice() {
+  if (_aaChosenIndex < 0 || !_aaOptions[_aaChosenIndex]) return;
+  _draft.artistAvatar = _aaOptions[_aaChosenIndex];
+  _draft.artistAvatarConsentedAt = _draft.artistAvatarConsentedAt || Date.now();
+  markDirty();
+  closeProfileEditSheet();
+  renderProfileEditPage();
+  try { _deps?.haptic?.("medium"); } catch {}
+  try { _deps?.showToast?.("Artist Avatar ready — tap Save to publish", { icon: "✦", durationMs: 2400 }); } catch {}
+}
+
+function openArtistAvatarEditor() {
+  resetArtistAvatarState();
+  const body = openProfileEditSheet("artist-avatar", "Artist Avatar");
+  if (!body) return;
+  renderArtistAvatarStep();
+}
+
 function triggerPhotoPicker() {
   const input = qs("#profileAvatarFile");
   if (!input) return;
@@ -678,6 +906,7 @@ export function initProfileEditOnce(deps) {
     else if (field === "bio") openBioEditor();
     else if (field === "genres") openGenresEditor();
     else if (field === "persona") openPersonaEditor();
+    else if (field === "artist-avatar") openArtistAvatarEditor();
     else if (field?.startsWith("social:")) openSocialEditor(field.slice(7), row.querySelector(".profileEditRowLabel")?.textContent || "Link");
   });
 

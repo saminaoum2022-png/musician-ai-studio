@@ -68438,7 +68438,7 @@ body[data-route="profile"][data-profile-songs-seg="music"] .profileSongsToolbar{
 
 /* ═══ Poster header v2: only the name lives on the photo; bio + stats sit below it on the dark page ═══
    (readable on any cover, including very light ones) */
-body[data-route="profile"] .profileAuraTopRow{ bottom: auto !important; height: 410px !important; }
+body[data-route="profile"] .profileAuraTopRow{ bottom: auto !important; height: 460px !important; }
 body[data-route="profile"] .profileAuraTopRow::before{
   background: linear-gradient(180deg, rgba(8, 10, 18, 0.5) 0%, transparent 18%, rgba(8, 10, 18, 0.5) 52%, rgba(8, 10, 18, 0.92) 84%, #080a12 100%) !important;
 }
@@ -68447,7 +68447,7 @@ body[data-route="profile"] .profileAuraAvatarFallback{
   -webkit-mask-image: none !important;
           mask-image: none !important;
 }
-body[data-route="profile"] .profileAura{ padding-top: 300px !important; }
+body[data-route="profile"] .profileAura{ padding-top: 350px !important; }
 body[data-route="profile"] .profilePlayFab{ top: 322px !important; bottom: auto !important; }
 body[data-route="profile"] .profileDisplayNameText{ text-shadow: 0 2px 22px rgba(0, 0, 0, 0.75), 0 0 2px rgba(0, 0, 0, 0.4); }
 body[data-route="profile"] .profileHandleText{ color: rgba(255, 255, 255, 0.78) !important; }
@@ -69802,21 +69802,33 @@ body[data-route="profile"] .aaFlipFace--back::after{
    (.profileAuraHeaderChrome), and the old top:14px/right:14px placement sat
    almost exactly on top of the Settings gear, hiding one behind the other. */
 body[data-route="profile"] .aaBackKick{
-  position: absolute; right: 56px; top: 250px;
+  position: absolute; right: 62px; top: 306px;
   font: 800 10.5px/1 var(--font-body, inherit); letter-spacing: .14em; color: rgba(255,255,255,.9);
   background: rgba(0,0,0,.4); border-radius: 999px; padding: 7px 12px; z-index: 3;
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
+/* A solid, fully-opaque brand-gradient fill instead of the faded low-opacity
+   wash it had before (which read as a flat, washed-out circle against most
+   photos) — plus a soft glow and a slow breathing pulse, same idea as the
+   avatar's own ring pulse, so it reads as "tap me" instead of decoration. */
 body[data-route="profile"] .aaFlipBadge{
-  position: absolute; right: 14px; top: 246px; z-index: 6;
-  width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.35);
-  background: linear-gradient(135deg, rgba(143,116,255,.35), rgba(46,224,192,.28));
-  color: #fff; font-size: 14px; display: grid; place-items: center;
-  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  position: absolute; right: 14px; top: 296px; z-index: 6;
+  width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.55);
+  background: linear-gradient(135deg, #8f74ff, #22C5A9);
+  color: #fff; display: grid; place-items: center;
+  box-shadow: 0 4px 18px -4px rgba(124,92,255,.75), 0 0 0 1px rgba(0,0,0,.08);
   -webkit-tap-highlight-color: transparent;
+  animation: aaFlipBadgePulse 2.8s ease-in-out infinite;
 }
 body[data-route="profile"] .aaFlipBadge[hidden]{ display: none !important; }
-body[data-route="profile"] .aaFlipBadge:active{ transform: scale(.92); }
+body[data-route="profile"] .aaFlipBadge:active{ transform: scale(.92); animation-play-state: paused; }
+@keyframes aaFlipBadgePulse{
+  0%, 100%{ transform: scale(1); box-shadow: 0 4px 18px -4px rgba(124,92,255,.75), 0 0 0 1px rgba(0,0,0,.08); }
+  50%{ transform: scale(1.08); box-shadow: 0 4px 24px -2px rgba(124,92,255,.95), 0 0 0 1px rgba(0,0,0,.08); }
+}
+@media (prefers-reduced-motion: reduce){
+  body[data-route="profile"] .aaFlipBadge{ animation: none; }
+}
 /* Once a REAL generated avatar is set, it already carries the brand rim-light
    treatment baked in by Gemini — the grayscale/duotone above was only ever a
    stand-in filter over a copy of the real photo for the flip preview. */

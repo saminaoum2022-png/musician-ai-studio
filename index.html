@@ -3317,7 +3317,9 @@
                       </div>
                     </div>
                   </div>
-                  <button type="button" id="aaFlipBadge" class="aaFlipBadge" hidden aria-label="Flip to your Artist Avatar">✦</button>
+                  <button type="button" id="aaFlipBadge" class="aaFlipBadge" hidden aria-label="Flip to your Artist Avatar">
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2.5c.6 3.4 1.4 5.6 2.7 6.9 1.3 1.3 3.5 2.1 6.8 2.6-3.3.6-5.5 1.4-6.8 2.7-1.3 1.3-2.1 3.5-2.7 6.8-.6-3.3-1.4-5.5-2.7-6.8-1.3-1.3-3.5-2.1-6.8-2.7 3.3-.5 5.5-1.3 6.8-2.6 1.3-1.3 2.1-3.5 2.7-6.9Z"/></svg>
+                  </button>
                 </div>
               </div>
 
@@ -3547,15 +3549,6 @@
             <svg class="profileArtistAvatarPromoChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
           </a>
 
-          <!-- Bio moved off the cover photo (used to sit right under the handle,
-               crowding the name/username/stats) into its own labeled section. -->
-          <section id="profileAboutSection" class="profileAboutSection" hidden aria-labelledby="profileAboutSectionLabel">
-            <h2 id="profileAboutSectionLabel" class="profileAboutSectionLabel">About</h2>
-            <div id="profileHeroBio" class="profileHeroBio">
-              <p id="profileAboutText" class="profileHeroBioText"></p>
-            </div>
-          </section>
-
           <!-- Songs — Public (Discover / link) vs All (full library) -->
           <div class="profileSongsBlock">
             <div id="profileFeaturedCreationWrap" class="profileFeaturedCreationWrap" hidden aria-hidden="true">
@@ -3607,6 +3600,16 @@
               <h3 class="profileSectionTitle">Popular this week</h3>
             </header>
             <div id="profileTopWeekList" class="profileTopWeekScroll" role="list"></div>
+          </section>
+
+          <!-- Bio's home — moved off the cover photo (used to crowd the name/
+               username/stats there) down to the bottom of the page instead,
+               so the cover keeps more room. -->
+          <section id="profileAboutSection" class="profileAboutSection" hidden aria-labelledby="profileAboutSectionLabel">
+            <h2 id="profileAboutSectionLabel" class="profileAboutSectionLabel">About</h2>
+            <div id="profileHeroBio" class="profileHeroBio">
+              <p id="profileAboutText" class="profileHeroBioText"></p>
+            </div>
           </section>
 
           <!-- Auth utility nodes for scripts; sign out / delete live in Settings only. -->

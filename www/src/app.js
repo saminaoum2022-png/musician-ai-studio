@@ -61382,7 +61382,7 @@ function musicAboutCardHtml({ bio, styles, releases = 0, remixes = 0, editable =
   const bioClean = screenshotSanitizeCopy(cleanProfileBioText(bio));
   const styleList = (styles || []).map((s) => String(s || "").trim()).filter(Boolean);
   const bioHtml = bioClean
-    ? `<p class="upmBio" dir="auto">${escapeHtml(bioClean)}</p>`
+    ? userTextWithMentionsHtml(bioClean, { tag: "p", className: "upmBio", escapeHtml })
     : (editable ? `<button type="button" class="upmBioInvite" data-upm-edit="bio">Write your biography</button>` : "");
   const chips = styleList.map((label) => `<span class="upmChip">${escapeHtml(label)}</span>`).join("");
   const stylesHtml = chips

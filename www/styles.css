@@ -47072,6 +47072,23 @@ html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .fol
 .feedReplyBody .userMention{
   color: #6eb6ff;
 }
+.userHashtag{
+  color: #C4B5FD;
+  font-weight: 650;
+  font-style: normal;
+}
+.followActCaption .userHashtag,
+.followActCaptionText .userHashtag,
+.releaseCaptionLine .userHashtag,
+.feedReplyBody .userHashtag,
+.upmBio .userHashtag{
+  color: #C4B5FD !important;
+}
+html[data-theme="light"] .userHashtag,
+html[data-theme="light"] .followActCaption .userHashtag,
+html[data-theme="light"] .upmBio .userHashtag{
+  color: #6D4AFF !important;
+}
 .feedReplyRow:last-child{
   border-bottom: 0;
 }

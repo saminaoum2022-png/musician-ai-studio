@@ -14250,7 +14250,7 @@ function discoverFriendCardHtml(item, profMap) {
         <span class="discoverFriendCardArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" /></span>
         <span class="discoverFriendCardShade" aria-hidden="true"></span>
         <span class="discoverFriendCardWho"><span class="discoverFriendCardAv">${discoverFeedCreatorAvatarHtml(prof, handle)}</span><span>${escapeHtml(handle || "friend")}</span></span>
-        <span class="discoverFriendCardPl" aria-hidden="true">${discoverPlayBtnSvg(16)}</span>
+        <span class="discoverFriendCardPl" aria-hidden="true">${coverArtPlayStateIconsHtml(16)}</span>
         <span class="discoverFriendCardText"><strong dir="auto">${escapeHtml(title)}</strong><span>${escapeHtml(when)}</span></span>
       </button>
     </div>`;
@@ -30868,16 +30868,15 @@ function updateProfilePersonaRow() {
 }
 
 function syncProfilePersonaAvatarBadge() {
+  // Removed: the persona mic badge on the profile avatar. Persona status still
+  // lives in the Persona signature row below the header.
   const wrap = els.profileAuraAvatarWrap;
   const badge = els.profilePersonaAvatarBadge;
-  if (!wrap || !badge) return;
-  let hasPersona = false;
-  try {
-    hasPersona = authSession?.user?.id && loadPersonas().length > 0;
-  } catch {}
-  wrap.classList.toggle("hasPersona", hasPersona);
-  badge.hidden = !hasPersona;
-  badge.setAttribute("aria-hidden", hasPersona ? "false" : "true");
+  if (wrap) wrap.classList.remove("hasPersona");
+  if (badge) {
+    badge.hidden = true;
+    badge.setAttribute("aria-hidden", "true");
+  }
 }
 
 /**
@@ -37533,7 +37532,6 @@ function paintUserPublicMusic(cache) {
     return `
       <div class="upmRow" role="listitem">
         <button type="button" class="upmRowPlay" ${attrs} aria-label="Play ${escapeHtml(String(t.title || "song"))}">
-          <span class="upmNo"><b>${i + 1}</b>${UPM_EQ_HTML}</span>
           <span class="upmArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />${UPM_OVERLAY_HTML}</span>
           <span class="upmMeta"><strong dir="auto">${escapeHtml(String(t.title || "Untitled"))}</strong>${hasCounts ? `<small>${plays ? `${escapeHtml(formatStatCount(plays))} plays` : "New"}</small>` : ""}</span>
         </button>
@@ -50356,10 +50354,31 @@ function maybeRecordQualifiedPublicPlay() {
   }).catch(() => {});
 }
 
-/** Recent `user_songs` rows anyone marked public (RLS: `public_on_profile` select). */
+/** Recent `user_songs` rows anyone marked public (RLS: `public_on_profile` select).
+ *  Five call sites hit this on boot/route-entry with no shared cache — when they land
+ *  close together they used to each fire their own full fetch (seen tripling in testing,
+ *  competing for bandwidth with everything else Discover needs). A caller whose limit
+ *  fits inside an already-in-flight request now rides that one instead of starting a new one. */
+let _discoveryPublicSongsInflight = null;
 async function supabaseFetchDiscoveryPublicSongs(limit) {
-  if (isNativeShell()) await ensureNativeNetworkReady();
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
+  if (_discoveryPublicSongsInflight && _discoveryPublicSongsInflight.limit >= lim) {
+    try {
+      const rows = await _discoveryPublicSongsInflight.promise;
+      return rows.slice(0, lim);
+    } catch {
+      // Fall through and fetch fresh if the shared request failed.
+    }
+  }
+  const inflight = { limit: lim, promise: null };
+  inflight.promise = supabaseFetchDiscoveryPublicSongsUncached(lim).finally(() => {
+    if (_discoveryPublicSongsInflight === inflight) _discoveryPublicSongsInflight = null;
+  });
+  _discoveryPublicSongsInflight = inflight;
+  return inflight.promise;
+}
+async function supabaseFetchDiscoveryPublicSongsUncached(lim) {
+  if (isNativeShell()) await ensureNativeNetworkReady();
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     applyClientEnvBootstrap();
     loadPublicConfigFromCache();
@@ -52175,7 +52194,7 @@ function primeDiscoverPlaybackPendingFromEl(el) {
 
 /** Inline Discover play targets beyond library rows / feed posts (Top 10, carousels). */
 const DISCOVER_INLINE_PLAY_HOSTS =
-  ".chartWeekWinnerTap,.chartWeekRunnerTap,.chartWeekLeaderRow,.discoverFeedTemplateCard,.discoverHubPickCardPlay,.discoverFeedChallengeMini,.discoverChallengeSpotCard,.discoverHubTopEntry,.discoverHubEntryMini,.deskRailTrendRow";
+  ".chartWeekWinnerTap,.chartWeekRunnerTap,.chartWeekLeaderRow,.discoverFeedTemplateCard,.discoverHubPickCardPlay,.discoverFeedChallengeMini,.discoverChallengeSpotCard,.discoverHubTopEntry,.discoverHubEntryMini,.deskRailTrendRow,.discoverFriendCardPlay";
 
 /** Same contract as Library rows: `active` when loaded, `audible` when playing,
  *  `loading` between tap and first audible frame (spinner on cover play button). */
@@ -53663,7 +53682,10 @@ const UPM_OVERLAY_HTML = `<span class="upmOv" aria-hidden="true"><span class="up
 
 /** Playing state for the Music panels (own + public) and their Play buttons: works for any way the song was started. */
 function syncMusicPanelsPlaying() {
-  const roots = ["userPublicMusic", "profileMusic"].map((id) => document.getElementById(id)).filter((r) => r && !r.hidden);
+  // Scan both panels even when their tab isn't the visible one — switching to
+  // Posts/Reposts hides #profileMusic, but the Play button must keep showing
+  // the real playing state regardless of which profile tab is open.
+  const roots = ["userPublicMusic", "profileMusic"].map((id) => document.getElementById(id)).filter(Boolean);
   const curRef = String(currentPlayerTrackRef?.url || "").trim();
   const a = playerEl;
   const dur = a ? getPlayerDuration() : 0;
@@ -54377,6 +54399,95 @@ async function playNextDiscoverPlaylistTrack(excludeUrl, opts = {}) {
   }
 }
 
+async function playPrevDiscoverPlaylistTrack() {
+  if (_discoverPlaylistAdvancing) return;
+  if (!_discoverPlaylistQueue.length || !_discoverPlaylistQueueSlug) return;
+  if (miniSource?.type !== "discover_playlist") return;
+  const curIdx = Number.isFinite(miniSource?.playlistIndex) ? Number(miniSource.playlistIndex) : -1;
+  let idx = curIdx;
+  if (idx < 0) {
+    const cur = String(currentPlayerTrackRef?.url || miniSource?.url || "").trim();
+    idx = _discoverPlaylistQueue.findIndex((t) => String(t.url || "").trim() === cur);
+  }
+  const prevIdx = idx - 1;
+  if (prevIdx < 0) return;
+  const pick = _discoverPlaylistQueue[prevIdx];
+  if (!pick?.url) return;
+  _discoverPlaylistAdvancing = true;
+  const token = ++_discoverPlaylistAdvanceToken;
+  haptic("light");
+  try {
+    await playLibraryUrlOnPlayer(pick.url, pick.title, pick.artUrl, {
+      discoverFeed: true,
+      discoverPlaylist: true,
+      playlistSlug: _discoverPlaylistQueueSlug,
+      playlistIndex: prevIdx,
+      openPlayer: false,
+      discoverBy: pick.byLine,
+      playSource: pick.songId && pick.ownerUserId
+        ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId, taskId: pick.taskId, audioId: pick.audioId }
+        : null,
+    });
+  } finally {
+    if (token === _discoverPlaylistAdvanceToken) _discoverPlaylistAdvancing = false;
+  }
+}
+
+/** Swipe up/down on the full player to move through the playlist you opened it from
+ *  (a "Your vibes" playlist, or one of your own playlists). Separate from the Discover
+ *  Reel swipe above — mutually exclusive, since that one only engages in reel mode. */
+function wirePlayerPlaylistSwipeOnce() {
+  const shell = document.querySelector(".playerShell");
+  if (!shell || shell.dataset.playlistSwipeWired === "1") return;
+  shell.dataset.playlistSwipeWired = "1";
+  const PLAYLIST_SWIPE_PX = 56;
+  let startY = 0;
+  let startX = 0;
+  let dragging = false;
+
+  function activeQueueLen() {
+    if (miniSource?.type === "discover_playlist") return _discoverPlaylistQueue.length;
+    if (miniSource?.type === "user_playlist") return _userPlaylistQueue.length;
+    return 0;
+  }
+
+  shell.addEventListener("touchstart", (e) => {
+    if (discoverReelModeActive() || !activeQueueLen()) return;
+    if (e.touches.length !== 1) return;
+    startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX;
+    dragging = true;
+  }, { passive: true });
+
+  shell.addEventListener("touchmove", (e) => {
+    if (!dragging) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    if (Math.abs(dx) > Math.abs(dy) + 8) { dragging = false; return; }
+  }, { passive: true });
+
+  shell.addEventListener("touchend", (e) => {
+    if (!dragging) return;
+    dragging = false;
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+    const dy = touch.clientY - startY;
+    const dx = touch.clientX - startX;
+    if (Math.abs(dx) > Math.abs(dy)) return;
+    if (Math.abs(dy) < PLAYLIST_SWIPE_PX) return;
+    haptic("light");
+    if (dy < 0) {
+      if (miniSource?.type === "discover_playlist") void playNextDiscoverPlaylistTrack(currentPlayerTrackRef?.url, { manual: true });
+      else void playNextUserPlaylistTrack(currentPlayerTrackRef?.url);
+    } else {
+      if (miniSource?.type === "discover_playlist") void playPrevDiscoverPlaylistTrack();
+      else void playPrevUserPlaylistTrack();
+    }
+  }, { passive: true });
+
+  shell.addEventListener("touchcancel", () => { dragging = false; }, { passive: true });
+}
+
 function getUserPlaylistsStorageKey() {
   const uid = String(activeProfile?.id || authSession?.user?.id || "").trim();
   return `${USER_PLAYLISTS_STORAGE_PREFIX}${uid || "guest"}`;
@@ -54676,6 +54787,27 @@ async function playNextUserPlaylistTrack(excludeUrl) {
   const token = ++_userPlaylistAdvanceToken;
   try {
     await playUserPlaylistTrackAt(_userPlaylistQueueId, nextIdx, { openPlayer: false });
+  } finally {
+    if (token === _userPlaylistAdvanceToken) _userPlaylistAdvancing = false;
+  }
+}
+
+async function playPrevUserPlaylistTrack() {
+  if (_userPlaylistAdvancing) return;
+  if (!_userPlaylistQueue.length || !_userPlaylistQueueId) return;
+  if (miniSource?.type !== "user_playlist") return;
+  const curIdx = Number.isFinite(miniSource?.playlistIndex) ? Number(miniSource.playlistIndex) : -1;
+  let idx = curIdx;
+  if (idx < 0) {
+    const cur = String(currentPlayerTrackRef?.url || miniSource?.url || "").trim();
+    idx = _userPlaylistQueue.findIndex((t) => audioUrlsEquivalent(String(t.url || "").trim(), cur));
+  }
+  const prevIdx = idx - 1;
+  if (prevIdx < 0) return;
+  _userPlaylistAdvancing = true;
+  const token = ++_userPlaylistAdvanceToken;
+  try {
+    await playUserPlaylistTrackAt(_userPlaylistQueueId, prevIdx, { openPlayer: false });
   } finally {
     if (token === _userPlaylistAdvanceToken) _userPlaylistAdvancing = false;
   }
@@ -55270,22 +55402,25 @@ function discoveryTrackRowHtml(t, profMap, idx) {
   const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
-  const styleLine = discoveryStyleLineHtml(t);
   const challengeLine = challengeSourceLineHtml(t);
   const mashupLine = mashupSourceLineHtml(t);
-  const remixLine = remixSourceLineHtml(t);
-  const releaseLine = releaseCaptionLineHtml(t);
-  const playLine = Number.isFinite(Number(t.playCount))
-    ? `<span class="discoveryRowPlayCount">${discoveryPlayCountChipHtml(t)}</span>`
+  // Same quiet "Remix of …" chip as the Remixes you'll love section — not the
+  // heavier ➦ REMIX badge + full attribution line used on the track's own post.
+  const remixOf = remixAttributionForTrack(t);
+  const remixLine = remixOf
+    ? `<span class="discoverRemixChip">Remix of ${escapeHtml(String(remixOf.title || "the original").slice(0, 28))}</span>`
+    : "";
+  // Playlist rows keep only what's essential — creator, time, plays as plain text.
+  // Style tags and the release note/caption are clutter here (they already show on the track's own post).
+  const n = Math.max(0, Number(t?.playCount) || 0);
+  const playsText = Number.isFinite(Number(t.playCount))
+    ? ` · ${escapeHtml(formatStatCount(n))} ${n === 1 ? "play" : "plays"}`
     : "";
   const extraHtml = [
-    `<span class="discoverFeedSongBy">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}</span>`,
-    styleLine,
+    `<span class="discoverFeedSongBy discoveryRowPlayPlain">${escapeHtml(byLine)} · ${escapeHtml(relativeTime(t.ts))}${playsText}</span>`,
     challengeLine,
     mashupLine,
     remixLine,
-    releaseLine,
-    playLine,
   ].filter(Boolean).join("");
   return discoverFeedSongRowHtml(t, profMap, {
     styleIdx: idx,
@@ -55397,18 +55532,20 @@ async function refreshDiscoverFeed() {
     const rows = await supabaseFetchDiscoveryPublicSongs(64);
     if (gen !== _discoveryFeedGen) return;
     const playable = rows.filter((t) => String(t.url || "").trim());
-    const profMap = await fetchProfilesByUserIdsMap(playable.map((t) => t.userId));
+    // Profiles and play counts don't depend on each other — fetch them together
+    // instead of one after the other, so Discover isn't waiting on two full
+    // network round-trips back to back before it can paint.
+    const [profMap, playCountMap] = await Promise.all([
+      fetchProfilesByUserIdsMap(playable.map((t) => t.userId)),
+      playable.length ? fetchPlayCountsForTracks(playable).catch(() => null) : Promise.resolve(null),
+    ]);
     _discoveryLastProfMap = profMap;
     if (gen !== _discoveryFeedGen) return;
     bindCampaignUiOnce();
-    if (playable.length) {
-      try {
-        const playCountMap = await fetchPlayCountsForTracks(playable);
-        if (gen !== _discoveryFeedGen) return;
-        for (const t of playable) {
-          t.playCount = playCountMap.get(String(t.id || "")) || 0;
-        }
-      } catch {}
+    if (playCountMap) {
+      for (const t of playable) {
+        t.playCount = playCountMap.get(String(t.id || "")) || 0;
+      }
     }
     if (gen !== _discoveryFeedGen) return;
     _discoveryFeedTracksRaw = playable;
@@ -60693,7 +60830,7 @@ function profileOwnPublishedTracks() {
 
 /** Shimmer placeholder for the Music panels (same silhouette as the real thing, so nothing jumps). */
 function musicPanelSkeletonHtml() {
-  const row = `<div class="upmRow upmSkelRow" aria-hidden="true"><span class="upmNo"></span><span class="upmArt upmSk"></span><span class="upmMeta"><i class="upmSk"></i><i class="upmSk short"></i></span></div>`;
+  const row = `<div class="upmRow upmSkelRow" aria-hidden="true"><span class="upmArt upmSk"></span><span class="upmMeta"><i class="upmSk"></i><i class="upmSk short"></i></span></div>`;
   const card = `<div class="upmCard upmSkelCard" aria-hidden="true"><span class="upmCardArt upmSk"></span><i class="upmSk"></i><i class="upmSk short"></i></div>`;
   return `
     <section class="upmSection upmSkeleton" aria-busy="true" aria-label="Loading music">
@@ -60747,7 +60884,7 @@ function applyStoredPlays(tracks) {
   return all;
 }
 function trendingSkeletonSection() {
-  const row = `<div class="upmRow upmSkelRow" aria-hidden="true"><span class="upmNo"></span><span class="upmArt upmSk"></span><span class="upmMeta"><i class="upmSk"></i><i class="upmSk short"></i></span></div>`;
+  const row = `<div class="upmRow upmSkelRow" aria-hidden="true"><span class="upmArt upmSk"></span><span class="upmMeta"><i class="upmSk"></i><i class="upmSk short"></i></span></div>`;
   return `<section class="upmSection upmSkeleton" aria-busy="true" aria-label="Trending now"><h3 class="upmH">Trending now</h3><div class="upmList">${row.repeat(5)}</div></section>`;
 }
 
@@ -60835,7 +60972,6 @@ function paintProfileMusicNow() {
     return `
       <div class="upmRow" role="listitem">
         <button type="button" class="upmRowPlay" ${attrs} aria-label="Play ${escapeHtml(String(t.title || "song"))}">
-          <span class="upmNo"><b>${i + 1}</b>${UPM_EQ_HTML}</span>
           <span class="upmArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />${UPM_OVERLAY_HTML}</span>
           <span class="upmMeta"><strong dir="auto">${escapeHtml(String(t.title || "Untitled"))}</strong>${hasCounts ? `<small>${plays ? `${escapeHtml(formatStatCount(plays))} plays` : "New"}</small>` : ""}</span>
         </button>
@@ -78225,6 +78361,7 @@ if (els.btnPlayerToggle) {
 }
 wirePlayerSocialRailOnce();
 wirePlayerDiscoverReelSwipeOnce();
+wirePlayerPlaylistSwipeOnce();
 wireInAppShareSheetsOnce();
 if (els.btnPlayerBack) {
   els.btnPlayerBack.addEventListener("click", () => {

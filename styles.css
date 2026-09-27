@@ -65477,6 +65477,7 @@ body[data-route="discover"] .discoverFeaturedHeroCarousel .discoverFeaturedChall
 }
 .discoverTonightAv{ display: inline-flex; width: 24px; height: 24px; border-radius: 50%; overflow: hidden; flex: none; }
 .discoverTonightAv img, .discoverTonightAv > *{ width: 100%; height: 100%; object-fit: cover; }
+.discoverTonightAv .discoverFeedFollowAvFallback{ font-size: 10px; }
 .discoverTonightDot{ opacity: 0.6; }
 .discoverTonightActs{ display: flex; align-items: center; gap: 10px; margin-top: 7px; }
 .discoverTonightPlay{
@@ -65858,9 +65859,9 @@ body[data-route="discover"] .discoverFeedSongRow--remix .discoverFeedSongTitle{
   padding: 0 8px;
   border-radius: 999px;
   font-size: 10.5px;
-  font-weight: 800;
-  color: #cbbcff;
-  background: rgba(124, 92, 255, 0.22);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.56);
+  background: rgba(255, 255, 255, 0.08);
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
@@ -66587,6 +66588,8 @@ body.connectFriendsActive #friendsComposeFabRoot{ display: none !important; }
 .discoverFriendCardWho > span:last-child{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .discoverFriendCardAv{ width: 24px; height: 24px; border-radius: 50%; overflow: hidden; flex: none; display: block; }
 .discoverFriendCardAv img, .discoverFriendCardAv > *{ width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+/* The letter fallback is sized for the 96px "suggested to follow" avatar; shrink it to fit this 24px badge. */
+.discoverFriendCardAv .discoverFeedFollowAvFallback{ font-size: 10px; }
 .discoverFriendCardPl{
   position: absolute;
   right: 10px;
@@ -66596,9 +66599,13 @@ body.connectFriendsActive #friendsComposeFabRoot{ display: none !important; }
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: #fff;
-  color: #0b0b13;
+  background: rgba(20, 22, 32, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  -webkit-backdrop-filter: blur(10px);
+          backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.92);
 }
+.discoverFriendCardPl .nbBars{ --nb-purple: #8f74ff; --nb-teal: #22c5a9; opacity: 0.82; }
 .discoverFriendCardText{ position: absolute; left: 12px; right: 56px; bottom: 12px; display: flex; flex-direction: column; gap: 1px; }
 .discoverFriendCardText strong{ font-size: 14px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .discoverFriendCardText span{ font-size: 11px; font-weight: 600; color: rgba(255, 255, 255, 0.7); }
@@ -69080,7 +69087,7 @@ body .authScreen .authTermsLine a{ color: #f5f6fb; text-decoration: underline; t
 /* ===== Play pill (profile + public profile) and the shared two-bar sign ===== */
 /* .nbBars = the launch screen's two bars. Playing: quick and uneven. Loading: slow and even, like the launch screen. */
 .nbBars{ --nb-purple: #7752f8; --nb-teal: #14a58b; --nb-size: 16px; display: inline-flex; align-items: flex-end; gap: calc(var(--nb-size) * .25); height: var(--nb-size); }
-.nbBars i{ display: block; width: calc(var(--nb-size) * .31); height: 100%; border-radius: 999px; transform-origin: 50% 100%; }
+.nbBars i{ display: block; width: calc(var(--nb-size) * .26); height: 100%; border-radius: 999px; transform-origin: 50% 100%; }
 .nbBars i:first-child{ background: var(--nb-purple); }
 .nbBars i:last-child{ background: var(--nb-teal); }
 .nbBars--play i:first-child{ animation: nbPlay1 .9s ease-in-out infinite; }
@@ -69151,7 +69158,7 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay:active{ backgrou
 /* on the dark cover scrims the bars use the bright brand colours; on the white feed circle they use the deeper teal */
 .coverArtPlayIco .nbBars, .upmOvIco .nbBars{ --nb-purple: #8f74ff; --nb-teal: #22c5a9; }
 .feedEdgePlay .coverArtPlayIco .nbBars{ --nb-purple: #7752f8; --nb-teal: #14a58b; }
-.coverArtPlayIco .nbBars, .upmOvIco .nbBars{ display: inline-flex; }
+.coverArtPlayIco .nbBars, .upmOvIco .nbBars{ display: inline-flex; opacity: 0.82; }
 /* the separate teal equaliser is retired: the cover shows "playing", the rank number stays */
 .libRowEq, .upmEq{ display: none !important; }
 .upmRow.isPlaying .upmNo b{ display: inline !important; }

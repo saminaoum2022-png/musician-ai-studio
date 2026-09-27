@@ -551,6 +551,37 @@ function aaCapGallery(list) {
   return out.slice(-AA_GALLERY_MAX);
 }
 
+/** Every other row here (bio, genres, persona) only takes effect once the
+ *  page-level Save is tapped — that's fine when you're actively looking at
+ *  the Save button. It was the wrong call for Artist Avatar specifically:
+ *  the generation itself already cost real credits, so "picked one, force-
+ *  quit before remembering to tap Save, reopened to the old photo" is a
+ *  real loss, not just an unsaved draft. Persist the avatar fields the
+ *  moment they change — local write is immediate (survives a force-quit
+ *  right away), cloud follows in the background. Never touches any other
+ *  in-progress, still-unsaved draft field (bio/genres/etc). */
+async function persistArtistAvatarNow() {
+  if (!_deps) return;
+  const active = _deps.getActiveProfile?.() || {};
+  const next = {
+    ...active,
+    artistAvatar: _draft.artistAvatar || "",
+    artistAvatarGallery: aaCapGallery(_draft.artistAvatarGallery || []),
+    artistAvatarConsentedAt: _draft.artistAvatarConsentedAt || active.artistAvatarConsentedAt || 0,
+    artistAvatarUpdatedAt: Date.now(),
+    avatar: _draft.avatar || active.avatar || "",
+  };
+  try { _deps.saveProfile(next); } catch {}
+  try { _deps.syncProfileUi?.(next); } catch {}
+  try {
+    await _deps.supabaseUpsertProfile(next);
+  } catch (e) {
+    try {
+      _deps?.showToast?.("Saved on this phone — will sync once your connection is back", { durationMs: 3000 });
+    } catch {}
+  }
+}
+
 /** Switch which generated portrait is "active" (shows on the profile flip) — free,
  *  no regeneration. If the previous active one was also standing in as the profile
  *  picture, the new one takes over that role too, so the two stay in sync. */
@@ -560,6 +591,7 @@ function switchActiveArtistAvatar(src) {
   _draft.artistAvatar = src;
   if (wasProfilePic) _draft.avatar = src;
   markDirty();
+  void persistArtistAvatarNow();
 }
 
 /** Promote/demote the active Artist Avatar to be `avatar` itself — the photo that
@@ -577,6 +609,7 @@ function setArtistAvatarAsProfilePic(on) {
     _draft.avatar = _draft.artistAvatarPrevAvatar || "";
   }
   markDirty();
+  void persistArtistAvatarNow();
 }
 
 function aaThumbGridHtml() {
@@ -798,6 +831,9 @@ async function startArtistAvatarGeneration() {
     // them later" only works if the ones not chosen right now aren't thrown away.
     _draft.artistAvatarGallery = aaCapGallery([...(_draft.artistAvatarGallery || []), ...d.options]);
     markDirty();
+    // These already cost real credits — persist the gallery right away so a
+    // force-quit before tapping "Use this one" doesn't throw the batch away.
+    void persistArtistAvatarNow();
     _aaStep = "pick";
     renderArtistAvatarStep();
   } catch (e) {
@@ -813,10 +849,11 @@ function confirmArtistAvatarChoice() {
   _draft.artistAvatarConsentedAt = _draft.artistAvatarConsentedAt || Date.now();
   if (_aaUseAsProfilePic) setArtistAvatarAsProfilePic(true);
   markDirty();
+  void persistArtistAvatarNow();
   closeProfileEditSheet();
   renderProfileEditPage();
   try { _deps?.haptic?.("medium"); } catch {}
-  try { _deps?.showToast?.("Artist Avatar ready — tap Save to publish", { icon: "✦", durationMs: 2400 }); } catch {}
+  try { _deps?.showToast?.("Artist Avatar saved ✦", { icon: "✦", durationMs: 2200 }); } catch {}
 }
 
 function openArtistAvatarEditor() {

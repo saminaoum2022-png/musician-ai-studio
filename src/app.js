@@ -317,7 +317,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260925-164812";
+const APP_BUILD = "20260927-143437";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -37691,6 +37691,46 @@ function paintOurMusicArt(el, pairKey) {
   el.style.setProperty("--om-h1", h1);
   el.style.setProperty("--om-h2", h2);
 }
+
+const OUR_MUSIC_COVER_CACHE_PREFIX = "nabad_om_cover:";
+/** Real Gemini-generated "Our Music Together" cover, cached per friend pair + shared-tag
+ *  signature so Gemini only runs once per pair (until their shared tags actually change).
+ *  Gemini only — deliberately no Pollinations/Cloudflare fallback; on any failure the
+ *  gradient blobs from paintOurMusicArt() stay as the cover. */
+async function loadOurMusicGeneratedCover(imgEl, pairKey, otherId, sharedTags) {
+  if (!imgEl || !otherId) return;
+  const tagsKey = (Array.isArray(sharedTags) ? sharedTags : []).slice().sort().join(",");
+  const cacheKey = `${OUR_MUSIC_COVER_CACHE_PREFIX}${pairKey}`;
+  try {
+    const cachedRaw = localStorage.getItem(cacheKey);
+    if (cachedRaw) {
+      const cached = JSON.parse(cachedRaw);
+      if (cached?.dataUrl && cached?.tagsKey === tagsKey) {
+        imgEl.style.backgroundImage = `url('${cached.dataUrl}')`;
+        imgEl.classList.add("omArtImg--visible");
+        return;
+      }
+    }
+  } catch {}
+
+  try {
+    const token = getSupabaseAuthToken();
+    const r = await fetch(
+      apiUrl(`/api/music/our-music-cover?userId=${encodeURIComponent(otherId)}&tags=${encodeURIComponent(tagsKey)}`),
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+    if (!r.ok) return;
+    const data = await r.json().catch(() => null);
+    if (!data?.ok || !data?.dataUrl) return;
+    imgEl.style.backgroundImage = `url('${data.dataUrl}')`;
+    imgEl.classList.add("omArtImg--visible");
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({ dataUrl: data.dataUrl, tagsKey, ts: Date.now() }));
+    } catch {}
+  } catch (e) {
+    console.warn("[our-music] cover skipped", e?.message || e);
+  }
+}
 let _ourMusicSheetBound = false;
 function bindOurMusicSheetOnce() {
   if (_ourMusicSheetBound) return;
@@ -37748,30 +37788,68 @@ async function openOurMusicSheet(targetUserId, partner = {}) {
     return;
   }
 
+  void loadOurMusicGeneratedCover(document.getElementById("omArtImg"), pairKey, targetUserId, data.sharedTags);
+
   if (titleEl) titleEl.textContent = ourMusicAlbumTitle(data.sharedTags, pairKey);
   if (statusEl) statusEl.hidden = true;
   if (contentEl) contentEl.hidden = false;
 
+  const daysEl = document.getElementById("omDays");
+  if (daysEl) daysEl.textContent = String(Math.max(0, Number(data.daysInSync) || 0));
+  const sessEl = document.getElementById("omSessions");
+  if (sessEl) sessEl.textContent = String(Math.max(0, Number(data.sessionCount) || 0));
+  const streakEl = document.getElementById("omStreak");
+  if (streakEl) streakEl.textContent = String(Math.max(0, Number(data.streakWeeks) || 0));
+
+  const trkAttrs = (t) => {
+    const url = String(t?.url || "").trim();
+    return url
+      ? `data-om-play="${encodeURIComponent(url)}" data-om-title="${encodeURIComponent(t.title || "Song")}" data-om-art="${encodeURIComponent(t.cover || "")}"`
+      : "";
+  };
+  const trkArtCss = (t) => t?.cover ? `url('${escapeHtml(t.cover)}') center/cover` : "linear-gradient(135deg,#402030,#a04a6a)";
+
+  const allTracks = Array.isArray(data.tracklist) ? data.tracklist : [];
+  const top = allTracks[0] || null;
+  const rest = allTracks.slice(1);
+
+  const spotWrap = document.getElementById("omSongSpot");
+  if (spotWrap) spotWrap.hidden = !top;
+  if (top) {
+    const spotCard = document.getElementById("omSpotCard");
+    const spotArt = document.getElementById("omSpotArt");
+    const spotTitle = document.getElementById("omSpotTitle");
+    const spotCount = document.getElementById("omSpotCount");
+    if (spotArt) spotArt.style.background = trkArtCss(top);
+    if (spotTitle) spotTitle.textContent = top.title || "Song";
+    if (spotCount) spotCount.textContent = `Played together ${top.count}×`;
+    if (spotCard) {
+      const url = String(top.url || "").trim();
+      if (url) {
+        spotCard.setAttribute("data-om-play", encodeURIComponent(url));
+        spotCard.setAttribute("data-om-title", encodeURIComponent(top.title || "Song"));
+        spotCard.setAttribute("data-om-art", encodeURIComponent(top.cover || ""));
+      } else {
+        spotCard.removeAttribute("data-om-play");
+      }
+    }
+  }
+
   const tracklistEl = document.getElementById("omTracklist");
   const emptyEl = document.getElementById("omEmptyTracks");
-  const tracks = Array.isArray(data.tracklist) ? data.tracklist : [];
   if (tracklistEl) {
-    tracklistEl.innerHTML = tracks.map((t, i) => {
-      const url = String(t.url || "").trim();
-      const attrs = url
-        ? `data-om-play="${encodeURIComponent(url)}" data-om-title="${encodeURIComponent(t.title || "Song")}" data-om-art="${encodeURIComponent(t.cover || "")}"`
-        : "";
-      return `
-      <div class="omTrk${url ? "" : " omTrk--noPlay"}" ${attrs}>
-        <span class="omTrkNo">${i + 1}</span>
-        <span class="omTrkArt" style="background:${t.cover ? `url('${escapeHtml(t.cover)}') center/cover` : "linear-gradient(135deg,#402030,#a04a6a)"}"></span>
+    tracklistEl.innerHTML = rest.map((t, i) => `
+      <div class="omTrk${t.url ? "" : " omTrk--noPlay"}" ${trkAttrs(t)}>
+        <span class="omTrkNo">${i + 2}</span>
+        <span class="omTrkArt" style="background:${trkArtCss(t)}"></span>
         <span class="omTrkTxt">${escapeHtml(t.title || "Song")}</span>
         <span class="omTrkCount">${t.count}×</span>
-      </div>`;
-    }).join("");
-    tracklistEl.hidden = !tracks.length;
+      </div>`).join("");
+    tracklistEl.hidden = !rest.length;
   }
-  if (emptyEl) emptyEl.hidden = Boolean(tracks.length);
+  const tlHead = tracklistEl?.previousElementSibling;
+  if (tlHead && tlHead.classList.contains("omTlHead")) tlHead.hidden = !rest.length;
+  if (emptyEl) emptyEl.hidden = Boolean(allTracks.length);
 
   const pct = Math.max(0, Math.min(100, Number(data.matchPct) || 0));
   const circ = 2 * Math.PI * 26;
@@ -37794,6 +37872,22 @@ async function openOurMusicSheet(targetUserId, partner = {}) {
       closeOurMusicSheet();
       document.getElementById("btnUserPublicTogether")?.click();
     });
+  }
+
+  const shareBtn = document.getElementById("omShare");
+  if (shareBtn) {
+    // No generated share image yet (that needs its own design pass) — for now this
+    // shares the same facts as plain text/link, which still works everywhere.
+    shareBtn.onclick = () => {
+      haptic("light");
+      const title = String(titleEl?.textContent || "Our Album").trim();
+      const text = `${title} — ${byEl?.textContent || "us"}, ${data.daysInSync} days in sync on NabadAi 🎵`;
+      if (navigator.share) {
+        navigator.share({ title, text }).catch(() => {});
+      } else {
+        try { navigator.clipboard?.writeText(text); showToast("Copied to share", { durationMs: 2200 }); } catch {}
+      }
+    };
   }
 }
 

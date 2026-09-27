@@ -105,9 +105,22 @@ module.exports = async (req, res) => {
     ? Math.max(0, Math.floor((Date.now() - new Date(firstSessionAt).getTime()) / 86_400_000))
     : 0;
 
+  // Streak: consecutive rolling 7-day windows, counting back from right now, with at
+  // least one session — relative to "now" rather than fixed calendar-epoch weeks, so a
+  // session yesterday always counts toward week 0 instead of possibly landing on the
+  // wrong side of an arbitrary bucket boundary.
+  const weekMs = 7 * 86_400_000;
+  const now = Date.now();
+  const weeksAgoWithSession = new Set(
+    sessions.map((s) => Math.floor((now - new Date(s.started_at).getTime()) / weekMs)),
+  );
+  let streakWeeks = 0;
+  for (let w = 0; weeksAgoWithSession.has(w); w++) streakWeeks += 1;
+
   return sendJson(res, 200, {
     sessionCount,
     daysInSync,
+    streakWeeks,
     firstSessionAt,
     tracklist,
     sharedTags,

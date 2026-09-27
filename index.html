@@ -233,7 +233,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260925-164812" />
+    <link rel="stylesheet" href="./styles.css?v=20260927-143437" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -5589,25 +5589,44 @@
         }));
       }
       // Dynamic import so the giant app module does not block the first dots.
-      import("./src/app.js?v=20260925-164812");
+      import("./src/app.js?v=20260927-143437");
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
   
     <div id="ourMusicSheet" class="ourMusicSheet" hidden aria-hidden="true">
       <div class="omDim" id="omDim"></div>
       <div class="omPanel">
-        <div class="omArt" id="omArt"><div class="omBlob omB1"></div><div class="omBlob omB2"></div><div class="omBlob omB3"></div></div>
-        <div class="omOverlay">
-          <div class="omTop"><button type="button" id="omClose" class="omClose" aria-label="Close">✕</button></div>
-          <div class="omBottom">
-            <div class="omKick">AN ALBUM MADE FROM YOUR NABAD</div>
-            <div class="omTitle" id="omTitle">Your Album</div>
-            <div class="omBy" id="omBy"></div>
+        <div class="omArt" id="omArt">
+          <div class="omBlob omB1"></div><div class="omBlob omB2"></div><div class="omBlob omB3"></div>
+          <div class="omArtImg" id="omArtImg" aria-hidden="true"></div>
+          <div class="omOverlay">
+            <div class="omTop"><button type="button" id="omClose" class="omClose" aria-label="Close">✕</button></div>
+            <div class="omBottom">
+              <div class="omKick">AN ALBUM MADE FROM YOUR NABAD</div>
+              <div class="omTitle" id="omTitle">Your Album</div>
+              <div class="omBy" id="omBy"></div>
+            </div>
           </div>
         </div>
         <div class="omBody" id="omBody">
           <div class="omStatus" id="omStatus">Loading your album…</div>
           <div class="omContent" id="omContent" hidden>
+            <div class="omHeroStats">
+              <div class="omHeroStat"><b id="omDays">0</b><span>days in sync</span></div>
+              <div class="omHeroDot" aria-hidden="true"></div>
+              <div class="omHeroStat"><b id="omSessions">0</b><span>sessions</span></div>
+              <div class="omHeroDot" aria-hidden="true"></div>
+              <div class="omHeroStat"><b id="omStreak">0</b><span>week streak</span></div>
+            </div>
+            <div class="omSongSpot" id="omSongSpot" hidden>
+              <div class="omSecLabel">YOUR SONG</div>
+              <button type="button" class="omSpotCard" id="omSpotCard">
+                <span class="omSpotArt" id="omSpotArt"></span>
+                <span class="omSpotTitle" id="omSpotTitle"></span>
+                <span class="omSpotSub">The one you keep coming back to</span>
+                <span class="omSpotCount" id="omSpotCount"></span>
+              </button>
+            </div>
             <div class="omTlHead"><b>The tracklist</b><small>Your most shared, in order</small></div>
             <div class="omTracklist" id="omTracklist"></div>
             <div class="omEmptyTracks" id="omEmptyTracks" hidden>No shared Listen Together sessions yet.</div>
@@ -5616,7 +5635,8 @@
               <div class="omMatchRing"><svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="6"/><circle id="omMatchArc" cx="32" cy="32" r="26" fill="none" stroke="url(#omMatchGrad)" stroke-width="6" stroke-linecap="round" transform="rotate(-90 32 32)"/><defs><linearGradient id="omMatchGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8f74ff"/><stop offset="100%" stop-color="#2ee0c0"/></linearGradient></defs></svg><span class="omMatchPct" id="omMatchPct">0%</span></div>
               <div class="omMatchTags" id="omMatchTags"></div>
             </div>
-            <button type="button" id="omListenTogether" class="omListenBtn">👥 Listen together</button>
+            <button type="button" id="omListenTogether" class="omListenBtn">Listen together</button>
+            <button type="button" id="omShare" class="omShareBtn">Share the album</button>
           </div>
         </div>
       </div>

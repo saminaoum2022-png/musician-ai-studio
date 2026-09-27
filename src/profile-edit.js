@@ -44,6 +44,7 @@ function emptyDraft() {
     links: { instagram: "", tiktok: "", youtube: "", spotify: "" },
     personaId: "",
     artistAvatar: "",
+    artistAvatarGallery: [],
   };
 }
 
@@ -85,6 +86,10 @@ function profileFromDraft(base = {}) {
       ? Date.now()
       : Number(base.artistAvatarUpdatedAt || 0),
     artistAvatarConsentedAt: _draft.artistAvatarConsentedAt || Number(base.artistAvatarConsentedAt || 0),
+    artistAvatarGallery: (Array.isArray(_draft.artistAvatarGallery) && _draft.artistAvatarGallery.length
+      ? _draft.artistAvatarGallery
+      : (Array.isArray(base.artistAvatarGallery) ? base.artistAvatarGallery : [])
+    ).slice(-AA_GALLERY_MAX),
   };
 }
 
@@ -110,6 +115,7 @@ export function hydrateProfileEditDraft(profile) {
     personaId,
     artistAvatar: String(p.artistAvatar || "").trim(),
     artistAvatarConsentedAt: Number(p.artistAvatarConsentedAt || 0),
+    artistAvatarGallery: Array.isArray(p.artistAvatarGallery) ? p.artistAvatarGallery.slice(-AA_GALLERY_MAX) : [],
   };
   _dirty = false;
   _genresTouched = false;
@@ -167,7 +173,11 @@ function personaPreview() {
 }
 
 function artistAvatarPreview() {
-  return _draft?.artistAvatar ? "Ready ✦" : "Not set up";
+  if (!_draft?.artistAvatar) return "Not set up";
+  const n = Array.isArray(_draft.artistAvatarGallery) ? _draft.artistAvatarGallery.length : 0;
+  const isProfilePic = _draft.avatar === _draft.artistAvatar;
+  const suffix = isProfilePic ? " · profile pic" : n > 1 ? ` · ${n} saved` : "";
+  return `Ready ✦${suffix}`;
 }
 
 function applyAvatarToEditPhoto() {
@@ -507,24 +517,66 @@ function openPersonaEditor() {
   });
 }
 
-/* ── Nabad Artist Avatar: consent → upload → generate → pick one ────────── */
+/* ── Nabad Artist Avatar: manage/switch → consent → upload → generate → pick ── */
 const AA_MIN_PHOTOS = 3;
 const AA_MAX_PHOTOS = 5;
 const AA_COST = 15;
-let _aaStep = "intro"; // intro | upload | generating | pick | error
+const AA_GALLERY_MAX = 6; // every generated option is kept (not just the chosen one) so you can switch later, capped so the profile row doesn't grow unbounded
+let _aaStep = "intro"; // manage | intro | upload | generating | pick | error
 let _aaPhotos = [];    // data URLs, compressed
 let _aaOptions = [];   // data URLs returned by the server
 let _aaChosenIndex = -1;
 let _aaConsent = false;
 let _aaErrorMessage = "";
+let _aaUseAsProfilePic = false; // pending checkbox state carried from "pick" into confirmArtistAvatarChoice
 
 function resetArtistAvatarState() {
-  _aaStep = "intro";
+  _aaStep = (Array.isArray(_draft?.artistAvatarGallery) && _draft.artistAvatarGallery.length) ? "manage" : "intro";
   _aaPhotos = [];
   _aaOptions = [];
   _aaChosenIndex = -1;
   _aaConsent = false;
   _aaErrorMessage = "";
+  _aaUseAsProfilePic = false;
+}
+
+function aaCapGallery(list) {
+  const seen = new Set();
+  const out = [];
+  for (const src of list || []) {
+    if (!src || seen.has(src)) continue;
+    seen.add(src);
+    out.push(src);
+  }
+  return out.slice(-AA_GALLERY_MAX);
+}
+
+/** Switch which generated portrait is "active" (shows on the profile flip) — free,
+ *  no regeneration. If the previous active one was also standing in as the profile
+ *  picture, the new one takes over that role too, so the two stay in sync. */
+function switchActiveArtistAvatar(src) {
+  if (!src) return;
+  const wasProfilePic = Boolean(_draft.artistAvatar) && _draft.avatar === _draft.artistAvatar;
+  _draft.artistAvatar = src;
+  if (wasProfilePic) _draft.avatar = src;
+  markDirty();
+}
+
+/** Promote/demote the active Artist Avatar to be `avatar` itself — the photo that
+ *  shows everywhere (tab bar, DMs, comments), not just the cover flip. Keeps a
+ *  one-level backup of the real photo so turning it back off restores it instead
+ *  of losing it. */
+function setArtistAvatarAsProfilePic(on) {
+  if (!_draft.artistAvatar) return;
+  if (on) {
+    if (_draft.avatar !== _draft.artistAvatar) {
+      _draft.artistAvatarPrevAvatar = _draft.avatar || _draft.artistAvatarPrevAvatar || "";
+      _draft.avatar = _draft.artistAvatar;
+    }
+  } else if (_draft.avatar === _draft.artistAvatar) {
+    _draft.avatar = _draft.artistAvatarPrevAvatar || "";
+  }
+  markDirty();
 }
 
 function aaThumbGridHtml() {
@@ -540,6 +592,45 @@ function aaThumbGridHtml() {
 function renderArtistAvatarStep() {
   const body = qs("#profileEditSheetBody");
   if (!body) return;
+
+  if (_aaStep === "manage") {
+    const gallery = aaCapGallery(_draft.artistAvatarGallery);
+    const isProfilePic = Boolean(_draft.artistAvatar) && _draft.avatar === _draft.artistAvatar;
+    const thumbs = gallery.map((src, i) => `
+      <button type="button" class="aaOption${src === _draft.artistAvatar ? " isChosen" : ""}" style="background-image:url('${src}')" data-aa-switch="${i}" aria-label="Avatar option ${i + 1}"></button>
+    `).join("");
+    body.innerHTML = `
+      <div class="aaStepKick">YOUR ARTIST AVATARS</div>
+      <p class="aaStepBody">Tap one to make it active on your profile's flip. It's free to switch between ones you've already made.</p>
+      <div class="aaOptionsGrid" id="aaGalleryGrid">${thumbs}</div>
+      <label class="aaConsentRow" for="aaUseAsProfileCheck">
+        <input type="checkbox" id="aaUseAsProfileCheck" ${isProfilePic ? "checked" : ""} />
+        <span>Also use as my profile picture everywhere — not just the cover flip</span>
+      </label>
+      <button type="button" id="aaGenerateMoreBtn" class="aaPrimaryBtn">Generate new photos · ${AA_COST} credits</button>
+    `;
+    body.querySelectorAll("[data-aa-switch]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const i = Number(btn.getAttribute("data-aa-switch"));
+        switchActiveArtistAvatar(gallery[i]);
+        try { _deps?.haptic?.("light"); } catch {}
+        renderProfileEditPage();
+        renderArtistAvatarStep();
+      });
+    });
+    qs("#aaUseAsProfileCheck", body)?.addEventListener("change", (e) => {
+      setArtistAvatarAsProfilePic(Boolean(e.target.checked));
+      renderProfileEditPage();
+      renderArtistAvatarStep();
+    });
+    qs("#aaGenerateMoreBtn", body)?.addEventListener("click", () => {
+      _aaStep = "intro";
+      _aaPhotos = [];
+      _aaConsent = false;
+      renderArtistAvatarStep();
+    });
+    return;
+  }
 
   if (_aaStep === "intro") {
     const replacing = Boolean(_draft.artistAvatar);
@@ -604,8 +695,12 @@ function renderArtistAvatarStep() {
     `).join("");
     body.innerHTML = `
       <div class="aaStepKick">PICK ONE</div>
-      <p class="aaStepBody">These are yours now — choose the one that feels most you.</p>
+      <p class="aaStepBody">All ${_aaOptions.length} are saved — you can switch between them later. Choose one to make active now.</p>
       <div class="aaOptionsGrid" id="aaOptionsGrid">${options}</div>
+      <label class="aaConsentRow" for="aaUseAsProfileCheckPick">
+        <input type="checkbox" id="aaUseAsProfileCheckPick" ${_aaUseAsProfilePic ? "checked" : ""} />
+        <span>Also use as my profile picture everywhere — not just the cover flip</span>
+      </label>
       <button type="button" id="aaUseChosenBtn" class="aaPrimaryBtn" ${_aaChosenIndex >= 0 ? "" : "disabled"}>Use this one</button>
       <button type="button" id="aaRegenBtn" class="aaSecondaryBtn">Try different photos</button>
     `;
@@ -615,6 +710,9 @@ function renderArtistAvatarStep() {
         try { _deps?.haptic?.("light"); } catch {}
         renderArtistAvatarStep();
       });
+    });
+    qs("#aaUseAsProfileCheckPick", body)?.addEventListener("change", (e) => {
+      _aaUseAsProfilePic = Boolean(e.target.checked);
     });
     qs("#aaUseChosenBtn", body)?.addEventListener("click", () => confirmArtistAvatarChoice());
     qs("#aaRegenBtn", body)?.addEventListener("click", () => {
@@ -695,6 +793,11 @@ async function startArtistAvatarGeneration() {
     }
     _aaOptions = d.options;
     _aaChosenIndex = -1;
+    _aaUseAsProfilePic = false;
+    // Save all generated options, not just whichever gets picked — "switch between
+    // them later" only works if the ones not chosen right now aren't thrown away.
+    _draft.artistAvatarGallery = aaCapGallery([...(_draft.artistAvatarGallery || []), ...d.options]);
+    markDirty();
     _aaStep = "pick";
     renderArtistAvatarStep();
   } catch (e) {
@@ -708,6 +811,7 @@ function confirmArtistAvatarChoice() {
   if (_aaChosenIndex < 0 || !_aaOptions[_aaChosenIndex]) return;
   _draft.artistAvatar = _aaOptions[_aaChosenIndex];
   _draft.artistAvatarConsentedAt = _draft.artistAvatarConsentedAt || Date.now();
+  if (_aaUseAsProfilePic) setArtistAvatarAsProfilePic(true);
   markDirty();
   closeProfileEditSheet();
   renderProfileEditPage();

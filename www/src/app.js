@@ -36068,6 +36068,11 @@ async function supabaseUpsertProfile(profile) {
     artist_avatar_consented_at: profile.artistAvatarConsentedAt
       ? new Date(profile.artistAvatarConsentedAt).toISOString()
       : undefined,
+    // Omitted (not sent as `[]`) when empty, same reasoning as the timestamps above —
+    // an unrelated save (e.g. editing bio) must never wipe a gallery it doesn't know about.
+    artist_avatar_gallery: Array.isArray(profile.artistAvatarGallery) && profile.artistAvatarGallery.length
+      ? profile.artistAvatarGallery.slice(-6)
+      : undefined,
     is_public: profile.isPublic !== false,
     calling_card_url: profile.callingCardUrl || null,
     calling_card_updated_at: profile.callingCardUpdatedAt
@@ -36162,6 +36167,7 @@ async function supabaseLoadProfile(opts = {}) {
     artistAvatar: p.artist_avatar || "",
     artistAvatarUpdatedAt: p.artist_avatar_updated_at ? Date.parse(p.artist_avatar_updated_at) || 0 : 0,
     artistAvatarConsentedAt: p.artist_avatar_consented_at ? Date.parse(p.artist_avatar_consented_at) || 0 : 0,
+    artistAvatarGallery: Array.isArray(p.artist_avatar_gallery) ? p.artist_avatar_gallery.slice(-6) : [],
     links: {
       instagram: p.instagram || "",
       youtube: p.youtube || "",

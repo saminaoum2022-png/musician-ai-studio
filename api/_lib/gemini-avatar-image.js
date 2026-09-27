@@ -31,9 +31,10 @@ const {
 const HOUSE_STYLE = [
   "Using the attached reference photos of one person's face, create a single semi-realistic painterly digital-illustration portrait of that same person — preserve their real likeness, skin tone, hair, and facial structure faithfully, just rendered in a refined illustrated style, not a photograph and not a cartoon or emoji-style avatar.",
   "Crop from the chest up, shoulders relaxed, plain dark contemporary top with no visible logos or patterns.",
+  "Strict square 1:1 canvas. This will later be cropped into BOTH a circular profile photo and a tall rectangular cover cutout, so composition must survive either crop: keep the whole head with clear empty space above the hair (do not let hair or forehead touch the top edge), keep both shoulders fully visible with room to spare below, and keep even margins on the left and right — the face should fill roughly 45-55% of the frame height, centered, never a tight zoomed-in close-up that fills the edges.",
   "Lighting: cinematic studio rim light — a violet-purple (#7752F8) rim light on one side of the face and a teal (#22C5A9) rim light on the other, both fading softly into a near-black to deep indigo gradient background with no scenery, props, or text.",
   "A single faint glowing soundwave line traces along the edge of the rim light, barely visible, the only hint that this is a music artist portrait — no literal microphone, headphones, or instruments anywhere in frame.",
-  "Fine painterly grain, soft cinematic contrast, confident and warm mood. Square 1:1 composition. Absolutely no text, letters, logos, watermarks, or captions anywhere in the image.",
+  "Fine painterly grain, soft cinematic contrast, confident and warm mood. Absolutely no text, letters, logos, watermarks, or captions anywhere in the image.",
 ].join(" ");
 
 /** Three pose/mood variants of the same house style, so "3 options" are
@@ -55,6 +56,11 @@ function buildAvatarRequestVariants(prompt, referenceImages) {
   }));
   const contents = [{ role: "user", parts: [...imageParts, { text: prompt }] }];
   return [
+    // Explicit square aspect ratio first — the text instruction alone was letting the
+    // model return a tighter/taller crop than asked, which then got cover-cropped into
+    // the profile hero and cut off foreheads/chins. Falls back to plain requests if the
+    // model/API version doesn't support responseFormat.
+    { contents, generationConfig: { responseModalities: ["TEXT", "IMAGE"], responseFormat: { image: { aspectRatio: "1:1", imageSize: "1K" } } } },
     { contents, generationConfig: { responseModalities: ["TEXT", "IMAGE"] } },
     { contents },
     { contents, generationConfig: { responseModalities: ["IMAGE"] } },

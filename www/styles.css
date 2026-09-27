@@ -8040,9 +8040,8 @@ body.hubJumpingToTop #hubList .hubRow{
   display: block;
   width: 9px;
   height: 7px;
-  background: rgba(155, 135, 255, 0.96);
+  background: rgba(255, 255, 255, 0.92);
   clip-path: polygon(50% 100%, 0 0, 100% 0);
-  filter: drop-shadow(0 0 5px rgba(124, 92, 255, 0.48));
 }
 .hasFeedHook > .feedHookMarker,
 .hasFeedHook.feedHookMarkerHost > .feedHookMarker{
@@ -8063,7 +8062,6 @@ body.hubJumpingToTop #hubList .hubRow{
 .hubNowProg.hasFeedHook .feedHookMarker::before{
   width: 7px;
   height: 5px;
-  filter: drop-shadow(0 0 4px rgba(124, 92, 255, 0.42));
 }
 /* Friends feed dock — tip overlaps waveform tops slightly. */
 .followActMediaDockWave.hasFeedHook{
@@ -8087,8 +8085,7 @@ body.hubJumpingToTop #hubList .hubRow{
   z-index: 4;
 }
 html[data-theme="light"] .feedHookMarker::before{
-  background: rgba(98, 72, 220, 0.92);
-  filter: drop-shadow(0 0 4px rgba(98, 72, 220, 0.28));
+  background: rgba(255, 255, 255, 0.92);
 }
 .playerTimeRow{
   display:flex;
@@ -68851,16 +68848,19 @@ body[data-route="discover"] #discoverOccasionsPanel .discoverOccasionStartCta{ d
 .feedEdge.isRecordSide .feedEdgeRing{ opacity: 1; }
 /* flip button */
 .feedEdgeFlip{
-  position: absolute; z-index: 7; top: 14px; right: 14px; height: 36px; padding: 0 13px 0 10px; border-radius: 999px;
-  display: inline-flex; align-items: center; gap: 7px; color: #fff; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  position: absolute; z-index: 7; top: 14px; right: 14px; width: 36px; height: 36px; padding: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; color: #fff; cursor: pointer;
   background: rgba(10,11,18,.5); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.18);
   -webkit-tap-highlight-color: transparent;
 }
-.feedEdgeFlip svg{ width: 18px; height: 18px; color: #23d5ab; display: block; }
+.feedEdgeFlip svg{ width: 18px; height: 18px; color: #fff; display: block; }
+/* The word ("Record" / "Sleeve") is dropped — the icon alone is the affordance, so it
+   doesn't crowd the cover. The aria-label still names the action. */
+.feedEdgeFlipTxt{ display: none !important; }
 .feedEdgeFlipIco--sleeve, .feedEdgeFlipTxt--sleeve{ display: none; }
 .feedEdge.isRecordSide .feedEdgeFlipIco--rec, .feedEdge.isRecordSide .feedEdgeFlipTxt--rec{ display: none; }
 .feedEdge.isRecordSide .feedEdgeFlipIco--sleeve{ display: inline-flex; }
-.feedEdge.isRecordSide .feedEdgeFlipTxt--sleeve{ display: inline; }
+.feedEdge.isRecordSide .feedEdgeFlipTxt--sleeve{ display: none; }
 /* title / meta / play */
 .feedEdgeMeta{ position: absolute; z-index: 5; left: 16px; right: 16px; bottom: 22px; display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; pointer-events: none; transition: gap .3s ease; }
 .feedEdgeMetaText{ min-width: 0; }

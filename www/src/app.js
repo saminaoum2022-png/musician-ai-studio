@@ -17412,10 +17412,10 @@ function feedEdgeTagList(track, orig = null) {
   }
   return tags.slice(0, 3);
 }
-function feedEdgeSubTagsHtml(track, orig = null) {
-  const tags = feedEdgeTagList(track, orig);
-  if (!tags.length) return "";
-  return `<span class="feedEdgeTags"> <span class="feedEdgeDot" aria-hidden="true">·</span> ${escapeHtml(tags.map((tg) => truncateStyleTag(tg, 18)).join(" · "))}</span>`;
+function feedEdgeSubTagsHtml(_track, _orig = null) {
+  // Style tags (genre, mood) no longer render inside the post — they crowded the
+  // cover. They still live in the song's About, which is the right place for them.
+  return "";
 }
 
 /** Attribute string that makes an element play `source` (remix original / mashup source). */

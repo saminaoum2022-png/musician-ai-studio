@@ -200,7 +200,7 @@ function applyAvatarToEditPhoto() {
   const hint = qs("#profileEditPhotoHint");
   const av = String(_draft?.avatar || "").trim();
   if (shell) shell.classList.toggle("isEmpty", !av);
-  if (hint) hint.textContent = av ? "Tap to manage" : "Tap to add a photo";
+  if (hint) hint.textContent = av ? "Tap photo to manage" : "Tap photo to add";
   if (img) {
     if (av) {
       img.src = av;
@@ -215,6 +215,27 @@ function applyAvatarToEditPhoto() {
   if (fallback) {
     fallback.hidden = Boolean(av);
     fallback.setAttribute("aria-hidden", av ? "true" : "false");
+  }
+  applyArtistRingToEditPhoto();
+}
+
+/** Nested Artist + ring on the Edit Profile photo — empty dashed +, or live AA thumb. */
+function applyArtistRingToEditPhoto() {
+  const ring = qs("#profileEditArtistRing");
+  const thumb = qs("#profileEditArtistRingThumb");
+  if (!ring) return;
+  const src = String(_draft?.artistAvatar || "").trim();
+  const empty = !src;
+  ring.classList.toggle("profileEditArtistRing--empty", empty);
+  ring.setAttribute("aria-label", empty ? "Create your Artist Avatar" : "Manage your Artist Avatar");
+  if (thumb) {
+    if (src) {
+      if (thumb.getAttribute("src") !== src) thumb.src = src;
+      thumb.hidden = false;
+    } else {
+      thumb.removeAttribute("src");
+      thumb.hidden = true;
+    }
   }
 }
 
@@ -1344,6 +1365,13 @@ export function initProfileEditOnce(deps) {
     e.preventDefault();
     try { _deps?.haptic?.("light"); } catch {}
     openProfilePhotoFlow();
+  });
+
+  qs("#profileEditArtistRing")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try { _deps?.haptic?.("light"); } catch {}
+    openArtistAvatarEditor();
   });
 
   page.addEventListener("click", (e) => {

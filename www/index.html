@@ -4061,17 +4061,22 @@
 
           <div class="profileEditBody">
             <div class="profileEditPhotoBlock">
-              <button type="button" class="profileEditAvatarBtn" id="profileEditAvatarWrap" aria-label="Profile photo">
-                <span class="profileEditAvatarShell">
-                  <img id="profileEditAvatar" class="profileEditAvatar" alt="" hidden decoding="async" />
-                  <span id="profileEditAvatarFallback" class="profileEditAvatarFallback emptyProfileAvatar" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.7" fill="currentColor"/><path d="M4.4 19.6c.9-3.6 4-5.8 7.6-5.8s6.7 2.2 7.6 5.8c.1.5-.3.9-.8.9H5.2c-.5 0-.9-.4-.8-.9Z" fill="currentColor"/></svg>
+              <div class="profileEditPhotoStage">
+                <button type="button" class="profileEditAvatarBtn" id="profileEditAvatarWrap" aria-label="Profile photo">
+                  <span class="profileEditAvatarShell">
+                    <img id="profileEditAvatar" class="profileEditAvatar" alt="" hidden decoding="async" />
+                    <span id="profileEditAvatarFallback" class="profileEditAvatarFallback emptyProfileAvatar" aria-hidden="true">
+                      <svg viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.7" fill="currentColor"/><path d="M4.4 19.6c.9-3.6 4-5.8 7.6-5.8s6.7 2.2 7.6 5.8c.1.5-.3.9-.8.9H5.2c-.5 0-.9-.4-.8-.9Z" fill="currentColor"/></svg>
+                    </span>
                   </span>
-                  <span class="profileEditCameraBadge" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M4 8.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8.5"/><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M8.5 8.5 10 6h4l1.5 2.5"/><circle cx="12" cy="13" r="2.75" fill="none" stroke="currentColor" stroke-width="1.75"/></svg>
-                  </span>
-                </span>
-              </button>
+                  <span class="profileEditPhotoCaption">Photo</span>
+                </button>
+                <button type="button" class="profileEditArtistRing profileEditArtistRing--empty" id="profileEditArtistRing" aria-label="Create your Artist Avatar">
+                  <img id="profileEditArtistRingThumb" class="profileEditArtistRingThumb" alt="" hidden decoding="async" draggable="false" />
+                  <svg class="profileEditArtistRingPlus" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7V4Z"/></svg>
+                  <span class="profileEditArtistCaption">Artist</span>
+                </button>
+              </div>
               <p class="profileEditPhotoHint" id="profileEditPhotoHint">Tap to manage</p>
             </div>
 

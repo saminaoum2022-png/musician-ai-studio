@@ -58305,7 +58305,7 @@ body[data-route="profile-edit"] main.grid{
   position: relative;
   width: 104px;
   height: 104px;
-  margin: 0 12px 22px;
+  margin: 0 12px 10px;
 }
 .profileEditPhotoHint{
   margin: 0;
@@ -58500,18 +58500,6 @@ html[data-theme="light"] .profileEditBusyText{ color: rgba(11, 11, 19, 0.88); }
   width: 52%;
   height: 52%;
 }
-.profileEditPhotoCaption{
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 8px);
-  transform: translateX(-50%);
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: rgba(238, 243, 255, 0.72);
-  white-space: nowrap;
-  pointer-events: none;
-}
 /* Nested Artist ring — owns the bottom-right corner (camera badge retired). */
 .profileEditArtistRing{
   -webkit-appearance: none;
@@ -58609,21 +58597,6 @@ html[data-theme="light"] .profileEditBusyText{ color: rgba(11, 11, 19, 0.88); }
 }
 .profileEditArtistRing:not(.profileEditArtistRing--empty) .profileEditArtistRingPlus{ display: none; }
 .profileEditArtistRing--empty .profileEditArtistRingThumb{ display: none !important; }
-.profileEditArtistCaption{
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 8px);
-  transform: translateX(-50%);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: rgba(200, 190, 255, 0.78);
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 2;
-}
-html[data-theme="light"] .profileEditPhotoCaption{ color: rgba(11, 11, 19, 0.62); }
-html[data-theme="light"] .profileEditArtistCaption{ color: rgba(88, 70, 160, 0.78); }
 html[data-theme="light"] .profileEditArtistRing{
   background: rgba(255, 255, 255, 0.72);
   border-color: rgba(11, 11, 19, 0.35);

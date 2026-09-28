@@ -46,6 +46,7 @@ function emptyDraft() {
     artistAvatar: "",
     artistAvatarGallery: [],
     clearArtistAvatar: false,
+    avatarRemoved: false,
   };
 }
 
@@ -74,7 +75,9 @@ function profileFromDraft(base = {}) {
     displayName: normalizeDisplayName(_draft.displayName),
     username,
     bio: cleanBio(_draft.bio),
-    avatar: String(_draft.avatar || base.avatar || "").trim(),
+    avatar: _draft.avatarRemoved
+      ? ""
+      : String(_draft.avatar || base.avatar || "").trim(),
     genres: genreLabels.join(","),
     links: {
       instagram: String(_draft.links?.instagram || "").trim(),
@@ -125,6 +128,7 @@ export function hydrateProfileEditDraft(profile) {
     artistAvatarConsentedAt: Number(p.artistAvatarConsentedAt || 0),
     artistAvatarGallery: Array.isArray(p.artistAvatarGallery) ? p.artistAvatarGallery.slice(-AA_GALLERY_MAX) : [],
     clearArtistAvatar: false,
+    avatarRemoved: false,
   };
   _dirty = false;
   _genresTouched = false;
@@ -191,11 +195,10 @@ function artistAvatarPreview() {
 
 function applyAvatarToEditPhoto() {
   const img = qs("#profileEditAvatar");
-  const fallback = qs("#profileEditAvatarFallback");
+  const shell = qs(".profileEditAvatarShell");
   const av = String(_draft?.avatar || "").trim();
   const usingArtistAsPic = Boolean(_draft?.artistAvatar) && _draft.avatar === _draft.artistAvatar;
-  const handle = normalizeUsername(_draft?.username) || "na";
-  const initials = handle.slice(0, 2).toUpperCase();
+  if (shell) shell.classList.toggle("isEmpty", !av);
   if (img) {
     const adj = qs("#btnProfileEditAdjustPhoto");
     const removeBtn = qs("#btnProfileEditRemovePhoto");
@@ -212,10 +215,6 @@ function applyAvatarToEditPhoto() {
       img.dataset.empty = "true";
       img.hidden = true;
     }
-  }
-  if (fallback) {
-    fallback.textContent = initials;
-    fallback.hidden = Boolean(av);
   }
 }
 
@@ -1049,9 +1048,13 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
     usernameChangedAt: Number(base.usernameChangedAt || 0),
     voiceTimbre: base.voiceTimbre || "",
     isPublic: base.isPublic !== false,
-    clearAvatar: Boolean(_draft.avatarRemoved) && !String(next.avatar || "").trim(),
+    clearAvatar: Boolean(_draft.avatarRemoved) && !String(_draft.avatar || "").trim(),
     clearArtistAvatar: Boolean(_draft.clearArtistAvatar) && !String(next.artistAvatar || "").trim(),
   };
+  if (payload.clearAvatar) {
+    payload.avatar = "";
+    payload.avatarUpdatedAt = Date.now();
+  }
   if (payload.clearArtistAvatar) {
     payload.artistAvatar = "";
     payload.artistAvatarGallery = [];
@@ -1061,8 +1064,7 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
   if (String(payload.avatar || "").startsWith("data:") || String(payload.avatar || "").startsWith("blob:")) {
     payload.avatarUpdatedAt = Date.now();
   } else if (payload.clearAvatar) {
-    payload.avatar = "";
-    payload.avatarUpdatedAt = Date.now();
+    // already cleared above
   } else if (String(payload.avatar || "").trim() && String(payload.avatar || "").trim() !== String(base.avatar || "").trim()) {
     payload.avatarUpdatedAt = Date.now();
   } else {

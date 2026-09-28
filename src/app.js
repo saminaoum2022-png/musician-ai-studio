@@ -29031,6 +29031,7 @@ async function publishProfileAvatarChange(dataUrl, { toast = true } = {}) {
     id: String(authSession?.user?.id || activeProfile?.id || "").trim() || activeProfile.id,
     avatar: raw,
     avatarUpdatedAt: when,
+    clearAvatar: false,
   };
   saveProfile(activeProfile);
   try { syncProfileUiFromEdit(activeProfile); } catch {}
@@ -32004,6 +32005,8 @@ async function persistProfileAvatarSnapshot(id, url) {
 function profileAvatarUrlForPaint() {
   const live = String(activeProfile?.avatar || "").trim();
   if (isRealUserAvatarUrl(live)) return live;
+  // Intentional wipe — never resurrect the cold-start snap.
+  if (activeProfile?.clearAvatar) return "";
   return cachedProfileAvatarUrl(activeProfile?.id);
 }
 
@@ -32310,6 +32313,16 @@ function resolveMergedAvatar(cloud, localFilled, active = activeProfile) {
     localFilled?.avatarUpdatedAt != null ? localFilled.avatarUpdatedAt : active?.avatarUpdatedAt || 0,
   );
   const localIsFresh = localTs > 0 && Date.now() - localTs < 5 * 60 * 1000;
+  const clearing = Boolean(
+    (localFilled && Object.prototype.hasOwnProperty.call(localFilled, "clearAvatar")
+      ? localFilled.clearAvatar
+      : active?.clearAvatar),
+  );
+  // You just removed the photo on this phone — keep it empty while the cloud
+  // wipe catches up. Do not resurrect the previous hosted URL from merge.
+  if (clearing && !localOk) {
+    return { avatar: "", avatarUpdatedAt: localTs || Date.now() };
+  }
   // You just changed the photo on this phone — keep it for a few minutes
   // while the upload and other devices catch up.
   if (localOk && localIsFresh) {

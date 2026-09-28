@@ -5217,8 +5217,8 @@ function syncMobileTabbarProfileAvatar() {
     slot.hidden = true;
     return;
   }
-  const raw = String(activeProfile?.avatar || "").trim();
-  const isReal = raw && !/nabadai-logo\.png(?:$|\?)|splash-mark\.png(?:$|\?)/i.test(raw);
+  const raw = profileAvatarUrlForPaint();
+  const isReal = isRealUserAvatarUrl(raw);
   const url = isReal ? normalizeProfileAvatarForImg(raw) : "";
   const initials = String(activeProfile?.username || "U")
     .replace(/^@/, "")
@@ -6403,12 +6403,17 @@ function applyRoute({ passGen } = {}) {
       })();
       renderPersonaSelect();
       renderProfileCallingCardHint();
+      // Photo and name are already on the device. Paint them now. A cloud
+      // refresh can update them in place — it must not blank the header
+      // while songs are still loading.
+      try { renderProfilePreviewFromInputs(); } catch {}
+      if (shouldShowProfileHeaderSkeleton()) setProfileHeaderLoading(true);
+      else setProfileHeaderLoading(false);
       if (
         authSession?.user?.id &&
         !profileCloudRecentlyMerged() &&
         (shouldShowProfileHeaderSkeleton() || profileNeedsCloudRefresh())
       ) {
-        setProfileHeaderLoading(true);
         void (async () => {
           try {
             const merged = await mergeActiveProfileFromCloud({
@@ -6420,6 +6425,7 @@ function applyRoute({ passGen } = {}) {
             }
           } catch {}
           try { setProfileHeaderLoading(false); } catch {}
+          try { renderProfilePreviewFromInputs(); } catch {}
         })();
       }
     } else {
@@ -30821,8 +30827,8 @@ function syncProfilePersonaAvatarBadge() {
  * see .aaHasRealAvatar in styles.css for why no CSS filter is layered on it. */
 function syncArtistAvatarBackFace() {
   const back = document.getElementById("aaBackImg");
-  const src = String(activeProfile?.artistAvatar || "").trim();
-  if (back && src) back.src = src;
+  const src = normalizeProfileAvatarForImg(String(activeProfile?.artistAvatar || "").trim());
+  if (back && src && back.getAttribute("src") !== src) back.src = src;
 }
 /** The flip badge's own content: a live thumbnail of whichever photo ISN'T
  *  the big one right now — front showing → badge previews the Artist Avatar;
@@ -31716,6 +31722,82 @@ function stripOAuthCallbackFromUrl() {
 }
 let activeProfile = { id: "guest", username: "guest", email: "", displayName: "", soundCertified: false };
 let lastAuthDebug = "";
+
+/** Last profile photo, kept small and separate from the profile JSON.
+ *  The full photo is often a large data URL. Saving that inside the
+ *  profile blob blows the localStorage quota, the write is dropped, and
+ *  the next open has the name but no photo until the cloud answers. */
+const PROFILE_AVATAR_SNAP_MAX = 150000;
+function profileAvatarSnapKey(id) {
+  return `mas:profile-avatar:v1:${String(id || "").trim()}`;
+}
+function cachedProfileAvatarUrl(id) {
+  const uid = String(id || "").trim();
+  if (!uid || uid === "guest") return "";
+  try {
+    const parsed = JSON.parse(localStorage.getItem(profileAvatarSnapKey(uid)) || "null");
+    const url = String(parsed?.url || "").trim();
+    return isRealUserAvatarUrl(url) ? url : "";
+  } catch {
+    return "";
+  }
+}
+function writeProfileAvatarSnap(id, url) {
+  const uid = String(id || "").trim();
+  const clean = String(url || "").trim();
+  if (!uid || uid === "guest" || !isRealUserAvatarUrl(clean)) return;
+  if (clean.startsWith("data:") && clean.length > PROFILE_AVATAR_SNAP_MAX) return;
+  try {
+    localStorage.setItem(profileAvatarSnapKey(uid), JSON.stringify({ url: clean, at: Date.now() }));
+  } catch {}
+}
+function shrinkAvatarDataUrl(dataUrl, maxSize = 320) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const nw = img.naturalWidth || maxSize;
+        const nh = img.naturalHeight || maxSize;
+        const ratio = Math.min(1, maxSize / Math.max(nw, nh));
+        const w = Math.max(1, Math.round(nw * ratio));
+        const h = Math.max(1, Math.round(nh * ratio));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve("");
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.74));
+      } catch {
+        resolve("");
+      }
+    };
+    img.onerror = () => resolve("");
+    img.src = dataUrl;
+  });
+}
+let _avatarSnapWriteKey = "";
+async function persistProfileAvatarSnapshot(id, url) {
+  const clean = String(url || "").trim();
+  if (!isRealUserAvatarUrl(clean)) return;
+  const writeKey = `${id}|${clean.length}|${clean.slice(0, 64)}`;
+  if (_avatarSnapWriteKey === writeKey) return;
+  _avatarSnapWriteKey = writeKey;
+  if (!clean.startsWith("data:") || clean.length <= PROFILE_AVATAR_SNAP_MAX) {
+    writeProfileAvatarSnap(id, clean);
+    return;
+  }
+  const small = await shrinkAvatarDataUrl(clean);
+  if (_avatarSnapWriteKey !== writeKey) return;
+  if (small && small.length <= PROFILE_AVATAR_SNAP_MAX) writeProfileAvatarSnap(id, small);
+}
+/** Photo to paint now: the live profile photo, or the last one saved on
+ *  this phone when the live copy has not arrived yet. */
+function profileAvatarUrlForPaint() {
+  const live = String(activeProfile?.avatar || "").trim();
+  if (isRealUserAvatarUrl(live)) return live;
+  return cachedProfileAvatarUrl(activeProfile?.id);
+}
 function loadProfile() {
   try {
     const uid = String(authSession?.user?.id || "").trim();
@@ -31736,9 +31818,21 @@ function saveProfile(p) {
   const authId = String(authSession?.user?.id || "").trim();
   const next = authId ? { ...p, id: authId } : { ...p };
   activeProfile = next;
+  void persistProfileAvatarSnapshot(next.id, next.avatar);
   try {
     localStorage.setItem(profileStorageKey(next.id), JSON.stringify(next));
-  } catch {}
+  } catch {
+    // The full photo did not fit. Keep the name and the small snapshot;
+    // the snapshot is what the poster paints on the next open.
+    try {
+      const slim = { ...next };
+      if (String(slim.avatar || "").length > PROFILE_AVATAR_SNAP_MAX) {
+        slim.avatar = cachedProfileAvatarUrl(next.id) || "";
+      }
+      if (String(slim.artistAvatar || "").length > PROFILE_AVATAR_SNAP_MAX) slim.artistAvatar = "";
+      localStorage.setItem(profileStorageKey(next.id), JSON.stringify(slim));
+    } catch {}
+  }
   const uid = String(next.id || "").trim();
   if (uid && uid !== "guest") {
     _profileRowCache.set(uid, {
@@ -60806,12 +60900,17 @@ function renderProfilePreviewFromInputs() {
     els.profilePreviewGenres.style.display = "none";
   }
   if (els.profilePreviewAvatar) {
-    const raw = String(activeProfile.avatar || "").trim();
-    const isReal = raw && !/nabadai-logo\.png(?:$|\?)|splash-mark\.png(?:$|\?)/.test(raw);
+    const raw = profileAvatarUrlForPaint();
+    const isReal = isRealUserAvatarUrl(raw);
     const url = isReal ? normalizeProfileAvatarForImg(raw) : "";
     if (url) {
       const _img = els.profilePreviewAvatar;
-      if (_img.src !== url) _img.src = url;
+      const current = String(_img.getAttribute("src") || "").trim();
+      let resolvedSame = current === url;
+      if (!resolvedSame) {
+        try { resolvedSame = _img.src === new URL(url, location.href).href; } catch {}
+      }
+      if (!resolvedSame) _img.src = url;
       els.profilePreviewAvatar.removeAttribute("data-empty");
     } else {
       els.profilePreviewAvatar.removeAttribute("src");
@@ -60841,6 +60940,7 @@ function renderProfilePreviewFromInputs() {
   renderProfileNabadCertBadge();
   try { renderProfileMusicStylesInline(); } catch {}
   try { syncMobileTabbarProfileAvatar(); } catch {}
+  try { syncArtistAvatarFlipVisibility(); } catch {}
   try { syncArtistAvatarPromoBanner(); } catch {}
   if (els.profileAuraAvatarWrap) {
     const tappable = canChangeOwnProfilePhoto();

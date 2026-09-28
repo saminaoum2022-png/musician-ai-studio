@@ -18066,11 +18066,19 @@ html[data-theme="light"] .profileStatCol + .profileStatCol{
   transition: opacity 220ms ease;
   z-index: 3;
 }
-.profileAuraTopRow[data-loading="true"] .profileAuraAvatar{
+.profileAuraTopRow[data-loading="true"] .profileAuraAvatar[data-empty="true"]{
   opacity: 0;
+}
+.profileAuraTopRow[data-loading="true"] .profileAuraAvatar:not([data-empty="true"]){
+  opacity: 1;
 }
 .profileAuraTopRow[data-loading="true"] .profileAuraAvatarSkeleton{
   opacity: 1;
+}
+/* The poster photo — or the empty-profile mark — is on screen immediately.
+   Songs can wait. This shimmer must not cover them. */
+body[data-route="profile"] .profileAuraTopRow[data-loading="true"] .profileAuraAvatarSkeleton{
+  opacity: 0;
 }
 
 .profileAuraNameSkeleton{
@@ -18094,11 +18102,21 @@ html[data-theme="light"] .profileStatCol + .profileStatCol{
 .profileAuraNameRow[data-loading="true"] .profileAuraNameSkeleton{
   display: block;
 }
+.profileAuraNameRow[data-loading="true"]:has(.profileDisplayNameLine:not([hidden])) .profileAuraNameSkeleton,
+.profileAuraNameRow[data-loading="true"]:has(.profileHandleSubline:not([hidden])) .profileAuraNameSkeleton{
+  display: none;
+}
+.profileAuraNameRow[data-loading="true"]:has(.profileDisplayNameLine:not([hidden])) .profileAuraNameCenterWrap,
+.profileAuraNameRow[data-loading="true"]:has(.profileDisplayNameLine:not([hidden])) .profileAuraNameCluster,
+.profileAuraNameRow[data-loading="true"]:has(.profileHandleSubline:not([hidden])) .profileAuraNameCenterWrap,
+.profileAuraNameRow[data-loading="true"]:has(.profileHandleSubline:not([hidden])) .profileAuraNameCluster{
+  visibility: visible;
+}
 .profileAuraNameRow[data-loading="true"] .profileAuraNameCenterWrap,
 .profileAuraNameRow[data-loading="true"] .profileAuraNameCluster,
 .profileAuraNameRow[data-loading="true"] .profileAuraNameInput,
-.profileAuraNameRow[data-loading="true"] .profileDisplayNameLine,
-.profileAuraNameRow[data-loading="true"] .profileHandleSubline,
+.profileAuraNameRow[data-loading="true"] .profileDisplayNameLine[hidden],
+.profileAuraNameRow[data-loading="true"] .profileHandleSubline[hidden],
 .profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon,
 .profileAuraNameRow[data-loading="true"] .profileEditPill{
   visibility: hidden;
@@ -67982,7 +68000,7 @@ body[data-route="profile"] .profileAuraAvatarFallback svg{
   height: 112px;
 }
 body[data-route="profile"] .profileAuraTopRow[data-loading="true"] .profileAuraAvatarFallback{
-  visibility: hidden;
+  visibility: visible;
 }
 body[data-route="profile"] .profileAuraAvatar:not([src]),
 body[data-route="profile"] .profileAuraAvatar[src=""]{ visibility: hidden; }

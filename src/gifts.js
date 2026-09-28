@@ -7,11 +7,16 @@ import { showGiftSentOverlay, previewGiftSent, hideGiftSentOverlay } from "./gif
 
 const GIFT_TIERS = GIFT_TIER_OPTIONS.map((o) => o.tier);
 const PREVIEW_HOLD_MS = 380;
+/** Mid-song tip nudge on the existing player-rail gift box (once per listen). */
+const GIFT_RAIL_NUDGE_AT = 0.58;
+const GIFT_RAIL_NUDGE_CLASS = "isGiftNudge";
 
 let _deps = null;
 let _pending = null;
 let _sending = false;
 let _sendingTier = 0;
+let _giftRailNudgeKey = "";
+let _giftRailNudgeFired = false;
 
 function el(id) {
   return document.getElementById(id);
@@ -294,4 +299,75 @@ async function sendGift(amount) {
     _sendingTier = 0;
     paintGiftSheet();
   }
+}
+
+function giftRailNudgeSongKey() {
+  const row = document.querySelector(".playerSocialActions");
+  const songId = String(row?.getAttribute("data-friends-act-id") || "").trim();
+  return songId || "";
+}
+
+function clearGiftRailNudgeClass() {
+  document
+    .querySelectorAll(`.playerSocialAct--gift.${GIFT_RAIL_NUDGE_CLASS}, [data-friends-act="gift"].${GIFT_RAIL_NUDGE_CLASS}`)
+    .forEach((btn) => btn.classList.remove(GIFT_RAIL_NUDGE_CLASS));
+}
+
+/**
+ * Once near mid/late song, pulse the existing rail gift box to tip the creator.
+ * Does not change gift tiers, sheet layout, or icons.
+ */
+export function tickGiftRailNudge(audio) {
+  try {
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+      return;
+    }
+    const a = audio;
+    if (!a || a.paused || a.ended) return;
+    const dur = Number(a.duration);
+    const cur = Number(a.currentTime);
+    if (!Number.isFinite(dur) || dur < 12 || !Number.isFinite(cur) || cur < 0) return;
+
+    const key = giftRailNudgeSongKey();
+    if (!key) {
+      if (_giftRailNudgeKey) {
+        _giftRailNudgeKey = "";
+        _giftRailNudgeFired = false;
+        clearGiftRailNudgeClass();
+      }
+      return;
+    }
+    if (key !== _giftRailNudgeKey) {
+      _giftRailNudgeKey = key;
+      _giftRailNudgeFired = false;
+      clearGiftRailNudgeClass();
+    }
+    if (_giftRailNudgeFired) return;
+    if (cur / dur < GIFT_RAIL_NUDGE_AT) return;
+
+    const btn = document.querySelector(
+      '.playerSocialActions [data-friends-act="gift"]:not([hidden])',
+    );
+    if (!btn || btn.hidden || btn.classList.contains("isGifted")) return;
+
+    _giftRailNudgeFired = true;
+    btn.classList.remove(GIFT_RAIL_NUDGE_CLASS);
+    // Restart CSS animation if class was somehow left on
+    void btn.offsetWidth;
+    btn.classList.add(GIFT_RAIL_NUDGE_CLASS);
+    try {
+      _deps?.haptic?.("light");
+    } catch {}
+    window.setTimeout(() => {
+      btn.classList.remove(GIFT_RAIL_NUDGE_CLASS);
+    }, 2400);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function resetGiftRailNudge() {
+  _giftRailNudgeKey = "";
+  _giftRailNudgeFired = false;
+  clearGiftRailNudgeClass();
 }

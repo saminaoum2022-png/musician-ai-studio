@@ -68,7 +68,8 @@ export function postActIconRepost(klass) {
   return postIcon(klass, "followActActIco followActActIco--repost", '<path d="M16.5 3.5l3 3-3 3"/><path d="M4.5 11.5v-1.2A3.8 3.8 0 0 1 8.3 6.5h11.2"/><path d="M7.5 20.5l-3-3 3-3"/><path d="M19.5 12.5v1.2a3.8 3.8 0 0 1-3.8 3.8H4.5"/>');
 }
 export function postActIconGift(klass) {
-  return postIcon(klass, "followActActIco followActActIco--gift", '<rect x="4" y="9.5" width="16" height="10.5" rx="2"/><path d="M12 9.5V20M4 14h16"/><path d="M12 9.5c-1.3-3.6-5-3.8-5-1.5 0 1.4 2.4 1.5 5 1.5zM12 9.5c1.3-3.6 5-3.8 5-1.5 0 1.4-2.4 1.5-5 1.5z"/>');
+  // Same gift mark as the player rail — one SVG family across posts + rail.
+  return feedActIconGift(klass || "followActActIco followActActIco--gift");
 }
 export function postActIconPlays(klass) {
   return postIcon(klass, "followActActIco followActActIco--plays", '<path d="M8.2 6.2v11.6a.8.8 0 0 0 1.2.7l9-5.8a.8.8 0 0 0 0-1.4l-9-5.8a.8.8 0 0 0-1.2.7z"/>');

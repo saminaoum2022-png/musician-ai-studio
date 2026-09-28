@@ -191,7 +191,7 @@ import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js
 import { openCoverStudio, configureCoverStudio } from "./cover-studio.js";
 import { portrait916CropRect } from "./cover-art/portrait-normalize.js";
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays, feedActIconRepost, feedActIconShare, postActIconAnalytics, postActIconComment, postActIconGift, postActIconLike, postActIconPlays, postActIconRepost } from "./feed-action-icons.js";
-import { initGifts, openGiftSheetForTarget, openGiftSheetFromButton } from "./gifts.js";
+import { initGifts, openGiftSheetForTarget, openGiftSheetFromButton, tickGiftRailNudge, resetGiftRailNudge } from "./gifts.js";
 import {
   initProSinger,
   openProSingerRequestSheet,
@@ -4119,7 +4119,7 @@ function flushSecondaryRouteNavigation(route, targetHash) {
   const prevBodyRoute = String(document.body.getAttribute("data-route") || "").trim();
   if (prevBodyRoute === wanted && String(location.hash || "") === hash) return;
   bumpApplyRouteGeneration();
-  if (prevBodyRoute && prevBodyRoute !== wanted) invalidateInFlightRouteFeedWork(prevBodyRoute);
+  if (prevBodyRoute && prevBodyRoute !== wanted) invalidateInFlightRouteFeedWork(prevBodyRoute, wanted);
   _secondaryNavFromClick = true;
   if (location.hash !== hash) {
     try {
@@ -4282,7 +4282,7 @@ function flushTabRouteNavigation(route, targetHash) {
   const prevBodyRoute = String(document.body.getAttribute("data-route") || "").trim();
   const prev = tabBarRouteKey(prevBodyRoute);
   bumpApplyRouteGeneration();
-  if (prev !== route) invalidateInFlightRouteFeedWork(prev);
+  if (prev !== route) invalidateInFlightRouteFeedWork(prev, route);
   if (prevBodyRoute === "generate" && route !== "generate") {
     leaveGenerateRouteCleanup();
   }
@@ -5494,7 +5494,11 @@ function syncRoutePanelVisibility(wanted) {
   try { syncCoachFabDesktopAnchor(); } catch {}
   try { ensurePageScrollHealthy(); } catch {}
   if (route !== "discover") {
-    document.body.classList.remove("friendsFeedActive");
+    // Connect Friends owns friendsFeedActive while on messages — don't strip it
+    // here or Discover chrome will collapse the live Friends list under the player.
+    if (!(route === "messages" && _connectSeg === "friends")) {
+      document.body.classList.remove("friendsFeedActive");
+    }
     try { syncDiscoverFriendsFeedChrome(); } catch {}
   }
 }
@@ -5546,14 +5550,17 @@ function routeApplyStale(passGen) {
   return passGen !== _applyRouteGen;
 }
 
-function invalidateInFlightRouteFeedWork(leavingRoute) {
+function invalidateInFlightRouteFeedWork(leavingRoute, enteringRoute = "") {
   const left = tabBarRouteKey(String(leavingRoute || "").trim());
+  const entering = tabBarRouteKey(String(enteringRoute || "").trim());
   if (left === "friends" || left === "discover") {
     _discoveryFollowingGen += 1;
     _discoveryFeedGen += 1;
   }
   if (left === "friends") _friendsRouteEnterToken += 1;
-  if (left === "messages" && _connectSeg === "friends") {
+  // Soft-return: leaving Connect Friends for the full player must not cancel
+  // the feed gens — otherwise back always hard-refreshes and jumps scroll.
+  if (left === "messages" && _connectSeg === "friends" && entering !== "player") {
     _discoveryFollowingGen += 1;
     _friendsRouteEnterToken += 1;
   }
@@ -6129,7 +6136,7 @@ function applyRoute({ passGen } = {}) {
     try { onLeaveSearchRoute(); } catch {}
   }
   if (routeApplyStale(gate)) return;
-  if (prevRoute !== wanted) invalidateInFlightRouteFeedWork(prevRoute);
+  if (prevRoute !== wanted) invalidateInFlightRouteFeedWork(prevRoute, wanted);
   const navDir = navDirectionFor(wanted);
   _scrollRestoreOk = navDir === "back";
   const skipEnterAnim =
@@ -6467,6 +6474,7 @@ function applyRoute({ passGen } = {}) {
     bindMessagesPageOnce();
     enterMessagesRoute({
       fromThread: prevRoute === "messages-thread",
+      fromPlayer: prevRoute === "player",
     });
   }
   if (MESSAGES_FEATURE_ENABLED && wanted === "messages-thread") {
@@ -14161,9 +14169,15 @@ function syncDiscoverFriendsFeedChrome() {
   const onFriends = onDiscover && _discoverFeedTab === "friends";
   const onOccasions = onDiscover && _discoverFeedTab === "occasions";
   const hideMount = onFriends || onOccasions;
-  document.body.classList.toggle("friendsFeedActive", onFriends);
+  // Only Discover-tab Friends toggles this class; Connect Friends is owned by syncConnectSegUi.
+  if (onDiscover) {
+    document.body.classList.toggle("friendsFeedActive", onFriends);
+  }
   document.body.classList.toggle("occasionsFeedActive", onOccasions);
-  if (friendsPanel) {
+  // #discoverFriendsPanel lives under Connect (#connectFriendsPane). Never hide it
+  // from Discover chrome — that was collapsing Friends when opening the player.
+  const friendsUnderConnect = Boolean(friendsPanel?.closest?.("#connectFriendsPane"));
+  if (friendsPanel && !friendsUnderConnect) {
     friendsPanel.hidden = !onFriends;
     friendsPanel.setAttribute("aria-hidden", onFriends ? "false" : "true");
     friendsPanel.style.display = onFriends ? "" : "none";
@@ -22619,9 +22633,13 @@ function paintFriendsFeedSnapshotIfFresh() {
   if (!snapFresh) return false;
   listEl.classList.remove("isDiscoveryLoading");
   listEl.hidden = false;
-  listEl.innerHTML = snap.html;
   statusEl.hidden = true;
   statusEl.textContent = "";
+  // Keep the live DOM when returning from player — rewriting HTML jumps scroll.
+  const hasRealRows = Boolean(listEl.querySelector(".followAct:not(.followAct--skel)"));
+  if (!hasRealRows) {
+    listEl.innerHTML = snap.html;
+  }
   if (Array.isArray(snap.tracks)) _discoveryFeedTracks = snap.tracks;
   if (Number.isFinite(Number(snap.shown)) && Number(snap.shown) > 0) {
     _friendsFeedShown = Math.max(FRIENDS_FEED_PAGE_SIZE, Number(snap.shown));
@@ -22632,6 +22650,7 @@ function paintFriendsFeedSnapshotIfFresh() {
     syncDiscoveryPlayingHighlights();
   } catch {}
   applyFeedSocialStatsToDom(listEl);
+  markRouteHeavy("friends");
   return true;
 }
 
@@ -22894,7 +22913,11 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
   if (snapFresh && !keepFeed) {
     listEl.classList.remove("isDiscoveryLoading");
     listEl.hidden = false;
-    listEl.innerHTML = snap.html;
+    // Prefer keeping the live list (soft return from player) over rewriting HTML.
+    const hasRealRows = Boolean(listEl.querySelector(".followAct:not(.followAct--skel)"));
+    if (!hasRealRows) {
+      listEl.innerHTML = snap.html;
+    }
     statusEl.hidden = true;
     statusEl.textContent = "";
     if (Array.isArray(snap.tracks)) _discoveryFeedTracks = snap.tracks;
@@ -22902,6 +22925,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       syncDiscoveryPlayingHighlights();
     } catch {}
     applyFeedSocialStatsToDom(listEl);
+    markRouteHeavy("friends");
     if (!force && Date.now() - snap.at < FRIENDS_MIN_FETCH_GAP_MS) {
       return;
     }
@@ -23162,7 +23186,9 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       !hasSkeleton &&
       ((remaining > 0) === hasPager);
     if (!skipListRebuild) {
-      listEl.innerHTML = friendsFeedRowsHtml(visibleItems, profMap) + friendsFeedLoadMoreHtml(remaining);
+      pinWindowScrollDuring(() => {
+        listEl.innerHTML = friendsFeedRowsHtml(visibleItems, profMap) + friendsFeedLoadMoreHtml(remaining);
+      });
       wireFriendsFeedLoadMoreOnce();
       observeFriendsFeedLoadMore(listEl);
       logFriendsFeedListRender(visibleItems.length);
@@ -23190,6 +23216,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
+    markRouteHeavy("friends");
     void enrichFriendsFeedAfterPaint({
       playable: enrichTracks,
       mergedItems,
@@ -47458,12 +47485,38 @@ function bindConnectSegOnce() {
   });
 }
 
-function enterMessagesRoute({ fromThread = false } = {}) {
+function canSkipFriendsFeedHeavy() {
+  const list = document.getElementById("discoveryFollowingList");
+  if (!list?.querySelector(".followAct:not(.followAct--skel)")) return false;
+  if (!(_friendsFeedMergedItems?.length || _discoveryFeedTracks?.length)) return false;
+  return shouldSkipRouteHeavy("friends");
+}
+
+function softRestoreConnectFriendsFromPlayer() {
+  syncConnectSegUi();
+  try { paintFriendsFeedTabsActive(); } catch {}
+  try { syncDiscoveryPlayingHighlights(); } catch {}
+  restoreMessagesInboxScroll();
+  // resetRouteEnterScroll zeros Y before enter — re-pin after layout settles.
+  requestAnimationFrame(() => {
+    restoreMessagesInboxScroll();
+    requestAnimationFrame(() => restoreMessagesInboxScroll());
+  });
+  markRouteHeavy("friends");
+}
+
+function enterMessagesRoute({ fromThread = false, fromPlayer = false } = {}) {
   bindConnectSegOnce();
   syncConnectSegUi();
   startConnectPresencePoll();
   void refreshDiscoverLiveFriends();
-  if (_connectSeg === "friends" && !fromThread) activateConnectFriends();
+  if (_connectSeg === "friends" && !fromThread) {
+    if (fromPlayer && canSkipFriendsFeedHeavy()) {
+      softRestoreConnectFriendsFromPlayer();
+    } else {
+      activateConnectFriends();
+    }
+  }
   syncFriendsMessagesBtn();
   startMessagesInboxPoll();
   startMessagesInboxRealtime();
@@ -67671,6 +67724,10 @@ function ensurePlayer() {
   playerEl.addEventListener("timeupdate", () => {
     try { maybeAdvanceDiscoverPlaylistFromProgress(playerEl); } catch {}
     try { maybeAdvanceUserPlaylistFromProgress(playerEl); } catch {}
+    try { tickGiftRailNudge(playerEl); } catch {}
+  });
+  playerEl.addEventListener("emptied", () => {
+    try { resetGiftRailNudge(); } catch {}
   });
   playerEl.addEventListener("seeked", () => {
     syncPlayerUI();

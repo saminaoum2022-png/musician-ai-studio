@@ -37739,8 +37739,8 @@ async function fetchPublicProfileRowByUserId(userId) {
   if (!uid || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
   const base = `${SUPABASE_URL}/rest/v1/profiles`;
-  const selFull = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified,genres";
-  const selCore = "user_id,username,avatar,bio,voice_timbre,genres";
+  const selFull = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified,genres,artist_avatar";
+  const selCore = "user_id,username,avatar,bio,voice_timbre,genres,artist_avatar";
   const selLegacy = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified";
   const selLegacyCore = "user_id,username,avatar,bio,voice_timbre";
   const filter = `user_id=eq.${encodeURIComponent(uid)}`;
@@ -37771,8 +37771,8 @@ async function fetchPublicProfileRowByUsername(username) {
   if (!handle || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
   const base = `${SUPABASE_URL}/rest/v1/profiles`;
-  const selFull = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified,genres";
-  const selCore = "user_id,username,avatar,bio,voice_timbre,genres";
+  const selFull = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified,genres,artist_avatar";
+  const selCore = "user_id,username,avatar,bio,voice_timbre,genres,artist_avatar";
   const selLegacy = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified";
   const selLegacyCore = "user_id,username,avatar,bio,voice_timbre";
   const eq = `username=eq.${encodeURIComponent(handle)}`;
@@ -37790,7 +37790,7 @@ async function fetchPublicProfileRowByUsername(username) {
       return null;
     }
   };
-  // `sound_certified` / `genres` break the whole request if columns are not migrated yet — fall back.
+  // `sound_certified` / `genres` / `artist_avatar` break the whole request if columns are not migrated yet — fall back.
   // `eq` is case-sensitive — try escaped `ilike` second so `@Samy_CEO` still resolves.
   const row =
     (await tryOne(eq, selFull)) ||
@@ -37810,8 +37810,8 @@ async function fetchPublicProfileRowByDisplayName(displayName) {
   if (!name || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
   const base = `${SUPABASE_URL}/rest/v1/profiles`;
-  const selFull = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified,genres";
-  const selCore = "user_id,username,avatar,bio,voice_timbre,genres";
+  const selFull = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified,genres,artist_avatar";
+  const selCore = "user_id,username,avatar,bio,voice_timbre,genres,artist_avatar";
   const selLegacy = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified";
   const selLegacyCore = "user_id,username,avatar,bio,voice_timbre";
   const escaped = escapeUsernameForIlikeExact(name);
@@ -48292,6 +48292,81 @@ function applyUserPublicAvatar(url, displayName = "", userId = "") {
   }
 }
 
+/** Radiant Artist Avatar badge on someone else's profile (same ring as Edit / own). */
+let _userPublicArtistFlipBound = false;
+let _userPublicArtistShowingAa = false;
+let _userPublicArtistPhotoSrc = "";
+let _userPublicArtistAaSrc = "";
+
+function applyUserPublicArtistBadge(prof) {
+  const badge = document.getElementById("userPublicArtistBadge");
+  const thumb = document.getElementById("userPublicArtistBadgeThumb");
+  if (!badge || !thumb) return;
+  const aa = normalizeProfileAvatarForImg(String(prof?.artist_avatar || prof?.artistAvatar || "").trim());
+  const photo = normalizeProfileAvatarForImg(String(prof?.avatar || "").trim());
+  const hasAa = isRealUserAvatarUrl(aa);
+  _userPublicArtistAaSrc = hasAa ? aa : "";
+  _userPublicArtistPhotoSrc = isRealUserAvatarUrl(photo) ? photo : "";
+  _userPublicArtistShowingAa = false;
+  badge.hidden = !hasAa;
+  badge.setAttribute("aria-hidden", hasAa ? "false" : "true");
+  badge.setAttribute("aria-label", hasAa ? "Flip to Artist Avatar" : "Artist Avatar");
+  if (hasAa) {
+    if (thumb.getAttribute("src") !== aa) thumb.src = aa;
+  } else {
+    thumb.removeAttribute("src");
+  }
+  try { syncUserPublicArtistBadgePosition(); } catch {}
+}
+
+function syncUserPublicArtistBadgePosition() {
+  const badge = document.getElementById("userPublicArtistBadge");
+  const wrap = document.getElementById("userPublicAvatarWrap");
+  if (!badge || !wrap || badge.hidden) return;
+  const displayEl = document.getElementById("userPublicDisplayName");
+  const nameEl = document.getElementById("userPublicName");
+  const anchor = (displayEl && !displayEl.hidden) ? displayEl : nameEl;
+  if (!anchor) return;
+  const wrapRect = wrap.getBoundingClientRect();
+  const anchorRect = anchor.getBoundingClientRect();
+  if (!wrapRect.height || !anchorRect.height) return;
+  const centerY = anchorRect.top + anchorRect.height / 2 - wrapRect.top;
+  const size = badge.offsetHeight || 52;
+  badge.style.top = `${Math.max(0, Math.round(centerY - size / 2))}px`;
+}
+
+function wireUserPublicArtistBadgeOnce() {
+  if (_userPublicArtistFlipBound) return;
+  _userPublicArtistFlipBound = true;
+  const badge = document.getElementById("userPublicArtistBadge");
+  if (!badge) return;
+  badge.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!_userPublicArtistAaSrc) return;
+    try { haptic("light"); } catch {}
+    const img = els.userPublicAvatar;
+    const thumb = document.getElementById("userPublicArtistBadgeThumb");
+    _userPublicArtistShowingAa = !_userPublicArtistShowingAa;
+    const coverSrc = _userPublicArtistShowingAa
+      ? _userPublicArtistAaSrc
+      : (_userPublicArtistPhotoSrc || _userPublicArtistAaSrc);
+    const badgeSrc = _userPublicArtistShowingAa
+      ? (_userPublicArtistPhotoSrc || _userPublicArtistAaSrc)
+      : _userPublicArtistAaSrc;
+    if (img && coverSrc) {
+      img.dataset.empty = "true";
+      img.src = coverSrc;
+    }
+    if (thumb && badgeSrc) thumb.src = badgeSrc;
+    badge.setAttribute(
+      "aria-label",
+      _userPublicArtistShowingAa ? "Flip back to photo" : "Flip to Artist Avatar",
+    );
+  });
+  window.addEventListener("resize", () => { try { syncUserPublicArtistBadgePosition(); } catch {} });
+}
+
 function renderUserPublicIdentity(prof, handleFallback = "") {
   const handle = screenshotHandle(normalizeProfileUsername(prof?.username || handleFallback));
   const friendly = screenshotDisplayName(normalizeDisplayName(prof?.display_name || prof?.displayName || ""));
@@ -48319,6 +48394,9 @@ function renderUserPublicIdentity(prof, handleFallback = "") {
   stack?.classList.toggle("userPublicNameStack--hasDisplayName", Boolean(friendly));
   syncUserPublicVerifiedBadge(prof);
   syncUserPublicProBadge(currentUserPublicSocialStats);
+  try { applyUserPublicArtistBadge(prof); } catch {}
+  try { wireUserPublicArtistBadgeOnce(); } catch {}
+  requestAnimationFrame(() => { try { syncUserPublicArtistBadgePosition(); } catch {} });
 }
 
 function setUserPublicLoading(on, username = "") {
@@ -48328,6 +48406,7 @@ function setUserPublicLoading(on, username = "") {
   if (loading) {
     renderUserPublicIdentity({ username: handle }, handle);
     applyUserPublicAvatar("", handle);
+    try { applyUserPublicArtistBadge(null); } catch {}
     if (els.userPublicVoice) els.userPublicVoice.style.display = "none";
     renderUserPublicBio("");
     if (els.userPublicMusicStyles) els.userPublicMusicStyles.hidden = true;

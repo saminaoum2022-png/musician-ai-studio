@@ -39,10 +39,16 @@ function renderSquare(img, crop, size) {
 }
 
 /**
- * @param {{ src: string, title?: string, doneLabel?: string }} opts
+ * @param {{ src: string, title?: string, doneLabel?: string, mode?: "cover" | "circle", guideLabel?: string }} opts
  * @returns {Promise<{ avatar: string } | null>} null when cancelled
  */
-export function openPhotoFrame({ src, title = "Frame your photo", doneLabel = "Done" } = {}) {
+export function openPhotoFrame({
+  src,
+  title = "Frame your photo",
+  doneLabel = "Done",
+  mode = "cover",
+  guideLabel,
+} = {}) {
   return new Promise(async (resolve) => {
     let img;
     try {
@@ -51,6 +57,9 @@ export function openPhotoFrame({ src, title = "Frame your photo", doneLabel = "D
       resolve(null);
       return;
     }
+    const circle = mode === "circle";
+    const guideText = guideLabel
+      || (circle ? "Artist ring preview" : "Your name sits here");
     const root = document.createElement("div");
     root.className = "pfRoot";
     root.setAttribute("role", "dialog");
@@ -62,10 +71,11 @@ export function openPhotoFrame({ src, title = "Frame your photo", doneLabel = "D
         <button type="button" class="pfBtn pfBtn--done" data-pf="done">${doneLabel}</button>
       </div>
       <div class="pfStageWrap">
-        <div class="pfStage" data-pf="stage">
+        <div class="pfStage${circle ? " pfStage--circle" : ""}" data-pf="stage">
           <img class="pfImg" alt="" draggable="false" />
-          <div class="pfGuide" aria-hidden="true">
-            <span class="pfGuideName">Your name sits here</span>
+          ${circle ? `<div class="pfCircleMask" aria-hidden="true"></div>` : ""}
+          <div class="pfGuide${circle ? " pfGuide--circle" : ""}" aria-hidden="true">
+            <span class="pfGuideName">${guideText}</span>
           </div>
         </div>
       </div>

@@ -58457,6 +58457,17 @@ html[data-theme="light"] .profileEditBusyText{ color: rgba(11, 11, 19, 0.88); }
   -webkit-tap-highlight-color: transparent;
 }
 .profileEditArtistRing:active{ transform: scale(0.94); }
+/* Inner well clips the photo to a true circle (no transform-scale fringe). */
+.profileEditArtistRingWell{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+  background: transparent;
+}
 .profileEditArtistRingThumb{
   width: 100%;
   height: 100%;
@@ -58465,8 +58476,8 @@ html[data-theme="light"] .profileEditBusyText{ color: rgba(11, 11, 19, 0.88); }
   object-position: center;
   display: block;
   pointer-events: none;
-  /* Crop past generator edge glow / anti-alias fringe. */
-  transform: scale(1.1);
+  /* Slight zoom inside the clipped well — hides generator edge glow without oval/fringe. */
+  transform: scale(1.06);
 }
 .profileEditArtistRingThumb[hidden]{ display: none !important; }
 .profileEditArtistRingPlus{
@@ -58475,30 +58486,26 @@ html[data-theme="light"] .profileEditBusyText{ color: rgba(11, 11, 19, 0.88); }
   height: 18px;
   pointer-events: none;
 }
-/* Filled: photo clipped clean; brand gradient ring sits OUTSIDE (not under the photo). */
+/* Filled: photo clipped in the well; brand gradient ring sits OUTSIDE. */
 .profileEditArtistRing:not(.profileEditArtistRing--empty){
   border: none;
   background: transparent;
   overflow: visible;
   box-shadow: none;
 }
-.profileEditArtistRing:not(.profileEditArtistRing--empty)::after{
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
+.profileEditArtistRing:not(.profileEditArtistRing--empty) .profileEditArtistRingWell{
   background: #0b0d14;
-  border: 1.5px solid rgba(255, 255, 255, 0.92);
-  box-shadow: 0 0 0 3px rgba(8, 10, 18, 0.92);
-  pointer-events: none;
-  z-index: 0;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.92),
+    0 0 0 2.5px rgba(8, 10, 18, 0.95);
+  z-index: 1;
 }
 .profileEditArtistRing:not(.profileEditArtistRing--empty)::before{
   content: "";
   position: absolute;
-  inset: -3.5px;
+  inset: -5.5px;
   border-radius: 50%;
-  padding: 1.5px;
+  padding: 2px;
   background: linear-gradient(135deg, #23d5ab 0%, #8f74ff 100%);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -58509,13 +58516,7 @@ html[data-theme="light"] .profileEditBusyText{ color: rgba(11, 11, 19, 0.88); }
     linear-gradient(#000 0 0);
           mask-composite: exclude;
   pointer-events: none;
-  z-index: 0;
-}
-.profileEditArtistRing:not(.profileEditArtistRing--empty) .profileEditArtistRingThumb{
-  position: relative;
-  z-index: 1;
-  -webkit-clip-path: circle(50% at 50% 50%);
-          clip-path: circle(50% at 50% 50%);
+  z-index: 2;
 }
 .profileEditArtistRing:not(.profileEditArtistRing--empty) .profileEditArtistRingPlus{ display: none; }
 .profileEditArtistRing--empty .profileEditArtistRingThumb{ display: none !important; }
@@ -58547,10 +58548,11 @@ html[data-theme="light"] .profileEditArtistRing:not(.profileEditArtistRing--empt
   border: none;
   box-shadow: none;
 }
-html[data-theme="light"] .profileEditArtistRing:not(.profileEditArtistRing--empty)::after{
+html[data-theme="light"] .profileEditArtistRing:not(.profileEditArtistRing--empty) .profileEditArtistRingWell{
   background: #f4f5f8;
-  border-color: rgba(11, 11, 19, 0.55);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.92);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(11, 11, 19, 0.55),
+    0 0 0 3px rgba(255, 255, 255, 0.92);
 }
 .profileAuraAvatarWrap--tappable{
   cursor: pointer;
@@ -68492,6 +68494,70 @@ body[data-route="user"] .userPublicAvatarFallback{
           mask-image: linear-gradient(180deg, #000 0%, #000 72%, transparent 100%);
 }
 body[data-route="user"] .userPublicAvatarRing{ display: none !important; }
+/* Artist Avatar badge on public profiles — same teal→purple ring as Edit / own profile. */
+body[data-route="user"] .userPublicArtistBadge{
+  position: absolute;
+  right: max(18px, calc(50vw - 50% + 18px));
+  top: 296px;
+  z-index: 6;
+  width: 52px;
+  height: 52px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: none;
+  overflow: visible;
+  padding: 0;
+  background: transparent;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+body[data-route="user"] .userPublicArtistBadge[hidden]{ display: none !important; }
+body[data-route="user"] .userPublicArtistBadgeWell{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+  background: #0b0d14;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.92),
+    0 0 0 2.5px rgba(8, 10, 18, 0.95);
+}
+body[data-route="user"] .userPublicArtistBadge::before{
+  content: "";
+  position: absolute;
+  inset: -5.5px;
+  border-radius: 50%;
+  padding: 2px;
+  background: linear-gradient(135deg, #23d5ab 0%, #8f74ff 100%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+body[data-route="user"] .userPublicArtistBadgeThumb{
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  pointer-events: none;
+  transform: scale(1.06);
+}
+body[data-route="user"] .userPublicArtistBadge:active{ transform: scale(0.92); }
 body[data-route="user"] .userPublicAvatarWrap::after{
   content: "";
   position: absolute;
@@ -69109,8 +69175,29 @@ body.pfOpen{ overflow: hidden; }
   box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6);
 }
 .pfImg{ position: absolute; left: 0; top: 0; transform-origin: 0 0; max-width: none; user-select: none; -webkit-user-drag: none; will-change: transform; }
+/* Circle mode: square bake, circular preview vignette (Artist Avatar ring). */
+.pfStage--circle{ border-radius: 28px; }
+.pfCircleMask{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 0 999px rgba(6, 7, 12, 0.62);
+  border: 2px solid rgba(255, 255, 255, 0.88);
+  z-index: 2;
+}
 /* the lower part is where the name and stats sit on the profile — a soft guide, not a mask */
-.pfGuide{ position: absolute; left: 0; right: 0; bottom: 0; height: 38%; pointer-events: none; background: linear-gradient(180deg, transparent, rgba(6, 7, 12, 0.78)); display: flex; align-items: flex-end; padding: 0 16px 12px; }
+.pfGuide{ position: absolute; left: 0; right: 0; bottom: 0; height: 38%; pointer-events: none; background: linear-gradient(180deg, transparent, rgba(6, 7, 12, 0.78)); display: flex; align-items: flex-end; padding: 0 16px 12px; z-index: 3; }
+.pfGuide--circle{
+  left: 12%;
+  right: 12%;
+  bottom: 10%;
+  height: auto;
+  justify-content: center;
+  background: none;
+  padding: 0 8px 4px;
+  text-align: center;
+}
 .pfGuideName{ font-size: 11px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255, 255, 255, 0.7); }
 .pfHint{ margin: 14px 0 10px; font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.5); }
 .pfZoomRow{ width: min(100%, 420px); display: flex; align-items: center; gap: 12px; }
@@ -70414,25 +70501,25 @@ body[data-route="profile"] .aaFlipBadge{
   -webkit-tap-highlight-color: transparent;
   animation: aaFlipBadgePulse 2.8s ease-in-out infinite;
 }
-/* Dark well + white hairline under the thumb (no brand fill under the photo). */
-body[data-route="profile"] .aaFlipBadge:not(.aaFlipBadge--empty)::after{
-  content: "";
+/* Inner well clips the photo clean — no transform-scale fringe under the ring. */
+body[data-route="profile"] .aaFlipBadgeWell{
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: #0b0d14;
-  border: 2px solid rgba(255, 255, 255, 0.92);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-  pointer-events: none;
-  z-index: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+  background: transparent;
 }
-/* Brand gradient ring outside the photo — clean, no purple bleed inside. */
+/* Brand gradient sits OUTSIDE the dark halo so it stays visible (was getting
+   covered when the well’s 3px shadow painted over ::before). */
 body[data-route="profile"] .aaFlipBadge:not(.aaFlipBadge--empty)::before{
   content: "";
   position: absolute;
-  inset: -3px;
+  inset: -5.5px;
   border-radius: 50%;
-  padding: 1.5px;
+  padding: 2px;
   background: linear-gradient(135deg, #23d5ab 0%, #8f74ff 100%);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -70443,16 +70530,19 @@ body[data-route="profile"] .aaFlipBadge:not(.aaFlipBadge--empty)::before{
     linear-gradient(#000 0 0);
           mask-composite: exclude;
   pointer-events: none;
-  z-index: 0;
+  z-index: 2;
+}
+body[data-route="profile"] .aaFlipBadge:not(.aaFlipBadge--empty) .aaFlipBadgeWell{
+  background: #0b0d14;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.92),
+    0 0 0 2.5px rgba(8, 10, 18, 0.95);
+  z-index: 1;
 }
 body[data-route="profile"] .aaFlipBadgeThumb{
-  position: relative;
-  z-index: 1;
   width: 100%; height: 100%; border-radius: 50%;
   object-fit: cover; object-position: center; display: block;
   pointer-events: none;
-  -webkit-clip-path: circle(50% at 50% 50%);
-          clip-path: circle(50% at 50% 50%);
   transform: scale(1.06);
 }
 body[data-route="profile"] .aaFlipBadge[hidden]{ display: none !important; }
@@ -70464,8 +70554,7 @@ body[data-route="profile"] .aaFlipBadge.aaFlipBadge--empty{
   box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.55);
   overflow: hidden;
 }
-body[data-route="profile"] .aaFlipBadge.aaFlipBadge--empty::before,
-body[data-route="profile"] .aaFlipBadge.aaFlipBadge--empty::after{
+body[data-route="profile"] .aaFlipBadge.aaFlipBadge--empty::before{
   display: none;
 }
 body[data-route="profile"] .aaFlipBadgePlus{ display: none; color: rgba(255, 255, 255, 0.9); }

@@ -3212,6 +3212,11 @@
                 <img id="userPublicAvatar" class="userPublicAvatar profileAuraAvatar" alt="avatar" draggable="false" data-empty="true" />
                 <span id="userPublicAvatarFallback" class="userPublicAvatarFallback activityAvatarSilhouette" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.7" fill="currentColor"/><path d="M4.4 19.6c.9-3.6 4-5.8 7.6-5.8s6.7 2.2 7.6 5.8c.1.5-.3.9-.8.9H5.2c-.5 0-.9-.4-.8-.9Z" fill="currentColor"/></svg></span>
                 <span id="userPublicProAvatarPill" class="profileProAvatarPill" hidden aria-hidden="true" title="NabadAi Pro">Pro</span>
+                <button type="button" id="userPublicArtistBadge" class="userPublicArtistBadge" hidden aria-label="Artist Avatar">
+                  <span class="userPublicArtistBadgeWell">
+                    <img id="userPublicArtistBadgeThumb" class="userPublicArtistBadgeThumb" alt="" draggable="false" />
+                  </span>
+                </button>
               </div>
               <div class="userPublicMeta">
                 <div class="userPublicNameStack" id="userPublicNameStack">
@@ -3342,8 +3347,10 @@
                   <span id="profileAvatarEditHint" class="profileAuraAvatarHint" style="display:none">Photo</span>
                   <span id="profileProAvatarPill" class="profileProAvatarPill" hidden aria-hidden="true" title="NabadAi Pro">Pro</span>
                   <button type="button" id="aaFlipBadge" class="aaFlipBadge" hidden aria-label="Flip to your Artist Avatar">
-                    <img id="aaFlipBadgeThumb" class="aaFlipBadgeThumb" alt="" draggable="false" />
-                    <svg class="aaFlipBadgePlus" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7V4Z"/></svg>
+                    <span class="aaFlipBadgeWell">
+                      <img id="aaFlipBadgeThumb" class="aaFlipBadgeThumb" alt="" draggable="false" />
+                      <svg class="aaFlipBadgePlus" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7V4Z"/></svg>
+                    </span>
                   </button>
                 </div>
               </div>
@@ -4072,8 +4079,10 @@
                   <span class="profileEditPhotoCaption">Photo</span>
                 </button>
                 <button type="button" class="profileEditArtistRing profileEditArtistRing--empty" id="profileEditArtistRing" aria-label="Create your Artist Avatar">
-                  <img id="profileEditArtistRingThumb" class="profileEditArtistRingThumb" alt="" hidden decoding="async" draggable="false" />
-                  <svg class="profileEditArtistRingPlus" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7V4Z"/></svg>
+                  <span class="profileEditArtistRingWell">
+                    <img id="profileEditArtistRingThumb" class="profileEditArtistRingThumb" alt="" hidden decoding="async" draggable="false" />
+                    <svg class="profileEditArtistRingPlus" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7V4Z"/></svg>
+                  </span>
                   <span class="profileEditArtistCaption">Artist</span>
                 </button>
               </div>

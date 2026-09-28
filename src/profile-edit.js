@@ -479,6 +479,90 @@ async function frameAndPublishPhoto(src) {
   }
 }
 
+/** Ring / manage sheet: same framing UX as profile photo, with a circular guide. */
+async function adjustArtistAvatarFraming(srcOverride) {
+  const src = String(srcOverride || _draft?.artistAvatar || "").trim();
+  if (!src) {
+    openArtistAvatarEditor();
+    return false;
+  }
+  return frameAndPublishArtistAvatar(src);
+}
+
+/**
+ * Bake a square PNG framed for the circular Artist ring, then persist.
+ * Replaces the active AA + matching gallery entry so flip badge stays in sync.
+ */
+async function frameAndPublishArtistAvatar(src) {
+  if (!src) return false;
+  const res = await openPhotoFrame({
+    src,
+    title: "Frame Artist Avatar",
+    doneLabel: "Use photo",
+    mode: "circle",
+    guideLabel: "Artist ring preview",
+  });
+  if (!res?.avatar) return false;
+  const framed = res.avatar;
+  const prev = String(_draft?.artistAvatar || "").trim();
+  const wasProfilePic = Boolean(prev) && _draft.avatar === prev;
+  showProfileEditBusy("Saving Artist Avatar…");
+  try {
+    _draft.artistAvatar = framed;
+    _draft.clearArtistAvatar = false;
+    _draft.artistAvatarUpdatedAt = Date.now();
+    const gallery = Array.isArray(_draft.artistAvatarGallery) ? _draft.artistAvatarGallery.slice() : [];
+    let replaced = false;
+    for (let i = 0; i < gallery.length; i++) {
+      if (gallery[i] === prev || gallery[i] === src) {
+        gallery[i] = framed;
+        replaced = true;
+      }
+    }
+    if (!replaced) gallery.push(framed);
+    _draft.artistAvatarGallery = aaCapGallery(gallery);
+    if (wasProfilePic) {
+      _draft.avatar = framed;
+      _draft.avatarRemoved = false;
+      _draft.avatarUpdatedAt = Date.now();
+    }
+    markDirty();
+    renderProfileEditPage();
+    await persistArtistAvatarNow();
+    if (wasProfilePic && _deps?.publishProfileAvatarChange) {
+      try {
+        const hosted = await _deps.publishProfileAvatarChange(framed, { toast: false });
+        if (hosted) {
+          _draft.avatar = String(hosted);
+          _draft.artistAvatar = String(hosted);
+          renderProfileEditPage();
+        }
+      } catch {}
+    }
+    try { _deps?.showToast?.("Artist Avatar framed ✦", { icon: "✦", durationMs: 1800 }); } catch {}
+    return true;
+  } catch (e) {
+    markDirty();
+    try { _deps?.showToast?.(e?.message || "Couldn’t save framing", { icon: "!", durationMs: 2600 }); } catch {}
+    return false;
+  } finally {
+    hideProfileEditBusy();
+  }
+}
+
+/** Tap the nested Artist ring — create, or Adjust / Manage when one exists. */
+function openArtistRingFlow() {
+  const src = String(_draft?.artistAvatar || "").trim();
+  if (!src) {
+    openArtistAvatarEditor();
+    return;
+  }
+  openPhotoActionSheet("Artist Avatar", [
+    { id: "adjust", label: "Adjust framing", run: () => void adjustArtistAvatarFraming() },
+    { id: "manage", label: "Manage Artist Avatar", run: () => openArtistAvatarEditor() },
+  ]);
+}
+
 function usernamePreview() {
   const handle = normalizeUsername(_draft?.username);
   if (!handle) return "Choose username";
@@ -986,6 +1070,7 @@ function renderArtistAvatarStep() {
         <input type="checkbox" id="aaUseAsProfileCheck" ${isProfilePic ? "checked" : ""} />
         <span>Also use as my profile picture everywhere — not just the cover flip</span>
       </label>
+      <button type="button" id="aaAdjustFrameBtn" class="aaSecondaryBtn">Adjust framing</button>
       <button type="button" id="aaGenerateMoreBtn" class="aaPrimaryBtn">Generate new photos · ${AA_COST} credits</button>
       <button type="button" id="aaResetAvatarBtn" class="aaDangerBtn">Reset Artist Avatar</button>
     `;
@@ -1002,6 +1087,11 @@ function renderArtistAvatarStep() {
       setArtistAvatarAsProfilePic(Boolean(e.target.checked));
       renderProfileEditPage();
       renderArtistAvatarStep();
+    });
+    qs("#aaAdjustFrameBtn", body)?.addEventListener("click", () => {
+      void adjustArtistAvatarFraming().then((ok) => {
+        if (ok) renderArtistAvatarStep();
+      });
     });
     qs("#aaGenerateMoreBtn", body)?.addEventListener("click", () => {
       _aaStep = "intro";
@@ -1097,7 +1187,7 @@ function renderArtistAvatarStep() {
     qs("#aaUseAsProfileCheckPick", body)?.addEventListener("change", (e) => {
       _aaUseAsProfilePic = Boolean(e.target.checked);
     });
-    qs("#aaUseChosenBtn", body)?.addEventListener("click", () => confirmArtistAvatarChoice());
+    qs("#aaUseChosenBtn", body)?.addEventListener("click", () => void confirmArtistAvatarChoice());
     qs("#aaRegenBtn", body)?.addEventListener("click", () => {
       _aaStep = "upload";
       _aaPhotos = [];
@@ -1194,11 +1284,26 @@ async function startArtistAvatarGeneration() {
   }
 }
 
-function confirmArtistAvatarChoice() {
+async function confirmArtistAvatarChoice() {
   if (_aaChosenIndex < 0 || !_aaOptions[_aaChosenIndex]) return;
-  _draft.artistAvatar = _aaOptions[_aaChosenIndex];
+  const chosen = _aaOptions[_aaChosenIndex];
+  // Frame for the circular ring before saving — same tool as profile photo.
+  const res = await openPhotoFrame({
+    src: chosen,
+    title: "Frame Artist Avatar",
+    doneLabel: "Use photo",
+    mode: "circle",
+    guideLabel: "Artist ring preview",
+  });
+  if (!res?.avatar) return; // cancelled — stay on pick
+  const framed = res.avatar;
+  _aaOptions[_aaChosenIndex] = framed;
+  _draft.artistAvatar = framed;
   _draft.artistAvatarConsentedAt = _draft.artistAvatarConsentedAt || Date.now();
   _draft.clearArtistAvatar = false;
+  _draft.artistAvatarGallery = aaCapGallery(
+    (_draft.artistAvatarGallery || []).map((s) => (s === chosen ? framed : s)),
+  );
   if (_aaUseAsProfilePic) setArtistAvatarAsProfilePic(true);
   markDirty();
   void persistArtistAvatarNow();
@@ -1371,7 +1476,7 @@ export function initProfileEditOnce(deps) {
     e.preventDefault();
     e.stopPropagation();
     try { _deps?.haptic?.("light"); } catch {}
-    openArtistAvatarEditor();
+    openArtistRingFlow();
   });
 
   page.addEventListener("click", (e) => {

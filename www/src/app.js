@@ -38435,7 +38435,7 @@ function paintOurMusicArt(el, pairKey) {
   el.style.setProperty("--om-h2", h2);
 }
 
-const OUR_MUSIC_COVER_CACHE_PREFIX = "nabad_om_cover:v2:";
+const OUR_MUSIC_COVER_CACHE_PREFIX = "nabad_om_cover:v3:";
 /** The cover's visual "tier" grows the longer a pair stays in sync — mirrors the
  *  thresholds in api/_lib/our-music-stats.js (server is the real source of truth;
  *  this copy is only used client-side to know when to bust the localStorage cache
@@ -38467,11 +38467,9 @@ function syncOurMusicTierBadge(daysInSync) {
   el.textContent = `${tier.label}${hint}`;
   el.hidden = false;
 }
-/** Real Gemini-generated "Our Music Together" cover, cached per friend pair + a
- *  signature of (shared tags + tier) so Gemini only re-runs when their shared taste
- *  actually changes OR they cross into a new tier. Gemini only — deliberately no
- *  Pollinations/Cloudflare fallback; on any failure the gradient blobs from
- *  paintOurMusicArt() stay as the cover. */
+/** Duo-story "Our Music Together" cover (v3): Gemini only when BOTH friends have
+ *  an Artist Avatar. Cached per pair + (shared tags + tier). On skip/failure the
+ *  gradient blobs from paintOurMusicArt() stay as the cover — no abstract regen. */
 async function loadOurMusicGeneratedCover(imgEl, pairKey, otherId, data) {
   if (!imgEl || !otherId) return;
   const sharedTags = Array.isArray(data?.sharedTags) ? data.sharedTags : [];
@@ -38479,7 +38477,7 @@ async function loadOurMusicGeneratedCover(imgEl, pairKey, otherId, data) {
   const tierId = ourMusicTierForDays(data?.daysInSync).id;
   syncOurMusicTierBadge(data?.daysInSync);
   const cacheKey = `${OUR_MUSIC_COVER_CACHE_PREFIX}${pairKey}`;
-  const sig = `${tagsKey}|${tierId}`;
+  const sig = `duo|${tagsKey}|${tierId}`;
   try {
     const cachedRaw = localStorage.getItem(cacheKey);
     if (cachedRaw) {
@@ -38500,6 +38498,7 @@ async function loadOurMusicGeneratedCover(imgEl, pairKey, otherId, data) {
     );
     if (!r.ok) return;
     const resp = await r.json().catch(() => null);
+    // skipped: need_both_avatars — keep gradient, do not cache a failure
     if (!resp?.ok || !resp?.dataUrl) return;
     imgEl.style.backgroundImage = `url('${resp.dataUrl}')`;
     imgEl.classList.add("omArtImg--visible");

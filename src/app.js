@@ -32034,6 +32034,12 @@ function writeArtistAvatarSnap(id, url) {
     localStorage.setItem(artistAvatarSnapKey(uid), JSON.stringify({ url: clean, at: Date.now() }));
   } catch {}
 }
+function clearArtistAvatarSnap(id) {
+  const uid = String(id || "").trim();
+  if (!uid || uid === "guest") return;
+  try { localStorage.removeItem(artistAvatarSnapKey(uid)); } catch {}
+  _artistAvatarSnapWriteKey = "";
+}
 let _artistAvatarSnapWriteKey = "";
 async function persistArtistAvatarSnapshot(id, url) {
   const clean = String(url || "").trim();
@@ -32082,6 +32088,12 @@ function saveProfile(p) {
   activeProfile = next;
   void persistProfileAvatarSnapshot(next.id, next.avatar);
   void persistArtistAvatarSnapshot(next.id, next.artistAvatar);
+  if (!String(next.avatar || "").trim() && next.clearAvatar) {
+    try { localStorage.removeItem(profileAvatarSnapKey(next.id)); } catch {}
+  }
+  if (!String(next.artistAvatar || "").trim() && next.clearArtistAvatar) {
+    clearArtistAvatarSnap(next.id);
+  }
   try {
     localStorage.setItem(profileStorageKey(next.id), JSON.stringify(next));
   } catch {
@@ -36439,9 +36451,11 @@ async function supabaseUpsertProfile(profile) {
   let outgoingYoutube = String(profile.links?.youtube || "").trim();
   let outgoingTiktok = String(profile.links?.tiktok || "").trim();
   let outgoingArtistAvatar = String(profile.artistAvatar || "").trim();
+  const clearAvatar = Boolean(profile.clearAvatar);
+  const clearArtistAvatar = Boolean(profile.clearArtistAvatar);
   // Never write a data: URL into profiles.avatar — that is what made the
   // photo bounce between devices. Host it first, or keep the cloud URL.
-  if (outgoingAvatar.startsWith("data:") || outgoingAvatar.startsWith("blob:")) {
+  if (!clearAvatar && (outgoingAvatar.startsWith("data:") || outgoingAvatar.startsWith("blob:"))) {
     try {
       outgoingAvatar = await hostProfileAvatarUrl(outgoingAvatar);
       if (outgoingAvatar && String(activeProfile?.id || "") === String(authSession?.user?.id || "")) {
@@ -36457,17 +36471,19 @@ async function supabaseUpsertProfile(profile) {
       outgoingAvatar = "";
     }
   }
+  if (clearAvatar) outgoingAvatar = "";
+  if (clearArtistAvatar) outgoingArtistAvatar = "";
   const needsCloudPeek =
-    (!outgoingAvatar || !outgoingBio || !outgoingGenres || !outgoingDisplayName || !outgoingInstagram || !outgoingYoutube || !outgoingTiktok || !outgoingArtistAvatar) &&
+    ((!outgoingAvatar && !clearAvatar) || !outgoingBio || !outgoingGenres || !outgoingDisplayName || !outgoingInstagram || !outgoingYoutube || !outgoingTiktok || (!outgoingArtistAvatar && !clearArtistAvatar)) &&
     authSession?.user?.id;
   if (needsCloudPeek) {
     try {
       const existing = await supabaseLoadProfile();
       if (existing) {
-        if (!outgoingAvatar && String(existing.avatar || "").trim()) {
+        if (!clearAvatar && !outgoingAvatar && String(existing.avatar || "").trim()) {
           outgoingAvatar = String(existing.avatar).trim();
         }
-        if (!outgoingArtistAvatar && String(existing.artistAvatar || "").trim()) {
+        if (!clearArtistAvatar && !outgoingArtistAvatar && String(existing.artistAvatar || "").trim()) {
           outgoingArtistAvatar = String(existing.artistAvatar).trim();
         }
         if (!outgoingBio && String(existing.bio || "").trim()) {
@@ -36504,18 +36520,25 @@ async function supabaseUpsertProfile(profile) {
     instagram: outgoingInstagram,
     youtube: outgoingYoutube,
     tiktok: outgoingTiktok,
-    artist_avatar: outgoingArtistAvatar || null,
-    artist_avatar_updated_at: profile.artistAvatarUpdatedAt
-      ? new Date(profile.artistAvatarUpdatedAt).toISOString()
-      : undefined,
-    artist_avatar_consented_at: profile.artistAvatarConsentedAt
-      ? new Date(profile.artistAvatarConsentedAt).toISOString()
-      : undefined,
+    artist_avatar: clearArtistAvatar ? null : (outgoingArtistAvatar || null),
+    artist_avatar_updated_at: clearArtistAvatar
+      ? new Date().toISOString()
+      : (profile.artistAvatarUpdatedAt
+        ? new Date(profile.artistAvatarUpdatedAt).toISOString()
+        : undefined),
+    artist_avatar_consented_at: clearArtistAvatar
+      ? null
+      : (profile.artistAvatarConsentedAt
+        ? new Date(profile.artistAvatarConsentedAt).toISOString()
+        : undefined),
     // Omitted (not sent as `[]`) when empty, same reasoning as the timestamps above —
     // an unrelated save (e.g. editing bio) must never wipe a gallery it doesn't know about.
-    artist_avatar_gallery: Array.isArray(profile.artistAvatarGallery) && profile.artistAvatarGallery.length
-      ? profile.artistAvatarGallery.slice(-6)
-      : undefined,
+    // Explicit reset is the exception: send `[]` so the cloud gallery is wiped.
+    artist_avatar_gallery: clearArtistAvatar
+      ? []
+      : (Array.isArray(profile.artistAvatarGallery) && profile.artistAvatarGallery.length
+        ? profile.artistAvatarGallery.slice(-6)
+        : undefined),
     is_public: profile.isPublic !== false,
     calling_card_url: profile.callingCardUrl || null,
     calling_card_updated_at: profile.callingCardUpdatedAt
@@ -36526,7 +36549,7 @@ async function supabaseUpsertProfile(profile) {
   if (authSession?.user?.id) {
     try {
       const existing = await supabaseLoadProfile({ force: true, reason: "upsertWipeGuard" });
-      if (profileUpsertWouldWipeCloud(existing, payload)) {
+      if (!clearAvatar && profileUpsertWouldWipeCloud(existing, payload)) {
         try {
           console.warn("[profile] blocked cloud upsert that would wipe saved profile fields");
         } catch {}
@@ -36566,6 +36589,10 @@ async function supabaseUpsertProfile(profile) {
     bio: outgoingBio,
     genres: outgoingGenres,
     artistAvatar: outgoingArtistAvatar,
+    artistAvatarGallery: clearArtistAvatar
+      ? []
+      : (Array.isArray(profile.artistAvatarGallery) ? profile.artistAvatarGallery.slice(-6) : []),
+    artistAvatarConsentedAt: clearArtistAvatar ? 0 : Number(profile.artistAvatarConsentedAt || 0),
     voiceTimbre: profile.voiceTimbre || "",
     links: {
       instagram: outgoingInstagram,

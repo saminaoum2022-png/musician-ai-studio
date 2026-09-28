@@ -45,6 +45,7 @@ function emptyDraft() {
     personaId: "",
     artistAvatar: "",
     artistAvatarGallery: [],
+    clearArtistAvatar: false,
   };
 }
 
@@ -81,15 +82,22 @@ function profileFromDraft(base = {}) {
       youtube: String(_draft.links?.youtube || "").trim(),
       spotify: String(_draft.links?.spotify || "").trim(),
     },
-    artistAvatar: String(_draft.artistAvatar || base.artistAvatar || "").trim(),
-    artistAvatarUpdatedAt: _draft.artistAvatar && _draft.artistAvatar !== base.artistAvatar
+    artistAvatar: _draft.clearArtistAvatar
+      ? ""
+      : String(_draft.artistAvatar || base.artistAvatar || "").trim(),
+    artistAvatarUpdatedAt: _draft.clearArtistAvatar || (_draft.artistAvatar && _draft.artistAvatar !== base.artistAvatar)
       ? Date.now()
       : Number(base.artistAvatarUpdatedAt || 0),
-    artistAvatarConsentedAt: _draft.artistAvatarConsentedAt || Number(base.artistAvatarConsentedAt || 0),
-    artistAvatarGallery: (Array.isArray(_draft.artistAvatarGallery) && _draft.artistAvatarGallery.length
-      ? _draft.artistAvatarGallery
-      : (Array.isArray(base.artistAvatarGallery) ? base.artistAvatarGallery : [])
-    ).slice(-AA_GALLERY_MAX),
+    artistAvatarConsentedAt: _draft.clearArtistAvatar
+      ? 0
+      : (_draft.artistAvatarConsentedAt || Number(base.artistAvatarConsentedAt || 0)),
+    artistAvatarGallery: _draft.clearArtistAvatar
+      ? []
+      : (Array.isArray(_draft.artistAvatarGallery) && _draft.artistAvatarGallery.length
+        ? _draft.artistAvatarGallery
+        : (Array.isArray(base.artistAvatarGallery) ? base.artistAvatarGallery : [])
+      ).slice(-AA_GALLERY_MAX),
+    clearArtistAvatar: Boolean(_draft.clearArtistAvatar) && !String(_draft.artistAvatar || "").trim(),
   };
 }
 
@@ -116,6 +124,7 @@ export function hydrateProfileEditDraft(profile) {
     artistAvatar: String(p.artistAvatar || "").trim(),
     artistAvatarConsentedAt: Number(p.artistAvatarConsentedAt || 0),
     artistAvatarGallery: Array.isArray(p.artistAvatarGallery) ? p.artistAvatarGallery.slice(-AA_GALLERY_MAX) : [],
+    clearArtistAvatar: false,
   };
   _dirty = false;
   _genresTouched = false;
@@ -184,11 +193,16 @@ function applyAvatarToEditPhoto() {
   const img = qs("#profileEditAvatar");
   const fallback = qs("#profileEditAvatarFallback");
   const av = String(_draft?.avatar || "").trim();
+  const usingArtistAsPic = Boolean(_draft?.artistAvatar) && _draft.avatar === _draft.artistAvatar;
   const handle = normalizeUsername(_draft?.username) || "na";
   const initials = handle.slice(0, 2).toUpperCase();
   if (img) {
     const adj = qs("#btnProfileEditAdjustPhoto");
-    if (adj) adj.hidden = !av;
+    const removeBtn = qs("#btnProfileEditRemovePhoto");
+    const stopArtistBtn = qs("#btnProfileEditStopArtistPic");
+    if (adj) adj.hidden = !av || usingArtistAsPic;
+    if (removeBtn) removeBtn.hidden = !av || usingArtistAsPic;
+    if (stopArtistBtn) stopArtistBtn.hidden = !usingArtistAsPic;
     if (av) {
       img.src = av;
       img.dataset.empty = "false";
@@ -203,6 +217,22 @@ function applyAvatarToEditPhoto() {
     fallback.textContent = initials;
     fallback.hidden = Boolean(av);
   }
+}
+
+/** Clear the profile photo on this edit draft. Does not delete the Artist Avatar
+ *  itself — only stops using it (or a real photo) as the everywhere avatar. */
+function removeProfilePhotoFromDraft() {
+  if (!_draft) return;
+  if (_draft.artistAvatar && _draft.avatar === _draft.artistAvatar) {
+    setArtistAvatarAsProfilePic(false);
+  }
+  _draft.avatar = "";
+  _draft.artistAvatarPrevAvatar = "";
+  _draft.avatarRemoved = true;
+  _draft.avatarUpdatedAt = Date.now();
+  markDirty();
+  renderProfileEditPage();
+  try { _deps?.showToast?.("Photo removed — tap Save to publish", { durationMs: 1800 }); } catch {}
 }
 
 function usernamePreview() {
@@ -563,17 +593,20 @@ function aaCapGallery(list) {
 async function persistArtistAvatarNow() {
   if (!_deps) return;
   const active = _deps.getActiveProfile?.() || {};
+  const clearing = Boolean(_draft.clearArtistAvatar) && !String(_draft.artistAvatar || "").trim();
   const next = {
     ...active,
-    artistAvatar: _draft.artistAvatar || "",
-    artistAvatarGallery: aaCapGallery(_draft.artistAvatarGallery || []),
-    artistAvatarConsentedAt: _draft.artistAvatarConsentedAt || active.artistAvatarConsentedAt || 0,
+    artistAvatar: clearing ? "" : (_draft.artistAvatar || ""),
+    artistAvatarGallery: clearing ? [] : aaCapGallery(_draft.artistAvatarGallery || []),
+    artistAvatarConsentedAt: clearing ? 0 : (_draft.artistAvatarConsentedAt || active.artistAvatarConsentedAt || 0),
     artistAvatarUpdatedAt: Date.now(),
+    clearArtistAvatar: clearing,
     avatar: _draft.avatar || active.avatar || "",
     avatarUpdatedAt:
-      String(_draft.avatar || "") && String(_draft.avatar || "") !== String(active.avatar || "")
+      String(_draft.avatar || "") !== String(active.avatar || "")
         ? Date.now()
         : Number(active.avatarUpdatedAt || 0),
+    clearAvatar: Boolean(_draft.avatarRemoved) && !String(_draft.avatar || "").trim(),
   };
   try { _deps.saveProfile(next); } catch {}
   try { _deps.syncProfileUi?.(next); } catch {}
@@ -601,6 +634,7 @@ function switchActiveArtistAvatar(src) {
   if (!src) return;
   const wasProfilePic = Boolean(_draft.artistAvatar) && _draft.avatar === _draft.artistAvatar;
   _draft.artistAvatar = src;
+  _draft.clearArtistAvatar = false;
   if (wasProfilePic) _draft.avatar = src;
   markDirty();
   void persistArtistAvatarNow();
@@ -616,12 +650,60 @@ function setArtistAvatarAsProfilePic(on) {
     if (_draft.avatar !== _draft.artistAvatar) {
       _draft.artistAvatarPrevAvatar = _draft.avatar || _draft.artistAvatarPrevAvatar || "";
       _draft.avatar = _draft.artistAvatar;
+      _draft.avatarRemoved = false;
+      _draft.avatarUpdatedAt = Date.now();
     }
   } else if (_draft.avatar === _draft.artistAvatar) {
-    _draft.avatar = _draft.artistAvatarPrevAvatar || "";
+    const restored = String(_draft.artistAvatarPrevAvatar || "").trim();
+    _draft.avatar = restored;
+    if (!restored) {
+      _draft.avatarRemoved = true;
+      _draft.avatarUpdatedAt = Date.now();
+    } else {
+      _draft.avatarRemoved = false;
+      _draft.avatarUpdatedAt = Date.now();
+    }
   }
   markDirty();
   void persistArtistAvatarNow();
+}
+
+/** Wipe the Artist Avatar (active + gallery + consent). If it was also the
+ *  everywhere profile photo, restore the previous real photo (or clear it).
+ *  Persists immediately — same reason generation does: force-quit before Save
+ *  must not resurrect a deleted portrait from the cloud snap. */
+async function resetArtistAvatarCompletely() {
+  if (!_draft?.artistAvatar && !(Array.isArray(_draft?.artistAvatarGallery) && _draft.artistAvatarGallery.length)) {
+    return;
+  }
+  const ok = typeof confirm === "function"
+    ? confirm("Reset your Artist Avatar? Your generated portraits will be removed. You can create a new one anytime.")
+    : true;
+  if (!ok) return;
+
+  if (_draft.artistAvatar && _draft.avatar === _draft.artistAvatar) {
+    const restored = String(_draft.artistAvatarPrevAvatar || "").trim();
+    _draft.avatar = restored;
+    if (!restored) {
+      _draft.avatarRemoved = true;
+      _draft.avatarUpdatedAt = Date.now();
+    } else {
+      _draft.avatarRemoved = false;
+      _draft.avatarUpdatedAt = Date.now();
+    }
+  }
+  _draft.artistAvatar = "";
+  _draft.artistAvatarGallery = [];
+  _draft.artistAvatarConsentedAt = 0;
+  _draft.artistAvatarPrevAvatar = "";
+  _draft.clearArtistAvatar = true;
+  resetArtistAvatarState();
+  markDirty();
+  await persistArtistAvatarNow();
+  closeProfileEditSheet();
+  renderProfileEditPage();
+  try { _deps?.haptic?.("medium"); } catch {}
+  try { _deps?.showToast?.("Artist Avatar reset", { durationMs: 2000 }); } catch {}
 }
 
 function aaThumbGridHtml() {
@@ -653,6 +735,7 @@ function renderArtistAvatarStep() {
         <span>Also use as my profile picture everywhere — not just the cover flip</span>
       </label>
       <button type="button" id="aaGenerateMoreBtn" class="aaPrimaryBtn">Generate new photos · ${AA_COST} credits</button>
+      <button type="button" id="aaResetAvatarBtn" class="aaDangerBtn">Reset Artist Avatar</button>
     `;
     body.querySelectorAll("[data-aa-switch]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -673,6 +756,9 @@ function renderArtistAvatarStep() {
       _aaPhotos = [];
       _aaConsent = false;
       renderArtistAvatarStep();
+    });
+    qs("#aaResetAvatarBtn", body)?.addEventListener("click", () => {
+      void resetArtistAvatarCompletely();
     });
     return;
   }
@@ -842,6 +928,7 @@ async function startArtistAvatarGeneration() {
     // Save all generated options, not just whichever gets picked — "switch between
     // them later" only works if the ones not chosen right now aren't thrown away.
     _draft.artistAvatarGallery = aaCapGallery([...(_draft.artistAvatarGallery || []), ...d.options]);
+    _draft.clearArtistAvatar = false;
     markDirty();
     // These already cost real credits — persist the gallery right away so a
     // force-quit before tapping "Use this one" doesn't throw the batch away.
@@ -859,6 +946,7 @@ function confirmArtistAvatarChoice() {
   if (_aaChosenIndex < 0 || !_aaOptions[_aaChosenIndex]) return;
   _draft.artistAvatar = _aaOptions[_aaChosenIndex];
   _draft.artistAvatarConsentedAt = _draft.artistAvatarConsentedAt || Date.now();
+  _draft.clearArtistAvatar = false;
   if (_aaUseAsProfilePic) setArtistAvatarAsProfilePic(true);
   markDirty();
   void persistArtistAvatarNow();
@@ -887,6 +975,8 @@ async function onAvatarFileChange(file) {
     const dataUrl = await _deps.compressAvatarFile(file, { maxSize: 720, type: "image/png" });
     if (!dataUrl) throw new Error("Could not read photo");
     _draft.avatar = dataUrl;
+    _draft.avatarRemoved = false;
+    _draft.avatarUpdatedAt = Date.now();
     markDirty();
     renderProfileEditPage();
     // Let the person frame it right away (Cancel keeps the automatic crop).
@@ -908,6 +998,8 @@ async function frameCurrentPhoto(src) {
   const res = await openPhotoFrame({ src });
   if (!res) return;
   _draft.avatar = res.avatar;
+  _draft.avatarRemoved = false;
+  _draft.avatarUpdatedAt = Date.now();
   markDirty();
   renderProfileEditPage();
   try { _deps?.showToast?.("Framing updated — tap Save to publish", { icon: "✓", durationMs: 1800 }); } catch {}
@@ -957,8 +1049,19 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
     usernameChangedAt: Number(base.usernameChangedAt || 0),
     voiceTimbre: base.voiceTimbre || "",
     isPublic: base.isPublic !== false,
+    clearAvatar: Boolean(_draft.avatarRemoved) && !String(next.avatar || "").trim(),
+    clearArtistAvatar: Boolean(_draft.clearArtistAvatar) && !String(next.artistAvatar || "").trim(),
   };
+  if (payload.clearArtistAvatar) {
+    payload.artistAvatar = "";
+    payload.artistAvatarGallery = [];
+    payload.artistAvatarConsentedAt = 0;
+    payload.artistAvatarUpdatedAt = Date.now();
+  }
   if (String(payload.avatar || "").startsWith("data:") || String(payload.avatar || "").startsWith("blob:")) {
+    payload.avatarUpdatedAt = Date.now();
+  } else if (payload.clearAvatar) {
+    payload.avatar = "";
     payload.avatarUpdatedAt = Date.now();
   } else if (String(payload.avatar || "").trim() && String(payload.avatar || "").trim() !== String(base.avatar || "").trim()) {
     payload.avatarUpdatedAt = Date.now();
@@ -1042,6 +1145,16 @@ export function initProfileEditOnce(deps) {
   qs("#btnProfileEditChangePhoto")?.addEventListener("click", () => {
     try { _deps?.haptic?.("light"); } catch {}
     triggerPhotoPicker();
+  });
+  qs("#btnProfileEditRemovePhoto")?.addEventListener("click", () => {
+    try { _deps?.haptic?.("light"); } catch {}
+    removeProfilePhotoFromDraft();
+  });
+  qs("#btnProfileEditStopArtistPic")?.addEventListener("click", () => {
+    try { _deps?.haptic?.("light"); } catch {}
+    setArtistAvatarAsProfilePic(false);
+    renderProfileEditPage();
+    try { _deps?.showToast?.("Artist Avatar is only on the cover flip now — tap Save", { durationMs: 2200 }); } catch {}
   });
   qs("#profileEditAvatarWrap")?.addEventListener("click", (e) => {
     e.preventDefault();

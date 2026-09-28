@@ -4056,6 +4056,8 @@
               </button>
               <button type="button" id="btnProfileEditChangePhoto" class="profileEditPhotoLabel">Change Photo</button>
               <button type="button" id="btnProfileEditAdjustPhoto" class="profileEditPhotoLabel profileEditPhotoLabel--adjust" hidden>Adjust framing</button>
+              <button type="button" id="btnProfileEditRemovePhoto" class="profileEditPhotoLabel profileEditPhotoLabel--remove" hidden>Remove photo</button>
+              <button type="button" id="btnProfileEditStopArtistPic" class="profileEditPhotoLabel profileEditPhotoLabel--remove" hidden>Stop using Artist Avatar as profile photo</button>
             </div>
 
             <section class="profileEditSection" aria-labelledby="profileEditIdentityTitle">
@@ -4084,6 +4086,22 @@
               </div>
             </section>
 
+            <section class="profileEditSection" aria-labelledby="profileEditAiTitle">
+              <h2 id="profileEditAiTitle" class="profileEditSectionLabel">AI</h2>
+              <div class="profileEditCard">
+                <button type="button" class="profileEditRow" data-profile-edit-field="persona">
+                  <span class="profileEditRowLabel">Voice persona</span>
+                  <span class="profileEditRowValue" id="profileEditPersonaVal">Default voice</span>
+                  <span class="profileEditRowChev" aria-hidden="true">›</span>
+                </button>
+                <button type="button" class="profileEditRow" id="btnEditProfileArtistAvatar" data-profile-edit-field="artist-avatar">
+                  <span class="profileEditRowLabel">Artist Avatar</span>
+                  <span class="profileEditRowValue profileEditRowValue--empty" id="profileEditArtistAvatarVal">Not set up</span>
+                  <span class="profileEditRowChev" aria-hidden="true">›</span>
+                </button>
+              </div>
+            </section>
+
             <section class="profileEditSection" aria-labelledby="profileEditSocialTitle">
               <h2 id="profileEditSocialTitle" class="profileEditSectionLabel">Social links</h2>
               <div class="profileEditCard">
@@ -4105,22 +4123,6 @@
                 <button type="button" class="profileEditRow" data-profile-edit-field="social:spotify">
                   <span class="profileEditRowLabel">Spotify</span>
                   <span class="profileEditRowValue profileEditRowValue--empty" id="profileEditSocialVal-spotify">Add link</span>
-                  <span class="profileEditRowChev" aria-hidden="true">›</span>
-                </button>
-              </div>
-            </section>
-
-            <section class="profileEditSection" aria-labelledby="profileEditAiTitle">
-              <h2 id="profileEditAiTitle" class="profileEditSectionLabel">AI</h2>
-              <div class="profileEditCard">
-                <button type="button" class="profileEditRow" data-profile-edit-field="persona">
-                  <span class="profileEditRowLabel">Voice persona</span>
-                  <span class="profileEditRowValue" id="profileEditPersonaVal">Default voice</span>
-                  <span class="profileEditRowChev" aria-hidden="true">›</span>
-                </button>
-                <button type="button" class="profileEditRow" id="btnEditProfileArtistAvatar" data-profile-edit-field="artist-avatar">
-                  <span class="profileEditRowLabel">Artist Avatar</span>
-                  <span class="profileEditRowValue profileEditRowValue--empty" id="profileEditArtistAvatarVal">Not set up</span>
                   <span class="profileEditRowChev" aria-hidden="true">›</span>
                 </button>
               </div>

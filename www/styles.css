@@ -68830,6 +68830,12 @@ body.pfOpen{ overflow: hidden; }
 .pfReset{ appearance: none; margin-top: 14px; height: 40px; padding: 0 22px; border-radius: 20px; font: inherit; font-size: 14px; font-weight: 700; color: #fff; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); cursor: pointer; }
 .profileEditPhotoLabel--adjust[hidden]{ display: none !important; }
 .profileEditPhotoLabel--adjust{ margin-top: 2px; opacity: 0.85; }
+.profileEditPhotoLabel--remove[hidden]{ display: none !important; }
+.profileEditPhotoLabel--remove{
+  margin-top: 2px;
+  color: rgba(255, 120, 130, 0.92);
+  font-weight: 600;
+}
 
 /* ═══ Music panels: consistent playing state (any way the song was started) ═══
    playing → dimmed cover + pause glyph + moving equaliser · paused → play glyph · loading → spinner · title turns teal */
@@ -70196,6 +70202,14 @@ html[data-theme="light"] body[data-route="profile"] .profileAboutSection .profil
   -webkit-tap-highlight-color: transparent;
 }
 .aaSecondaryBtn:active{ transform: scale(.98); }
+.aaDangerBtn{
+  width: 100%; margin-top: 10px; border-radius: 999px; padding: 13px 0;
+  background: transparent; border: 1.5px solid rgba(255, 110, 120, .45); color: rgba(255, 140, 150, .95);
+  font: 800 13px var(--font-body, inherit);
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.aaDangerBtn:active{ transform: scale(.98); opacity: .85; }
 .aaThumbGrid{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
 .aaThumb{ position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; background-size: cover; background-position: center; background-color: rgba(255,255,255,.06); }
 .aaThumbRemove{
@@ -70229,3 +70243,6 @@ html[data-theme="light"] .aaSheetPanel{ background: #fff; }
 html[data-theme="light"] .aaStepTitle{ color: #0b0b13; }
 html[data-theme="light"] .aaStepBody{ color: rgba(11,11,19,.6); }
 html[data-theme="light"] .aaConsentRow{ color: rgba(11,11,19,.7); background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.08); }
+html[data-theme="light"] .aaDangerBtn{
+  border-color: rgba(200, 60, 80, .35); color: rgba(180, 40, 60, .92);
+}

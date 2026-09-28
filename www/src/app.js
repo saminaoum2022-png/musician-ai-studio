@@ -31076,20 +31076,21 @@ function wireArtistAvatarFlipOnce() {
   if (!flip) return;
   const hasAvatarNow = () => Boolean(artistAvatarUrlForPaint());
   const toggle = () => {
+    if (!hasAvatarNow()) return;
     try { haptic("light"); } catch {}
     flip.classList.toggle("isFlipped");
     const isBack = flip.classList.contains("isFlipped");
     badge?.setAttribute("aria-label", isBack ? "Flip back to your photo" : "Flip to your Artist Avatar");
     syncArtistAvatarBadgeThumb();
+    try { syncArtistAvatarBadgePosition(); } catch {}
   };
-  // Tapping the photo itself only flips once there's something to flip to;
-  // before that it's a no-op there (the badge below is the CTA instead).
-  flip.addEventListener("click", () => { if (hasAvatarNow()) toggle(); });
+  // Big cover + badge both flip either way once an Artist Avatar exists.
+  // (CSS only enables pointer-events on .aaHasRealAvatar.)
+  flip.addEventListener("click", toggle);
   badge?.addEventListener("click", (e) => {
     e.stopPropagation();
     if (hasAvatarNow()) { toggle(); return; }
-    // No Artist Avatar yet — the badge is a "create one" CTA in this state,
-    // same destination as the profile promo banner.
+    // No Artist Avatar yet — badge is a "create one" CTA.
     try { haptic("light"); } catch {}
     try { openArtistAvatarEditorFromProfile(); } catch {}
   });

@@ -38470,8 +38470,18 @@ function syncOurMusicTierBadge(daysInSync) {
 /** Duo-story "Our Music Together" cover (v3): Gemini only when BOTH friends have
  *  an Artist Avatar. Cached per pair + (shared tags + tier). On skip/failure the
  *  gradient blobs from paintOurMusicArt() stay as the cover — no abstract regen. */
+let _ourMusicCoverGen = 0;
+function clearOurMusicCoverImg(imgEl) {
+  if (!imgEl) return;
+  try { imgEl.style.backgroundImage = ""; } catch {}
+  try { imgEl.classList.remove("omArtImg--visible"); } catch {}
+}
 async function loadOurMusicGeneratedCover(imgEl, pairKey, otherId, data) {
   if (!imgEl || !otherId) return;
+  const gen = ++_ourMusicCoverGen;
+  // Always wipe the previous friend's cover before painting this pair — the sheet
+  // is a single DOM node reused across conversations.
+  clearOurMusicCoverImg(imgEl);
   const sharedTags = Array.isArray(data?.sharedTags) ? data.sharedTags : [];
   const tagsKey = sharedTags.slice().sort().join(",");
   const tierId = ourMusicTierForDays(data?.daysInSync).id;
@@ -38483,6 +38493,7 @@ async function loadOurMusicGeneratedCover(imgEl, pairKey, otherId, data) {
     if (cachedRaw) {
       const cached = JSON.parse(cachedRaw);
       if (cached?.dataUrl && cached?.sig === sig) {
+        if (gen !== _ourMusicCoverGen) return;
         imgEl.style.backgroundImage = `url('${cached.dataUrl}')`;
         imgEl.classList.add("omArtImg--visible");
         return;
@@ -38496,8 +38507,10 @@ async function loadOurMusicGeneratedCover(imgEl, pairKey, otherId, data) {
       apiUrl(`/api/music/our-music-cover?userId=${encodeURIComponent(otherId)}`),
       { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     );
+    if (gen !== _ourMusicCoverGen) return;
     if (!r.ok) return;
     const resp = await r.json().catch(() => null);
+    if (gen !== _ourMusicCoverGen) return;
     // skipped: need_both_avatars — keep gradient, do not cache a failure
     if (!resp?.ok || !resp?.dataUrl) return;
     imgEl.style.backgroundImage = `url('${resp.dataUrl}')`;
@@ -38634,6 +38647,9 @@ function closeOurMusicSheet() {
   if (!sheet) return;
   sheet.hidden = true;
   sheet.setAttribute("aria-hidden", "true");
+  // Invalidate any in-flight cover fetch + clear so the next open never flashes the last pair.
+  _ourMusicCoverGen += 1;
+  clearOurMusicCoverImg(document.getElementById("omArtImg"));
 }
 async function openOurMusicSheet(targetUserId, partner = {}) {
   bindOurMusicSheetOnce();
@@ -38648,6 +38664,8 @@ async function openOurMusicSheet(targetUserId, partner = {}) {
   const myId = String(authSession?.user?.id || "").trim();
   const pairKey = [myId, targetUserId].sort().join(":");
   paintOurMusicArt(document.getElementById("omArt"), pairKey);
+  // Wipe any previous friend's cover immediately (don't wait for the fetch).
+  clearOurMusicCoverImg(document.getElementById("omArtImg"));
   const handle = String(partner.handle || "").replace(/^@/, "");
   const byEl = document.getElementById("omBy");
   if (byEl) byEl.textContent = handle ? `You & @${handle}` : "You & your friend";

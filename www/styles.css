@@ -40980,6 +40980,43 @@ html[data-theme="light"] .liveListenChip{
   background: rgba(124,92,255,0.18);
   position: relative;
 }
+.messagesThreadAvatar.is-heartPulse{
+  overflow: visible;
+  z-index: 5;
+}
+.messagesThreadAvatar.is-heartPulse::before{
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  padding: 2.5px;
+  background: linear-gradient(135deg, #23d5ab 0%, #8f74ff 55%, #FF4D5A 100%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: 4;
+  animation: messagesThreadAvatarHeartPulse 0.72s cubic-bezier(0.2, 0.85, 0.25, 1);
+}
+@keyframes messagesThreadAvatarHeartPulse{
+  0%{
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  28%{
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100%{
+    opacity: 0;
+    transform: scale(1.28);
+  }
+}
 .messagesThreadAvatar.is-online{
   overflow: visible;
 }
@@ -41115,7 +41152,7 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
 .messagesBubbleWrap{
   display: flex;
   justify-content: flex-start;
-  padding: 0 8px;
+  padding: 0 8px 4px;
 }
 .messagesBubbleWrap.is-mine,
 .messagesBubbleWrap--song.is-mine{
@@ -41158,6 +41195,67 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
   border-radius: 16px 16px 16px 6px;
   background: rgba(18, 20, 30, 0.94);
   border: 1px solid rgba(255,255,255,0.08);
+  position: relative;
+}
+.messagesBubbleHeart{
+  position: absolute;
+  right: 6px;
+  bottom: -7px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(12, 12, 18, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 3px 8px -5px rgba(0, 0, 0, 0.45);
+  color: #FF4D5A;
+  pointer-events: none;
+  opacity: 0.92;
+}
+.messagesBubbleHeart[hidden]{ display: none !important; }
+.messagesBubbleHeart svg{
+  display: block;
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.2;
+}
+.messagesBubbleHeart:not(.is-on){
+  color: rgba(255, 255, 255, 0.55);
+}
+.messagesBubbleHeartCount{
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1;
+}
+.messagesBubbleWrap.is-mine .messagesBubbleHeart{
+  right: auto;
+  left: 6px;
+}
+@media (prefers-reduced-motion: no-preference){
+  .messagesBubbleWrap--heartPop .messagesBubble{
+    animation: messagesBubbleHeartPop 0.38s cubic-bezier(0.2, 0.9, 0.25, 1);
+  }
+}
+@keyframes messagesBubbleHeartPop{
+  0%{ transform: scale(1); }
+  35%{ transform: scale(1.045); }
+  100%{ transform: scale(1); }
+}
+html[data-theme="light"] .messagesBubbleHeart{
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(11, 11, 19, 0.12);
+  box-shadow: 0 4px 12px -6px rgba(0, 0, 0, 0.22);
+}
+html[data-theme="light"] .messagesBubbleHeartCount{
+  color: rgba(11, 11, 19, 0.72);
 }
 .messagesBubbleWrap.is-mine .messagesBubble{
   border-radius: 16px 16px 6px 16px;

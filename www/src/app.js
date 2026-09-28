@@ -41000,6 +41000,8 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
         prev.body !== m.body
         || prev.created_at !== m.created_at
         || String(prev.delivered_at || "") !== String(m.delivered_at || "")
+        || Boolean(prev.heartedByMe) !== Boolean(m.heartedByMe)
+        || Number(prev.heartCount || 0) !== Number(m.heartCount || 0)
       ) {
         list[existingIdx] = {
           ...prev,
@@ -43957,6 +43959,170 @@ function renderCoachMarkdown(text) {
   return out.join("");
 }
 
+function messagesBubbleHeartHtml(msg) {
+  const count = Math.max(0, Number(msg?.heartCount) || 0);
+  const mine = Boolean(msg?.heartedByMe);
+  if (!count && !mine) {
+    return `<span class="messagesBubbleHeart" data-msg-heart hidden aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 20.2s-7.4-4.6-7.4-10.3A4.3 4.3 0 0 1 12 7.1a4.3 4.3 0 0 1 7.4 2.8c0 5.7-7.4 10.3-7.4 10.3z"/></svg></span>`;
+  }
+  const countHtml = count > 1 ? `<span class="messagesBubbleHeartCount">${escapeHtml(String(count))}</span>` : "";
+  return `<span class="messagesBubbleHeart is-on${mine ? " is-mine" : ""}" data-msg-heart aria-label="${count} heart${count === 1 ? "" : "s"}"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 20.2s-7.4-4.6-7.4-10.3A4.3 4.3 0 0 1 12 7.1a4.3 4.3 0 0 1 7.4 2.8c0 5.7-7.4 10.3-7.4 10.3z"/></svg>${countHtml}</span>`;
+}
+
+function ensureMessagesBubbleHeartBadge(wrap, { heartCount = 1, heartedByMe = true } = {}) {
+  if (!wrap) return null;
+  const bubble = wrap.querySelector(".messagesBubble") || wrap;
+  let badge = wrap.querySelector("[data-msg-heart]");
+  if (!badge) {
+    bubble.insertAdjacentHTML("beforeend", messagesBubbleHeartHtml({ heartCount, heartedByMe }));
+    badge = wrap.querySelector("[data-msg-heart]");
+  }
+  if (!badge) return null;
+  badge.hidden = false;
+  badge.removeAttribute("hidden");
+  badge.classList.add("is-on");
+  badge.classList.toggle("is-mine", Boolean(heartedByMe));
+  badge.setAttribute("aria-hidden", "false");
+  const count = Math.max(0, Number(heartCount) || 0);
+  badge.setAttribute("aria-label", `${count} heart${count === 1 ? "" : "s"}`);
+  let countEl = badge.querySelector(".messagesBubbleHeartCount");
+  if (count > 1) {
+    if (!countEl) {
+      countEl = document.createElement("span");
+      countEl.className = "messagesBubbleHeartCount";
+      badge.appendChild(countEl);
+    }
+    countEl.textContent = String(count);
+  } else if (countEl) {
+    countEl.remove();
+  }
+  return badge;
+}
+
+function applyMessagesBubbleHeartState(msgId, { heartCount, heartedByMe }) {
+  const id = String(msgId || "").trim();
+  if (!id) return;
+  const list = Array.isArray(_messagesList) ? _messagesList : [];
+  const idx = list.findIndex((m) => String(m?.id || "") === id);
+  if (idx >= 0) {
+    list[idx] = {
+      ...list[idx],
+      heartCount: Math.max(0, Number(heartCount) || 0),
+      heartedByMe: Boolean(heartedByMe),
+    };
+  }
+  const wrap = document.querySelector(`#messagesThreadMount .messagesBubbleWrap[data-msg-id="${cssAttrEscape(id)}"]`);
+  if (wrap) ensureMessagesBubbleHeartBadge(wrap, { heartCount, heartedByMe });
+}
+
+function popMessagesBubble(wrap) {
+  if (!wrap) return;
+  wrap.classList.remove("messagesBubbleWrap--heartPop");
+  // Force reflow so re-adding the class retriggers the animation.
+  void wrap.offsetWidth;
+  wrap.classList.add("messagesBubbleWrap--heartPop");
+  window.setTimeout(() => wrap.classList.remove("messagesBubbleWrap--heartPop"), 420);
+}
+
+function pulseMessagesThreadAvatarHeart(avatarEl) {
+  const avatar = avatarEl || document.getElementById("messagesThreadAvatar");
+  if (!avatar) return;
+  avatar.classList.remove("is-heartPulse");
+  void avatar.offsetWidth;
+  avatar.classList.add("is-heartPulse");
+  window.setTimeout(() => avatar.classList.remove("is-heartPulse"), 780);
+}
+
+let _messagesBubbleHeartAt = 0;
+async function heartMessagesBubbleFromDoubleTap(wrap) {
+  if (!wrap || wrap.classList.contains("is-pending") || wrap.classList.contains("is-failed")) return;
+  if (wrap.querySelector(".messagesBubble--coachTyping")) return;
+  const msgId = String(wrap.getAttribute("data-msg-id") || "").trim();
+  if (!msgId || isPendingThreadMessageId(msgId)) return;
+  const now = Date.now();
+  if (now - _messagesBubbleHeartAt < 700) return;
+  _messagesBubbleHeartAt = now;
+
+  const list = Array.isArray(_messagesList) ? _messagesList : [];
+  const msg = list.find((m) => String(m?.id || "") === msgId);
+  const already = Boolean(msg?.heartedByMe);
+  const nextCount = already
+    ? Math.max(1, Number(msg?.heartCount) || 1)
+    : Math.max(1, (Number(msg?.heartCount) || 0) + 1);
+
+  popMessagesBubble(wrap);
+  ensureMessagesBubbleHeartBadge(wrap, { heartCount: nextCount, heartedByMe: true });
+  const bubble = wrap.querySelector(".messagesBubble") || wrap;
+  const avatar = document.getElementById("messagesThreadAvatar");
+  const flyTarget = avatar || wrap.querySelector("[data-msg-heart]");
+  if (flyTarget) {
+    playRadiantHeartFly({
+      startEl: bubble,
+      endEl: flyTarget,
+      onLand: avatar ? () => pulseMessagesThreadAvatarHeart(avatar) : null,
+    });
+  }
+  try { hapticHeartbeat(); } catch {}
+
+  if (already) return;
+
+  applyMessagesBubbleHeartState(msgId, { heartCount: nextCount, heartedByMe: true });
+  try {
+    const data = await messagesApi("/api/messages", {
+      method: "POST",
+      timeoutMs: 10000,
+      body: JSON.stringify({ action: "react_message", messageId: msgId, reaction: "heart" }),
+    });
+    if (data?.ok) {
+      applyMessagesBubbleHeartState(msgId, {
+        heartCount: Number(data.heartCount) || nextCount,
+        heartedByMe: true,
+      });
+    }
+  } catch (e) {
+    // Keep optimistic heart; toast only if table missing / hard failure.
+    const msgText = String(e?.message || e || "");
+    if (/dm_message_reactions|Run supabase/i.test(msgText)) {
+      try { showToast("Heart saved on device — DB migration needed", { icon: "!", durationMs: 2400 }); } catch {}
+    }
+  }
+}
+
+function wireMessagesBubbleDoubleTapHeartOnce() {
+  const mount = document.getElementById("messagesThreadMount");
+  if (!mount || mount.dataset.doubleTapHeart === "1") return;
+  mount.dataset.doubleTapHeart = "1";
+  let lastAt = 0;
+  let lastX = 0;
+  let lastY = 0;
+  const fromEventTarget = (target) => {
+    const el = target instanceof Element ? target : null;
+    if (!el) return null;
+    if (el.closest("button, a, input, textarea, [data-user-lib-play], [data-retry-client-msg], .messagesVoiceDrop, .messagesVoiceMixCapsule")) {
+      return null;
+    }
+    return el.closest(".messagesBubbleWrap[data-msg-id]");
+  };
+  mount.addEventListener("dblclick", (e) => {
+    const wrap = fromEventTarget(e.target);
+    if (!wrap) return;
+    e.preventDefault();
+    void heartMessagesBubbleFromDoubleTap(wrap);
+  });
+  mount.addEventListener("touchend", (e) => {
+    const t = e.changedTouches?.[0];
+    if (!t) return;
+    const wrap = fromEventTarget(e.target);
+    if (!wrap) return;
+    const now = Date.now();
+    const repeat = now - lastAt < 320 && Math.abs(t.clientX - lastX) < 28 && Math.abs(t.clientY - lastY) < 28;
+    lastAt = repeat ? 0 : now;
+    lastX = t.clientX;
+    lastY = t.clientY;
+    if (repeat) void heartMessagesBubbleFromDoubleTap(wrap);
+  }, { passive: true });
+}
+
 function messagesBubbleHtml(msg, viewerId, opts) {
   if (msg?.coachTyping) {
     return `
@@ -43985,6 +44151,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
     timeHtml || statusHtml
       ? `<span class="messagesBubbleMeta">${timeHtml}${statusHtml}</span>`
       : "";
+  const heartHtml = messagesBubbleHeartHtml(msg);
   if (parsed.type === "song") {
     if (parsed.legacyVoiceMix) {
       return `
@@ -43993,6 +44160,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
           ${messagesVoiceMixCapsuleHtml(voiceMixParsedFromLegacySong(parsed, ""), { mine, msgId: msg?.id })}
           ${metaHtml}
         </div>
+        ${heartHtml}
       </div>`;
     }
     return `
@@ -44001,6 +44169,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
           ${messagesDmSongCardHtml(parsed, { mine })}
           ${metaHtml}
         </div>
+        ${heartHtml}
       </div>`;
   }
   if (parsed.type === "voice_mix") {
@@ -44010,6 +44179,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
           ${messagesVoiceMixCapsuleHtml(parsed, { mine, msgId: msg?.id })}
           ${metaHtml}
         </div>
+        ${heartHtml}
       </div>`;
   }
   if (parsed.type === "voice") {
@@ -44021,6 +44191,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
           ${messagesVoiceDropBubbleHtml(voiceParsed, { mine, msgId: msg?.id, mixHtml })}
           ${metaHtml}
         </div>
+        ${heartHtml}
       </div>`;
   }
   const body = String(parsed.text || "").trim();
@@ -44036,6 +44207,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
         ${textHtml}
         ${metaHtml}
       </div>
+      ${heartHtml}
     </div>`;
 }
 
@@ -44659,6 +44831,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   wireMessagesThreadKeyboardOnce();
   wireMessagesNativeKeyboardOnce();
   wireMessagesThreadScrollOnce();
+  wireMessagesBubbleDoubleTapHeartOnce();
   setMessagesNativeKeyboardScroll(true);
   setMessagesNativeAccessoryBar(false);
   updateMessagesComposerReserve();
@@ -69841,27 +70014,31 @@ function wirePlayerDiscoverReelSwipeOnce() {
   });
 }
 
-function playPlayerLikeFly(likeBtn) {
-  const ico = likeBtn?.querySelector(".followActActIco--like") || likeBtn?.querySelector("svg");
-  const stage = document.querySelector(".playerArtStage");
-  if (!ico || !stage) return;
-  const end = ico.getBoundingClientRect();
-  if (end.width < 4 || end.height < 4) return;
-  const stageRect = stage.getBoundingClientRect();
-  const startCx = stageRect.left + stageRect.width / 2;
-  const startCy = stageRect.top + stageRect.height * 0.46;
+function playRadiantHeartFly({ startEl, endEl, startCx, startCy, hideEndWhileFlying = false, onLand = null } = {}) {
+  const start = startEl?.getBoundingClientRect?.();
+  const end = endEl?.getBoundingClientRect?.();
+  if (!end || end.width < 2 || end.height < 2) return;
+  const sx = Number.isFinite(startCx)
+    ? startCx
+    : (start ? start.left + start.width / 2 : end.left + end.width / 2);
+  const sy = Number.isFinite(startCy)
+    ? startCy
+    : (start ? start.top + start.height / 2 : end.top + end.height / 2);
   const endCx = end.left + end.width / 2;
   const endCy = end.top + end.height / 2;
   document.querySelector(".playerLikeFly")?.remove();
   const fly = document.createElement("div");
   fly.className = "playerLikeFly";
   fly.setAttribute("aria-hidden", "true");
-  const svg = ico.cloneNode(true);
-  svg.setAttribute("aria-hidden", "true");
   const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "followActActIco followActActIco--like");
   const defs = document.createElementNS(ns, "defs");
   const grad = document.createElementNS(ns, "linearGradient");
-  grad.setAttribute("id", "nabadLikeFlyGrad");
+  const gradId = `nabadLikeFlyGrad-${Date.now().toString(36)}`;
+  grad.setAttribute("id", gradId);
   grad.setAttribute("x1", "0");
   grad.setAttribute("y1", "0");
   grad.setAttribute("x2", "1");
@@ -69873,19 +70050,19 @@ function playPlayerLikeFly(likeBtn) {
     grad.appendChild(stop);
   });
   defs.appendChild(grad);
-  svg.insertBefore(defs, svg.firstChild);
-  const path = svg.querySelector("path");
-  if (path) {
-    path.setAttribute("fill", "url(#nabadLikeFlyGrad)");
-    path.setAttribute("stroke", "url(#nabadLikeFlyGrad)");
-  }
+  svg.appendChild(defs);
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", "M12 20.2s-7.4-4.6-7.4-10.3A4.3 4.3 0 0 1 12 7.1a4.3 4.3 0 0 1 7.4 2.8c0 5.7-7.4 10.3-7.4 10.3z");
+  path.setAttribute("fill", `url(#${gradId})`);
+  path.setAttribute("stroke", `url(#${gradId})`);
+  svg.appendChild(path);
   fly.appendChild(svg);
-  fly.style.left = `${startCx}px`;
-  fly.style.top = `${startCy}px`;
+  fly.style.left = `${sx}px`;
+  fly.style.top = `${sy}px`;
   fly.style.transform = "translate(-50%, -50%) scale(0.45)";
   document.body.appendChild(fly);
-  likeBtn.classList.add("isLikeFlying");
-  const land = `translate(calc(-50% + ${endCx - startCx}px), calc(-50% + ${endCy - startCy}px)) scale(1)`;
+  if (hideEndWhileFlying) endEl.classList?.add?.("isLikeFlying");
+  const land = `translate(calc(-50% + ${endCx - sx}px), calc(-50% + ${endCy - sy}px)) scale(1)`;
   const fromColors = ["#A78BFA", "#7752F8", "#22C5A9"];
   const toColor = [255, 77, 90];
   const stops = [...grad.querySelectorAll("stop")];
@@ -69893,6 +70070,12 @@ function playPlayerLikeFly(likeBtn) {
     const h = hex.slice(1);
     return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
   });
+  let landed = false;
+  const fireLand = () => {
+    if (landed) return;
+    landed = true;
+    try { if (typeof onLand === "function") onLand(); } catch {}
+  };
   requestAnimationFrame(() => {
     fly.style.transition = "transform 160ms cubic-bezier(0.2, 0.85, 0.2, 1), opacity 120ms ease";
     fly.style.opacity = "1";
@@ -69913,12 +70096,30 @@ function playPlayerLikeFly(likeBtn) {
         if (t < 1) requestAnimationFrame(step);
       };
       requestAnimationFrame(step);
+      // Heart arrives near end of the fly (~180 + 520).
+      window.setTimeout(fireLand, 500);
     }, 180);
     window.setTimeout(() => {
-      likeBtn.classList.remove("isLikeFlying");
+      if (hideEndWhileFlying) endEl.classList?.remove?.("isLikeFlying");
       fly.remove();
+      fireLand();
     }, 920);
   });
+}
+
+function playPlayerLikeFly(likeBtn) {
+  const ico = likeBtn?.querySelector(".followActActIco--like") || likeBtn?.querySelector("svg");
+  const stage = document.querySelector(".playerArtStage");
+  if (!ico || !stage) return;
+  const stageRect = stage.getBoundingClientRect();
+  playRadiantHeartFly({
+    endEl: ico,
+    startCx: stageRect.left + stageRect.width / 2,
+    startCy: stageRect.top + stageRect.height * 0.46,
+    hideEndWhileFlying: true,
+  });
+  likeBtn?.classList?.add?.("isLikeFlying");
+  window.setTimeout(() => likeBtn?.classList?.remove?.("isLikeFlying"), 920);
 }
 
 let _playerDoubleTapLikeAt = 0;

@@ -633,6 +633,79 @@ function threadPartnerId(thread, viewerId) {
   return "";
 }
 
+function isMissingDmReactionsTable(text) {
+  const s = String(text || "");
+  return /dm_message_reactions|Could not find the table|PGRST205|42P01/i.test(s);
+}
+
+/** Batch heart summaries for thread messages. Degrades to empty if SQL not applied. */
+async function heartSummariesForMessages(messageIds, viewerId) {
+  const ids = [...new Set((Array.isArray(messageIds) ? messageIds : []).map((id) => cleanUserId(id)).filter(Boolean))];
+  const out = new Map();
+  if (!ids.length) return out;
+  const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
+  const r = await svcFetch(
+    `dm_message_reactions?select=message_id,user_id&message_id=in.(${inClause})&reaction=eq.heart&limit=2000`,
+  );
+  if (!r.ok) {
+    if (isMissingDmReactionsTable(r.text)) return out;
+    return out;
+  }
+  const rows = Array.isArray(r.data) ? r.data : [];
+  const vid = cleanUserId(viewerId);
+  for (const row of rows) {
+    const mid = cleanUserId(row?.message_id);
+    if (!mid) continue;
+    const cur = out.get(mid) || { heartCount: 0, heartedByMe: false };
+    cur.heartCount += 1;
+    if (vid && cleanUserId(row?.user_id) === vid) cur.heartedByMe = true;
+    out.set(mid, cur);
+  }
+  return out;
+}
+
+function attachHeartFields(messages, summaryMap) {
+  return (Array.isArray(messages) ? messages : []).map((m) => {
+    const mid = cleanUserId(m?.id);
+    const hit = mid && summaryMap?.get?.(mid);
+    return {
+      ...m,
+      heartCount: hit ? Number(hit.heartCount) || 0 : 0,
+      heartedByMe: Boolean(hit?.heartedByMe),
+    };
+  });
+}
+
+async function loadMessageThreadMembership(messageId, viewerId) {
+  const mid = cleanUserId(messageId);
+  const vid = cleanUserId(viewerId);
+  if (!mid || !vid) return null;
+  const plain = await svcFetch(
+    `dm_messages?select=id,thread_id,sender_id&id=eq.${encodeURIComponent(mid)}&limit=1`,
+  );
+  const msg = Array.isArray(plain.data) && plain.data[0] ? plain.data[0] : null;
+  if (!msg?.thread_id) return null;
+  const tr = await svcFetch(
+    `dm_threads?select=id,user_a,user_b&id=eq.${encodeURIComponent(msg.thread_id)}&limit=1`,
+  );
+  const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
+  if (!thread) return null;
+  const a = cleanUserId(thread.user_a);
+  const b = cleanUserId(thread.user_b);
+  if (vid !== a && vid !== b) return null;
+  return { message: msg, thread };
+}
+
+async function countHeartsForMessage(messageId) {
+  const mid = cleanUserId(messageId);
+  if (!mid) return 0;
+  const r = await svcFetch(
+    `dm_message_reactions?select=user_id&message_id=eq.${encodeURIComponent(mid)}&reaction=eq.heart&limit=500`,
+  );
+  if (!r.ok) return 0;
+  return Array.isArray(r.data) ? r.data.length : 0;
+}
+
 async function lastMessageForThread(threadId) {
   const tid = String(threadId || "").trim();
   if (!tid) return null;
@@ -929,6 +1002,10 @@ async function handleGet(req, res, user) {
       await reconcileOutboundDeliveryForSender(thread, user.userId);
     })());
     const rows = Array.isArray(msgs.data) ? [...msgs.data].reverse() : [];
+    const summaries = await heartSummariesForMessages(
+      rows.map((m) => m?.id),
+      user.userId,
+    );
     return sendJson(res, 200, {
       ok: true,
       thread: {
@@ -938,7 +1015,7 @@ async function handleGet(req, res, user) {
         partnerAvatar: prof?.avatar || "",
       },
       partnerLastReadAt: partnerLastReadAt || null,
-      messages: rows,
+      messages: attachHeartFields(rows, summaries),
     });
   }
 
@@ -1350,6 +1427,53 @@ async function handlePost(req, res, user) {
       if (pushed?.ok) await markMessagesDelivered([msgId], { threadId: pushThreadId });
     })());
     return sendJson(res, 200, { ok: true, threadId: thread.id, message: sent.message });
+  }
+
+  if (action === "react_message" || action === "unreact_message") {
+    const messageId = cleanUserId(body?.messageId || body?.message_id);
+    const reaction = String(body?.reaction || "heart").trim().toLowerCase() || "heart";
+    if (!messageId) return sendJson(res, 400, { ok: false, error: "Missing messageId" });
+    if (reaction !== "heart") return sendJson(res, 400, { ok: false, error: "Unsupported reaction" });
+    const membership = await loadMessageThreadMembership(messageId, user.userId);
+    if (!membership) return sendJson(res, 404, { ok: false, error: "Message not found" });
+
+    if (action === "react_message") {
+      const ins = await svcFetch("dm_message_reactions", {
+        method: "POST",
+        headers: { Prefer: "return=minimal,resolution=ignore-duplicates" },
+        body: JSON.stringify({
+          message_id: messageId,
+          user_id: user.userId,
+          reaction: "heart",
+        }),
+      });
+      if (!ins.ok && ins.status !== 409) {
+        if (isMissingDmReactionsTable(ins.text)) {
+          return sendJson(res, 503, {
+            ok: false,
+            error: "Run supabase/dm_message_reactions.sql in Supabase.",
+            missingTable: true,
+          });
+        }
+        return sendJson(res, 500, { ok: false, error: "Reaction failed", details: ins.text });
+      }
+      const heartCount = await countHeartsForMessage(messageId);
+      return sendJson(res, 200, { ok: true, hearted: true, heartCount, messageId });
+    }
+
+    const del = await svcFetch(
+      `dm_message_reactions?message_id=eq.${encodeURIComponent(messageId)}&user_id=eq.${encodeURIComponent(user.userId)}&reaction=eq.heart`,
+      { method: "DELETE", headers: { Prefer: "return=minimal" } },
+    );
+    if (!del.ok && isMissingDmReactionsTable(del.text)) {
+      return sendJson(res, 503, {
+        ok: false,
+        error: "Run supabase/dm_message_reactions.sql in Supabase.",
+        missingTable: true,
+      });
+    }
+    const heartCount = await countHeartsForMessage(messageId);
+    return sendJson(res, 200, { ok: true, hearted: false, heartCount, messageId });
   }
 
   return sendJson(res, 400, { ok: false, error: "Unknown messages action" });

@@ -56,10 +56,9 @@ function buildAvatarRequestVariants(prompt, referenceImages) {
   }));
   const contents = [{ role: "user", parts: [...imageParts, { text: prompt }] }];
   return [
-    // Explicit square aspect ratio first — the text instruction alone was letting the
-    // model return a tighter/taller crop than asked, which then got cover-cropped into
-    // the profile hero and cut off foreheads/chins. Falls back to plain requests if the
-    // model/API version doesn't support responseFormat.
+    // Prefer 2K when the model allows it — the flip cover is full-bleed on
+    // Retina, so 1K alone looks soft once maximised. Fall back to 1K / plain.
+    { contents, generationConfig: { responseModalities: ["TEXT", "IMAGE"], responseFormat: { image: { aspectRatio: "1:1", imageSize: "2K" } } } },
     { contents, generationConfig: { responseModalities: ["TEXT", "IMAGE"], responseFormat: { image: { aspectRatio: "1:1", imageSize: "1K" } } } },
     { contents, generationConfig: { responseModalities: ["TEXT", "IMAGE"] } },
     { contents },

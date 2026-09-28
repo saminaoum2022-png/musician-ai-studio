@@ -29083,6 +29083,91 @@ async function publishProfileAvatarChange(dataUrl, { toast = true } = {}) {
   return hosted;
 }
 
+function artistAvatarStorageKey(uid, slot = "active", ext = "jpg") {
+  const safe = String(slot || "active").replace(/[^a-z0-9_-]/gi, "").slice(0, 40) || "active";
+  return `${String(uid || "").trim()}/artist_avatar_${safe}.${ext}`;
+}
+
+async function uploadArtistAvatarBlob(blob, slot = "active") {
+  const token = getSupabaseAuthToken();
+  const uid = authSession?.user?.id;
+  if (!token || !uid) throw new Error("Login required");
+  if (!SUPABASE_URL) throw new Error("Supabase not configured");
+  const ext = extFromCoverMime(blob.type);
+  const key = artistAvatarStorageKey(uid, slot, ext);
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/storage/v1/object/song_covers/${key}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": blob.type || "image/jpeg",
+      "x-upsert": "true",
+      "Cache-Control": "public, max-age=60",
+    },
+    body: blob,
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`Artist Avatar upload failed (${r.status}): ${t.slice(0, 140)}`);
+  }
+  return `${SUPABASE_URL}/storage/v1/object/public/song_covers/${key}?v=${Date.now()}`;
+}
+
+/** Host a framed Artist Avatar data URL as a short public https URL (same bucket as profile photos).
+ *  Without this, the flip cover falls back to a ~320px local snap and looks soft full-bleed. */
+async function hostArtistAvatarUrl(avatar, slot = "active") {
+  const raw = String(avatar || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw) && !raw.startsWith("data:")) return raw;
+  if (!raw.startsWith("data:") && !raw.startsWith("blob:")) return raw;
+  const blob = await profileAvatarUploadBlobFromDataUrl(raw);
+  return uploadArtistAvatarBlob(blob, slot);
+}
+
+let _artistAvatarPublishGen = 0;
+async function publishArtistAvatarChange(dataUrl, { toast = false, slot = "active" } = {}) {
+  const raw = String(dataUrl || "").trim();
+  if (!raw) throw new Error("Could not read Artist Avatar");
+  const gen = ++_artistAvatarPublishGen;
+  const when = Date.now();
+  const gallery = Array.isArray(activeProfile?.artistAvatarGallery)
+    ? activeProfile.artistAvatarGallery.slice()
+    : [];
+  activeProfile = {
+    ...activeProfile,
+    id: String(authSession?.user?.id || activeProfile?.id || "").trim() || activeProfile.id,
+    artistAvatar: raw,
+    artistAvatarUpdatedAt: when,
+    clearArtistAvatar: false,
+  };
+  saveProfile(activeProfile);
+  try { syncProfileUiFromEdit(activeProfile); } catch {}
+  try { syncArtistAvatarFlipVisibility(); } catch {}
+  if (toast) {
+    try { showToast("Artist Avatar saved", { icon: "✦", durationMs: 1400 }); } catch {}
+  }
+  if (!authSession?.user?.id) return activeProfile.artistAvatar;
+  if (_profileCloudSyncTimer) {
+    clearTimeout(_profileCloudSyncTimer);
+    _profileCloudSyncTimer = null;
+  }
+  const hosted = await hostArtistAvatarUrl(raw, slot);
+  if (gen !== _artistAvatarPublishGen) return String(activeProfile?.artistAvatar || hosted || "");
+  const nextGallery = gallery.map((s) => (s === raw ? hosted : s));
+  if (!nextGallery.includes(hosted)) nextGallery.push(hosted);
+  activeProfile = {
+    ...activeProfile,
+    artistAvatar: hosted,
+    artistAvatarGallery: nextGallery.slice(-6),
+    artistAvatarUpdatedAt: Date.now(),
+  };
+  saveProfile(activeProfile);
+  try { syncProfileUiFromEdit(activeProfile); } catch {}
+  try { syncArtistAvatarFlipVisibility(); } catch {}
+  await supabaseUpsertProfile(activeProfile);
+  return hosted;
+}
+
 async function uploadSongCoverBlob(blob, trackId, suffix = "") {
   const token = getSupabaseAuthToken();
   const uid = authSession?.user?.id;
@@ -31146,6 +31231,8 @@ function syncArtistAvatarFlipVisibility() {
   if (onProfileRoute) {
     try { wireArtistAvatarFlipOnce(); } catch {}
     requestAnimationFrame(() => { try { syncArtistAvatarBadgePosition(); } catch {} });
+    // Upgrade legacy data-URL Artist Avatars to hosted https so the flip cover stays sharp.
+    try { void maybeHostLiveArtistAvatar(); } catch {}
   }
   if (hasAvatar) {
     try { syncArtistAvatarBackFace(); syncArtistAvatarBadgeThumb(); } catch {}
@@ -32082,7 +32169,9 @@ async function persistArtistAvatarSnapshot(id, url) {
     writeArtistAvatarSnap(id, clean);
     return;
   }
-  const small = await shrinkAvatarDataUrl(clean);
+  // Cover flip is full-bleed — keep the cold-start snap sharp enough (320 looked
+  // soft the moment the card flipped). JPEG ~720 usually still fits the snap budget.
+  const small = await shrinkAvatarDataUrl(clean, 720);
   if (_artistAvatarSnapWriteKey !== writeKey) return;
   if (small && small.length <= PROFILE_AVATAR_SNAP_MAX) writeArtistAvatarSnap(id, small);
 }
@@ -32091,6 +32180,40 @@ function artistAvatarUrlForPaint() {
   if (isRealUserAvatarUrl(live)) return live;
   return cachedArtistAvatarUrl(activeProfile?.id);
 }
+
+let _artistAvatarHostInFlight = "";
+/** One-shot: if the live Artist Avatar is still a data URL, host it and repaint the flip. */
+async function maybeHostLiveArtistAvatar() {
+  const live = String(activeProfile?.artistAvatar || "").trim();
+  if (!live.startsWith("data:") && !live.startsWith("blob:")) return;
+  if (!authSession?.user?.id) return;
+  if (_artistAvatarHostInFlight === live.slice(0, 96)) return;
+  _artistAvatarHostInFlight = live.slice(0, 96);
+  try {
+    const hosted = await hostArtistAvatarUrl(live, "active");
+    if (!hosted || hosted === live) return;
+    if (String(activeProfile?.artistAvatar || "").trim() !== live) return;
+    const gallery = Array.isArray(activeProfile?.artistAvatarGallery)
+      ? activeProfile.artistAvatarGallery.map((s) => (s === live ? hosted : s))
+      : [];
+    if (!gallery.includes(hosted)) gallery.push(hosted);
+    activeProfile = {
+      ...activeProfile,
+      artistAvatar: hosted,
+      artistAvatarGallery: gallery.slice(-6),
+      artistAvatarUpdatedAt: Date.now(),
+    };
+    saveProfile(activeProfile);
+    try { syncArtistAvatarBackFace(); syncArtistAvatarBadgeThumb(); } catch {}
+    try { syncProfileUiFromEdit(activeProfile); } catch {}
+    void supabaseUpsertProfile(activeProfile);
+  } catch {
+    /* keep painting whatever we have */
+  } finally {
+    if (_artistAvatarHostInFlight === live.slice(0, 96)) _artistAvatarHostInFlight = "";
+  }
+}
+
 function loadProfile() {
   try {
     const uid = String(authSession?.user?.id || "").trim();
@@ -36510,6 +36633,31 @@ async function supabaseUpsertProfile(profile) {
     } catch (e) {
       try { console.warn("[profile] avatar host failed; keeping cloud photo", e); } catch {}
       outgoingAvatar = "";
+    }
+  }
+  // Same rule for Artist Avatar — never leave a multi-MB data URL in the row
+  // (or a 320px local snap will win on the next cold open and the flip looks soft).
+  if (!clearArtistAvatar && (outgoingArtistAvatar.startsWith("data:") || outgoingArtistAvatar.startsWith("blob:"))) {
+    try {
+      const prevAa = outgoingArtistAvatar;
+      outgoingArtistAvatar = await hostArtistAvatarUrl(outgoingArtistAvatar, "active");
+      if (outgoingArtistAvatar && String(activeProfile?.id || "") === String(authSession?.user?.id || "")) {
+        const gallery = Array.isArray(activeProfile?.artistAvatarGallery)
+          ? activeProfile.artistAvatarGallery.map((s) => (s === prevAa ? outgoingArtistAvatar : s))
+          : [];
+        if (outgoingArtistAvatar && !gallery.includes(outgoingArtistAvatar)) gallery.push(outgoingArtistAvatar);
+        activeProfile = {
+          ...activeProfile,
+          artistAvatar: outgoingArtistAvatar,
+          artistAvatarGallery: gallery.slice(-6),
+          artistAvatarUpdatedAt: Number(profile.artistAvatarUpdatedAt || Date.now()),
+        };
+        try { saveProfile(activeProfile); } catch {}
+        try { syncArtistAvatarFlipVisibility(); } catch {}
+      }
+    } catch (e) {
+      try { console.warn("[profile] artist avatar host failed; keeping cloud copy", e); } catch {}
+      outgoingArtistAvatar = "";
     }
   }
   if (clearAvatar) outgoingAvatar = "";
@@ -79439,7 +79587,9 @@ try {
     saveProfile,
     supabaseUpsertProfile,
     hostProfileAvatarUrl,
+    hostArtistAvatarUrl,
     publishProfileAvatarChange,
+    publishArtistAvatarChange,
     compressAvatarFile,
     scheduleProfileCloudSync,
     loadPersonas,

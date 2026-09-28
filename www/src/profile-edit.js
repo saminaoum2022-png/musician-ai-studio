@@ -951,10 +951,30 @@ async function persistArtistAvatarNow() {
     const av = String(next.avatar || "").trim();
     if ((av.startsWith("data:") || av.startsWith("blob:")) && _deps.hostProfileAvatarUrl) {
       const hosted = await _deps.hostProfileAvatarUrl(av);
-      toCloud = { ...next, avatar: hosted, avatarUpdatedAt: Date.now() };
-      try { _deps.saveProfile(toCloud); } catch {}
-      try { _deps.syncProfileUi?.(toCloud); } catch {}
+      toCloud = { ...toCloud, avatar: hosted, avatarUpdatedAt: Date.now() };
+      _draft.avatar = hosted;
     }
+    // Host the active Artist Avatar so the profile flip cover stays sharp
+    // (local snaps used to shrink it to ~320px and the maximised flip looked soft).
+    const aa = String(toCloud.artistAvatar || "").trim();
+    if (!clearing && (aa.startsWith("data:") || aa.startsWith("blob:")) && _deps.hostArtistAvatarUrl) {
+      const hostedAa = await _deps.hostArtistAvatarUrl(aa, "active");
+      const gallery = aaCapGallery(
+        (toCloud.artistAvatarGallery || []).map((s) => (s === aa ? hostedAa : s)),
+      );
+      if (!gallery.includes(hostedAa)) gallery.push(hostedAa);
+      toCloud = {
+        ...toCloud,
+        artistAvatar: hostedAa,
+        artistAvatarGallery: gallery,
+        artistAvatarUpdatedAt: Date.now(),
+      };
+      _draft.artistAvatar = hostedAa;
+      _draft.artistAvatarGallery = gallery;
+      if (_draft.avatar === aa) _draft.avatar = hostedAa;
+    }
+    try { _deps.saveProfile(toCloud); } catch {}
+    try { _deps.syncProfileUi?.(toCloud); } catch {}
     await _deps.supabaseUpsertProfile(toCloud);
   } catch (e) {
     try {

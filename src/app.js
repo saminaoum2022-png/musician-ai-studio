@@ -28929,16 +28929,130 @@ function extFromCoverMime(mime) {
 }
 
 
-/* Profile photo: framed once (src/photo-frame.js) into a single ~720 px JPEG and saved as `avatar`.
- * There used to be a second, separate "HD" copy uploaded to a derived storage key with an async swap
- * once it finished uploading. That added a failure mode: any photo that never got an HD copy (older
- * photos, or an upload that silently failed) stayed on a blurry small placeholder forever — which read
- * as "stuck loading". Removed in favor of one right-sized photo, uploaded once, used everywhere. */
+/* Profile photo: framed once (src/photo-frame.js) into a single ~720 px image.
+ * The live `profiles.avatar` value must be a short https URL in Supabase Storage —
+ * never a multi-MB data: URL. Storing the data URL in the row made upserts race
+ * and let an older photo overwrite a fresh one a few seconds later. */
 
 async function dataUrlToBlob(dataUrl) {
   const r = await fetch(String(dataUrl || ""));
   if (!r.ok) throw new Error("Could not read cover image");
   return r.blob();
+}
+
+/** JPEG under the song_covers size cap — PNG data URLs from the framer are too big to POST into `profiles.avatar`. */
+async function profileAvatarUploadBlobFromDataUrl(dataUrl) {
+  const raw = String(dataUrl || "").trim();
+  if (!raw.startsWith("data:")) {
+    const blob = await dataUrlToBlob(raw);
+    return blob;
+  }
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const max = 720;
+        const nw = img.naturalWidth || max;
+        const nh = img.naturalHeight || max;
+        const ratio = Math.min(1, max / Math.max(nw, nh));
+        const w = Math.max(1, Math.round(nw * ratio));
+        const h = Math.max(1, Math.round(nh * ratio));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Could not encode photo"));
+        ctx.fillStyle = "#0b0c12";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          (blob) => (blob ? resolve(blob) : reject(new Error("Could not encode photo"))),
+          "image/jpeg",
+          0.9,
+        );
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = () => reject(new Error("Could not read photo"));
+    img.src = raw;
+  });
+}
+
+function profileAvatarStorageKey(uid, ext = "jpg") {
+  return `${String(uid || "").trim()}/profile_avatar.${ext}`;
+}
+
+async function uploadProfileAvatarBlob(blob) {
+  const token = getSupabaseAuthToken();
+  const uid = authSession?.user?.id;
+  if (!token || !uid) throw new Error("Login required");
+  if (!SUPABASE_URL) throw new Error("Supabase not configured");
+  const ext = extFromCoverMime(blob.type);
+  const key = profileAvatarStorageKey(uid, ext);
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/storage/v1/object/song_covers/${key}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": blob.type || "image/jpeg",
+      "x-upsert": "true",
+      "Cache-Control": "public, max-age=60",
+    },
+    body: blob,
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`Photo upload failed (${r.status}): ${t.slice(0, 140)}`);
+  }
+  return `${SUPABASE_URL}/storage/v1/object/public/song_covers/${key}?v=${Date.now()}`;
+}
+
+/** Turn a framed data URL into a public https URL before it is written to `profiles.avatar`. */
+async function hostProfileAvatarUrl(avatar) {
+  const raw = String(avatar || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw) && !raw.startsWith("data:")) return raw;
+  if (!raw.startsWith("data:") && !raw.startsWith("blob:")) return raw;
+  const blob = await profileAvatarUploadBlobFromDataUrl(raw);
+  return uploadProfileAvatarBlob(blob);
+}
+
+let _avatarPublishGen = 0;
+/** Paint the new photo everywhere on this phone now, host it, then push one
+ *  stable URL to the cloud so Friends / other devices cannot bounce back. */
+async function publishProfileAvatarChange(dataUrl, { toast = true } = {}) {
+  const raw = String(dataUrl || "").trim();
+  if (!raw) throw new Error("Could not read photo");
+  const gen = ++_avatarPublishGen;
+  const when = Date.now();
+  activeProfile = {
+    ...activeProfile,
+    id: String(authSession?.user?.id || activeProfile?.id || "").trim() || activeProfile.id,
+    avatar: raw,
+    avatarUpdatedAt: when,
+  };
+  saveProfile(activeProfile);
+  try { syncProfileUiFromEdit(activeProfile); } catch {}
+  if (toast) {
+    try { showToast("Photo saved", { icon: "✓", durationMs: 1400 }); } catch {}
+  }
+  if (!authSession?.user?.id) return activeProfile.avatar;
+  if (_profileCloudSyncTimer) {
+    clearTimeout(_profileCloudSyncTimer);
+    _profileCloudSyncTimer = null;
+  }
+  const hosted = await hostProfileAvatarUrl(raw);
+  if (gen !== _avatarPublishGen) return String(activeProfile?.avatar || hosted || "");
+  activeProfile = {
+    ...activeProfile,
+    avatar: hosted,
+    avatarUpdatedAt: Date.now(),
+  };
+  saveProfile(activeProfile);
+  try { syncProfileUiFromEdit(activeProfile); } catch {}
+  await supabaseUpsertProfile(activeProfile);
+  return hosted;
 }
 
 async function uploadSongCoverBlob(blob, trackId, suffix = "") {
@@ -32102,6 +32216,42 @@ function resolveMergedDisplayName(cloud, localFilled, active = activeProfile) {
   return cloudDn;
 }
 
+/** Newer photo wins. A data: URL that was just picked must not be replaced by
+ *  a stale cloud URL, and a hosted cloud URL must not be overwritten by an
+ *  older local data: copy from another device. */
+function normalizeAvatarCompareUrl(url) {
+  return String(url || "").trim().split("?")[0].split("#")[0];
+}
+function resolveMergedAvatar(cloud, localFilled, active = activeProfile) {
+  const cloudAv = String(cloud?.avatar || "").trim();
+  const localAv = String(
+    localFilled?.avatar != null ? localFilled.avatar : active?.avatar || "",
+  ).trim();
+  const cloudOk = isRealUserAvatarUrl(cloudAv);
+  const localOk = isRealUserAvatarUrl(localAv);
+  const localTs = Number(
+    localFilled?.avatarUpdatedAt != null ? localFilled.avatarUpdatedAt : active?.avatarUpdatedAt || 0,
+  );
+  const localIsFresh = localTs > 0 && Date.now() - localTs < 5 * 60 * 1000;
+  // You just changed the photo on this phone — keep it for a few minutes
+  // while the upload and other devices catch up.
+  if (localOk && localIsFresh) {
+    return { avatar: localAv, avatarUpdatedAt: localTs };
+  }
+  if (cloudOk && /^https?:\/\//i.test(cloudAv)) {
+    if (!localOk || localAv.startsWith("data:")) {
+      return { avatar: cloudAv, avatarUpdatedAt: Date.now() };
+    }
+    if (normalizeAvatarCompareUrl(cloudAv) !== normalizeAvatarCompareUrl(localAv)) {
+      return { avatar: cloudAv, avatarUpdatedAt: Date.now() };
+    }
+    return { avatar: cloudAv, avatarUpdatedAt: localTs || Date.now() };
+  }
+  if (localOk) return { avatar: localAv, avatarUpdatedAt: localTs || Date.now() };
+  if (cloudOk) return { avatar: cloudAv, avatarUpdatedAt: 0 };
+  return { avatar: "", avatarUpdatedAt: 0 };
+}
+
 function resolveMergedUsernameChangedAt(cloud, localFilled, active = activeProfile, mergedUsername) {
   const merged = normalizeProfileUsername(mergedUsername);
   const cloudName = normalizeProfileUsername(cloud?.username);
@@ -32123,6 +32273,9 @@ function applyMergedIdentityFields(nextProfile, cloud, localFilled) {
   nextProfile.displayName = resolveMergedDisplayName(cloud, localFilled, nextProfile);
   nextProfile.usernameChangedAt = resolveMergedUsernameChangedAt(cloud, localFilled, nextProfile, username);
   nextProfile.soundCertified = resolveMergedSoundCertified(cloud, localFilled, nextProfile);
+  const av = resolveMergedAvatar(cloud, localFilled, nextProfile);
+  nextProfile.avatar = av.avatar;
+  nextProfile.avatarUpdatedAt = av.avatarUpdatedAt;
   return nextProfile;
 }
 
@@ -36221,6 +36374,24 @@ async function supabaseUpsertProfile(profile) {
   let outgoingYoutube = String(profile.links?.youtube || "").trim();
   let outgoingTiktok = String(profile.links?.tiktok || "").trim();
   let outgoingArtistAvatar = String(profile.artistAvatar || "").trim();
+  // Never write a data: URL into profiles.avatar — that is what made the
+  // photo bounce between devices. Host it first, or keep the cloud URL.
+  if (outgoingAvatar.startsWith("data:") || outgoingAvatar.startsWith("blob:")) {
+    try {
+      outgoingAvatar = await hostProfileAvatarUrl(outgoingAvatar);
+      if (outgoingAvatar && String(activeProfile?.id || "") === String(authSession?.user?.id || "")) {
+        activeProfile = {
+          ...activeProfile,
+          avatar: outgoingAvatar,
+          avatarUpdatedAt: Number(profile.avatarUpdatedAt || Date.now()),
+        };
+        try { saveProfile(activeProfile); } catch {}
+      }
+    } catch (e) {
+      try { console.warn("[profile] avatar host failed; keeping cloud photo", e); } catch {}
+      outgoingAvatar = "";
+    }
+  }
   const needsCloudPeek =
     (!outgoingAvatar || !outgoingBio || !outgoingGenres || !outgoingDisplayName || !outgoingInstagram || !outgoingYoutube || !outgoingTiktok || !outgoingArtistAvatar) &&
     authSession?.user?.id;
@@ -36318,6 +36489,33 @@ async function supabaseUpsertProfile(profile) {
     const txt = await r.text().catch(() => "");
     throw new Error(`Cloud save failed (${r.status}): ${txt.slice(0, 140)}`);
   }
+  // Fresh row is what Friends and other devices will read — drop the stale
+  // 30s profile cache so a merge cannot resurrect the previous photo.
+  _profileLoadCache = {
+    ...(typeof profile === "object" && profile ? profile : {}),
+    id: authSession?.user?.id,
+    username: outgoingUsername,
+    displayName: outgoingDisplayName,
+    avatar: outgoingAvatar,
+    avatarUpdatedAt: Number(profile.avatarUpdatedAt || Date.now()),
+    bio: outgoingBio,
+    genres: outgoingGenres,
+    artistAvatar: outgoingArtistAvatar,
+    voiceTimbre: profile.voiceTimbre || "",
+    links: {
+      instagram: outgoingInstagram,
+      youtube: outgoingYoutube,
+      tiktok: outgoingTiktok,
+    },
+    isPublic: profile.isPublic !== false,
+  };
+  _profileLoadCacheAt = Date.now();
+  try {
+    invalidateProfileIdentityCachesAfterSave({
+      ..._profileLoadCache,
+      id: authSession?.user?.id,
+    });
+  } catch {}
 }
 async function supabaseLoadProfile(opts = {}) {
   const reason = String(opts.reason || "unknown");
@@ -78957,6 +79155,8 @@ try {
     getActiveProfile: () => activeProfile,
     saveProfile,
     supabaseUpsertProfile,
+    hostProfileAvatarUrl,
+    publishProfileAvatarChange,
     compressAvatarFile,
     scheduleProfileCloudSync,
     loadPersonas,
@@ -81283,36 +81483,10 @@ if (els.profileAvatarFile) {
     try {
       const dataUrl = await compressAvatarFile(f, { maxSize: 720, type: "image/png" });
       if (!dataUrl) throw new Error("Could not read photo");
-      activeProfile.avatar = dataUrl;
-      // Persist to localStorage IMMEDIATELY so a PWA close doesn't
-      // throw away the photo just because the user navigated away
-      // before tapping Save. Previous behavior: only the in-memory
-      // copy was updated, which is why "I put a photo, came back,
-      // it's gone" was reproducible after a hard restart.
-      saveProfile(activeProfile);
-      renderProfilePreviewFromInputs();
-      // Optimistic toast — UI already updated. Cloud sync happens
-      // inline below so a reload re-fetches the same photo from
-      // Supabase (the prior debounced path could be dropped if the
-      // app was closed before the 600ms timer fired).
-      showToast("Photo saved", { icon: "✓", durationMs: 1400 });
-      // Cancel any pending debounced sync — we're about to flush.
-      if (_profileCloudSyncTimer) {
-        clearTimeout(_profileCloudSyncTimer);
-        _profileCloudSyncTimer = null;
-      }
-      if (authSession?.user?.id) {
-        try {
-          await supabaseUpsertProfile(activeProfile);
-        } catch (e) {
-          console.warn("[avatar] cloud sync failed; will retry on next Save", e);
-          showToast("Photo saved locally — cloud will retry on Save", { durationMs: 3200 });
-          void scheduleProfileCloudSync({ delayMs: 2000 });
-        }
-      }
+      await publishProfileAvatarChange(dataUrl, { toast: true });
     } catch (e) {
-      console.error("[avatar] failed to read photo", e);
-      showToast(`Could not load photo: ${e?.message || "error"}`, { icon: "!", durationMs: 3200 });
+      console.error("[avatar] failed to publish photo", e);
+      showToast(`Could not save photo: ${e?.message || "error"}`, { icon: "!", durationMs: 3200 });
     } finally {
       try { if (els.profileAvatarFile) els.profileAvatarFile.value = ""; } catch {}
     }

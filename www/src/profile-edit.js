@@ -570,11 +570,23 @@ async function persistArtistAvatarNow() {
     artistAvatarConsentedAt: _draft.artistAvatarConsentedAt || active.artistAvatarConsentedAt || 0,
     artistAvatarUpdatedAt: Date.now(),
     avatar: _draft.avatar || active.avatar || "",
+    avatarUpdatedAt:
+      String(_draft.avatar || "") && String(_draft.avatar || "") !== String(active.avatar || "")
+        ? Date.now()
+        : Number(active.avatarUpdatedAt || 0),
   };
   try { _deps.saveProfile(next); } catch {}
   try { _deps.syncProfileUi?.(next); } catch {}
   try {
-    await _deps.supabaseUpsertProfile(next);
+    let toCloud = next;
+    const av = String(next.avatar || "").trim();
+    if ((av.startsWith("data:") || av.startsWith("blob:")) && _deps.hostProfileAvatarUrl) {
+      const hosted = await _deps.hostProfileAvatarUrl(av);
+      toCloud = { ...next, avatar: hosted, avatarUpdatedAt: Date.now() };
+      try { _deps.saveProfile(toCloud); } catch {}
+      try { _deps.syncProfileUi?.(toCloud); } catch {}
+    }
+    await _deps.supabaseUpsertProfile(toCloud);
   } catch (e) {
     try {
       _deps?.showToast?.("Saved on this phone — will sync once your connection is back", { durationMs: 3000 });
@@ -946,6 +958,13 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
     voiceTimbre: base.voiceTimbre || "",
     isPublic: base.isPublic !== false,
   };
+  if (String(payload.avatar || "").startsWith("data:") || String(payload.avatar || "").startsWith("blob:")) {
+    payload.avatarUpdatedAt = Date.now();
+  } else if (String(payload.avatar || "").trim() && String(payload.avatar || "").trim() !== String(base.avatar || "").trim()) {
+    payload.avatarUpdatedAt = Date.now();
+  } else {
+    payload.avatarUpdatedAt = Number(base.avatarUpdatedAt || 0);
+  }
   _deps.saveProfile(payload);
   const uid = String(_deps.getAuthSession?.()?.user?.id || payload.id || "").trim();
   if (uid && parseMusicPreferencesFromProfile(payload).length) {
@@ -970,7 +989,15 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
   void (async () => {
     let cloudSaved = false;
     try {
-      await _deps.supabaseUpsertProfile(payload);
+      let toCloud = payload;
+      const av = String(payload.avatar || "").trim();
+      if ((av.startsWith("data:") || av.startsWith("blob:")) && _deps.hostProfileAvatarUrl) {
+        const hosted = await _deps.hostProfileAvatarUrl(av);
+        toCloud = { ...payload, avatar: hosted, avatarUpdatedAt: Date.now() };
+        try { _deps.saveProfile(toCloud); } catch {}
+        try { _deps.syncProfileUi?.(toCloud); } catch {}
+      }
+      await _deps.supabaseUpsertProfile(toCloud);
       cloudSaved = true;
     } catch (err) {
       _deps.setStatus?.(`Saved locally. Cloud sync skipped: ${err?.message || String(err)}`);

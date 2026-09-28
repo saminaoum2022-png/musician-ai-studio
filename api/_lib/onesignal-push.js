@@ -1,8 +1,9 @@
 /**
- * Privacy-first OneSignal push delivery for Nabad.
+ * OneSignal push delivery for Nabad.
  *
- * - Never send DM message bodies/content to OneSignal.
- * - DM copy stays private ("New message from <sender>").
+ * - DM alerts include a short message preview so lock-screen / banner text can
+ *   show content. iOS and Android system settings still control whether the
+ *   user sees previews (Show Previews / sensitive notification options).
  * - Social copy is concise actor + action.
  * - Deep-link hints use opaque route/category keys only.
  * - Target by external_id first (all linked devices); fall back to subscription IDs.
@@ -12,6 +13,7 @@ const ONESIGNAL_APP_ID = String(process.env.ONESIGNAL_APP_ID || "").trim();
 const ONESIGNAL_REST_API_KEY = String(process.env.ONESIGNAL_REST_API_KEY || "").trim();
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const PUSH_APP_TITLE = "NabadAi";
 
 /** @type {Record<string, { route: string } | null>} */
 const PUSH_TEMPLATES = {
@@ -55,6 +57,13 @@ function cleanDisplayName(v) {
   return s.slice(0, 40);
 }
 
+function cleanDmPreview(v) {
+  return String(v || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 140);
+}
+
 function composePushCopy({ type, actorDisplayName, metadata }) {
   const actor = cleanDisplayName(actorDisplayName);
   const t = String(type || "").trim();
@@ -71,7 +80,15 @@ function composePushCopy({ type, actorDisplayName, metadata }) {
     return { body: customBody.slice(0, 180) };
   }
   if (type === "dm_message") {
+    const preview = cleanDmPreview(metadata?.preview || metadata?.body || "");
+    if (preview) {
+      return {
+        heading: actor || "Someone",
+        body: preview,
+      };
+    }
     return {
+      heading: PUSH_APP_TITLE,
       body: `New message from ${actor || "someone"}`,
     };
   }
@@ -204,12 +221,11 @@ async function resolveAllPushSubscriptionIds(userId) {
   return [...new Set([...osIds, ...dbIds])];
 }
 
-const PUSH_APP_TITLE = "NabadAi";
-
 function buildNotificationPayload({ uid, tpl, data, subscriptionIds, copy }) {
+  const heading = String(copy?.heading || PUSH_APP_TITLE).trim() || PUSH_APP_TITLE;
   const base = {
     app_id: ONESIGNAL_APP_ID,
-    headings: { en: PUSH_APP_TITLE },
+    headings: { en: heading },
     contents: { en: copy.body },
     data,
   };

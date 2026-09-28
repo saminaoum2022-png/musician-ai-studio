@@ -27,6 +27,17 @@ export function isDmThreadChannelReady() {
   return Boolean(_threadChannelReady && _threadChannel && _activeThreadId);
 }
 
+/** Thread id the user is currently viewing (empty when not in a chat). */
+export function getActiveDmThreadId() {
+  return String(_activeThreadId || "").trim();
+}
+
+/** Mark which DM is on screen — used to suppress same-thread push banners. */
+export function setActiveDmThreadId(threadId) {
+  _activeThreadId = String(threadId || "").trim();
+  if (!_activeThreadId) _activeThreadPartnerId = "";
+}
+
 export function isDmInboxChannelReady() {
   return Boolean(_inboxChannelReady && _inboxChannel && _activeInboxUserId);
 }

@@ -1345,6 +1345,7 @@ async function handlePost(req, res, user) {
         type: "dm_message",
         entityId: pushThreadId,
         actorDisplayName: senderProfile?.username || "Someone",
+        metadata: { preview: String(text || sent.message?.body || "").trim() },
       }).catch(() => null);
       if (pushed?.ok) await markMessagesDelivered([msgId], { threadId: pushThreadId });
     })());

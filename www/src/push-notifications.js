@@ -1,8 +1,10 @@
 /**
- * OneSignal push — privacy-first (web + native Capacitor).
+ * OneSignal push — web + native Capacitor.
  * Links Supabase auth UUID as external_id; registers subscription ID with our API.
- * Never sends message content to OneSignal.
+ * DM alerts may include a short message preview (OS settings still gate lock-screen reveal).
  */
+
+import { getActiveDmThreadId } from "./messages-realtime.js";
 
 let _appId = "";
 let _initPromise = null;
@@ -127,10 +129,31 @@ export function stashPendingPushPayload(raw) {
   return hashPath;
 }
 
-function shouldSuppressForegroundGenerationPush(raw) {
+function foregroundActiveDmThreadId() {
+  try {
+    const fromRt = getActiveDmThreadId();
+    if (fromRt) return fromRt;
+  } catch {}
+  try {
+    if (String(document.body?.getAttribute("data-route") || "") !== "messages-thread") return "";
+    const q = new URLSearchParams(String(location.hash || "").split("?")[1] || "");
+    return String(q.get("thread") || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function shouldSuppressForegroundPush(raw) {
   if (!isAppActiveForPush()) return false;
-  const { category } = normalizePushPayload(raw);
-  return isGenerationPushCategory(category);
+  const { category, entityId } = normalizePushPayload(raw);
+  // Generation ready while app is open — in-app UI already covers it.
+  if (isGenerationPushCategory(category)) return true;
+  // Already inside this DM thread — live messages arrive without a banner.
+  if (category === "dm_message" && entityId) {
+    const active = foregroundActiveDmThreadId();
+    if (active && active === entityId) return true;
+  }
+  return false;
 }
 
 function ackDmThreadDeliveredFromPush(threadId) {
@@ -168,7 +191,7 @@ function attachForegroundGenerationPushFilter(OneSignal) {
     try {
       const notif = event?.notification || event?.getNotification?.() || event;
       maybeAckDmDeliveryFromPush(notif);
-      if (!shouldSuppressForegroundGenerationPush(notif)) return;
+      if (!shouldSuppressForegroundPush(notif)) return;
       if (typeof event.preventDefault === "function") event.preventDefault();
     } catch {}
   });

@@ -3775,11 +3775,15 @@ const TAB_REFRESH_ACTIONS = {
       void refreshDiscoverFeed();
     } catch (e) { console.warn("[tabRefresh/discover]", e); }
   },
-  friends() {
+  friends(opts = {}) {
     try {
+      const pull = opts.source === "pull";
       syncFollowingComposeUi();
-      void refreshDiscoveryFollowingFeed();
-      void refreshDiscoverLiveFriends();
+      void refreshDiscoveryFollowingFeed({ force: pull, keepVisible: true });
+      // Presence checks fan out one request per friend. Keep that off the
+      // pull gesture — a second wave of fetches during the refresh is what
+      // was restarting the app.
+      if (!pull) void refreshDiscoverLiveFriends();
     } catch (e) { console.warn("[tabRefresh/friends]", e); }
   },
   messages(opts = {}) {
@@ -3892,7 +3896,11 @@ function triggerTabRefresh(route, opts = {}) {
     console.warn("[tabRefresh]", e);
     return false;
   }
-  try { window.scrollTo({ top: 0, behavior: pull ? "auto" : "smooth" }); } catch {}
+  // Pull-to-refresh only starts at the top. Scrolling again inside the
+  // gesture fights WKWebView and has been enough to kill the process.
+  if (!pull) {
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+  }
   // Fixed visual: a single, satisfying rotation regardless of network.
   // 900ms ≈ one rotation of the CSS animation, plus a tiny breath.
   const tabEl = document.querySelector(`.mobileTabbar a[data-route-link="${route}"]`);
@@ -17597,10 +17605,14 @@ function friendsFeedPageSlice(items, filter = _friendsFeedFilter) {
 }
 
 function friendsFeedLoadMoreHtml(remaining) {
-  if (remaining <= 0) return "";
+  const more = remaining > 0 || _friendsFeedMoreRemote;
+  if (!more) return "";
+  const count = remaining > 0
+    ? `<span class="profileReleasesLoadMoreCount">${remaining}</span>`
+    : "";
   return `<div class="profileReleasesLoadMoreRow friendsFeedLoadMoreRow" data-friends-feed-loadmore-sentinel>
     <button type="button" class="profileReleasesLoadMore" id="friendsFeedLoadMore" aria-label="Load more posts">
-      Load more<span class="profileReleasesLoadMoreCount">${remaining}</span>
+      Load more${count}
     </button>
   </div>`;
 }
@@ -17649,7 +17661,10 @@ function extendFriendsFeedPage() {
   const listEl = document.getElementById("discoveryFollowingList");
   if (!listEl || listEl.hidden) return;
   const filtered = filterFriendsFeedItems(_friendsFeedMergedItems, _friendsFeedFilter);
-  if (_friendsFeedShown >= filtered.length) return;
+  if (_friendsFeedShown >= filtered.length) {
+    void loadOlderFriendsFeedPosts();
+    return;
+  }
   const prevShown = _friendsFeedShown;
   _friendsFeedShown = Math.min(filtered.length, _friendsFeedShown + FRIENDS_FEED_PAGE_SIZE);
   const nextItems = filtered.slice(prevShown, _friendsFeedShown);
@@ -17667,13 +17682,6 @@ function extendFriendsFeedPage() {
   } catch {}
   applyFeedSocialStatsToDom(listEl);
   void hydrateFeedSocialStatsForFeed(listEl);
-  _friendsFeedSnapshot = {
-    at: Date.now(),
-    html: listEl.innerHTML,
-    tracks: _discoveryFeedTracks,
-    shown: _friendsFeedShown,
-  };
-  persistFriendsFeedSnapshot();
   logFriendsFeedListRender(_friendsFeedShown);
 }
 
@@ -22560,7 +22568,12 @@ function resetProfileStatsGuestUi() {
   }
 }
 const FRIENDS_FEED_LIBRARY_USERS = 12;
-const FRIENDS_FEED_LIBRARY_SONG_LIMIT = 24;
+/** One screen of songs. Older posts come in on scroll, not in this request. */
+const FRIENDS_FEED_LIBRARY_SONG_LIMIT = 10;
+let _friendsFeedLibraryUserIds = [];
+let _friendsFeedOldestCreatedAt = "";
+let _friendsFeedMoreRemote = false;
+let _friendsFeedOlderInFlight = false;
 
 function hydrateFriendsFeedSnapshotFromStorage() {
   if (_friendsFeedSnapshot) return;
@@ -22582,6 +22595,10 @@ function hydrateFriendsFeedSnapshotFromStorage() {
 
 function persistFriendsFeedSnapshot() {
   if (!_friendsFeedSnapshot) return;
+  // The snapshot is the first screen only. Saving every card the user
+  // scrolled into sessionStorage has restarted the app on pull-to-refresh.
+  const html = String(_friendsFeedSnapshot.html || "");
+  if (!html || html.length > 80000) return;
   try {
     sessionStorage.setItem(FRIENDS_FEED_SNAPSHOT_KEY, JSON.stringify(_friendsFeedSnapshot));
   } catch {}
@@ -22850,10 +22867,9 @@ function wireFriendsComposeFabOnce() {
 }
 
 async function refreshDiscoveryFollowingFeed(opts = {}) {
-  if (_friendsFeedRefreshInFlight) {
-    if (opts.force) _friendsFeedRefreshQueued = true;
-    return;
-  }
+  // A second full fetch stacked on the first one (pull while the feed is
+  // still loading) is enough to run the web view out of memory.
+  if (_friendsFeedRefreshInFlight) return;
   _friendsFeedRefreshInFlight = true;
   _routeRefreshGate.friends.begin();
   try {
@@ -22865,7 +22881,9 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
   if (!statusEl || !listEl) return;
   if (authSession?.user?.id) _friendsFeedAuthRetry = 0;
 
-  const keepFeed = Boolean(STATUS_POSTS_FEATURE_ENABLED && _friendsOwnPostPin && listEl.querySelector(".followAct"));
+  const keepFeed = Boolean(
+    opts.keepVisible && listEl.querySelector(".followAct:not(.followAct--skel)"),
+  ) || Boolean(STATUS_POSTS_FEATURE_ENABLED && _friendsOwnPostPin && listEl.querySelector(".followAct"));
   const snap = _friendsFeedSnapshot;
   const snapFresh =
     snap &&
@@ -23016,12 +23034,15 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     }
 
     const libraryUserIds = followingIds.slice(0, FRIENDS_FEED_LIBRARY_USERS);
+    _friendsFeedLibraryUserIds = libraryUserIds;
+    _friendsFeedMoreRemote = false;
+    _friendsFeedOldestCreatedAt = "";
     const [statusPosts, tracksByUser, repostRows] = await Promise.all([
       STATUS_POSTS_FEATURE_ENABLED
-        ? fetchFollowingStatusPosts(40, await fetchFollowingListForFeed())
+        ? fetchFollowingStatusPosts(8, await fetchFollowingListForFeed())
         : Promise.resolve([]),
-      supabaseFetchPublicLibraryForUserIds(libraryUserIds, FRIENDS_FEED_LIBRARY_SONG_LIMIT),
-      fetchFollowingRepostsForFeed(libraryUserIds, 40),
+      supabaseFetchPublicLibraryForUserIds(libraryUserIds, FRIENDS_FEED_LIBRARY_SONG_LIMIT, { lean: true }),
+      fetchFollowingRepostsForFeed(libraryUserIds, 8),
     ]);
     const tracksNested = libraryUserIds.map((userId) =>
       (tracksByUser.get(userId) || []).map((row) => ({ ...row, userId })),
@@ -23036,11 +23057,17 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
         return isDiscoverFeedActive(t);
       })
       .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0))
-      .slice(0, 60);
+      .slice(0, FRIENDS_FEED_LIBRARY_SONG_LIMIT);
+    const oldestCreated = playable.reduce((min, t) => {
+      const n = Number(t.createdTs || t.ts || 0);
+      return n > 0 && (min === 0 || n < min) ? n : min;
+    }, 0);
+    _friendsFeedOldestCreatedAt = oldestCreated ? new Date(oldestCreated).toISOString() : "";
+    _friendsFeedMoreRemote = playable.length >= FRIENDS_FEED_LIBRARY_SONG_LIMIT;
 
     // Reposts: hydrate the original songs, then build repost feed items.
     const repostTargetIds = [...new Set(repostRows.map((r) => r.targetId))];
-    const repostSongs = repostTargetIds.length ? await fetchPublicSongsByIds(repostTargetIds) : new Map();
+    const repostSongs = repostTargetIds.length ? await fetchPublicSongsByIds(repostTargetIds, { lean: true }) : new Map();
     if (gen !== _discoveryFollowingGen) return;
     const repostItems = repostRows
       .map((rp) => {
@@ -23086,7 +23113,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     ]
       .filter((row) => row.ts > 0 || row.kind === "status")
       .sort((a, b) => b.ts - a.ts);
-    const mergedItems = mergeFriendsOwnPostPin(feedItems).slice(0, 80);
+    const mergedItems = mergeFriendsOwnPostPin(feedItems).slice(0, FRIENDS_FEED_LIBRARY_SONG_LIMIT + 8);
     _friendsFeedMergedItems = mergedItems;
     _friendsFeedProfMap = profMap;
     try { paintDiscoverFriendsTeaser(); } catch {}
@@ -23194,10 +23221,69 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
   } finally {
     _friendsFeedRefreshInFlight = false;
     _routeRefreshGate.friends.end();
-    if (_friendsFeedRefreshQueued) {
-      _friendsFeedRefreshQueued = false;
-      void refreshDiscoveryFollowingFeed(opts);
+    _friendsFeedRefreshQueued = false;
+  }
+}
+
+/** Next screen of songs from people you follow. Runs when the user
+ *  scrolls to the end — not as part of the first paint. */
+async function loadOlderFriendsFeedPosts() {
+  if (_friendsFeedOlderInFlight || _friendsFeedRefreshInFlight) return;
+  if (!_friendsFeedMoreRemote || !_friendsFeedOldestCreatedAt || !_friendsFeedLibraryUserIds.length) return;
+  const listEl = document.getElementById("discoveryFollowingList");
+  if (!listEl || !isFriendsFeedSurface()) return;
+  _friendsFeedOlderInFlight = true;
+  const gen = _discoveryFollowingGen;
+  try {
+    const tracksByUser = await supabaseFetchPublicLibraryForUserIds(
+      _friendsFeedLibraryUserIds,
+      FRIENDS_FEED_LIBRARY_SONG_LIMIT,
+      { lean: true, beforeCreatedAt: _friendsFeedOldestCreatedAt },
+    );
+    if (gen !== _discoveryFollowingGen || !isFriendsFeedSurface()) return;
+    const seen = new Set(
+      (_friendsFeedMergedItems || []).map((item) => String(item?.track?.id || "")).filter(Boolean),
+    );
+    const older = [];
+    for (const [uid, rows] of tracksByUser) {
+      for (const row of rows || []) {
+        const track = { ...row, userId: String(uid || row?.userId || "") };
+        const id = String(track.id || "");
+        if (!id || seen.has(id) || !String(track.url || "").trim()) continue;
+        if (track.publicOnProfile === false || !isDiscoverFeedActive(track)) continue;
+        seen.add(id);
+        older.push(track);
+      }
     }
+    older.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+    const page = older.slice(0, FRIENDS_FEED_LIBRARY_SONG_LIMIT);
+    if (page.length < FRIENDS_FEED_LIBRARY_SONG_LIMIT) _friendsFeedMoreRemote = false;
+    if (!page.length) {
+      _friendsFeedMoreRemote = false;
+      listEl.querySelector("[data-friends-feed-loadmore-sentinel]")?.remove();
+      return;
+    }
+    const oldestCreated = page.reduce((min, t) => {
+      const n = Number(t.createdTs || t.ts || 0);
+      return n > 0 && (min === 0 || n < min) ? n : min;
+    }, 0);
+    if (oldestCreated) _friendsFeedOldestCreatedAt = new Date(oldestCreated).toISOString();
+    const missingProfiles = page
+      .map((t) => String(t.userId || "").trim())
+      .filter((id) => id && !_friendsFeedProfMap.has(id));
+    if (missingProfiles.length) {
+      const extra = await fetchProfilesByUserIdsMap(missingProfiles);
+      if (gen !== _discoveryFollowingGen) return;
+      for (const [id, prof] of extra) _friendsFeedProfMap.set(id, prof);
+    }
+    for (const track of page) {
+      _friendsFeedMergedItems.push({ kind: "music", ts: Number(track.ts || 0), track });
+    }
+    _friendsFeedMergedItems.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+    extendFriendsFeedPage();
+  } catch {}
+  finally {
+    _friendsFeedOlderInFlight = false;
   }
 }
 
@@ -26340,7 +26426,7 @@ async function hydrateRemixOriginalsForTracks(tracks) {
   }
   if (!wantedIds.size && !list.some((t) => remixAttributionForTrack(t))) return;
   try {
-    const byId = wantedIds.size ? await fetchPublicSongsByIds([...wantedIds]) : new Map();
+    const byId = wantedIds.size ? await fetchPublicSongsByIds([...wantedIds], { lean: true }) : new Map();
     const titleLookups = new Map();
     const lookupByTitle = (ownerUserId, title) => {
       const uid = String(ownerUserId || "").trim();
@@ -37474,6 +37560,11 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
 const PUBLIC_LIBRARY_SONG_META_COLS =
   "meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_style_tags:meta->styleTags,meta_mode:meta->>mode,meta_photo_mode:meta->photoMode,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_thumb_frame:meta->thumbFrame,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_post_media_layout:meta->>postMediaLayout,meta_lyrics:meta->>lyricsInput";
 
+/** Friends list only. Lyrics and the full cover live in `meta` and can be
+ *  hundreds of KB per song — the card never shows them. */
+const FRIENDS_FEED_SONG_META_COLS =
+  "meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_photo_mode:meta->photoMode,meta_image_thumb:meta->>imageThumb,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_post_media_layout:meta->>postMediaLayout";
+
 async function fetchPublicSongByOwnerTitle(ownerUserId, title) {
   const uid = String(ownerUserId || "").trim();
   const songTitle = String(title || "").trim();
@@ -37514,12 +37605,13 @@ async function fetchPublicSongByOwnerTitle(ownerUserId, title) {
 /** Fetch a set of public songs by id (for repost originals), keyed by song
  *  id. Returns playable track objects with userId attached. Safe if the
  *  table/columns are missing — resolves to an empty map. */
-async function fetchPublicSongsByIds(ids) {
+async function fetchPublicSongsByIds(ids, opts = {}) {
   const out = new Map();
   const uuids = [...new Set((ids || []).map((x) => String(x || "").trim()).filter(Boolean))].slice(0, 60);
   if (!uuids.length || !SUPABASE_URL || !SUPABASE_ANON_KEY) return out;
+  const metaCols = opts.lean ? FRIENDS_FEED_SONG_META_COLS : PUBLIC_LIBRARY_SONG_META_COLS;
   const cols =
-    `user_id,id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,${PUBLIC_LIBRARY_SONG_META_COLS}`;
+    `user_id,id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,${metaCols}`;
   const colsLegacy = cols.replace(",published_at", "");
   const inList = uuids.map((id) => `"${id}"`).join(",");
   const token = getSupabaseAuthToken();
@@ -38373,13 +38465,16 @@ function dedupePublicSongRowsRaw(arr) {
   return out;
 }
 
-async function supabaseFetchPublicLibraryRowsForFilter(filterQuery, perUserLimit = 80) {
+async function supabaseFetchPublicLibraryRowsForFilter(filterQuery, perUserLimit = 80, opts = {}) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !filterQuery) return new Map();
-  const lim = Math.min(120, Math.max(12, Number(perUserLimit) || 80));
+  const lean = Boolean(opts.lean);
+  const floor = lean ? 1 : 12;
+  const lim = Math.min(120, Math.max(floor, Number(perUserLimit) || 80));
+  const metaCols = lean ? FRIENDS_FEED_SONG_META_COLS : PUBLIC_LIBRARY_SONG_META_COLS;
   const colsWithPublished =
-    `user_id,id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,${PUBLIC_LIBRARY_SONG_META_COLS}`;
+    `user_id,id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,${metaCols}`;
   const colsLegacy =
-    `user_id,id,created_at,title,song_url,task_id,audio_id,kind,art_url,${PUBLIC_LIBRARY_SONG_META_COLS}`;
+    `user_id,id,created_at,title,song_url,task_id,audio_id,kind,art_url,${metaCols}`;
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const authHeaders = () => {
     const token = getSupabaseAuthToken();
@@ -38543,22 +38638,29 @@ async function refreshOwnerPublicPostsCache(opts = {}) {
   }
 }
 
-/** One request for many followed creators' public libraries (Friends feed). */
-async function supabaseFetchPublicLibraryForUserIds(userIds, maxRows = null) {
+/** One request for many followed creators' public libraries (Friends feed).
+ *  `lean` drops lyrics and full-size covers. `beforeCreatedAt` is the next
+ *  page (older than the last song already on screen). */
+async function supabaseFetchPublicLibraryForUserIds(userIds, maxRows = null, opts = {}) {
   const ids = [...new Set((userIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
   if (!ids.length) return new Map();
+  const lean = Boolean(opts.lean);
+  const floor = lean ? 1 : 12;
   const rowLimit = Math.min(
     120,
-    Math.max(12, Number(maxRows) || ids.length * 12),
+    Math.max(floor, Number(maxRows) || ids.length * 12),
   );
+  const before = String(opts.beforeCreatedAt || "").trim();
+  const older = before ? `&created_at=lt.${encodeURIComponent(before)}` : "";
   if (ids.length === 1) {
     return supabaseFetchPublicLibraryRowsForFilter(
-      `user_id=eq.${encodeURIComponent(ids[0])}`,
+      `user_id=eq.${encodeURIComponent(ids[0])}${older}`,
       rowLimit,
+      { lean },
     );
   }
   const inList = ids.map((id) => encodeURIComponent(id)).join(",");
-  return supabaseFetchPublicLibraryRowsForFilter(`user_id=in.(${inList})`, rowLimit);
+  return supabaseFetchPublicLibraryRowsForFilter(`user_id=in.(${inList})${older}`, rowLimit, { lean });
 }
 
 function remixMetaFromSongMeta(meta) {

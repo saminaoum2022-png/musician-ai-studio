@@ -4075,6 +4075,13 @@
                     <span id="profileEditAvatarFallback" class="profileEditAvatarFallback emptyProfileAvatar" aria-hidden="true">
                       <svg viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.7" fill="currentColor"/><path d="M4.4 19.6c.9-3.6 4-5.8 7.6-5.8s6.7 2.2 7.6 5.8c.1.5-.3.9-.8.9H5.2c-.5 0-.9-.4-.8-.9Z" fill="currentColor"/></svg>
                     </span>
+                    <span id="profileEditPhotoSync" class="profileEditMediaSync" hidden aria-live="polite">
+                      <span class="profileEditMediaSyncFill" aria-hidden="true"></span>
+                      <span class="profileEditMediaSyncLabel" id="profileEditPhotoSyncLabel">Uploading…</span>
+                      <button type="button" class="profileEditMediaSyncRetry" id="profileEditPhotoSyncRetry" hidden aria-label="Retry upload">
+                        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5a5 5 0 0 1-8.9 3.1L6.7 17.5A7 7 0 0 0 19 13c0-3.87-3.13-7-7-7z"/></svg>
+                      </button>
+                    </span>
                   </span>
                   <span class="profileEditPhotoCaption">Photo</span>
                 </button>
@@ -4082,6 +4089,12 @@
                   <span class="profileEditArtistRingWell">
                     <img id="profileEditArtistRingThumb" class="profileEditArtistRingThumb" alt="" hidden decoding="async" draggable="false" />
                     <svg class="profileEditArtistRingPlus" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7V4Z"/></svg>
+                    <span id="profileEditArtistSync" class="profileEditMediaSync profileEditMediaSync--ring" hidden aria-live="polite">
+                      <span class="profileEditMediaSyncFill" aria-hidden="true"></span>
+                      <button type="button" class="profileEditMediaSyncRetry profileEditMediaSyncRetry--ring" id="profileEditArtistSyncRetry" hidden aria-label="Retry Artist Avatar upload">
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5a5 5 0 0 1-8.9 3.1L6.7 17.5A7 7 0 0 0 19 13c0-3.87-3.13-7-7-7z"/></svg>
+                      </button>
+                    </span>
                   </span>
                   <span class="profileEditArtistCaption">Artist</span>
                 </button>

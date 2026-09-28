@@ -28967,7 +28967,8 @@ async function dataUrlToBlob(dataUrl) {
   return r.blob();
 }
 
-/** JPEG under the song_covers size cap — PNG data URLs from the framer are too big to POST into `profiles.avatar`. */
+/** JPEG for Storage — sharp enough for the full-bleed cover on phones, lean enough to upload fast.
+ *  1080px @ 0.84 ≈ Instagram-grade: no soft 320 snap, no multi-MB PNG data URL. */
 async function profileAvatarUploadBlobFromDataUrl(dataUrl) {
   const raw = String(dataUrl || "").trim();
   if (!raw.startsWith("data:")) {
@@ -28978,7 +28979,7 @@ async function profileAvatarUploadBlobFromDataUrl(dataUrl) {
     const img = new Image();
     img.onload = () => {
       try {
-        const max = 720;
+        const max = 1080;
         const nw = img.naturalWidth || max;
         const nh = img.naturalHeight || max;
         const ratio = Math.min(1, max / Math.max(nw, nh));
@@ -28989,13 +28990,15 @@ async function profileAvatarUploadBlobFromDataUrl(dataUrl) {
         canvas.height = h;
         const ctx = canvas.getContext("2d");
         if (!ctx) return reject(new Error("Could not encode photo"));
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
         ctx.fillStyle = "#0b0c12";
         ctx.fillRect(0, 0, w, h);
         ctx.drawImage(img, 0, 0, w, h);
         canvas.toBlob(
           (blob) => (blob ? resolve(blob) : reject(new Error("Could not encode photo"))),
           "image/jpeg",
-          0.9,
+          0.84,
         );
       } catch (e) {
         reject(e);

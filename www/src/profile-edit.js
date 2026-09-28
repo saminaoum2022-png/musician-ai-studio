@@ -217,6 +217,15 @@ function applyAvatarToEditPhoto() {
     fallback.setAttribute("aria-hidden", av ? "true" : "false");
   }
   applyArtistRingToEditPhoto();
+  // Keep on-photo upload / retry chrome if a sync is still in flight after a re-paint.
+  if (_photoSyncPending) {
+    const sync = qs("#profileEditPhotoSync");
+    if (sync && sync.hidden) setMediaSyncUi("photo", sync.classList.contains("isError") ? "error" : "uploading");
+  }
+  if (_artistSyncPending) {
+    const sync = qs("#profileEditArtistSync");
+    if (sync && sync.hidden) setMediaSyncUi("artist", sync.classList.contains("isError") ? "error" : "uploading");
+  }
 }
 
 /** Nested Artist + ring on the Edit Profile photo — empty dashed +, or live AA thumb. */
@@ -259,6 +268,100 @@ function hideProfileEditBusy() {
   }
   document.body.classList.remove("profileEditBusyOpen");
   try { _deps?.unlockSheetScroll?.(); } catch {}
+}
+
+/** Pending framed data URLs waiting for a successful cloud host — used by on-photo retry. */
+let _photoSyncPending = "";
+let _artistSyncPending = "";
+let _photoSyncRetryBound = false;
+
+/**
+ * IG-style status on the photo / Artist ring.
+ * status: "uploading" | "done" | "error" | "idle"
+ * Done = Storage + profile URL written. Spinner/fill only clears after that.
+ */
+function setMediaSyncUi(which, status, { label } = {}) {
+  const isPhoto = which === "photo";
+  const root = qs(isPhoto ? "#profileEditPhotoSync" : "#profileEditArtistSync");
+  const retry = qs(isPhoto ? "#profileEditPhotoSyncRetry" : "#profileEditArtistSyncRetry");
+  const text = isPhoto ? qs("#profileEditPhotoSyncLabel") : null;
+  if (!root) return;
+  root.classList.remove("isUploading", "isDone", "isError");
+  if (status === "idle") {
+    root.hidden = true;
+    if (retry) retry.hidden = true;
+    return;
+  }
+  root.hidden = false;
+  if (status === "uploading") {
+    root.classList.add("isUploading");
+    if (text) text.textContent = label || "Uploading…";
+    if (retry) retry.hidden = true;
+  } else if (status === "done") {
+    root.classList.add("isDone");
+    if (text) text.textContent = label || "Saved";
+    if (retry) retry.hidden = true;
+    window.setTimeout(() => {
+      if (root.classList.contains("isDone")) setMediaSyncUi(which, "idle");
+    }, 650);
+  } else if (status === "error") {
+    root.classList.add("isError");
+    if (text) text.textContent = label || "Tap to retry";
+    if (retry) retry.hidden = false;
+  }
+}
+
+function bindMediaSyncRetryOnce() {
+  if (_photoSyncRetryBound) return;
+  _photoSyncRetryBound = true;
+  qs("#profileEditPhotoSyncRetry")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const pending = String(_photoSyncPending || "").trim();
+    if (!pending) return;
+    void retryPublishProfilePhoto(pending);
+  });
+  qs("#profileEditArtistSyncRetry")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const pending = String(_artistSyncPending || "").trim();
+    if (!pending) return;
+    void retryPublishArtistAvatar(pending);
+  });
+}
+
+async function retryPublishProfilePhoto(dataUrl) {
+  setMediaSyncUi("photo", "uploading");
+  try {
+    if (!_deps?.publishProfileAvatarChange) throw new Error("Could not sync photo");
+    const hosted = await _deps.publishProfileAvatarChange(dataUrl, { toast: false });
+    if (hosted) _draft.avatar = String(hosted);
+    _photoSyncPending = "";
+    renderProfileEditPage();
+    setMediaSyncUi("photo", "done");
+    try { _deps?.showToast?.("Photo updated", { icon: "✓", durationMs: 1600 }); } catch {}
+  } catch (e) {
+    _photoSyncPending = dataUrl;
+    setMediaSyncUi("photo", "error");
+    try { _deps?.showToast?.(e?.message || "Upload failed — tap retry on the photo", { icon: "!", durationMs: 2800 }); } catch {}
+  }
+}
+
+async function retryPublishArtistAvatar(dataUrl) {
+  setMediaSyncUi("artist", "uploading");
+  try {
+    _draft.artistAvatar = dataUrl;
+    _draft.clearArtistAvatar = false;
+    await persistArtistAvatarNow();
+    _artistSyncPending = "";
+    renderProfileEditPage();
+    setMediaSyncUi("artist", "done");
+    try { _deps?.showToast?.("Artist Avatar saved ✦", { icon: "✦", durationMs: 1600 }); } catch {}
+  } catch (e) {
+    _artistSyncPending = dataUrl;
+    setMediaSyncUi("artist", "error");
+    try { _deps?.showToast?.(e?.message || "Upload failed — tap retry on Artist", { icon: "!", durationMs: 2800 }); } catch {}
+  }
 }
 
 function closePhotoActionSheet() {
@@ -447,7 +550,7 @@ async function adjustCurrentPhotoFraming() {
   await frameAndPublishPhoto(src);
 }
 
-/** Open framing; Use photo publishes immediately with a busy spinner. */
+/** Open framing; Use photo paints immediately, then on-photo upload fill until cloud confirms. */
 async function frameAndPublishPhoto(src) {
   if (!src) return;
   const res = await openPhotoFrame({
@@ -456,26 +559,30 @@ async function frameAndPublishPhoto(src) {
     doneLabel: "Use photo",
   });
   if (!res?.avatar) return;
-  showProfileEditBusy("Saving photo…");
+  _draft.avatar = res.avatar;
+  _draft.avatarRemoved = false;
+  _draft.avatarUpdatedAt = Date.now();
+  _photoSyncPending = res.avatar;
+  renderProfileEditPage();
+  setMediaSyncUi("photo", "uploading");
   try {
-    _draft.avatar = res.avatar;
-    _draft.avatarRemoved = false;
-    _draft.avatarUpdatedAt = Date.now();
-    renderProfileEditPage();
     if (_deps?.publishProfileAvatarChange) {
       const hosted = await _deps.publishProfileAvatarChange(res.avatar, { toast: false });
       if (hosted) _draft.avatar = String(hosted);
+      _photoSyncPending = "";
       renderProfileEditPage();
+      setMediaSyncUi("photo", "done");
       try { _deps?.showToast?.("Photo updated", { icon: "✓", durationMs: 1800 }); } catch {}
     } else {
       markDirty();
+      setMediaSyncUi("photo", "idle");
       try { _deps?.showToast?.("Photo ready — tap Save to publish", { icon: "✓", durationMs: 1800 }); } catch {}
     }
   } catch (e) {
     markDirty();
-    try { _deps?.showToast?.(`Saved on this phone — tap Save if it doesn’t sync: ${e?.message || ""}`.trim(), { icon: "!", durationMs: 2800 }); } catch {}
-  } finally {
-    hideProfileEditBusy();
+    _photoSyncPending = res.avatar;
+    setMediaSyncUi("photo", "error");
+    try { _deps?.showToast?.(e?.message || "Upload failed — tap retry on the photo", { icon: "!", durationMs: 2800 }); } catch {}
   }
 }
 
@@ -506,28 +613,31 @@ async function frameAndPublishArtistAvatar(src) {
   const framed = res.avatar;
   const prev = String(_draft?.artistAvatar || "").trim();
   const wasProfilePic = Boolean(prev) && _draft.avatar === prev;
-  showProfileEditBusy("Saving Artist Avatar…");
+  _draft.artistAvatar = framed;
+  _draft.clearArtistAvatar = false;
+  _draft.artistAvatarUpdatedAt = Date.now();
+  const gallery = Array.isArray(_draft.artistAvatarGallery) ? _draft.artistAvatarGallery.slice() : [];
+  let replaced = false;
+  for (let i = 0; i < gallery.length; i++) {
+    if (gallery[i] === prev || gallery[i] === src) {
+      gallery[i] = framed;
+      replaced = true;
+    }
+  }
+  if (!replaced) gallery.push(framed);
+  _draft.artistAvatarGallery = aaCapGallery(gallery);
+  if (wasProfilePic) {
+    _draft.avatar = framed;
+    _draft.avatarRemoved = false;
+    _draft.avatarUpdatedAt = Date.now();
+    _photoSyncPending = framed;
+  }
+  _artistSyncPending = framed;
+  markDirty();
+  renderProfileEditPage();
+  setMediaSyncUi("artist", "uploading");
+  if (wasProfilePic) setMediaSyncUi("photo", "uploading");
   try {
-    _draft.artistAvatar = framed;
-    _draft.clearArtistAvatar = false;
-    _draft.artistAvatarUpdatedAt = Date.now();
-    const gallery = Array.isArray(_draft.artistAvatarGallery) ? _draft.artistAvatarGallery.slice() : [];
-    let replaced = false;
-    for (let i = 0; i < gallery.length; i++) {
-      if (gallery[i] === prev || gallery[i] === src) {
-        gallery[i] = framed;
-        replaced = true;
-      }
-    }
-    if (!replaced) gallery.push(framed);
-    _draft.artistAvatarGallery = aaCapGallery(gallery);
-    if (wasProfilePic) {
-      _draft.avatar = framed;
-      _draft.avatarRemoved = false;
-      _draft.avatarUpdatedAt = Date.now();
-    }
-    markDirty();
-    renderProfileEditPage();
     await persistArtistAvatarNow();
     if (wasProfilePic && _deps?.publishProfileAvatarChange) {
       try {
@@ -537,16 +647,24 @@ async function frameAndPublishArtistAvatar(src) {
           _draft.artistAvatar = String(hosted);
           renderProfileEditPage();
         }
-      } catch {}
+      } catch (photoErr) {
+        _photoSyncPending = framed;
+        setMediaSyncUi("photo", "error");
+        throw photoErr;
+      }
     }
+    _artistSyncPending = "";
+    if (wasProfilePic) _photoSyncPending = "";
+    setMediaSyncUi("artist", "done");
+    if (wasProfilePic) setMediaSyncUi("photo", "done");
     try { _deps?.showToast?.("Artist Avatar framed ✦", { icon: "✦", durationMs: 1800 }); } catch {}
     return true;
   } catch (e) {
     markDirty();
-    try { _deps?.showToast?.(e?.message || "Couldn’t save framing", { icon: "!", durationMs: 2600 }); } catch {}
+    _artistSyncPending = framed;
+    setMediaSyncUi("artist", "error");
+    try { _deps?.showToast?.(e?.message || "Upload failed — tap retry on Artist", { icon: "!", durationMs: 2600 }); } catch {}
     return false;
-  } finally {
-    hideProfileEditBusy();
   }
 }
 
@@ -1475,6 +1593,7 @@ export function initProfileEditOnce(deps) {
   _inited = true;
   bindSheetDismiss();
   bindPhotoActionSheetOnce();
+  bindMediaSyncRetryOnce();
 
   const page = qs('[data-route="profile-edit"]');
   if (!page || page.dataset.boundProfileEdit === "1") return;

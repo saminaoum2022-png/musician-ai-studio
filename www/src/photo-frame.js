@@ -8,7 +8,7 @@
  * older or HD-less photos got stuck showing the blurry small copy forever. One size, uploaded once, no swap.)
  */
 
-const AVATAR_SIZE = 720;
+const AVATAR_SIZE = 1080;
 const MAX_ZOOM = 4;
 
 function clamp(v, lo, hi) {

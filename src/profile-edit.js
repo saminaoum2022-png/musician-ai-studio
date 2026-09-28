@@ -280,11 +280,10 @@ let _photoSyncRetryBound = false;
  * status: "uploading" | "done" | "error" | "idle"
  * Done = Storage + profile URL written. Spinner/fill only clears after that.
  */
-function setMediaSyncUi(which, status, { label } = {}) {
+function setMediaSyncUi(which, status) {
   const isPhoto = which === "photo";
   const root = qs(isPhoto ? "#profileEditPhotoSync" : "#profileEditArtistSync");
   const retry = qs(isPhoto ? "#profileEditPhotoSyncRetry" : "#profileEditArtistSyncRetry");
-  const text = isPhoto ? qs("#profileEditPhotoSyncLabel") : null;
   if (!root) return;
   root.classList.remove("isUploading", "isDone", "isError");
   if (status === "idle") {
@@ -295,18 +294,15 @@ function setMediaSyncUi(which, status, { label } = {}) {
   root.hidden = false;
   if (status === "uploading") {
     root.classList.add("isUploading");
-    if (text) text.textContent = label || "Uploading…";
     if (retry) retry.hidden = true;
   } else if (status === "done") {
     root.classList.add("isDone");
-    if (text) text.textContent = label || "Saved";
     if (retry) retry.hidden = true;
     window.setTimeout(() => {
       if (root.classList.contains("isDone")) setMediaSyncUi(which, "idle");
-    }, 650);
+    }, 550);
   } else if (status === "error") {
     root.classList.add("isError");
-    if (text) text.textContent = label || "Tap to retry";
     if (retry) retry.hidden = false;
   }
 }

@@ -196,16 +196,11 @@ function artistAvatarPreview() {
 function applyAvatarToEditPhoto() {
   const img = qs("#profileEditAvatar");
   const shell = qs(".profileEditAvatarShell");
+  const hint = qs("#profileEditPhotoHint");
   const av = String(_draft?.avatar || "").trim();
-  const usingArtistAsPic = Boolean(_draft?.artistAvatar) && _draft.avatar === _draft.artistAvatar;
   if (shell) shell.classList.toggle("isEmpty", !av);
+  if (hint) hint.textContent = av ? "Tap to manage" : "Tap to add a photo";
   if (img) {
-    const adj = qs("#btnProfileEditAdjustPhoto");
-    const removeBtn = qs("#btnProfileEditRemovePhoto");
-    const stopArtistBtn = qs("#btnProfileEditStopArtistPic");
-    if (adj) adj.hidden = !av || usingArtistAsPic;
-    if (removeBtn) removeBtn.hidden = !av || usingArtistAsPic;
-    if (stopArtistBtn) stopArtistBtn.hidden = !usingArtistAsPic;
     if (av) {
       img.src = av;
       img.dataset.empty = "false";
@@ -218,20 +213,234 @@ function applyAvatarToEditPhoto() {
   }
 }
 
-/** Clear the profile photo on this edit draft. Does not delete the Artist Avatar
- *  itself — only stops using it (or a real photo) as the everywhere avatar. */
-function removeProfilePhotoFromDraft() {
-  if (!_draft) return;
-  if (_draft.artistAvatar && _draft.avatar === _draft.artistAvatar) {
-    setArtistAvatarAsProfilePic(false);
+function showProfileEditBusy(text) {
+  const el = qs("#profileEditBusy");
+  const label = qs("#profileEditBusyText");
+  if (label) label.textContent = text || "Saving…";
+  if (el) {
+    el.hidden = false;
+    el.setAttribute("aria-hidden", "false");
   }
-  _draft.avatar = "";
-  _draft.artistAvatarPrevAvatar = "";
-  _draft.avatarRemoved = true;
-  _draft.avatarUpdatedAt = Date.now();
-  markDirty();
+  document.body.classList.add("profileEditBusyOpen");
+}
+
+function hideProfileEditBusy() {
+  const el = qs("#profileEditBusy");
+  if (el) {
+    el.hidden = true;
+    el.setAttribute("aria-hidden", "true");
+  }
+  document.body.classList.remove("profileEditBusyOpen");
+}
+
+function closePhotoActionSheet() {
+  const sheet = qs("#profilePhotoActionSheet");
+  if (!sheet) return;
+  sheet.classList.remove("isOpen");
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+}
+
+function openPhotoActionSheet(title, rows) {
+  const sheet = qs("#profilePhotoActionSheet");
+  const titleEl = qs("#profilePhotoActionSheetTitle");
+  const rowsEl = qs("#profilePhotoActionSheetRows");
+  if (!sheet || !rowsEl) return;
+  if (titleEl) titleEl.textContent = title;
+  rowsEl.innerHTML = rows.map((row) => `
+    <button type="button" class="userActionSheetRow${row.danger ? " userActionSheetRow--danger" : ""}" data-photo-action="${escapeHtml(row.id)}">${escapeHtml(row.label)}</button>
+  `).join("");
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => sheet.classList.add("isOpen"));
+  rowsEl.querySelectorAll("[data-photo-action]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-photo-action");
+      closePhotoActionSheet();
+      const hit = rows.find((r) => r.id === id);
+      if (hit?.run) void hit.run();
+    });
+  });
+}
+
+function bindPhotoActionSheetOnce() {
+  const sheet = qs("#profilePhotoActionSheet");
+  if (!sheet || sheet.dataset.boundPhotoSheet === "1") return;
+  sheet.dataset.boundPhotoSheet = "1";
+  sheet.addEventListener("click", (e) => {
+    if (e.target?.closest?.("[data-photo-sheet-dismiss]")) closePhotoActionSheet();
+  });
+}
+
+function openProfilePhotoFlow() {
+  const av = String(_draft?.avatar || "").trim();
+  const usingArtistAsPic = Boolean(_draft?.artistAvatar) && _draft.avatar === _draft.artistAvatar;
+  if (!av) {
+    openChoosePhotoSheet();
+    return;
+  }
+  const rows = [
+    { id: "adjust", label: "Adjust framing", run: () => void adjustCurrentPhotoFraming() },
+    { id: "choose", label: "Choose new photo", run: () => openChoosePhotoSheet() },
+  ];
+  if (usingArtistAsPic) {
+    rows.push({
+      id: "stop-artist",
+      label: "Stop using Artist Avatar",
+      danger: true,
+      run: () => void stopArtistAvatarAsProfilePicNow(),
+    });
+  } else {
+    rows.push({
+      id: "remove",
+      label: "Remove photo",
+      danger: true,
+      run: () => void removeProfilePhotoNow(),
+    });
+  }
+  openPhotoActionSheet("Photo", rows);
+}
+
+function openChoosePhotoSheet() {
+  openPhotoActionSheet("Choose photo", [
+    { id: "camera", label: "Take photo", run: () => void pickProfilePhoto("camera") },
+    { id: "library", label: "Photo library", run: () => void pickProfilePhoto("library") },
+  ]);
+}
+
+async function pickProfilePhoto(source) {
+  try {
+    const Camera = window.Capacitor?.Plugins?.Camera;
+    const native = Boolean(window.Capacitor?.isNativePlatform?.());
+    if (native && Camera?.getPhoto) {
+      showProfileEditBusy(source === "camera" ? "Opening camera…" : "Opening library…");
+      let photo;
+      try {
+        photo = await Camera.getPhoto({
+          quality: 92,
+          allowEditing: false,
+          resultType: "dataUrl",
+          source: source === "camera" ? "CAMERA" : "PHOTOS",
+        });
+      } finally {
+        hideProfileEditBusy();
+      }
+      const dataUrl = String(photo?.dataUrl || "").trim();
+      if (!dataUrl) return;
+      await frameAndPublishPhoto(dataUrl);
+      return;
+    }
+  } catch (e) {
+    hideProfileEditBusy();
+    const msg = String(e?.message || e || "");
+    if (/cancel|dismiss|user/i.test(msg)) return;
+    // Fall through to file input if the plugin is unavailable.
+  }
+  triggerHiddenPhotoInput(source);
+}
+
+function triggerHiddenPhotoInput(source) {
+  const input = qs("#profileAvatarFile");
+  if (!input) return;
+  try {
+    if (source === "camera") input.setAttribute("capture", "environment");
+    else input.removeAttribute("capture");
+  } catch {}
+  try { input.click(); } catch {}
+}
+
+/** Clear the profile photo and publish right away (no need to tap Save). */
+async function removeProfilePhotoNow() {
+  if (!_draft || !_deps) return;
+  if (_draft.artistAvatar && _draft.avatar === _draft.artistAvatar) {
+    await stopArtistAvatarAsProfilePicNow();
+    return;
+  }
+  showProfileEditBusy("Removing photo…");
+  try {
+    _draft.avatar = "";
+    _draft.artistAvatarPrevAvatar = "";
+    _draft.avatarRemoved = true;
+    _draft.avatarUpdatedAt = Date.now();
+    renderProfileEditPage();
+    const active = _deps.getActiveProfile?.() || {};
+    const next = {
+      ...active,
+      avatar: "",
+      clearAvatar: true,
+      avatarUpdatedAt: Date.now(),
+    };
+    try { _deps.saveProfile(next); } catch {}
+    try { _deps.syncProfileUi?.(next); } catch {}
+    try { await _deps.supabaseUpsertProfile(next); } catch {}
+    try { _deps?.showToast?.("Photo removed", { durationMs: 1800 }); } catch {}
+  } finally {
+    hideProfileEditBusy();
+  }
+}
+
+async function stopArtistAvatarAsProfilePicNow() {
+  setArtistAvatarAsProfilePic(false);
   renderProfileEditPage();
-  try { _deps?.showToast?.("Photo removed — tap Save to publish", { durationMs: 1800 }); } catch {}
+  try { _deps?.showToast?.("Artist Avatar is only on the cover flip now", { durationMs: 2200 }); } catch {}
+}
+
+async function onAvatarFileChange(file) {
+  if (!file || !_draft) return;
+  try {
+    showProfileEditBusy("Preparing photo…");
+    let objUrl = "";
+    try { objUrl = URL.createObjectURL(file); } catch {}
+    _photoFrameSrc = objUrl || "";
+    hideProfileEditBusy();
+    await frameAndPublishPhoto(objUrl || (await _deps.compressAvatarFile(file, { maxSize: 1600, type: "image/png" })));
+  } catch (e) {
+    hideProfileEditBusy();
+    try { _deps?.showToast?.(`Could not load photo: ${e?.message || "error"}`, { icon: "!", durationMs: 2800 }); } catch {}
+  }
+}
+
+let _photoFrameSrc = "";
+
+async function adjustCurrentPhotoFraming() {
+  const src = _photoFrameSrc || String(_draft?.avatar || "");
+  if (!src) {
+    openChoosePhotoSheet();
+    return;
+  }
+  await frameAndPublishPhoto(src);
+}
+
+/** Open framing; Use photo publishes immediately with a busy spinner. */
+async function frameAndPublishPhoto(src) {
+  if (!src) return;
+  const res = await openPhotoFrame({
+    src,
+    title: "Frame your photo",
+    doneLabel: "Use photo",
+  });
+  if (!res?.avatar) return;
+  showProfileEditBusy("Saving photo…");
+  try {
+    _draft.avatar = res.avatar;
+    _draft.avatarRemoved = false;
+    _draft.avatarUpdatedAt = Date.now();
+    renderProfileEditPage();
+    if (_deps?.publishProfileAvatarChange) {
+      const hosted = await _deps.publishProfileAvatarChange(res.avatar, { toast: false });
+      if (hosted) _draft.avatar = String(hosted);
+      renderProfileEditPage();
+      try { _deps?.showToast?.("Photo updated", { icon: "✓", durationMs: 1800 }); } catch {}
+    } else {
+      markDirty();
+      try { _deps?.showToast?.("Photo ready — tap Save to publish", { icon: "✓", durationMs: 1800 }); } catch {}
+    }
+  } catch (e) {
+    markDirty();
+    try { _deps?.showToast?.(`Saved on this phone — tap Save if it doesn’t sync: ${e?.message || ""}`.trim(), { icon: "!", durationMs: 2800 }); } catch {}
+  } finally {
+    hideProfileEditBusy();
+  }
 }
 
 function usernamePreview() {
@@ -962,48 +1171,6 @@ function openArtistAvatarEditor() {
   renderArtistAvatarStep();
 }
 
-function triggerPhotoPicker() {
-  const input = qs("#profileAvatarFile");
-  if (!input) return;
-  try { input.click(); } catch {}
-}
-
-async function onAvatarFileChange(file) {
-  if (!file || !_draft) return;
-  try {
-    const dataUrl = await _deps.compressAvatarFile(file, { maxSize: 720, type: "image/png" });
-    if (!dataUrl) throw new Error("Could not read photo");
-    _draft.avatar = dataUrl;
-    _draft.avatarRemoved = false;
-    _draft.avatarUpdatedAt = Date.now();
-    markDirty();
-    renderProfileEditPage();
-    // Let the person frame it right away (Cancel keeps the automatic crop).
-    let objUrl = "";
-    try { objUrl = URL.createObjectURL(file); } catch {}
-    _photoFrameSrc = objUrl;
-    if (objUrl) await frameCurrentPhoto(objUrl);
-    try { _deps?.showToast?.("Photo updated — tap Save to publish", { icon: "✓", durationMs: 1800 }); } catch {}
-  } catch (e) {
-    try { _deps?.showToast?.(`Could not load photo: ${e?.message || "error"}`, { icon: "!", durationMs: 2800 }); } catch {}
-  }
-}
-
-let _photoFrameSrc = "";
-
-/** Open the framing sheet on `src`; on Done the framed square replaces the draft photo. */
-async function frameCurrentPhoto(src) {
-  if (!src) return;
-  const res = await openPhotoFrame({ src });
-  if (!res) return;
-  _draft.avatar = res.avatar;
-  _draft.avatarRemoved = false;
-  _draft.avatarUpdatedAt = Date.now();
-  markDirty();
-  renderProfileEditPage();
-  try { _deps?.showToast?.("Framing updated — tap Save to publish", { icon: "✓", durationMs: 1800 }); } catch {}
-}
-
 export async function saveProfileEditDraft({ navigateBack = true } = {}) {
   if (!_draft || !_deps) return false;
   const base = _deps.getActiveProfile();
@@ -1070,52 +1237,63 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
   } else {
     payload.avatarUpdatedAt = Number(base.avatarUpdatedAt || 0);
   }
-  _deps.saveProfile(payload);
-  const uid = String(_deps.getAuthSession?.()?.user?.id || payload.id || "").trim();
-  if (uid && parseMusicPreferencesFromProfile(payload).length) {
-    try { markMusicPreferencesComplete(uid); } catch {}
+  showProfileEditBusy("Saving profile…");
+  const saveBtn = qs("#btnProfileEditPageSave");
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.setAttribute("aria-disabled", "true");
+    saveBtn.textContent = "Saving…";
   }
-  if (_draft.personaId !== (_deps.loadPersonaSelection?.() || "")) {
-    _deps.savePersonaSelection?.(_draft.personaId || "");
-    if (_deps.els?.sunoPersonaId) {
-      _deps.els.sunoPersonaId.value = _draft.personaId || "";
+  try {
+    _deps.saveProfile(payload);
+    const uid = String(_deps.getAuthSession?.()?.user?.id || payload.id || "").trim();
+    if (uid && parseMusicPreferencesFromProfile(payload).length) {
+      try { markMusicPreferencesComplete(uid); } catch {}
     }
-  }
-  // Everything the person sees is saved locally by now. Update the UI and leave immediately; the cloud
-  // profile row sync continues in the background instead of making them wait on the network.
-  _deps.syncProfileUi?.(payload);
-  _dirty = false;
-  syncSaveButton();
-  try { _deps.showToast?.("Profile saved.", { icon: "✓", durationMs: 2000 }); } catch {}
-  if (navigateBack) {
-    try { location.hash = "#/profile"; } catch {}
-    try { _deps.applyRoute?.(); } catch {}
-  }
-  void (async () => {
-    let cloudSaved = false;
-    try {
-      let toCloud = payload;
-      const av = String(payload.avatar || "").trim();
-      if ((av.startsWith("data:") || av.startsWith("blob:")) && _deps.hostProfileAvatarUrl) {
-        const hosted = await _deps.hostProfileAvatarUrl(av);
-        toCloud = { ...payload, avatar: hosted, avatarUpdatedAt: Date.now() };
-        try { _deps.saveProfile(toCloud); } catch {}
-        try { _deps.syncProfileUi?.(toCloud); } catch {}
+    if (_draft.personaId !== (_deps.loadPersonaSelection?.() || "")) {
+      _deps.savePersonaSelection?.(_draft.personaId || "");
+      if (_deps.els?.sunoPersonaId) {
+        _deps.els.sunoPersonaId.value = _draft.personaId || "";
       }
+    }
+    _deps.syncProfileUi?.(payload);
+
+    let toCloud = payload;
+    const av = String(payload.avatar || "").trim();
+    if ((av.startsWith("data:") || av.startsWith("blob:")) && _deps.hostProfileAvatarUrl) {
+      const hosted = await _deps.hostProfileAvatarUrl(av);
+      toCloud = { ...payload, avatar: hosted, avatarUpdatedAt: Date.now() };
+      try { _deps.saveProfile(toCloud); } catch {}
+      try { _deps.syncProfileUi?.(toCloud); } catch {}
+    }
+    try {
       await _deps.supabaseUpsertProfile(toCloud);
-      cloudSaved = true;
+      if (usernameWillChange) {
+        toCloud = { ...toCloud, usernameChangedAt: Date.now() };
+        _deps.saveProfile(toCloud);
+        try { await _deps.supabaseUpsertProfile(toCloud); } catch {}
+      }
     } catch (err) {
       _deps.setStatus?.(`Saved locally. Cloud sync skipped: ${err?.message || String(err)}`);
       try { _deps.scheduleProfileCloudSync?.({ delayMs: 3000 }); } catch {}
       try { _deps.showToast?.("Saved on this device — syncing when the connection is back.", { durationMs: 3200 }); } catch {}
     }
-    if (cloudSaved && usernameWillChange) {
-      payload.usernameChangedAt = Date.now();
-      _deps.saveProfile(payload);
-      try { await _deps.supabaseUpsertProfile(payload); } catch {}
+
+    _dirty = false;
+    syncSaveButton();
+    try { _deps.showToast?.("Profile saved.", { icon: "✓", durationMs: 2000 }); } catch {}
+    if (navigateBack) {
+      try { location.hash = "#/profile"; } catch {}
+      try { _deps.applyRoute?.(); } catch {}
     }
-  })();
-  return true;
+    return true;
+  } finally {
+    hideProfileEditBusy();
+    if (saveBtn) {
+      saveBtn.textContent = "Save";
+      syncSaveButton();
+    }
+  }
 }
 
 export function onProfileEditRouteActive() {
@@ -1127,6 +1305,7 @@ export function initProfileEditOnce(deps) {
   _deps = deps;
   _inited = true;
   bindSheetDismiss();
+  bindPhotoActionSheetOnce();
 
   const page = qs('[data-route="profile-edit"]');
   if (!page || page.dataset.boundProfileEdit === "1") return;
@@ -1138,30 +1317,10 @@ export function initProfileEditOnce(deps) {
     await saveProfileEditDraft({ navigateBack: true });
   });
 
-  qs("#btnProfileEditAdjustPhoto")?.addEventListener("click", async () => {
-    try { _deps?.haptic?.("light"); } catch {}
-    // Best source first: this session's original file, otherwise the saved avatar.
-    const src = _photoFrameSrc || String(_draft?.avatar || "");
-    await frameCurrentPhoto(src);
-  });
-  qs("#btnProfileEditChangePhoto")?.addEventListener("click", () => {
-    try { _deps?.haptic?.("light"); } catch {}
-    triggerPhotoPicker();
-  });
-  qs("#btnProfileEditRemovePhoto")?.addEventListener("click", () => {
-    try { _deps?.haptic?.("light"); } catch {}
-    removeProfilePhotoFromDraft();
-  });
-  qs("#btnProfileEditStopArtistPic")?.addEventListener("click", () => {
-    try { _deps?.haptic?.("light"); } catch {}
-    setArtistAvatarAsProfilePic(false);
-    renderProfileEditPage();
-    try { _deps?.showToast?.("Artist Avatar is only on the cover flip now — tap Save", { durationMs: 2200 }); } catch {}
-  });
   qs("#profileEditAvatarWrap")?.addEventListener("click", (e) => {
     e.preventDefault();
     try { _deps?.haptic?.("light"); } catch {}
-    triggerPhotoPicker();
+    openProfilePhotoFlow();
   });
 
   page.addEventListener("click", (e) => {
@@ -1186,6 +1345,7 @@ export function initProfileEditOnce(deps) {
       const f = avatarInput.files?.[0];
       await onAvatarFileChange(f);
       try { avatarInput.value = ""; } catch {}
+      try { avatarInput.removeAttribute("capture"); } catch {}
     });
   }
 }

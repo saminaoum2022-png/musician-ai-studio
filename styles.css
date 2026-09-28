@@ -58221,9 +58221,66 @@ body[data-route="profile-edit"] main.grid{
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   padding: 8px 0 4px;
 }
+.profileEditPhotoHint{
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: rgba(223, 231, 251, 0.48);
+}
+.profileEditBusy{
+  position: fixed;
+  inset: 0;
+  z-index: 32000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(3, 5, 10, 0.55);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.profileEditBusy[hidden]{ display: none !important; }
+body.profileEditBusyOpen{ overflow: hidden; }
+.profileEditBusyCard{
+  min-width: 168px;
+  max-width: 280px;
+  padding: 22px 24px 18px;
+  border-radius: 18px;
+  background: rgba(12, 15, 23, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.profileEditBusySpinner{
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2.5px solid rgba(255, 255, 255, 0.14);
+  border-top-color: rgba(35, 213, 171, 0.95);
+  animation: spin 0.85s linear infinite;
+}
+.profileEditBusyText{
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: rgba(238, 243, 255, 0.92);
+}
+html[data-theme="light"] .profileEditPhotoHint{ color: rgba(11, 11, 19, 0.45); }
+html[data-theme="light"] .profileEditBusy{ background: rgba(248, 250, 255, 0.55); }
+html[data-theme="light"] .profileEditBusyCard{
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(15, 23, 40, 0.1);
+}
+html[data-theme="light"] .profileEditBusyText{ color: rgba(11, 11, 19, 0.88); }
 .profileEditAvatarBtn{
   -webkit-appearance: none;
   appearance: none;

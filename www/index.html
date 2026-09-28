@@ -391,6 +391,20 @@
         <button type="button" class="userActionSheetRow userActionSheetCancel" data-coach-action="cancel">Cancel</button>
       </div>
     </div>
+    <div id="profilePhotoActionSheet" class="userActionSheet" hidden aria-hidden="true">
+      <button type="button" class="userActionSheetScrim" data-photo-sheet-dismiss="1" aria-label="Close"></button>
+      <div class="userActionSheetPanel" role="dialog" aria-modal="true" aria-labelledby="profilePhotoActionSheetTitle">
+        <p id="profilePhotoActionSheetTitle" class="userActionSheetTitle">Photo</p>
+        <div id="profilePhotoActionSheetRows"></div>
+        <button type="button" class="userActionSheetRow userActionSheetCancel" data-photo-sheet-dismiss="1">Cancel</button>
+      </div>
+    </div>
+    <div id="profileEditBusy" class="profileEditBusy" hidden aria-live="polite" aria-busy="true">
+      <div class="profileEditBusyCard">
+        <div class="profileEditBusySpinner" aria-hidden="true"></div>
+        <p id="profileEditBusyText" class="profileEditBusyText">Saving…</p>
+      </div>
+    </div>
     <div class="app">
       <header class="header">
         <div class="headerMain">
@@ -4045,7 +4059,7 @@
 
           <div class="profileEditBody">
             <div class="profileEditPhotoBlock">
-              <button type="button" class="profileEditAvatarBtn" id="profileEditAvatarWrap" aria-label="Change profile photo">
+              <button type="button" class="profileEditAvatarBtn" id="profileEditAvatarWrap" aria-label="Profile photo">
                 <span class="profileEditAvatarShell">
                   <img id="profileEditAvatar" class="profileEditAvatar" alt="" hidden decoding="async" />
                   <span class="profileEditCameraBadge" aria-hidden="true">
@@ -4053,10 +4067,7 @@
                   </span>
                 </span>
               </button>
-              <button type="button" id="btnProfileEditChangePhoto" class="profileEditPhotoLabel">Change Photo</button>
-              <button type="button" id="btnProfileEditAdjustPhoto" class="profileEditPhotoLabel profileEditPhotoLabel--adjust" hidden>Adjust framing</button>
-              <button type="button" id="btnProfileEditRemovePhoto" class="profileEditPhotoLabel profileEditPhotoLabel--remove" hidden>Remove photo</button>
-              <button type="button" id="btnProfileEditStopArtistPic" class="profileEditPhotoLabel profileEditPhotoLabel--remove" hidden>Stop using Artist Avatar as profile photo</button>
+              <p class="profileEditPhotoHint" id="profileEditPhotoHint">Tap to manage</p>
             </div>
 
             <section class="profileEditSection" aria-labelledby="profileEditIdentityTitle">

@@ -39,10 +39,10 @@ function renderSquare(img, crop, size) {
 }
 
 /**
- * @param {{ src: string, title?: string }} opts
+ * @param {{ src: string, title?: string, doneLabel?: string }} opts
  * @returns {Promise<{ avatar: string } | null>} null when cancelled
  */
-export function openPhotoFrame({ src, title = "Frame your photo" } = {}) {
+export function openPhotoFrame({ src, title = "Frame your photo", doneLabel = "Done" } = {}) {
   return new Promise(async (resolve) => {
     let img;
     try {
@@ -59,7 +59,7 @@ export function openPhotoFrame({ src, title = "Frame your photo" } = {}) {
       <div class="pfTop">
         <button type="button" class="pfBtn pfBtn--ghost" data-pf="cancel">Cancel</button>
         <strong class="pfTitle">${title}</strong>
-        <button type="button" class="pfBtn pfBtn--done" data-pf="done">Done</button>
+        <button type="button" class="pfBtn pfBtn--done" data-pf="done">${doneLabel}</button>
       </div>
       <div class="pfStageWrap">
         <div class="pfStage" data-pf="stage">

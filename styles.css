@@ -55921,25 +55921,29 @@ html[data-theme="light"] .appleSubManageSecondaryBtn{
   z-index: 1;
   width: min(100%, 460px);
   margin: 0 auto;
-  background: #0c0f17;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--nabad-sheet-bg);
+  border: 1px solid var(--nabad-sheet-border);
   border-bottom: 0;
-  border-radius: 20px 20px 0 0;
+  border-radius: var(--nabad-sheet-radius);
   padding: 10px 10px calc(14px + env(safe-area-inset-bottom, 0px));
   transform: translateY(14px);
   transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  -webkit-backdrop-filter: blur(var(--nabad-sheet-blur)) saturate(var(--nabad-sheet-saturate));
+          backdrop-filter: blur(var(--nabad-sheet-blur)) saturate(var(--nabad-sheet-saturate));
+  box-shadow: var(--nabad-sheet-shadow);
 }
 .userActionSheet.isOpen .userActionSheetPanel{ transform: translateY(0); }
 .userActionSheetTitle{
-  margin: 6px 8px 8px;
+  margin: 6px 8px 10px;
   font-size: 13px;
   font-weight: 600;
+  text-align: center;
   color: rgba(223, 231, 251, 0.5);
 }
 .userActionSheetRow{
   display: block;
   width: 100%;
-  text-align: left;
+  text-align: center;
   border: 0;
   background: transparent;
   color: #eef3ff;
@@ -58297,9 +58301,9 @@ html[data-theme="light"] .profileEditBusyText{ color: rgba(11, 11, 19, 0.88); }
   width: 104px;
   height: 104px;
   border-radius: var(--nabad-squircle-radius, 22px);
+  overflow: hidden;
 }
 .profileEditAvatarShell.isEmpty{
-  background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .profileEditAvatar{
@@ -58312,7 +58316,18 @@ html[data-theme="light"] .profileEditBusyText{ color: rgba(11, 11, 19, 0.88); }
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .profileEditAvatar[hidden]{ display: none !important; }
-/* Initials overlay removed — photo (or empty shell) only. */
+.profileEditAvatarFallback{
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.profileEditAvatarFallback[hidden]{ display: none !important; }
+.profileEditAvatarFallback.emptyProfileAvatar svg{
+  width: 52%;
+  height: 52%;
+}
 .profileEditCameraBadge{
   position: absolute;
   right: 4px;
@@ -58440,6 +58455,32 @@ html[data-theme="light"] .profileEditBusyText{ color: rgba(11, 11, 19, 0.88); }
 }
 body.profileEditSheetOpen{
   overflow: hidden;
+}
+
+/* While any bottom sheet / action sheet is open, freeze the page behind it.
+   iOS WKWebView still scrolls under fixed overlays unless we pin the body. */
+html.nabadSheetScrollLock,
+html.nabadSheetScrollLock body{
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+html.nabadSheetScrollLock body{
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: 100%;
+}
+.userActionSheet.isOpen,
+.profileEditSheet.isOpen,
+.profileEditBusy:not([hidden]){
+  overscroll-behavior: none;
+  touch-action: none;
+}
+.userActionSheet.isOpen .userActionSheetPanel,
+.profileEditSheet.isOpen .profileEditSheetCard,
+.profileEditSheet.isOpen .profileEditSheetBody[data-sheet-scroll]{
+  touch-action: pan-y;
+  overscroll-behavior: contain;
 }
 .profileEditSheetBackdrop{
   position: absolute;
@@ -60473,9 +60514,11 @@ html[data-theme="light"] .userActionSheetPanel{
 }
 html[data-theme="light"] .userActionSheetTitle{
   color: var(--text-muted);
+  text-align: center;
 }
 html[data-theme="light"] .userActionSheetRow{
   color: var(--text-primary);
+  text-align: center;
 }
 html[data-theme="light"] .userActionSheetRow:active{
   background: var(--nabad-glass-bg-hover);
@@ -64475,7 +64518,8 @@ html:not([data-theme="light"]) body .coachSongPlanSheetCard,
 html:not([data-theme="light"]) body .campaignSheetCard,
 html:not([data-theme="light"]) body .styleLibraryCard,
 html:not([data-theme="light"]) body .profileEditSheetCard,
-html:not([data-theme="light"]) body .searchRemixCard{
+html:not([data-theme="light"]) body .searchRemixCard,
+html:not([data-theme="light"]) body .userActionSheetPanel{
   background: var(--nabad-sheet-bg);
   border: 1px solid var(--nabad-sheet-border);
   border-top-left-radius: 24px;

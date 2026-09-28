@@ -195,6 +195,7 @@ function artistAvatarPreview() {
 
 function applyAvatarToEditPhoto() {
   const img = qs("#profileEditAvatar");
+  const fallback = qs("#profileEditAvatarFallback");
   const shell = qs(".profileEditAvatarShell");
   const hint = qs("#profileEditPhotoHint");
   const av = String(_draft?.avatar || "").trim();
@@ -211,6 +212,10 @@ function applyAvatarToEditPhoto() {
       img.hidden = true;
     }
   }
+  if (fallback) {
+    fallback.hidden = Boolean(av);
+    fallback.setAttribute("aria-hidden", av ? "true" : "false");
+  }
 }
 
 function showProfileEditBusy(text) {
@@ -222,6 +227,7 @@ function showProfileEditBusy(text) {
     el.setAttribute("aria-hidden", "false");
   }
   document.body.classList.add("profileEditBusyOpen");
+  try { _deps?.lockSheetScroll?.(); } catch {}
 }
 
 function hideProfileEditBusy() {
@@ -231,14 +237,19 @@ function hideProfileEditBusy() {
     el.setAttribute("aria-hidden", "true");
   }
   document.body.classList.remove("profileEditBusyOpen");
+  try { _deps?.unlockSheetScroll?.(); } catch {}
 }
 
 function closePhotoActionSheet() {
   const sheet = qs("#profilePhotoActionSheet");
   if (!sheet) return;
+  const wasOpen = sheet.classList.contains("isOpen") || !sheet.hidden;
   sheet.classList.remove("isOpen");
   sheet.hidden = true;
   sheet.setAttribute("aria-hidden", "true");
+  if (wasOpen) {
+    try { _deps?.unlockSheetScroll?.(); } catch {}
+  }
 }
 
 function openPhotoActionSheet(title, rows) {
@@ -250,8 +261,12 @@ function openPhotoActionSheet(title, rows) {
   rowsEl.innerHTML = rows.map((row) => `
     <button type="button" class="userActionSheetRow${row.danger ? " userActionSheetRow--danger" : ""}" data-photo-action="${escapeHtml(row.id)}">${escapeHtml(row.label)}</button>
   `).join("");
+  const alreadyOpen = sheet.classList.contains("isOpen") && !sheet.hidden;
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
+  if (!alreadyOpen) {
+    try { _deps?.lockSheetScroll?.(); } catch {}
+  }
   requestAnimationFrame(() => sheet.classList.add("isOpen"));
   rowsEl.querySelectorAll("[data-photo-action]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -496,9 +511,13 @@ function syncUsernameRowUi() {
 function closeProfileEditSheet() {
   const sheet = qs("#profileEditSheet");
   if (!sheet) return;
+  const wasOpen = sheet.classList.contains("isOpen") || !sheet.hidden;
   sheet.hidden = true;
   sheet.classList.remove("isOpen");
   document.body.classList.remove("profileEditSheetOpen");
+  if (wasOpen) {
+    try { _deps?.unlockSheetScroll?.(); } catch {}
+  }
   _activeSheet = "";
   const body = qs("#profileEditSheetBody");
   if (body) body.innerHTML = "";
@@ -509,12 +528,16 @@ function openProfileEditSheet(kind, title) {
   const body = qs("#profileEditSheetBody");
   const titleEl = qs("#profileEditSheetTitle");
   if (!sheet || !body) return;
+  const alreadyOpen = sheet.classList.contains("isOpen") && !sheet.hidden;
   _activeSheet = kind;
   if (titleEl) titleEl.textContent = title;
   body.innerHTML = "";
   sheet.hidden = false;
   requestAnimationFrame(() => sheet.classList.add("isOpen"));
   document.body.classList.add("profileEditSheetOpen");
+  if (!alreadyOpen) {
+    try { _deps?.lockSheetScroll?.(); } catch {}
+  }
   return body;
 }
 

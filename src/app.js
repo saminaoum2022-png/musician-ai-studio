@@ -44676,6 +44676,42 @@ function resetCoachChat() {
 }
 let _coachActionSheetOpen = false;
 let _coachActionSheetHideTimer = 0;
+
+// Freeze page scroll while a bottom / action sheet is open so content
+// behind cannot move or receive gestures until the sheet is dismissed.
+let _nabadSheetScrollLockCount = 0;
+let _nabadSheetScrollLockY = 0;
+let _nabadSheetTouchMoveBound = false;
+function onNabadSheetTouchMove(e) {
+  if (_nabadSheetScrollLockCount <= 0) return;
+  // Allow intentional scrolling inside marked sheet bodies only.
+  if (e.target?.closest?.("[data-sheet-scroll]")) return;
+  e.preventDefault();
+}
+function lockNabadSheetScroll() {
+  if (_nabadSheetScrollLockCount === 0) {
+    _nabadSheetScrollLockY = window.scrollY || document.documentElement.scrollTop || 0;
+    document.documentElement.classList.add("nabadSheetScrollLock");
+    document.body.style.top = `-${_nabadSheetScrollLockY}px`;
+    if (!_nabadSheetTouchMoveBound) {
+      document.addEventListener("touchmove", onNabadSheetTouchMove, { passive: false });
+      _nabadSheetTouchMoveBound = true;
+    }
+  }
+  _nabadSheetScrollLockCount += 1;
+}
+function unlockNabadSheetScroll() {
+  _nabadSheetScrollLockCount = Math.max(0, _nabadSheetScrollLockCount - 1);
+  if (_nabadSheetScrollLockCount > 0) return;
+  document.documentElement.classList.remove("nabadSheetScrollLock");
+  document.body.style.top = "";
+  if (_nabadSheetTouchMoveBound) {
+    document.removeEventListener("touchmove", onNabadSheetTouchMove, { passive: false });
+    _nabadSheetTouchMoveBound = false;
+  }
+  try { window.scrollTo(0, _nabadSheetScrollLockY); } catch {}
+}
+
 function openCoachActionSheet() {
   const sheet = document.getElementById("coachActionSheet");
   if (!sheet) return;
@@ -44683,6 +44719,7 @@ function openCoachActionSheet() {
     clearTimeout(_coachActionSheetHideTimer);
     _coachActionSheetHideTimer = 0;
   }
+  if (!_coachActionSheetOpen) lockNabadSheetScroll();
   _coachActionSheetOpen = true;
   sheet.hidden = false;
   sheet.setAttribute("aria-hidden", "false");
@@ -44693,9 +44730,11 @@ function openCoachActionSheet() {
 function closeCoachActionSheet() {
   const sheet = document.getElementById("coachActionSheet");
   if (!sheet) return;
+  const wasOpen = _coachActionSheetOpen;
   _coachActionSheetOpen = false;
   sheet.classList.remove("isOpen");
   sheet.setAttribute("aria-hidden", "true");
+  if (wasOpen) unlockNabadSheetScroll();
   if (_coachActionSheetHideTimer) clearTimeout(_coachActionSheetHideTimer);
   _coachActionSheetHideTimer = window.setTimeout(() => {
     _coachActionSheetHideTimer = 0;
@@ -79286,6 +79325,8 @@ try {
     showToast,
     setStatus,
     syncProfileUi: syncProfileUiFromEdit,
+    lockSheetScroll: lockNabadSheetScroll,
+    unlockSheetScroll: unlockNabadSheetScroll,
   });
 } catch (e) {
   console.error("[profile-edit] init failed", e);
@@ -81210,6 +81251,7 @@ syncAuthTermsCheckbox();
     }
     const handle = currentHandle();
     if (titleEl) titleEl.textContent = handle ? `@${handle}` : "This user";
+    if (!isOpen) lockNabadSheetScroll();
     isOpen = true;
     sheet.hidden = false;
     sheet.setAttribute("aria-hidden", "false");
@@ -81218,9 +81260,11 @@ syncAuthTermsCheckbox();
     });
   };
   const close = () => {
+    const wasOpen = isOpen;
     isOpen = false;
     sheet.classList.remove("isOpen");
     sheet.setAttribute("aria-hidden", "true");
+    if (wasOpen) unlockNabadSheetScroll();
     if (hideTimer) clearTimeout(hideTimer);
     hideTimer = window.setTimeout(() => {
       hideTimer = 0;

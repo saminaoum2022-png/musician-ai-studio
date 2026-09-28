@@ -69916,7 +69916,6 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay:active{ backgrou
 .profileLibChips{ display: none; gap: 6px; margin: 0 0 12px; overflow-x: auto; scrollbar-width: none; }
 .profileLibChips::-webkit-scrollbar{ display: none; }
 body[data-profile-songs-seg="all"] .profileLibChips,
-body[data-profile-songs-seg="vocals"] .profileLibChips,
 body[data-profile-songs-seg="playlist"] .profileLibChips{ display: flex; }
 .profileLibChip{
   -webkit-appearance: none; appearance: none; flex: none; cursor: pointer;
@@ -69955,9 +69954,18 @@ html[data-theme="light"] .profileLibChip.is-active{ color: #0b0b13; border-color
   width: 24px; height: 2px; margin-left: -12px; border-radius: 2px; background: #fff !important;
 }
 
-.profileLibChips{ gap: 22px; margin: 2px 0 12px; padding-left: 2px; }
+.profileLibChips{ gap: 22px; margin: 2px 0 4px; padding-left: 2px; }
 .profileLibChip{ padding: 6px 0; border: 0; border-radius: 0; background: none; font: 700 14px/1 inherit; font-family: inherit; color: rgba(255,255,255,.45); }
 .profileLibChip.is-active{ color: #fff; border: 0; }
+
+body[data-profile-songs-seg="all"] .profileSongsToolbar,
+body[data-profile-songs-seg="playlist"] .profileSongsToolbar{
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+body[data-profile-songs-seg="all"] .profileSongsKeepHint{
+  margin: 0 0 10px;
+}
 
 html[data-theme="light"] :is(body[data-route="profile"], body[data-route="user"]) .profileSegBar.profileSegBar--cap{ border-bottom-color: rgba(0,0,0,.1) !important; background: none !important; }
 html[data-theme="light"] :is(body[data-route="profile"], body[data-route="user"]) .profileSegBar--cap .profileSegTab{ color: rgba(0,0,0,.45); background: none !important; box-shadow: none !important; }

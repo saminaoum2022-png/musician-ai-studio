@@ -4018,9 +4018,9 @@ function restoreProfileSongsSegmentFromStorage() {
         ? "activities"
         : stored === "music" || stored === "all" || stored === "activities" || stored === "playlist" || stored === "vocals" || stored === "reposts"
           ? stored
-          : _profileSongsSegment || "music";
+          : _profileSongsSegment || "all";
   } catch {
-    _profileSongsSegment = _profileSongsSegment || "music";
+    _profileSongsSegment = _profileSongsSegment || "all";
   }
 }
 
@@ -5181,7 +5181,7 @@ function shortenSoundTitle(raw) {
 const LIBRARY_TAB_DOT_KEY = "mas:libraryTabDot:v1";
 const PROFILE_SONGS_SEGMENT_KEY = "mas:profileSongsSeg:v1";
 const USER_PUBLIC_SEGMENT_KEY = "nabad_user_public_seg:v1";
-let _profileSongsSegment = "music";
+let _profileSongsSegment = "all";
 let _profileSongsSegmentBound = false;
 let _profileLibLastSeg = "all";
 let _profileRepostsBound = false;
@@ -6359,10 +6359,10 @@ function applyRoute({ passGen } = {}) {
             ? "activities"
             : stored === "music" || stored === "all" || stored === "activities" || stored === "playlist" || stored === "vocals" || stored === "reposts"
               ? stored
-              : "music";
+              : "all";
       }
     } catch {
-      _profileSongsSegment = "music";
+      _profileSongsSegment = "all";
     }
     bindProfileSongsSegmentOnce();
     bindUserPlaylistPickerOnce();
@@ -62109,7 +62109,7 @@ function syncProfileSongsSegmentUi() {
   const isActivities = _profileSongsSegment === "activities";
   const isMusic = _profileSongsSegment === "music";
   const isVocals = _profileSongsSegment === "vocals";
-  if (isAll || isPlaylist || isVocals) _profileLibLastSeg = _profileSongsSegment;
+  if (isAll || isPlaylist) _profileLibLastSeg = _profileSongsSegment;
   const musicPanel = document.getElementById("profileMusic");
   if (musicPanel) {
     musicPanel.hidden = !isMusic;
@@ -62172,7 +62172,9 @@ function bindProfileSongsSegmentOnce() {
   wireProfileActivitiesLoadMoreOnce();
   document.querySelectorAll("[data-profile-lib-tab]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const seg = _profileLibLastSeg;
+      const seg = (_profileLibLastSeg === "all" || _profileLibLastSeg === "playlist")
+        ? _profileLibLastSeg
+        : "all";
       if (seg === _profileSongsSegment) return;
       _profileSongsSegment = seg;
       try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, seg); } catch {}

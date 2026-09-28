@@ -31027,7 +31027,7 @@ function syncProfilePersonaAvatarBadge() {
  * see .aaHasRealAvatar in styles.css for why no CSS filter is layered on it. */
 function syncArtistAvatarBackFace() {
   const back = document.getElementById("aaBackImg");
-  const src = normalizeProfileAvatarForImg(String(activeProfile?.artistAvatar || "").trim());
+  const src = normalizeProfileAvatarForImg(artistAvatarUrlForPaint());
   if (back && src && back.getAttribute("src") !== src) back.src = src;
 }
 /** The flip badge's own content: a live thumbnail of whichever photo ISN'T
@@ -31073,7 +31073,7 @@ function wireArtistAvatarFlipOnce() {
   const flip = document.getElementById("aaFlip");
   const badge = document.getElementById("aaFlipBadge");
   if (!flip) return;
-  const hasAvatarNow = () => Boolean(String(activeProfile?.artistAvatar || "").trim());
+  const hasAvatarNow = () => Boolean(artistAvatarUrlForPaint());
   const toggle = () => {
     try { haptic("light"); } catch {}
     flip.classList.toggle("isFlipped");
@@ -31103,7 +31103,7 @@ function syncArtistAvatarFlipVisibility() {
   const flip = document.getElementById("aaFlip");
   const badge = document.getElementById("aaFlipBadge");
   const backFace = document.getElementById("aaFlipBack");
-  const hasAvatar = Boolean(String(activeProfile?.artistAvatar || "").trim());
+  const hasAvatar = Boolean(artistAvatarUrlForPaint());
   const onProfileRoute = String(document.body.getAttribute("data-route") || "") === "profile";
   if (badge) {
     badge.hidden = !onProfileRoute;
@@ -31148,9 +31148,17 @@ function syncArtistAvatarPromoBanner() {
       openArtistAvatarEditorFromProfile();
     });
   }
-  const hasAvatar = Boolean(String(activeProfile?.artistAvatar || "").trim());
+  const hasAvatar = Boolean(artistAvatarUrlForPaint());
   const loading = shouldShowProfileHeaderSkeleton();
-  const on = !loading && !hasAvatar && String(document.body.getAttribute("data-route") || "") === "profile";
+  // Until the cloud profile has merged, do not flash the create card when
+  // the Artist Avatar was only dropped from local storage for size.
+  const awaitingCloud =
+    Boolean(authSession?.user?.id) && !_profileCloudMergedAt && !hasAvatar;
+  const on =
+    !loading &&
+    !hasAvatar &&
+    !awaitingCloud &&
+    String(document.body.getAttribute("data-route") || "") === "profile";
   el.hidden = !on;
   el.setAttribute("aria-hidden", on ? "false" : "true");
 }
@@ -31998,6 +32006,54 @@ function profileAvatarUrlForPaint() {
   if (isRealUserAvatarUrl(live)) return live;
   return cachedProfileAvatarUrl(activeProfile?.id);
 }
+
+/** Artist Avatar is often a large data URL and gets dropped from the
+ *  profile JSON on save. Keep a small snap so cold start does not flash
+ *  the "Create your Artist Avatar" card before the cloud row arrives.
+ *  (Profile photo snap above is separate — do not mix the two.) */
+function artistAvatarSnapKey(id) {
+  return `mas:artist-avatar:v1:${String(id || "").trim()}`;
+}
+function cachedArtistAvatarUrl(id) {
+  const uid = String(id || "").trim();
+  if (!uid || uid === "guest") return "";
+  try {
+    const parsed = JSON.parse(localStorage.getItem(artistAvatarSnapKey(uid)) || "null");
+    const url = String(parsed?.url || "").trim();
+    return isRealUserAvatarUrl(url) ? url : "";
+  } catch {
+    return "";
+  }
+}
+function writeArtistAvatarSnap(id, url) {
+  const uid = String(id || "").trim();
+  const clean = String(url || "").trim();
+  if (!uid || uid === "guest" || !isRealUserAvatarUrl(clean)) return;
+  if (clean.startsWith("data:") && clean.length > PROFILE_AVATAR_SNAP_MAX) return;
+  try {
+    localStorage.setItem(artistAvatarSnapKey(uid), JSON.stringify({ url: clean, at: Date.now() }));
+  } catch {}
+}
+let _artistAvatarSnapWriteKey = "";
+async function persistArtistAvatarSnapshot(id, url) {
+  const clean = String(url || "").trim();
+  if (!isRealUserAvatarUrl(clean)) return;
+  const writeKey = `${id}|aa|${clean.length}|${clean.slice(0, 64)}`;
+  if (_artistAvatarSnapWriteKey === writeKey) return;
+  _artistAvatarSnapWriteKey = writeKey;
+  if (!clean.startsWith("data:") || clean.length <= PROFILE_AVATAR_SNAP_MAX) {
+    writeArtistAvatarSnap(id, clean);
+    return;
+  }
+  const small = await shrinkAvatarDataUrl(clean);
+  if (_artistAvatarSnapWriteKey !== writeKey) return;
+  if (small && small.length <= PROFILE_AVATAR_SNAP_MAX) writeArtistAvatarSnap(id, small);
+}
+function artistAvatarUrlForPaint() {
+  const live = String(activeProfile?.artistAvatar || "").trim();
+  if (isRealUserAvatarUrl(live)) return live;
+  return cachedArtistAvatarUrl(activeProfile?.id);
+}
 function loadProfile() {
   try {
     const uid = String(authSession?.user?.id || "").trim();
@@ -32010,6 +32066,12 @@ function loadProfile() {
       if (!p?.id) continue;
       if (uid && String(p.id) !== uid && key === PROFILE_KEY) continue;
       activeProfile = p;
+      // Profile JSON often dropped a huge Artist Avatar data URL. Restore
+      // from the snap so the create-card does not flash on cold open.
+      if (!isRealUserAvatarUrl(String(activeProfile.artistAvatar || "").trim())) {
+        const aa = cachedArtistAvatarUrl(activeProfile.id);
+        if (aa) activeProfile = { ...activeProfile, artistAvatar: aa };
+      }
       return;
     }
   } catch {}
@@ -32019,6 +32081,7 @@ function saveProfile(p) {
   const next = authId ? { ...p, id: authId } : { ...p };
   activeProfile = next;
   void persistProfileAvatarSnapshot(next.id, next.avatar);
+  void persistArtistAvatarSnapshot(next.id, next.artistAvatar);
   try {
     localStorage.setItem(profileStorageKey(next.id), JSON.stringify(next));
   } catch {
@@ -32029,7 +32092,9 @@ function saveProfile(p) {
       if (String(slim.avatar || "").length > PROFILE_AVATAR_SNAP_MAX) {
         slim.avatar = cachedProfileAvatarUrl(next.id) || "";
       }
-      if (String(slim.artistAvatar || "").length > PROFILE_AVATAR_SNAP_MAX) slim.artistAvatar = "";
+      if (String(slim.artistAvatar || "").length > PROFILE_AVATAR_SNAP_MAX) {
+        slim.artistAvatar = cachedArtistAvatarUrl(next.id) || "";
+      }
       localStorage.setItem(profileStorageKey(next.id), JSON.stringify(slim));
     } catch {}
   }

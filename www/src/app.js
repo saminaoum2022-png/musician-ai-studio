@@ -4033,6 +4033,7 @@ function enterProfileRouteHooks({ skipHeavy = false } = {}) {
       setProfileHeaderLoading(shouldShowProfileHeaderSkeleton());
     } catch {}
     try { renderProfilePreviewFromInputs(); } catch {}
+    try { syncArtistAvatarPromoBanner(); } catch {}
     restoreRouteScroll("profile");
     return;
   }
@@ -4052,6 +4053,8 @@ function enterProfileRouteHooks({ skipHeavy = false } = {}) {
       });
     }, 0);
   }
+  try { renderProfilePreviewFromInputs(); } catch {}
+  try { syncArtistAvatarPromoBanner(); } catch {}
 }
 
 function syncProfileAuraHeaderChrome(route) {
@@ -30940,7 +30943,8 @@ function syncArtistAvatarPromoBanner() {
     });
   }
   const hasAvatar = Boolean(String(activeProfile?.artistAvatar || "").trim());
-  const on = !hasAvatar && String(document.body.getAttribute("data-route") || "") === "profile";
+  const loading = shouldShowProfileHeaderSkeleton();
+  const on = !loading && !hasAvatar && String(document.body.getAttribute("data-route") || "") === "profile";
   el.hidden = !on;
   el.setAttribute("aria-hidden", on ? "false" : "true");
 }
@@ -36152,10 +36156,10 @@ async function supabaseLoadProfile(opts = {}) {
   logSupabaseFetch("profile", reason, { cache: "miss" });
   const run = async () => {
   const uid = encodeURIComponent(authSession.user.id);
-  // 8s timeout — same reasoning as supabaseFetchUser: a hung profile
-  // fetch was the root cause of the "stuck loading + @guest" report.
+  // 18s — mobile data often needs longer than 8s. A short abort used to
+  // give up, clear the header shimmer, and leave the poster nameless.
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8000);
+  const timer = setTimeout(() => ctrl.abort(), 18000);
   let r;
   try {
     r = await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${uid}&select=*`, {
@@ -60381,6 +60385,7 @@ function setProfileHeaderLoading(on) {
   const flag = on ? "true" : "false";
   if (top) top.setAttribute("data-loading", flag);
   if (row) row.setAttribute("data-loading", flag);
+  try { syncArtistAvatarPromoBanner(); } catch {}
 }
 
 function refreshProfileHandleFromActiveProfile() {
@@ -60402,11 +60407,10 @@ function shouldShowProfileHeaderSkeleton() {
   if (localId === "guest" || localId !== uid) return true;
   const u = String(activeProfile?.username || "").trim().toLowerCase();
   if (!u || u === "guest") return true;
-  // Until the cloud merge lands, the header can only show whatever was last saved
-  // on the device — the photo and display name often arrive a beat later. Cover
-  // that gap with the shimmer for every signed-in account, not just placeholder
-  // handles, so a slow connection shows a skeleton instead of the initials flash.
-  if (!_profileCloudMergedAt) return true;
+  // A real cached handle can paint immediately. Only hold the shimmer for a
+  // placeholder handle until cloud confirms it — otherwise slow mobile data
+  // drops the skeleton and leaves a blank poster.
+  if (isPlaceholderUsername(u) && !_profileCloudMergedAt) return true;
   return false;
 }
 
@@ -60449,11 +60453,15 @@ function renderProfileIdentityLine() {
 
   if (input) input.value = handleText;
 
-  if (friendly) {
+  // A missing display name used to hide the title entirely, so the poster
+  // settled as a giant "Na" over @handle. Use the handle as the title until
+  // a real display name arrives from cache or cloud.
+  const shownName = friendly || (handle ? handle.charAt(0).toUpperCase() + handle.slice(1) : "");
+  if (shownName) {
     if (displayEl) {
       displayEl.hidden = false;
-      if (displayTextEl) displayTextEl.textContent = friendly;
-      else displayEl.textContent = friendly;
+      if (displayTextEl) displayTextEl.textContent = shownName;
+      else displayEl.textContent = shownName;
     }
     if (input) input.hidden = true;
     if (subEl) {
@@ -60833,6 +60841,7 @@ function renderProfilePreviewFromInputs() {
   renderProfileNabadCertBadge();
   try { renderProfileMusicStylesInline(); } catch {}
   try { syncMobileTabbarProfileAvatar(); } catch {}
+  try { syncArtistAvatarPromoBanner(); } catch {}
   if (els.profileAuraAvatarWrap) {
     const tappable = canChangeOwnProfilePhoto();
     els.profileAuraAvatarWrap.classList.remove("profileAuraAvatarWrap--tappable");

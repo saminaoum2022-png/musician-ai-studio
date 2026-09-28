@@ -67967,7 +67967,23 @@ body[data-route="profile"] .profileAuraAvatarFallback{
   box-shadow: none !important;
   transform: none !important;
 }
-body[data-route="profile"] .profileAuraAvatarFallback{ display: grid; place-items: center; font-size: 96px; font-weight: 900; color: rgba(255, 255, 255, 0.5); }
+body[data-route="profile"] .profileAuraAvatarFallback{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0;
+  color: rgba(232, 238, 247, 0.62);
+  background:
+    linear-gradient(165deg, rgba(124, 92, 255, 0.38), rgba(34, 211, 238, 0.16) 58%, rgba(8, 10, 16, 0.35)),
+    #141824;
+}
+body[data-route="profile"] .profileAuraAvatarFallback svg{
+  width: 112px;
+  height: 112px;
+}
+body[data-route="profile"] .profileAuraTopRow[data-loading="true"] .profileAuraAvatarFallback{
+  visibility: hidden;
+}
 body[data-route="profile"] .profileAuraAvatar:not([src]),
 body[data-route="profile"] .profileAuraAvatar[src=""]{ visibility: hidden; }
 body[data-route="profile"] .profileAuraRing,

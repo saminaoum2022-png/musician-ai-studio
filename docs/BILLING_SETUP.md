@@ -68,10 +68,11 @@ iPhone (RevenueCat SDK)
 
 ## Credit grants (from pro-plan-config.js)
 
-| Plan | Credits per renewal |
-|------|---------------------|
-| Weekly (incl. trial week) | 400 |
-| Monthly | 1,200 (1,000 + 200 bonus) |
+| Plan | Credits |
+|------|---------|
+| Weekly trial start | 90 |
+| Weekly (paid renewal) | 400 |
+| Monthly | 1,000 |
 
 ## Not in v1 (can add later)
 

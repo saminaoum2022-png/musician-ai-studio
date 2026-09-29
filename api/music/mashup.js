@@ -19,7 +19,7 @@ const {
   DEFAULT_SUNO_MODEL,
 } = require("../_lib/suno-upstream");
 
-const MASHUP_COST = 12;
+const MASHUP_COST = 15;
 const DEFAULT_MODEL = DEFAULT_SUNO_MODEL;
 const DEFAULT_PROMPT = "A dynamic mashup blending two songs together";
 

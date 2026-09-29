@@ -803,7 +803,7 @@ export function messagesVoiceDropBubbleHtml(parsed, { mine = false, msgId = "", 
           <button type="button" class="messagesVoiceClipChip" data-voice-clip-mood="night">Night</button>
           <button type="button" class="messagesVoiceClipChip" data-voice-clip-mood="arabic">Arabic</button>
         </div>
-        <button type="button" class="messagesVoiceClipGo" data-voice-clip-go="${id}">Remix · 12 credits</button>
+        <button type="button" class="messagesVoiceClipGo" data-voice-clip-go="${id}">Remix · 15 credits</button>
       </div>
       ${mixHtml || ""}
     </div>`;

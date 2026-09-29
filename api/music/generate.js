@@ -89,7 +89,7 @@ const {
 const { nabadSongEditEnabled } = require("../_lib/nabad-song-edit-lib");
 
 const LYRIA_FULL_SONG_FLOW = "lyria_full_song";
-const FULL_SONG_COST = 12;
+const FULL_SONG_COST = 15;
 const LYRIA_CLIP_CREDIT_COST = Math.max(
   1,
   Number(process.env.LYRIA_CLIP_CREDIT_COST || process.env.TEMPLATE_SPARK_CLIP_COST || 10),

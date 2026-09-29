@@ -5,6 +5,7 @@
 import {
   PRO_FEATURES,
   PRO_LAUNCH_COPY,
+  PRO_LAUNCH_COPY_AR,
   PRO_PLANS,
   planCreditsMeta,
 } from "./pro-plan-config.js";
@@ -420,6 +421,8 @@ function renderProPlanPage({ preserveTab = true } = {}) {
             <span class="proHeroTitleLine">Sound pro.</span>
           </h3>
           <p class="proHeroLead">${esc(PRO_LAUNCH_COPY.lead)}</p>
+          <p class="proSpecialOffer" role="note">${esc(PRO_LAUNCH_COPY.specialOffer)}</p>
+          <p class="proSpecialOffer proSpecialOffer--ar" dir="rtl" lang="ar" role="note">${esc(PRO_LAUNCH_COPY_AR.specialOffer)}</p>
         </div>
 
         <section class="proMain" aria-label="Pro plans">

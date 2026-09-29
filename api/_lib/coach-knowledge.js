@@ -124,9 +124,9 @@ ABOUT THIS SONG (the song details sheet):
 - For their OWN songs the owner also sees some housekeeping: Visibility (Public profile / Private library), whether Remix and Mashup are allowed, and the release note. (There is also a small folded section of internal reference IDs at the very end — users can ignore those; they're just technical identifiers.)
 
 OTHER WAYS TO MAKE AUDIO (from a song's menu or the player):
-- Remix: turn an existing song into a new version/arrangement (12 credits).
-- Cover / hum reference: new full song from your uploaded clip (12 credits).
-- Mashup: blend two songs into one (12 credits).
+- Remix: turn an existing song into a new version/arrangement (15 credits).
+- Cover / hum reference: new full song from your uploaded clip (15 credits).
+- Mashup: blend two songs into one (15 credits).
 - Get instrumental: create the instrumental ("karaoke") version of a track, with the lead vocals removed (2 credits).
 - Music video: generate a music-video visualizer (MP4) for a song (free). [disabled in app]
 - Sounds: short loops and ambience for games, podcasts, and backgrounds (2.5 credits) — also under Settings → Creator tools.
@@ -179,18 +179,18 @@ CREDITS — balance and what each action costs:
 - See your balance on your Profile (credits pill, top-left) and under Settings → **Credits & plan** → **Credits** (balance, redeem promo codes, recent activity).
 - Profile also shows a **NabadAi Pro** banner under your stats (Subscribe now) — it hides while you already have Pro.
 - Credit buckets: **Paid** (subscriptions — create and gift); **Gift received** (create only, not re-giftable); **Promo** (from codes — create and gift); **Trial** (weekly trial start — create only, not giftable). Paid, promo, and gift credits never expire. Unused trial credits end if you don't subscribe. Failed generations refund automatically.
-- **Costs:** full song = 12 credits (2 variants A & B); Remix / cover / hum reference = 12; Mashup = 12; save Persona = 5; Sound = 2.5; Get instrumental (karaoke) on existing song = 2; Studio "Separate vocals" ≈ 2; **template clip** (~30s from Create → Templates) ≈ 10 credits.
+- **Costs:** full song = 15 credits (2 variants A & B); Remix / cover / hum reference = 15; Mashup = 15; save Persona = 5; Sound = 2.5; Get instrumental (karaoke) on existing song = 2; Studio "Separate vocals" ≈ 2; **template clip** (~30s from Create → Templates) ≈ 10 credits.
 - **Free:** AI lyrics write/refine, ✦ Boost style, artwork suggestions, Voice Lab scan.
 - **Not enough credits?** Redeem a promo code on Credits or subscribe to NabadAi Pro (Settings → NabadAi Pro). You can also contact help@nabadai.com.
 
 NABADAI PRO (subscription — live on iPhone and nabadai.com):
 - Where: Profile Pro banner, Settings → Credits & plan → **NabadAi Pro**, or Credits → View plans. Active Pro shows a purple **Pro** pill on your profile avatar.
-- **Weekly:** $3.99/week · 7-day free trial · 400 credits on trial start (unused trial credits end if you don't subscribe) · 400 credits each paid week (≈ 33 songs) · paid credits are giftable.
-- **Monthly:** $9.99/month · Save ~17% · 1,000 + 200 bonus credits each month (≈ 100 songs) · giftable.
+- **Weekly:** $3.99/week · 7-day free trial · 90 credits on trial start (≈ 6 songs; unused trial credits end if you don't subscribe) · 400 credits each paid week (≈ 26 songs) · paid credits are giftable.
+- **Monthly:** $9.99/month · Save ~17% · 1,000 credits each month (≈ 66 songs) · giftable.
 - **How to subscribe:** On **iPhone**, Apple ID on the NabadAi Pro screen; cancel in iPhone **Settings → Apple ID → Subscriptions**. On **nabadai.com / desktop**, card on the same screen; cancel via **Manage subscription**.
 
 PRO FEATURES — list these when asked "what's in Pro?" / "what do I get?":
-1. **Weekly or monthly credits** — 400/week or 1,000 + 200 bonus/month, giftable.
+1. **Weekly or monthly credits** — 90 on trial start · 400/week or 1,000/month, giftable.
 2. **Unlimited NabadAi Coach** — free accounts have a daily Coach limit.
 3. **Hum** — Create → Hum tab (melody → song). Pro on iPhone and web.
 4. **Advanced options** — vocal style, range, type, Prosody. Pro on iPhone and web.

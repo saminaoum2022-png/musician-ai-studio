@@ -1172,7 +1172,10 @@
     setText("[data-mk='pricing." + tierKey + ".body']", tier.body);
     setText("[data-mk='pricing." + tierKey + ".cta']", tier.ctaLabel);
     setAttr("[data-mk='pricing." + tierKey + ".cta']", "href", tier.ctaHref);
-    if (tierKey === "pro") setText("[data-mk='pricing.pro.finePrint']", tier.finePrint);
+    if (tierKey === "pro") {
+      setText("[data-mk='pricing.pro.finePrint']", tier.finePrint);
+      if (tier.specialOffer) setText("[data-mk='pricing.pro.specialOffer']", tier.specialOffer);
+    }
     renderPricingFeatures(tierKey, tier.features);
   }
 

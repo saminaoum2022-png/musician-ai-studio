@@ -1121,6 +1121,12 @@ img { display: block; max-width: 100%; height: auto; }
   color: rgba(232, 238, 247, 0.36);
 }
 
+.pricingSectionNote--offer {
+  margin-top: 16px;
+  font-weight: 600;
+  color: rgba(180, 230, 210, 0.72);
+}
+
 .pricingCard--compact .marketingCta {
   margin-top: auto;
 }

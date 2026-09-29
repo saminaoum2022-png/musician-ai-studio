@@ -19,6 +19,10 @@
     "api/suno/upload-audio.js": {
       "includeFiles": "node_modules/ffmpeg-static/**"
     },
+    "api/music/vocal-clone.js": {
+      "includeFiles": "node_modules/ffmpeg-static/**",
+      "maxDuration": 60
+    },
     "api/render-video.js": {
       "includeFiles": "node_modules/ffmpeg-static/**",
       "maxDuration": 60

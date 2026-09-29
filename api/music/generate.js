@@ -1094,7 +1094,10 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
   if (!apiKey) return sendJson(res, 500, { error: "Missing GEMINI_API_KEY on server" });
 
-  if (!isAdmin && !lyriaGenerateEnabled()) {
+  const templateSparkFull = String(body?.templateSparkFull || "").trim() === "1";
+  // Public templates / sparks / occasions / challenges use Lyria 3.5 full via templateSparkFull.
+  // Admin Settings → Lyria (or LYRIA_GENERATE_ENABLED) still opens full Lyria for freeform create.
+  if (!isAdmin && !lyriaGenerateEnabled() && !templateSparkFull) {
     return sendJson(res, 403, {
       error: "This generation mode isn't available yet.",
       code: "lyria_admin_only",
@@ -1113,8 +1116,8 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     const debit = await callRpc("consume_credits", {
       p_user_id: user.userId,
       p_amount: FULL_SONG_COST,
-      p_reason: "full_song",
-      p_ref: "lyria",
+      p_reason: templateSparkFull ? "template_spark_full" : "full_song",
+      p_ref: templateSparkFull ? "template_spark_lyria_full" : "lyria",
     });
     if (!debit.ok || !debit.data?.ok) {
       const status = String(debit.data?.status || "");
@@ -1137,7 +1140,9 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   const instrumental = Boolean(body?.instrumental);
   const taskId = newTaskId("lyria");
   const audioId = `${taskId}_a`;
-  const model = resolveLyriaModel(String(body?.lyriaModel || "").trim());
+  const model = resolveLyriaModel(
+    String(body?.lyriaModel || (templateSparkFull ? "lyria-3.5" : "")).trim(),
+  );
   const photoImages = resolveLyriaPhotosFromBody(body);
 
   if (!instrumental && !lyrics && !stylePrompt && !photoImages.length) {

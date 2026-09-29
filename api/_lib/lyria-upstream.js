@@ -96,9 +96,10 @@ function nabadClipEnabled() {
   return envFlagEnabled("NABAD_CLIP_ENABLED", { defaultOn: true });
 }
 
-/** Templates, Sparks, and challenge shelves → Lyria Clip (~30s). */
+/** Templates / Sparks / Moments / Challenges → Lyria 3.5 full song (not clip).
+ *  Opt back into clip with TEMPLATE_SPARK_CLIP_ENABLED=1. Nabad Clip hub is separate. */
 function templateSparkClipEnabled() {
-  return envFlagEnabled("TEMPLATE_SPARK_CLIP_ENABLED", { defaultOn: true });
+  return envFlagEnabled("TEMPLATE_SPARK_CLIP_ENABLED", { defaultOn: false });
 }
 
 function isLyriaClipModel(model) {

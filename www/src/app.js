@@ -19722,8 +19722,7 @@ async function draft80sYouLyricsForGenerate(mood) {
       console.warn("[80s-you] lyrics draft failed", data?.error || r.status);
       return false;
     }
-    let lyrics = sanitizeLyricsPrompt(String(data.lyrics || "").trim());
-    lyrics = await apply80sLevantineDiacriticsIfNeeded(lyrics);
+    const lyrics = sanitizeLyricsPrompt(String(data.lyrics || "").trim());
     if (els.sunoPrompt) els.sunoPrompt.value = lyrics;
     _nabadAiLyricsDraft = lyrics;
     _lyricsGeneratedInNabad = true;
@@ -74282,7 +74281,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           : "";
       const debugNote = debugSuno || debugGemini ? ` [engine:${debugSuno || "-"} gemini:${debugGemini || "-"}]` : "";
       setStatus(`Lyrics ready${providerNote}${debugNote}.`);
-      const levantineHintTashkeel = /lebanese|syrian|palestinian/.test(String(lyricsDialect || ""));
       if (startedFromIdea) {
         const clipReady = isTemplateSparkClipFlow()
           ? "Lyrics ready on Write — edit, then Generate clip."
@@ -74291,21 +74289,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         showToast(clipReady, { icon: "✦", durationMs: 3600 });
       } else if (isTemplateSparkClipFlow()) {
         setStatus("Lyrics ready — review, then Generate clip.");
-        showToast(
-          levantineHintTashkeel
-            ? "Lyrics ready with light تشكيل — tap vowel marks to refine, then Generate clip."
-            : "Lyrics ready — then Generate clip.",
-          { icon: "✦", durationMs: 3600 },
-        );
+        showToast("Lyrics ready — then Generate clip.", { icon: "✦", durationMs: 3600 });
       } else if (usingSunoLyrics && provider === "suno") {
         showToast("Lyrics ready — then Generate song.", { icon: "✦", durationMs: 4200 });
       } else {
-        showToast(
-          levantineHintTashkeel
-            ? "Lyrics ready with light تشكيل — tap vowel marks for a fuller sung pass."
-            : "Lyrics ready.",
-          { icon: "♫", durationMs: 3200 },
-        );
+        showToast("Lyrics ready — plain script (tap تشكيل if you want vowel marks).", {
+          icon: "♫",
+          durationMs: 3200,
+        });
       }
       try { syncArabicLyricsControlsVisibility(); } catch {}
       try { syncLyricsSingabilityCheckVisibility(); } catch {}

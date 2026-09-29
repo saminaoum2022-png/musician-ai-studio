@@ -26,6 +26,8 @@ const {
   stripColloquialTanween,
   countArabicDiacritics,
   stripSungMarksKeepShadda,
+  stripAllArabicDiacritics,
+  applyColloquialArabicOrthography,
   lightenSungArabicDiacritics,
 } = require("./_lib/arabic-dialect-lyrics");
 const {
@@ -39,13 +41,13 @@ function postProcessGeneratedArabicLyrics(text, { mode, flags, arabicScript }) {
   if (mode === "enhance" || mode === "fix_singing" || mode === "to_arabizi") {
     return normalized;
   }
+  // Plain script after ✦ Generate only — never strip harakat on lyrics the user sends to Lyria (see sanitizeLyriaLyricsForSinging).
+  normalized = stripAllArabicDiacritics(normalized);
   if (flags.isLebanese || flags.isLevantineColloquial || flags.isEgyptian) {
-    normalized = lightenSungArabicDiacritics(normalized, {
-      isMsa: flags.isMsa,
+    normalized = applyColloquialArabicOrthography(normalized, {
       isLebanese: flags.isLebanese,
       isLevantineColloquial: flags.isLevantineColloquial,
       isEgyptian: flags.isEgyptian,
-      richer: true,
     });
   }
   return normalized;

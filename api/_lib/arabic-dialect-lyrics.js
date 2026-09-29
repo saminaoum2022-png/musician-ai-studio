@@ -93,7 +93,7 @@ function buildColloquialArabicGenerationLines({
       "- Spoken Cairo Masri ONLY — never fusHa nahwi, NEVER tanween (ًٌٍ) unless user explicitly asked for MSA.",
       "- Use Egyptian present-tense prefix ب- on verbs (بيحلى، بيقول، بشوف، بعمل).",
       "- Write Cairo hamza/qaf as أ (ألبي) — not classical /q/. Do NOT insert Latin digits unless the user's seed has them.",
-      ...buildSungReadyGenerationLines({ isEgyptian: true }),
+      ...buildPlainColloquialGenerationLines({ isEgyptian: true }),
       ...buildEgyptianLexiconLines(),
     ];
   }
@@ -106,7 +106,7 @@ function buildColloquialArabicGenerationLines({
       "- Examples of stopped endings: خلّص، عم، منّ، فيّ، شفت، قلّي — consonant feels closed, not classical open vowel + tanween.",
       "- ق = hamza in speech — write with أ (ألبي not قلبي), not classical /q/. ذ and ظ → ز (Levantine spoken).",
       "- NEVER insert Latin digits (0–9) in lyrics unless the user's seed already contains them.",
-      ...buildSungReadyGenerationLines({ isLebanese: true }),
+      ...buildPlainColloquialGenerationLines({ isLebanese: true }),
       ...buildLebaneseLexiconLines(),
     ];
   }
@@ -117,7 +117,7 @@ function buildColloquialArabicGenerationLines({
       "- Close word endings naturally (sukoon feel) — no open classical case endings on final words.",
       "- ق → أ (hamza), ذ → ز, ظ → ز — not classical /q/ or MSA ذ/ظ.",
       "- NEVER insert Latin digits (0–9) unless the user's seed already contains them.",
-      ...buildSungReadyGenerationLines({ isLevantineColloquial: true }),
+      ...buildPlainColloquialGenerationLines({ isLevantineColloquial: true }),
     ];
   }
   return [
@@ -127,27 +127,31 @@ function buildColloquialArabicGenerationLines({
   ];
 }
 
-/** Singer-ready marks baked into AI Generate (one shot) — Add vowel marks still does a fuller pass on user lyrics. */
-function buildSungReadyGenerationLines({
+/** Plain colloquial script for AI Generate — no tashkeel (harakat confuse Lyria / vocal identity). */
+function buildPlainColloquialGenerationLines({
   isLebanese = false,
   isLevantineColloquial = false,
   isEgyptian = false,
 } = {}) {
   const levantine = isLebanese || isLevantineColloquial;
   const lines = [
-    "SUNG tashkeel in this output (sparse, for the AI singer — NOT textbook full vowelization):",
-    "ADD: sukoon on stopped consonants, shadda where it changes the word, address marks إنتَ/إنتِ/إنتو only.",
-    "ADD: last-letter and mid-word short vowels only when the singer could misread (بَعد vs بُعد).",
-    "NEVER: tanween (ًٌٍ), nahwi case endings, marks on kaf in قلبك/معك/كيفك, or vowelizing every letter.",
+    "Write PLAIN colloquial Arabic script — NO vowel marks (tashkeel / harakat / sukoon / shadda) in this output.",
+    "The user adds تشكيل separately with Add vowel marks if they want it — do not vowelize in Generate.",
+    "NO tanween (ًٌٍ) or nahwi case endings on words.",
   ];
   if (levantine) {
     lines.push(
-      "Levantine orthography in Arabic script: ق→أ, ذ→ز, ظ→ز (e.g. ألبي, زكرة). No Latin digits.",
+      "Levantine orthography in letters only: ق→أ, ذ→ز, ظ→ز (e.g. ألبي, زكرة). No Latin digits.",
     );
   } else if (isEgyptian) {
     lines.push("Egyptian: Cairo hamza as أ on qaf (ألبي). Keep Masri ذ/ظ as written unless seed uses ز.");
   }
   return lines;
+}
+
+/** Remove all Arabic diacritics — for Lyria/generate paths that should stay plain. */
+function stripAllArabicDiacritics(input) {
+  return String(input || "").replace(/[\u064B-\u065F\u0670]/g, "");
 }
 
 function buildSparseDiacriticsLinesAr() {
@@ -603,6 +607,7 @@ module.exports = {
   stripColloquialTanween,
   countArabicDiacritics,
   stripSungMarksKeepShadda,
+  stripAllArabicDiacritics,
   applySparseSungDiacritics,
   hintSungArabicDiacritics,
   lightenSungArabicDiacritics,

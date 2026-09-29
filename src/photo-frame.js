@@ -115,8 +115,9 @@ export function openPhotoFrame({
       view.style.transform = `translate(${tx}px, ${ty}px) scale(${scale()})`;
     }
     function reset() {
-      zoom = 1;
-      slider.value = "1";
+      // Circle (Artist Avatar) starts a touch zoomed-in so any faint edge glow is already out of frame.
+      zoom = circle ? 1.06 : 1;
+      slider.value = String(zoom);
       const s = scale();
       tx = (V() - img.naturalWidth * s) / 2;
       ty = (V() - img.naturalHeight * s) / 2;

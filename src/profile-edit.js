@@ -5,6 +5,16 @@
 import { openPhotoFrame } from "./photo-frame.js";
 import { MUSIC_PREFERENCE_GENRES, parseMusicPreferencesFromProfile, markMusicPreferencesComplete, profileMusicStylesDisplaySlice } from "./music-preferences.js";
 import { USERNAME_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from "./profile-limits.js";
+import {
+  GOLD_RINGS,
+  GOLD_TOPPERS,
+  goldRingAccent,
+  applyGoldToAvatarWrap,
+  goldCanEdit,
+  readLocalGoldStyle,
+  saveOwnGoldStyle,
+  sanitizeGoldStyle,
+} from "./gold-style.js";
 
 let _deps = null;
 let _inited = false;
@@ -111,6 +121,7 @@ export function hydrateProfileEditDraft(profile) {
     String(_deps?.loadPersonaSelection?.() || "").trim() ||
     String(_deps?.getActivePersonaId?.() || "").trim();
   _photoFrameSrc = "";
+  _goldDirty = false;
   _draft = {
     displayName: String(p.displayName || "").trim(),
     username: String(p.username || "").trim(),
@@ -130,11 +141,14 @@ export function hydrateProfileEditDraft(profile) {
     clearArtistAvatar: false,
     avatarRemoved: false,
   };
+  try { _draft.goldStyle = readLocalGoldStyle(goldOwnUid()); } catch { _draft.goldStyle = null; }
   _dirty = false;
   _genresTouched = false;
   _originalUsername = normalizeUsername(_draft.username);
   renderProfileEditPage();
 }
+
+let _goldDirty = false;
 
 function markDirty() {
   _dirty = true;
@@ -228,6 +242,55 @@ function applyAvatarToEditPhoto() {
   }
 }
 
+function goldOwnUid() {
+  return String(_deps?.getAuthSession?.()?.user?.id || _deps?.getActiveProfile?.()?.id || "").trim();
+}
+
+/** Gold frame/emblem edits are part of the profile DRAFT — they light up Save and only go live (device + Supabase) when Save is tapped. */
+function goldStyleChanged(next) {
+  _draft.goldStyle = sanitizeGoldStyle(next);
+  _goldDirty = true;
+  markDirty();
+  try { applyGoldToAvatarWrap(qs("#aaHeroAvatar"), _draft.goldStyle); } catch {}
+  try { applyArtistRingToEditPhoto(); } catch {}
+}
+
+/** Called from Save: persist the frame/emblem to this device and to the user's profile row in Supabase. */
+async function commitGoldStyleFromDraft() {
+  if (!_goldDirty) return;
+  const uid = goldOwnUid();
+  if (!uid) return;
+  const r = await saveOwnGoldStyle(uid, _draft.goldStyle);
+  _goldDirty = false;
+  try { _deps?.onGoldStyleChanged?.(); } catch {}
+  if (!r?.cloud) {
+    try { _deps?.showToast?.("Frame saved on this device — cloud sync isn't set up yet.", { durationMs: 3600 }); } catch {}
+  }
+}
+
+function aaGoldBlockHtml(style) {
+  const ring = style?.ring || "";
+  const topper = style?.topper || "";
+  const chips = [{ id: "", label: "None", swatch: "" }, ...GOLD_RINGS].map((r) => `
+      <button type="button" class="aaFrameOpt" role="radio" aria-checked="${r.id === ring ? "true" : "false"}" data-aa-frame="${r.id}">
+        <span class="aaFrameDot${r.id ? "" : " aaFrameDot--none"}" ${r.swatch ? `style="background:${r.swatch}"` : ""}></span>
+        <span class="aaFrameLabel">${r.label}</span>
+      </button>`).join("");
+  const toppers = [{ id: "", label: "None", svg: "" }, ...GOLD_TOPPERS].map((t) => `
+      <button type="button" class="aaFrameOpt aaTopperOpt" role="radio" aria-checked="${t.id === topper ? "true" : "false"}" data-aa-topper="${t.id}">
+        <span class="aaTopperGlyph${t.id ? "" : " aaTopperGlyph--none"}">${t.svg}</span>
+        <span class="aaFrameLabel">${t.label}</span>
+      </button>`).join("");
+  return `
+    <section class="aaGold" id="aaGoldBlock" style="--aa-emblem:${goldRingAccent(ring)}" aria-label="Gold style">
+      <div class="aaGoldHead"><span class="aaGoldTitle">Gold style</span><span class="aaGoldTag">GOLD</span></div>
+      <div class="aaGoldLabel">Frame</div>
+      <div class="aaFrameRow" id="aaFrameRow" role="radiogroup" aria-label="Avatar frame">${chips}</div>
+      <div class="aaGoldLabel aaGoldLabel--gap">Emblem</div>
+      <div class="aaFrameRow" id="aaTopperRow" role="radiogroup" aria-label="Avatar emblem">${toppers}</div>
+    </section>`;
+}
+
 /** Nested Artist + ring on the Edit Profile photo — empty dashed +, or live AA thumb. */
 function applyArtistRingToEditPhoto() {
   const ring = qs("#profileEditArtistRing");
@@ -235,6 +298,7 @@ function applyArtistRingToEditPhoto() {
   if (!ring) return;
   const src = String(_draft?.artistAvatar || "").trim();
   const empty = !src;
+  try { applyGoldToAvatarWrap(ring, empty ? null : (_draft?.goldStyle || null)); } catch {}
   ring.classList.toggle("profileEditArtistRing--empty", empty);
   ring.setAttribute("aria-label", empty ? "Create your Artist Avatar" : "Manage your Artist Avatar");
   if (thumb) {
@@ -703,6 +767,14 @@ function renderProfileEditPage() {
     el.textContent = text;
     el.classList.toggle("profileEditRowValue--empty", empty);
   };
+  try {
+    const cn = qs("#profileEditCoverName");
+    const ch = qs("#profileEditCoverHandle");
+    const friendly = normalizeDisplayName(_draft?.displayName);
+    const handle = normalizeUsername(_draft?.username);
+    if (cn) { cn.textContent = friendly || (handle ? `@${handle}` : "Your name"); }
+    if (ch) { ch.textContent = friendly && handle ? `@${handle}` : ""; ch.hidden = !(friendly && handle); }
+  } catch {}
   setVal("#profileEditDisplayNameVal", displayNamePreview(), !String(_draft.displayName || "").trim());
   setVal("#profileEditUsernameVal", usernamePreview(), !normalizeUsername(_draft?.username));
   setVal("#profileEditBioVal", bioPreview(), !cleanBio(_draft.bio));
@@ -1176,6 +1248,34 @@ async function resetArtistAvatarCompletely() {
   try { _deps?.showToast?.("Artist Avatar reset", { durationMs: 2000 }); } catch {}
 }
 
+/** Centre-crop `src` inward by ~`zoom`x and return a square PNG data URL (falls back to the original on any failure). */
+async function aaTrimEdges(src, zoom = 1.12, size = 1280) {
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.crossOrigin = "anonymous";
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error("load"));
+      im.src = src;
+    });
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    if (!side) return src;
+    const crop = side / zoom;
+    const sx = (img.naturalWidth - crop) / 2;
+    const sy = (img.naturalHeight - crop) / 2;
+    const out = Math.min(size, Math.round(crop));
+    const canvas = document.createElement("canvas");
+    canvas.width = out;
+    canvas.height = out;
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, sx, sy, crop, crop, 0, 0, out, out);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return src;
+  }
+}
+
 function aaThumbGridHtml() {
   const thumbs = _aaPhotos.map((src, i) => `
     <div class="aaThumb" style="background-image:url('${src}')">
@@ -1196,18 +1296,51 @@ function renderArtistAvatarStep() {
     const thumbs = gallery.map((src, i) => `
       <button type="button" class="aaOption${src === _draft.artistAvatar ? " isChosen" : ""}" style="background-image:url('${src}')" data-aa-switch="${i}" aria-label="Avatar option ${i + 1}"></button>
     `).join("");
+    const active = String(_draft.artistAvatar || gallery[gallery.length - 1] || "").trim();
+    const showGold = goldCanEdit();
+    const style = _draft.goldStyle || { ring: "", topper: "" };
     body.innerHTML = `
-      <div class="aaStepKick">YOUR ARTIST AVATARS</div>
-      <p class="aaStepBody">Tap one to make it active on your profile's flip. It's free to switch between ones you've already made.</p>
+      <div class="aaHero">
+        <div class="aaHeroAvatar" id="aaHeroAvatar" style="background-image:url('${active}')"></div>
+        <div class="aaHeroCaption">Your Artist Avatar</div>
+      </div>
+      ${showGold ? aaGoldBlockHtml(style) : ""}
+      <div class="aaStepKick aaStepKick--section">YOUR AVATARS</div>
+      <p class="aaStepBody aaStepBody--tight">Tap one to make it active. Switching between ones you've made is free.</p>
       <div class="aaOptionsGrid" id="aaGalleryGrid">${thumbs}</div>
       <label class="aaConsentRow" for="aaUseAsProfileCheck">
         <input type="checkbox" id="aaUseAsProfileCheck" ${isProfilePic ? "checked" : ""} />
-        <span>Also use as my profile picture everywhere — not just the cover flip</span>
+        <span>Use as my profile photo too</span>
       </label>
-      <button type="button" id="aaAdjustFrameBtn" class="aaSecondaryBtn">Adjust framing</button>
       <button type="button" id="aaGenerateMoreBtn" class="aaPrimaryBtn">Generate new photos · ${AA_COST} credits</button>
+      <button type="button" id="aaAdjustFrameBtn" class="aaSecondaryBtn">Adjust framing</button>
       <button type="button" id="aaResetAvatarBtn" class="aaDangerBtn">Reset Artist Avatar</button>
     `;
+    try { applyGoldToAvatarWrap(qs("#aaHeroAvatar", body), _draft.goldStyle || null); } catch {}
+    if (showGold) {
+      let cur = { ring: style.ring || "", topper: style.topper || "" };
+      qs("#aaFrameRow", body)?.addEventListener("click", (e) => {
+        const btn = e.target?.closest?.("[data-aa-frame]");
+        if (!btn) return;
+        try { _deps?.haptic?.("light"); } catch {}
+        cur = { ...cur, ring: String(btn.getAttribute("data-aa-frame") || "") };
+        try { qs("#aaGoldBlock", body)?.style.setProperty("--aa-emblem", goldRingAccent(cur.ring)); } catch {}
+        body.querySelectorAll("[data-aa-frame]").forEach((b) => {
+          b.setAttribute("aria-checked", b === btn ? "true" : "false");
+        });
+        goldStyleChanged(cur);
+      });
+      qs("#aaTopperRow", body)?.addEventListener("click", (e) => {
+        const btn = e.target?.closest?.("[data-aa-topper]");
+        if (!btn) return;
+        try { _deps?.haptic?.("light"); } catch {}
+        cur = { ...cur, topper: String(btn.getAttribute("data-aa-topper") || "") };
+        body.querySelectorAll("[data-aa-topper]").forEach((b) => {
+          b.setAttribute("aria-checked", b === btn ? "true" : "false");
+        });
+        goldStyleChanged(cur);
+      });
+    }
     body.querySelectorAll("[data-aa-switch]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const i = Number(btn.getAttribute("data-aa-switch"));
@@ -1306,7 +1439,7 @@ function renderArtistAvatarStep() {
       <div class="aaOptionsGrid" id="aaOptionsGrid">${options}</div>
       <label class="aaConsentRow" for="aaUseAsProfileCheckPick">
         <input type="checkbox" id="aaUseAsProfileCheckPick" ${_aaUseAsProfilePic ? "checked" : ""} />
-        <span>Also use as my profile picture everywhere — not just the cover flip</span>
+        <span>Use as my profile photo too</span>
       </label>
       <button type="button" id="aaUseChosenBtn" class="aaPrimaryBtn" ${_aaChosenIndex >= 0 ? "" : "disabled"}>Use this one</button>
       <button type="button" id="aaRegenBtn" class="aaSecondaryBtn">Try different photos</button>
@@ -1398,6 +1531,10 @@ async function startArtistAvatarGeneration() {
     if (Number.isFinite(Number(d?.balance)) && _deps?.setCreditsBalance) {
       try { _deps.setCreditsBalance(Number(d.balance)); } catch {}
     }
+    // The generator leaves a faint rim/glow arc near the edges that shows up as an "inner circle"
+    // once the portrait is clipped round. Trim the outer margin off every option up front, so
+    // every avatar (picked now or switched to later) is clean without needing a manual re-frame.
+    d.options = await Promise.all(d.options.map((o) => aaTrimEdges(o)));
     _aaOptions = d.options;
     _aaChosenIndex = -1;
     _aaUseAsProfilePic = false;
@@ -1562,6 +1699,7 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
       try { _deps.showToast?.("Saved on this device — syncing when the connection is back.", { durationMs: 3200 }); } catch {}
     }
 
+    try { await commitGoldStyleFromDraft(); } catch {}
     _dirty = false;
     syncSaveButton();
     try { _deps.showToast?.("Profile saved.", { icon: "✓", durationMs: 2000 }); } catch {}

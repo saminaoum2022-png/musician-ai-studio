@@ -58708,17 +58708,15 @@ html[data-theme="light"] .profileEditBusyText{ color: rgba(11, 11, 19, 0.88); }
 }
 .profileEditArtistRing:not(.profileEditArtistRing--empty) .profileEditArtistRingWell{
   background: #0b0d14;
-  box-shadow:
-    inset 0 0 0 1.5px rgba(255, 255, 255, 0.92),
-    0 0 0 2.5px rgba(8, 10, 18, 0.95);
+  box-shadow: none;
   z-index: 1;
 }
 .profileEditArtistRing:not(.profileEditArtistRing--empty)::before{
   content: "";
   position: absolute;
-  inset: -5.5px;
+  inset: -3px;
   border-radius: 50%;
-  padding: 2px;
+  padding: 3px;
   background: linear-gradient(135deg, #23d5ab 0%, #8f74ff 100%);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -68727,16 +68725,14 @@ body[data-route="user"] .userPublicArtistBadgeWell{
   place-items: center;
   z-index: 1;
   background: #0b0d14;
-  box-shadow:
-    inset 0 0 0 1.5px rgba(255, 255, 255, 0.92),
-    0 0 0 2.5px rgba(8, 10, 18, 0.95);
+  box-shadow: none;
 }
 body[data-route="user"] .userPublicArtistBadge::before{
   content: "";
   position: absolute;
-  inset: -5.5px;
+  inset: -3px;
   border-radius: 50%;
-  padding: 2px;
+  padding: 3px;
   background: linear-gradient(135deg, #23d5ab 0%, #8f74ff 100%);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -70719,9 +70715,9 @@ body[data-route="profile"] .aaFlipBadgeWell{
 body[data-route="profile"] .aaFlipBadge:not(.aaFlipBadge--empty)::before{
   content: "";
   position: absolute;
-  inset: -5.5px;
+  inset: -3px;
   border-radius: 50%;
-  padding: 2px;
+  padding: 3px;
   background: linear-gradient(135deg, #23d5ab 0%, #8f74ff 100%);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -70736,9 +70732,7 @@ body[data-route="profile"] .aaFlipBadge:not(.aaFlipBadge--empty)::before{
 }
 body[data-route="profile"] .aaFlipBadge:not(.aaFlipBadge--empty) .aaFlipBadgeWell{
   background: #0b0d14;
-  box-shadow:
-    inset 0 0 0 1.5px rgba(255, 255, 255, 0.92),
-    0 0 0 2.5px rgba(8, 10, 18, 0.95);
+  box-shadow: none;
   z-index: 1;
 }
 body[data-route="profile"] .aaFlipBadgeThumb{
@@ -70824,11 +70818,25 @@ html[data-theme="light"] body[data-route="profile"] .profileAboutSection .profil
 .aaStepTitle{ font: 800 22px/1.25 var(--font-display, inherit); color: #fff; margin: 0 0 12px; }
 .aaStepBody{ font: 500 13.5px/1.5 var(--font-body, inherit); color: rgba(255,255,255,.65); margin: 0 0 18px; }
 .aaConsentRow{
-  display: flex; align-items: flex-start; gap: 10px; padding: 14px; margin-bottom: 20px;
-  border-radius: 16px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
-  font: 600 12px/1.5 var(--font-body, inherit); color: rgba(255,255,255,.75); cursor: pointer;
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px; margin-bottom: 16px;
+  border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+  font: 600 12.5px/1.3 var(--font-body, inherit); color: rgba(255,255,255,.75); cursor: pointer;
 }
-.aaConsentRow input{ margin-top: 2px; flex: none; width: 18px; height: 18px; accent-color: #8f74ff; }
+.aaConsentRow input{
+  -webkit-appearance: none; appearance: none;
+  margin: 0; flex: none; width: 20px; height: 20px; border-radius: 7px;
+  border: 1.5px solid rgba(255,255,255,.35); background: transparent;
+  display: grid; place-items: center; cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.aaConsentRow input::after{
+  content: ""; width: 10px; height: 6px; margin-top: -2px;
+  border-left: 2.2px solid #fff; border-bottom: 2.2px solid #fff;
+  transform: rotate(-45deg) scale(0); transition: transform 140ms ease;
+}
+.aaConsentRow input:checked{ background: linear-gradient(135deg, #23d5ab, #8f74ff); border-color: transparent; }
+.aaConsentRow input:checked::after{ transform: rotate(-45deg) scale(1); }
+html[data-theme="light"] .aaConsentRow input{ border-color: rgba(11,11,19,.35); }
 .aaPrimaryBtn{
   width: 100%; border: 0; border-radius: 999px; padding: 14px 0;
   background: #fff; color: #0b0b13; font: 800 13.5px var(--font-body, inherit);
@@ -70889,3 +70897,214 @@ html[data-theme="light"] .aaConsentRow{ color: rgba(11,11,19,.7); background: rg
 html[data-theme="light"] .aaDangerBtn{
   border-color: rgba(200, 60, 80, .35); color: rgba(180, 40, 60, .92);
 }
+
+/* ── Gold member cosmetics (hidden until launch; admin-only on staging) ──
+ * Same technique as the story ring (.followActAvatarRing): a gradient border masked into an
+ * outline, `border-radius: inherit` so it always matches the avatar's own shape (circle stays circle). */
+:where(.hasGold){ position: relative; }
+.goldRingLayer{
+  --gold-gap: 3px; --gold-w: 2.5px;
+  --gold-a: #ffe27a; --gold-b: #d99a1c; --gold-glow: rgba(255, 200, 70, .55); --gold-crown: #ffd45a;
+  position: absolute;
+  inset: calc(var(--gold-gap) * -1);
+  z-index: 4;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.hasGold[data-gold-ring="gold"] .goldRingLayer{ --gold-a:#ffe27a; --gold-b:#d99a1c; --gold-glow:rgba(255,200,70,.55); --gold-crown:#ffd45a; }
+.hasGold[data-gold-ring="royal"] .goldRingLayer{ --gold-a:#b58cff; --gold-b:#5b3df5; --gold-glow:rgba(140,100,255,.55); --gold-crown:#c9a8ff; }
+.hasGold[data-gold-ring="rose"] .goldRingLayer{ --gold-a:#ffc9c0; --gold-b:#d97a86; --gold-glow:rgba(255,160,170,.5); --gold-crown:#ffb3ba; }
+.hasGold[data-gold-ring="aurora"] .goldRingLayer{ --gold-a:#45f0c8; --gold-b:#ff6fd8; --gold-glow:rgba(124,92,255,.55); --gold-crown:#7ff3d8; }
+.hasGold[data-gold-ring="neon"] .goldRingLayer{ --gold-a:#39f5ff; --gold-b:#2b7bff; --gold-glow:rgba(57,245,255,.55); --gold-crown:#7df7ff; }
+.hasGold[data-gold-ring="ember"] .goldRingLayer{ --gold-a:#ffb347; --gold-b:#ff3d2e; --gold-glow:rgba(255,110,50,.55); --gold-crown:#ffb347; }
+.hasGold[data-gold-ring] .goldRingLayer::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: var(--gold-w);
+  background: linear-gradient(135deg, var(--gold-a) 0%, var(--gold-b) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  box-shadow: 0 0 14px -4px var(--gold-glow);
+}
+.goldTopper{
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: max(14px, 44%);
+  aspect-ratio: 1;
+  transform: translate(-50%, -66%) rotate(-7deg);
+  color: var(--gold-crown);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55)) drop-shadow(0 0 5px var(--gold-glow));
+}
+.goldTopper svg{ width: 100%; height: 100%; display: block; }
+/* Artist Avatar badge (own + public): Gold frame replaces the default brand-gradient ring */
+.aaFlipBadge.hasGold .goldRingLayer,
+.userPublicArtistBadge.hasGold .goldRingLayer{ --gold-gap: 3px; --gold-w: 3px; }
+.profileEditArtistRing.hasGold .goldRingLayer{ --gold-gap: 3px; --gold-w: 3px; }
+.profileEditArtistRing.hasGold[data-gold-ring]::before{ display: none !important; }
+body[data-route] .aaFlipBadge.hasGold[data-gold-ring]::before,
+body[data-route] .userPublicArtistBadge.hasGold[data-gold-ring]::before{ display: none !important; }
+/* Frame belongs to the Artist Avatar — hide it while the badge is showing the normal photo instead */
+.aaFlip.isFlipped ~ .aaFlipBadge.hasGold .goldRingLayer,
+.userPublicArtistBadge.isShowingPhoto .goldRingLayer,
+.aaFlipBadge--empty .goldRingLayer{ display: none; }
+
+/* ── Artist Avatar sheet: hero preview + Gold style ── */
+.aaHero{ display: flex; flex-direction: column; align-items: center; padding: 54px 0 20px; }
+.aaHeroAvatar{
+  position: relative;
+  width: 136px; height: 136px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.06) center / cover no-repeat;
+  box-shadow: none;
+}
+.aaHeroAvatar .goldRingLayer{ --gold-gap: 4px; --gold-w: 4px; }
+.aaHeroAvatar .goldTopper{ width: 46px; }
+.aaHeroCaption{ margin-top: 16px; font: 800 13px/1 var(--font-body, inherit); letter-spacing: .02em; color: rgba(255,255,255,.7); }
+.aaStepKick--section{ margin-top: 6px; }
+.aaStepBody--tight{ margin-bottom: 12px; }
+
+.aaGold{
+  margin: 0 0 22px;
+  padding: 16px 14px 14px;
+  border-radius: 20px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(255, 210, 90, .10), transparent 60%),
+    rgba(255,255,255,.04);
+  border: 1px solid rgba(255, 210, 90, .22);
+}
+.aaGoldHead{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.aaGoldTitle{ font: 800 15px/1 var(--font-display, inherit); color: #fff; }
+.aaGoldTag{
+  font: 800 9.5px/1 var(--font-body, inherit); letter-spacing: .16em;
+  padding: 5px 8px; border-radius: 999px; color: #2a1c00;
+  background: linear-gradient(135deg, #ffe27a, #d99a1c);
+}
+.aaGoldLabel{ font: 700 11.5px/1 var(--font-body, inherit); color: rgba(255,255,255,.55); margin-bottom: 10px; letter-spacing: .04em; }
+.aaGoldLabel--inline{ margin: 0; font-size: 14px; color: rgba(255,255,255,.9); letter-spacing: 0; }
+.aaFrameRow{
+  display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 12px; margin: 0 -2px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.aaFrameRow::-webkit-scrollbar{ display: none; }
+.aaFrameOpt{
+  flex: 0 0 auto; width: 62px; display: flex; flex-direction: column; align-items: center; gap: 7px;
+  padding: 9px 0 8px; border-radius: 14px;
+  background: rgba(255,255,255,.04); border: 1.5px solid transparent; color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.aaFrameOpt[aria-checked="true"]{ border-color: #f2c14e; background: rgba(242,193,78,.10); }
+.aaFrameOpt:active{ transform: scale(.96); }
+.aaFrameDot{ width: 30px; height: 30px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(0,0,0,.18); }
+.aaFrameDot--none{ background: transparent; box-shadow: none; border: 1.5px dashed rgba(255,255,255,.4); }
+.aaFrameLabel{ font: 700 10.5px/1 var(--font-body, inherit); color: rgba(255,255,255,.75); white-space: nowrap; }
+.aaCrownRow{
+  display: flex; align-items: center; justify-content: space-between;
+  padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08);
+}
+.aaSwitch{
+  position: relative; width: 50px; height: 30px; border-radius: 999px; border: 0; padding: 0;
+  background: rgba(255,255,255,.18); transition: background 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.aaSwitch[aria-checked="true"]{ background: linear-gradient(135deg, #ffe27a, #d99a1c); }
+.aaSwitchKnob{
+  position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+  background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); transition: transform 180ms ease;
+}
+.aaSwitch[aria-checked="true"] .aaSwitchKnob{ transform: translateX(20px); }
+html[data-theme="light"] .aaGoldTitle,
+html[data-theme="light"] .aaGoldLabel--inline{ color: #0b0b13; }
+html[data-theme="light"] .aaGoldLabel,
+html[data-theme="light"] .aaFrameLabel,
+html[data-theme="light"] .aaHeroCaption{ color: rgba(11,11,19,.6); }
+html[data-theme="light"] .aaGold{ background: rgba(0,0,0,.03); }
+
+/* ── Edit Profile: cover preview laid out like the real profile (edge to edge, avatar beside the name) ── */
+.profileEditPage .profileEditHead{ position: relative; z-index: 6; margin-bottom: 0; }
+.profileEditPage .profileEditBack,
+.profileEditPage .profileEditTitle,
+.profileEditPage .profileEditSave{ text-shadow: 0 1px 8px rgba(0,0,0,.55); }
+.profileEditPage .profileEditPhotoBlock{
+  position: relative;
+  width: 100vw;
+  max-width: 100vw;
+  margin: -46px calc(50% - 50vw) 0;
+  padding: 0;
+  gap: 0;
+  align-items: stretch;
+}
+.profileEditPage .profileEditPhotoStage{
+  width: 100%;
+  height: 400px;
+  margin: 0;
+}
+.profileEditPage .profileEditAvatarShell{
+  border-radius: 0;
+  background: linear-gradient(160deg, rgba(35, 213, 171, 0.32), rgba(124, 92, 255, 0.5));
+}
+.profileEditPage .profileEditAvatar{
+  border: 0;
+  border-radius: 0;
+  object-position: center 22%;
+}
+.profileEditPage .profileEditAvatarShell.isEmpty{ border: 0; }
+/* top scrim (readable back/Save) + bottom fade into the page black */
+.profileEditPage .profileEditPhotoStage::before,
+.profileEditPage .profileEditPhotoStage::after{
+  content: "";
+  position: absolute;
+  left: 0; right: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.profileEditPage .profileEditPhotoStage::before{
+  top: 0; height: 120px;
+  background: linear-gradient(180deg, rgba(5,7,13,.62), rgba(5,7,13,0));
+}
+.profileEditPage .profileEditPhotoStage::after{
+  bottom: 0; height: 58%;
+  background: linear-gradient(180deg, rgba(5,7,13,0) 0%, rgba(5,7,13,.72) 62%, #05070d 100%);
+}
+.profileEditCoverInfo{
+  position: absolute;
+  left: 20px; right: 92px; bottom: 50px;
+  z-index: 3;
+  pointer-events: none;
+  display: flex; flex-direction: column; gap: 3px;
+  min-width: 0;
+}
+.profileEditCoverName{
+  font: 800 24px/1.1 var(--font-display, inherit);
+  letter-spacing: -0.02em;
+  color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-shadow: 0 2px 14px rgba(0,0,0,.5);
+}
+.profileEditCoverHandle{
+  font: 600 14px/1.2 var(--font-body, inherit);
+  color: rgba(255,255,255,.72);
+  text-shadow: 0 1px 8px rgba(0,0,0,.5);
+}
+.profileEditCoverHandle[hidden]{ display: none; }
+/* Artist Avatar sits where it does on the real profile: right side, on the name row */
+.profileEditPage .profileEditArtistRing{
+  right: 22px; bottom: 50px;
+  width: 52px; height: 52px;
+  min-width: 52px; min-height: 52px;
+  max-width: 52px; max-height: 52px;
+  z-index: 4;
+}
+.profileEditPage .profileEditPhotoHint{ margin: 4px 0 0; text-align: center; }
+
+.aaGoldLabel--gap{ margin-top: 4px; }
+.aaTopperGlyph{
+  width: 30px; height: 30px; display: grid; place-items: center;
+  color: var(--aa-emblem, #ffd45a);
+}
+.aaTopperGlyph svg{ width: 26px; height: 26px; display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
+.aaTopperGlyph--none{ border-radius: 50%; border: 1.5px dashed rgba(255,255,255,.4); box-sizing: border-box; }

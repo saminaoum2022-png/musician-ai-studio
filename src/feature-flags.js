@@ -20,6 +20,12 @@ export const NABAD_VIBE_PUBLIC_SHIPPED = false;
 export const NABAD_SONG_EDIT_PUBLIC_SHIPPED = false;
 
 /**
+ * When true: Gold member perks (avatar rings, crown badge, caption/profile styling) are live for users.
+ * Keep false until explicit launch — staging bake uses nabadGoldUi + admin.
+ */
+export const NABAD_GOLD_PUBLIC_SHIPPED = false;
+
+/**
  * When true: Live Listen (host-owned one-song session) is live for users.
  * Launched publicly — keep true. Staging bake is no longer required to see it.
  */

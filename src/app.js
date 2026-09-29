@@ -315,6 +315,14 @@ import {
   screenshotSanitizeCopy,
 } from "./screenshot-mode.js";
 import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
+import {
+  applyGoldToAvatarWrap,
+  configureGoldStyle,
+  fetchGoldStyles,
+  goldUiEnabled,
+  readLocalGoldStyle,
+  writeLocalGoldStyle,
+} from "./gold-style.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
@@ -4028,6 +4036,7 @@ function restoreProfileSongsSegmentFromStorage() {
 function enterProfileRouteHooks({ skipHeavy = false } = {}) {
   wireProfileChromeNavOnce();
   try { syncOwnProfileSocialStatsUi(); } catch {}
+  try { syncOwnGoldRing({ refreshCloud: true }); } catch {}
   restoreProfileSongsSegmentFromStorage();
   bindProfileSongsSegmentOnce();
   bindUserPlaylistPickerOnce();
@@ -31483,6 +31492,7 @@ function syncArtistAvatarBadgeThumb() {
   const backSrc = String(document.getElementById("aaBackImg")?.getAttribute("src") || "").trim();
   const next = isBack ? frontSrc : backSrc;
   if (next && thumb.getAttribute("src") !== next) thumb.src = next;
+  try { syncOwnGoldRing(); } catch {}
 }
 /** Pins the badge's vertical center to the display-name row instead of a
  *  hardcoded photo offset, so it reads as part of the identity line — same
@@ -48980,7 +48990,9 @@ function applyUserPublicArtistBadge(prof) {
   } else {
     thumb.removeAttribute("src");
   }
+  badge.classList.remove("isShowingPhoto");
   try { syncUserPublicArtistBadgePosition(); } catch {}
+  try { syncUserPublicGoldRing(String(prof?.user_id || prof?.userId || "")); } catch {}
 }
 
 function syncUserPublicArtistBadgePosition() {
@@ -49023,6 +49035,7 @@ function wireUserPublicArtistBadgeOnce() {
       img.src = coverSrc;
     }
     if (thumb && badgeSrc) thumb.src = badgeSrc;
+    badge.classList.toggle("isShowingPhoto", _userPublicArtistShowingAa);
     badge.setAttribute(
       "aria-label",
       _userPublicArtistShowingAa ? "Flip back to photo" : "Flip to Artist Avatar",
@@ -62027,6 +62040,54 @@ function syncUserPublicProBadge(stats) {
   if (wrap) wrap.classList.toggle("hasPro", show);
 }
 
+/* ── Gold member cosmetics (hidden; admin-only on staging) ── */
+function ownGoldUserId() {
+  return String(authSession?.user?.id || activeProfile?.id || "").trim();
+}
+
+function ownGoldStyle() {
+  return readLocalGoldStyle(ownGoldUserId());
+}
+
+/** The frame belongs to the AI Artist Avatar — the round badge next to the name on the profile. */
+function syncOwnGoldRing({ refreshCloud = false } = {}) {
+  const badge = document.getElementById("aaFlipBadge");
+  const hasAa = Boolean(artistAvatarUrlForPaint());
+  applyGoldToAvatarWrap(badge, hasAa ? ownGoldStyle() : null);
+  const uid = ownGoldUserId();
+  if (!refreshCloud || !uid || !goldUiEnabled()) return;
+  void fetchGoldStyles([uid]).then((m) => {
+    const cloud = m.get(uid) || null;
+    // Cloud is the source of truth once it has a value (new device / another phone).
+    if (cloud && JSON.stringify(cloud) !== JSON.stringify(readLocalGoldStyle(uid))) {
+      writeLocalGoldStyle(uid, cloud);
+      if (ownGoldUserId() === uid) {
+        syncOwnGoldRing();
+      }
+    }
+  }).catch(() => {});
+}
+
+/** Same frame on someone else's Artist Avatar badge (their public profile). */
+function syncUserPublicGoldRing(profileUid = "") {
+  const badge = document.getElementById("userPublicArtistBadge");
+  if (!badge) return;
+  const uid = String(profileUid || currentUserPublicProfileId || "").trim();
+  if (!uid || badge.hidden || !goldUiEnabled()) {
+    applyGoldToAvatarWrap(badge, null);
+    return;
+  }
+  if (uid === ownGoldUserId()) {
+    applyGoldToAvatarWrap(badge, ownGoldStyle());
+    return;
+  }
+  void fetchGoldStyles([uid]).then((m) => {
+    const cur = document.getElementById("userPublicArtistBadge");
+    if (!cur || cur.hidden) return;
+    applyGoldToAvatarWrap(cur, m.get(uid) || null);
+  }).catch(() => {});
+}
+
 function renderProfileNabadCertBadge() {
   const check = els.profileNabadCertCheck;
   const legacy = els.profileNabadCertBadge;
@@ -62192,6 +62253,7 @@ function renderProfilePreviewFromInputs() {
     els.profileAuraAvatarWrap.removeAttribute("aria-label");
     els.profileAuraAvatarWrap.removeAttribute("tabindex");
   }
+  try { syncOwnGoldRing(); } catch {}
 }
 
 /** `meta.profileVisibility === "private"` hides the release on `#/u/…`;
@@ -80231,6 +80293,7 @@ try {
     getActivePersonaId,
     personaTypeLabel,
     getAuthSession: () => authSession,
+    onGoldStyleChanged: () => { try { syncOwnGoldRing(); } catch {} },
     getAuthToken: () => getSupabaseAuthToken(),
     apiUrl,
     showOutOfCreditsPrompt,
@@ -83587,6 +83650,32 @@ try {
   });
   syncNabadVibeCreateTab();
 } catch (e) { console.warn("[nabad-vibe] init", e); }
+
+try {
+  configureGoldStyle({
+    isAdmin: () => Boolean(creditsState.isAdmin),
+    isGold: () => false,
+    restFetch: async (path) => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), supabaseRestTimeoutMs());
+      try {
+        return await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+          headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" },
+          cache: "no-store",
+          signal: ctrl.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    restPatchOwnProfile: (uid, body) =>
+      supabaseAuthedFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${encodeURIComponent(uid)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify(body),
+      }),
+  });
+} catch (e) { console.warn("[gold-style] init", e); }
 
 try {
   configureNabadSongEdit({

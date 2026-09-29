@@ -492,7 +492,7 @@ function renderShell() {
     </div>`;
 
   el.querySelector("#nabadProducerBack")?.addEventListener("click", () => {
-    try { location.hash = "#/challenges"; } catch {}
+    try { location.hash = "#/generate"; } catch {}
     bridge.scheduleApplyRoute?.();
   });
 

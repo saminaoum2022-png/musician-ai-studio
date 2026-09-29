@@ -111,7 +111,7 @@ function paintFirstSongCredits() {
 function finishFirstSongExplore() {
   const uid = String(_deps?.getUserId?.() || "").trim();
   markFirstSongActivationDone(uid);
-  try { location.hash = "#/challenges"; } catch {}
+  try { location.hash = "#/generate"; } catch {}
   try { _deps?.applyRoute?.(); } catch {}
 }
 

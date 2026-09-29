@@ -179,7 +179,7 @@ function closeHumTrackUiOnly() {
 function leaveHumTrackFlow() {
   ctx?.clearCreateFlow?.();
   try {
-    location.hash = "#/challenges";
+    location.hash = "#/generate";
   } catch {}
   ctx?.scheduleApplyRoute?.();
 }
@@ -517,7 +517,7 @@ async function submitHumTrackGeneration() {
     return;
   }
   if (!ctx?.getAuthSession?.()?.user?.id) {
-    ctx?.setPostAuthReturnHash?.("#/challenges");
+    ctx?.setPostAuthReturnHash?.("#/generate");
     try {
       location.hash = "#/auth";
     } catch {}

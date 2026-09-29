@@ -95,9 +95,10 @@ export function shouldSkipIntroOrOnboardingRoute(userId) {
 
 export function getPostOnboardingHash(getAuthSession) {
   const session = typeof getAuthSession === "function" ? getAuthSession() : null;
-  if (session?.user?.id) return "#/challenges";
+  // Create hub (#/challenges) is retired — land on Create Song.
+  if (session?.user?.id) return "#/generate";
   try {
-    if (localStorage.getItem("nabadai_guest_mode_v1") === "1") return "#/challenges";
+    if (localStorage.getItem("nabadai_guest_mode_v1") === "1") return "#/generate";
   } catch {}
   return "#/auth";
 }
@@ -218,7 +219,7 @@ function finishOnboarding() {
   markOnboardingComplete(uid);
   let hash = "#/auth";
   if (uid) {
-    hash = "#/challenges";
+    hash = "#/generate";
   } else {
     hash = getPostOnboardingHash(_deps?.getAuthSession);
   }

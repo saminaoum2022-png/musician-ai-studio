@@ -8065,7 +8065,7 @@ function scheduleInitialHash() {
         /* keep onboarding hash */
       } else if (isAppLoggedIn() && String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] === "auth") {
         try {
-          location.hash = "#/challenges";
+          location.hash = "#/generate";
         } catch {}
       }
       scheduleApplyRoute();
@@ -8264,7 +8264,7 @@ document.getElementById("btnSettingsPreviewFirstSong")?.addEventListener("click"
     saveCoachChat(chat);
   } catch {}
   trySignupCoachWelcomeAfterAuth(uid);
-  try { location.hash = "#/challenges"; } catch {}
+  try { location.hash = "#/generate"; } catch {}
   try { applyRoute(); } catch {}
 });
 const btnSettingsMusicPrefs = document.getElementById("btnSettingsMusicPrefs");
@@ -27629,7 +27629,7 @@ function openChallengeFromTrackMeta(challenge) {
     return;
   }
   if (String(challenge.campaign || "").trim()) {
-    try { location.hash = "#/challenges"; } catch {}
+    try { location.hash = "#/generate"; } catch {}
     scheduleApplyRoute?.();
     try { showToast("Browse live events on Create.", { icon: "🏆", durationMs: 3200 }); } catch {}
     return;
@@ -51867,7 +51867,7 @@ function bindMashupPageOnce() {
   _mashupState.bound = true;
   els.btnMashupBack?.addEventListener("click", () => {
     haptic("light");
-    location.hash = "#/challenges";
+    location.hash = "#/generate";
   });
   els.mashupSlotA?.addEventListener("click", () => {
     if (_mashupState.generating || _mashupState.starting) return;
@@ -81731,10 +81731,10 @@ if (els.btnAuthGateGuest) {
   els.btnAuthGateGuest.addEventListener("click", () => {
     setGuestModeEnabled(true);
     try {
-      location.hash = "#/challenges";
+      location.hash = "#/generate";
       applyRoute();
     } catch {
-      try { location.hash = "#/challenges"; } catch {}
+      try { location.hash = "#/generate"; } catch {}
     }
     setStatus("Guest mode enabled. Login anytime from Settings.");
   });

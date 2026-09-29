@@ -49,7 +49,7 @@ export function initSoundsStudioOnce({ promptEl, haptic, syncCreateTabMorph, cle
   page.querySelector(".soundsStudioBack")?.addEventListener("click", (ev) => {
     ev.preventDefault();
     try { clearCreateFlow?.(); } catch {}
-    try { location.hash = "#/challenges"; } catch {}
+    try { location.hash = "#/generate"; } catch {}
     try { scheduleApplyRoute?.(); } catch {}
   });
 

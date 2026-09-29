@@ -1,6 +1,6 @@
 /**
  * Localized instruction prompts for Templates / Sparks / Occasions.
- * Arabic pools are Arabic script only — never Franco / Arabizi.
+ * Arabic pools are Arabic script only (positive instruction — never "no Arabizi" in the seed).
  * Style (dabke, pop) stays in the style field; the lyric idea can be anything.
  */
 
@@ -72,7 +72,7 @@ function variantLine(lang, variant) {
 
 function scriptRule(lang) {
   return lang === "arabic"
-    ? "اكتب بالأحرف العربية فقط. ممنوع فرانكو أو Arabizi أو أحرف لاتينية في الكلمات."
+    ? "اكتب الكلمات بالأحرف العربية فقط (سكربت عربي)."
     : "Write the lyrics in English.";
 }
 
@@ -214,15 +214,15 @@ const OCCASION_IDEAS = {
 const SPARK_IDEAS = {
   "dabke-drop": {
     english: [
-      "Write a short clip about a reunion with friends. Any personal idea. STYLE is Levantine dabke — do not write about dabke, weddings, or clapping.",
-      "A late-night Beirut feeling: windows down, someone you missed. STYLE is dabke. Do not mention dabke in the lyrics.",
-      "A proud hook about someone coming home. STYLE is festive dabke rhythm. The story can be love, win, or summer — not the dance.",
+      "Write a short clip about a reunion with friends. Any personal idea. Style field carries Levantine dabke — keep lyrics about people and feeling.",
+      "A late-night Beirut feeling: windows down, someone you missed. Style is dabke rhythm — keep the lyric story personal.",
+      "A proud hook about someone coming home. Festive dabke groove in the style — story can be love, win, or summer.",
     ],
     arabic: [
-      "اكتب كلمات قصيرة عن لمة رفاق بعد غياب. أي فكرة شخصية تنفع. الأسلوب دبكة شامية — لا تحكي عن الدبكة ولا العرس.",
-      "مزاج ليلة بيروت: شباك مفتوح وشخص راجع. الأسلوب دبكة. ممنوع كلمة دبكة أو يلا يا دبكة بالكلمات.",
-      "كورس فخور عن حدّا رجع عالبلد. الأسلوب إيقاع دبكة. القصة حب أو فوز أو صيف — مش الرقصة.",
-      "اكتب عن فرح بسيط: خبر حلو، ضحكة، طريق رجعة. الأسلوب دبكة لبنانية حديثة. الفكرة مش عن الرقص.",
+      "اكتب كلمات قصيرة عن لمة رفاق بعد غياب. أي فكرة شخصية تنفع. الأسلوب دبكة شامية — خلّي القصة عن الناس والشعور.",
+      "مزاج ليلة بيروت: شباك مفتوح وشخص راجع. الأسلوب دبكة — خلّي الكلمات عن الشوق أو الرجعة.",
+      "كورس فخور عن حدّا رجع عالبلد. الأسلوب إيقاع دبكة. القصة حب أو فوز أو صيف.",
+      "اكتب عن فرح بسيط: خبر حلو، ضحكة، طريق رجعة. الأسلوب دبكة لبنانية حديثة.",
     ],
   },
   "arabic-trend-byte": {
@@ -233,7 +233,7 @@ const SPARK_IDEAS = {
     arabic: [
       "حوّل جملة يومية صغيرة لكورس ترند عربي قصير. خلّيها محددة، مش كلام عام.",
       "مقطع عشرين ثانية من جملة حقيقية بتنقال بالبيت. جديدة، مش قالب يلا يلا.",
-      "اكتب هوك قصير عن مزاج الليلة بجملة وحدة لاصقة. عربي فصيح عامّي مكتوب بالعربي.",
+      "اكتب هوك قصير عن مزاج الليلة بجملة وحدة لاصقة. عربي محكي عامّي بالأحرف العربية.",
     ],
   },
   "oud-loop": {

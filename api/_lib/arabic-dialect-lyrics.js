@@ -470,34 +470,34 @@ function lightenSungArabicDiacritics(input, { isMsa = false, isLebanese = false,
 }
 
 function buildLyriaLebaneseArabicNote() {
-  return "Lebanese colloquial Arabic: stopped consonants with sukoon at word ends and inside clusters; no tanween; no MSA case endings; qaf as hamza.";
+  return "Lebanese colloquial Arabic: stopped consonants with sukoon at word ends and inside clusters; spoken Levantine vowels; qaf as hamza.";
 }
 
 function buildLyriaEgyptianArabicNote() {
-  return "Egyptian Masri colloquial Arabic: Cairo spoken forms, ب- present prefix on verbs, authentic Masri vocabulary; no tanween; no MSA case endings.";
+  return "Egyptian Masri colloquial Arabic: Cairo spoken forms, ب- present prefix on verbs, authentic Masri vocabulary; spoken Cairo vowels.";
 }
 
 /** Word-level Egyptian vs Levantine — for lyrics generation, not just vocal accent. */
 function buildEgyptianLexiconLines() {
   return [
-    "EGYPTIAN WORD CHOICE (required — Levantine vocabulary is WRONG):",
-    "- with me: معايا — NEVER معي (Levantine).",
-    "- in my imagination / in my mind: في خيالي or في بالي — NEVER بخيالي or ع خيالي (Levantine).",
+    "EGYPTIAN WORD CHOICE (required — stick to Masri vocabulary):",
+    "- with me: معايا",
+    "- in my imagination / in my mind: في خيالي or في بالي",
     "- Use Egyptian present-tense prefix ب- on verbs (بيحلى، بيقول، بشوف، بعمل).",
-    "- Prefer Egyptian: إزاي، كده، أوي، عايز، دلوقتي، ليه، مفيش، حاجة، كمان — not Lebanese شو، هيدا، عم، منيح، ليش.",
-    "- Addressing a man: إنت، حبيبي، معاك — keep Masri pronouns, not Lebanese-only slang.",
+    "- Prefer Egyptian: إزاي، كده، أوي، عايز، دلوقتي، ليه، مفيش، حاجة، كمان.",
+    "- Addressing a man: إنت، حبيبي، معاك — Masri pronouns and endings.",
   ];
 }
 
 /** Word-level Lebanese vs Egyptian — for lyrics generation, not just vocal accent. */
 function buildLebaneseLexiconLines() {
   return [
-    "LEBANESE WORD CHOICE (required — Egyptian vocabulary is WRONG):",
-    "- with me: معي — NEVER معايا (Egyptian).",
-    "- in my imagination / in my mind: بخيالي or ع خيالي — NEVER في خيالي (Egyptian).",
-    "- Avoid Egyptian present-tense prefix ب- on verbs (بيحلى، بيقول، بشوف) — use Lebanese forms (عم + verb, or natural Lebanese present without Egyptian ب-).",
-    "- Prefer Lebanese: شو، كيف، هيدا، هيك، منيح، يلّا، عم، ما، ليش — not Egyptian: إزاي، كده، أوي، عايز، دلوقتي، ليه، مفيش، حاجة.",
-    "- Addressing a man: إنت، حبيبي، معك — keep Levantine pronouns, not Egyptian-only slang.",
+    "LEBANESE WORD CHOICE (required — stick to Levantine vocabulary):",
+    "- with me: معي",
+    "- in my imagination / in my mind: بخيالي or ع خيالي",
+    "- Prefer Lebanese present forms (عم + verb, or natural Levantine present) over Egyptian ب- verb prefix (بيحلى، بيقول).",
+    "- Prefer Lebanese: شو، كيف، هيدا، هيك، منيح، يلّا، عم، ما، ليش — Levantine spoken vocabulary.",
+    "- Addressing a man: إنت، حبيبي، معك — Levantine pronouns and endings.",
   ];
 }
 

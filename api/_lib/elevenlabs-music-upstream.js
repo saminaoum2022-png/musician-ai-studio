@@ -1392,6 +1392,25 @@ function applyElevenReferenceToCompositionPlan(
   const baseStrength = ["low", "medium", "high", "xhigh"].includes(String(conditionStrength))
     ? String(conditionStrength)
     : "high";
+  // Instrumental hum-to-track: every chunk follows the melody reference.
+  if (instrumental) {
+    const chunks = plan.chunks.map((c, idx) => {
+      const positive_styles = ensureMinPositiveStyles([
+        "follow hum reference melody pitch and rhythm",
+        "solo instrumental matching the hummed tune",
+        ...(c.positive_styles || []),
+      ]).slice(0, 50);
+      return {
+        ...c,
+        positive_styles,
+        conditioning_ref: conditioningRef,
+        condition_strength: idx === 0
+          ? (baseStrength === "low" ? "medium" : baseStrength === "medium" ? "high" : "xhigh")
+          : baseStrength,
+      };
+    });
+    return { chunks };
+  }
   let firstVocalSeen = false;
   const chunks = plan.chunks.map((c) => {
     if (!isElevenVocalPlanChunk(c.text, { instrumental })) return c;

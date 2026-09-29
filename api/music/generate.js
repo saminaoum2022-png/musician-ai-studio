@@ -748,13 +748,31 @@ async function runElevenlabsGenerationJob({
           instrumental,
         });
         const refChunkCount = finalCompositionPlan.chunks.filter((c) => c.conditioning_ref).length;
-        elevenPlanSource = `${elevenPlanSource}_reference`;
-        console.log(
-          "[music/generate] elevenlabs multi-chunk reference",
-          taskId,
-          refChunkCount,
-          "vocal chunks",
-        );
+        if (!refChunkCount) {
+          // Multi-chunk plan had no attachable chunks — fall back to single-chunk reference.
+          finalCompositionPlan = buildElevenReferenceCompositionPlan({
+            lyrics: effectiveLyrics,
+            stylePrompt: effectiveStyle,
+            title,
+            musicLengthMs,
+            instrumental,
+            referenceSongId,
+            referenceRangeMs,
+            conditionStrength: referenceConditionStrength,
+            negativeTags: body?.negativeTags,
+            vocalGender,
+            voiceTimbre,
+          });
+          elevenPlanSource = "reference_fallback_empty_chunks";
+        } else {
+          elevenPlanSource = `${elevenPlanSource}_reference`;
+          console.log(
+            "[music/generate] elevenlabs multi-chunk reference",
+            taskId,
+            refChunkCount,
+            instrumental ? "instrumental chunks" : "vocal chunks",
+          );
+        }
       }
       console.log(
         "[music/generate] elevenlabs composition plan",
@@ -1449,12 +1467,8 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   }
 
   const hasReference = !isSongEdit && Boolean(body?.hasReference || body?.referenceAudio || body?.referenceAudioUrl);
-  if (hasReference && Boolean(body?.instrumental) && Boolean(body?.referenceInstrumentalOnly)) {
-    return sendJson(res, 400, {
-      error: "ElevenLabs reference mode supports vocal hum/sing references — disable instrumental-from-melody for now.",
-      code: "elevenlabs_reference_instrumental_unsupported",
-    });
-  }
+  // Hum Track / instrumental-from-melody: allow reference + instrumental.
+  // conditioning_ref is attached to instrumental chunks in applyElevenReferenceToCompositionPlan.
 
   let balanceAfterDebit = null;
   if (!isAdmin) {

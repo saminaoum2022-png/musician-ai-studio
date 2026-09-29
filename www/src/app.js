@@ -8681,6 +8681,11 @@ try {
     interpretSunoFailure,
     sunoFailureUserCopy,
     pushLocalGenerationFailedActivity,
+    getMusicProviderPref,
+    isAdmin: () => Boolean(creditsState.isAdmin),
+    getElevenlabsFinetunePref,
+    musicStatusApiPath,
+    estimateBlobDurationMs,
     voidRefreshProfile: () => {
       try {
         renderProfileSongs();
@@ -30290,6 +30295,13 @@ function musicProviderSubline(pref) {
   return "Suno — two variants per song";
 }
 
+function musicProviderShortLabel(pref = getMusicProviderPref()) {
+  if (pref === "minimax") return "MiniMax";
+  if (pref === "lyria") return "Lyria";
+  if (pref === "elevenlabs") return "ElevenLabs";
+  return "Suno";
+}
+
 function useAltMusicProvider() {
   const pref = getMusicProviderPref();
   return creditsState.isAdmin && (pref === "minimax" || pref === "lyria" || pref === "elevenlabs");
@@ -30307,12 +30319,55 @@ function useElevenlabsMusicProvider() {
   return creditsState.isAdmin && getMusicProviderPref() === "elevenlabs";
 }
 
+/**
+ * Admin Settings → engine must drive Create (hum / remix / reference / persona),
+ * including on production for the admin account. Non-admins stay on Suno paths.
+ * Returns a toast string when the chosen alt provider cannot run this generate.
+ */
+function adminProviderCapabilityBlockReason({
+  hasReference = false,
+  referenceInstrumentalOnly = false,
+  personaId = "",
+  shelfLyriaFull = false,
+} = {}) {
+  if (!creditsState.isAdmin) return "";
+  // Public shelf → Lyria full ignores the picker unless admin honors it.
+  if (shelfLyriaFull && !adminHonorsTemplateEnginePicker()) {
+    if (hasReference || personaId) {
+      return "Lyria shelf songs don't support hum, remix, or persona yet — clear audio/persona or switch Settings → engine.";
+    }
+    return "";
+  }
+  if (!useAltMusicProvider()) return "";
+  const pref = getMusicProviderPref();
+  const label = musicProviderShortLabel(pref);
+  if (personaId) {
+    return `${label} doesn't support persona yet — clear the persona chip, or switch Settings → engine to Suno.`;
+  }
+  if (hasReference) {
+    if (pref === "elevenlabs") {
+      // ElevenLabs supports hum/vocal reference (including Hum Track instrumental-from-melody).
+      return "";
+    }
+    const flow =
+      vocalRefOrigin === "remix" || currentRemixSource
+        ? "remix / reference"
+        : vocalRefOrigin === "record"
+          ? "hum-to-track"
+          : "audio reference";
+    return `${label} doesn't support ${flow} yet — switch Settings → engine to Suno or ElevenLabs to test that flow.`;
+  }
+  return "";
+}
+
 /** Admin ElevenLabs: surface song length on Create (maps to music_length_ms). */
 function syncElevenSongLengthPanel() {
   const panel = document.getElementById("elevenSongLengthPanel");
   const show = useElevenlabsMusicProvider();
   if (panel) {
     panel.hidden = !show;
+    // `.field { display:flex }` beats bare [hidden] without !important CSS / inline none.
+    panel.style.display = show ? "" : "none";
     panel.setAttribute("aria-hidden", show ? "false" : "true");
   }
   const hint = document.getElementById("elevenSongLengthHint");
@@ -76114,6 +76169,21 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     try {
       const referenceInstrumentalOnly = Boolean(hasReference && instrumentalSelected);
+      // Admin: honor Settings → engine for hum/remix/reference — never silently
+      // fall back to Suno when Lyria/MiniMax can't do the flow.
+      {
+        const earlyBlock = adminProviderCapabilityBlockReason({
+          hasReference,
+          referenceInstrumentalOnly,
+          personaId: getActivePersonaId(),
+          shelfLyriaFull: isTemplateSparkLyriaFullFlow(),
+        });
+        if (earlyBlock) {
+          showToast(earlyBlock, { icon: "!", durationMs: 7200 });
+          setStatus(earlyBlock);
+          return;
+        }
+      }
       const hubRemixLocked = Boolean(
         currentRemixSource?.originalUrl ||
           currentRemixSource?.url ||
@@ -76482,9 +76552,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         hasReference ? "Upload reference song" : "Generate song",
         async () => {
           let elevenlabsReferenceUpload = null;
+          // Admin alt engines (Lyria / MiniMax / ElevenLabs): never silently route
+          // hum/remix through Suno upload-cover. Suno stems only when engine is Suno
+          // (or non-admin). ElevenLabs reference uses /api/music/generate below.
           const elevenReferenceGenerate =
             hasReference && useAltMusicProvider() && getMusicProviderPref() === "elevenlabs";
-          if (hasReference && !elevenReferenceGenerate) {
+          if (hasReference && !elevenReferenceGenerate && !useAltMusicProvider()) {
             const sendFile = resolveVocalReferenceForSubmit();
             const remixSourceRaw = String(
               currentRemixSource?.originalUrl || currentRemixSource?.url || "",
@@ -76645,55 +76718,25 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           const authToken = getSupabaseAuthToken();
           if (useAltMusicProvider() || shelfLyriaFull) {
             const altProvider = shelfLyriaFull ? "lyria" : getMusicProviderPref();
-            const providerLabel =
-              altProvider === "lyria"
-                ? "Lyria"
-                : altProvider === "elevenlabs"
-                  ? "ElevenLabs"
-                  : "MiniMax";
-            if (personaIdSel) {
+            const providerLabel = musicProviderShortLabel(altProvider);
+            const lateBlock = adminProviderCapabilityBlockReason({
+              hasReference,
+              referenceInstrumentalOnly,
+              personaId: personaIdSel,
+              shelfLyriaFull,
+            });
+            if (lateBlock) {
               setLoading(false);
               setGenerateBtn("Generate song", false, "generate");
               setGenerateFieldsLocked(false);
               setProgress(0);
               try {
-                showToast(
-                  `${providerLabel} doesn't support persona yet — clear the persona chip first.`,
-                  { icon: "!", durationMs: 6400 },
-                );
+                showToast(lateBlock, { icon: "!", durationMs: 7200 });
               } catch {}
-              setStatus(`${providerLabel}: remove persona first.`);
-              return;
-            }
-            if (hasReference && altProvider !== "elevenlabs") {
-              setLoading(false);
-              setGenerateBtn("Generate song", false, "generate");
-              setGenerateFieldsLocked(false);
-              setProgress(0);
-              try {
-                showToast(
-                  `${providerLabel} doesn't support vocal reference uploads yet.`,
-                  { icon: "!", durationMs: 6400 },
-                );
-              } catch {}
-              setStatus(`${providerLabel}: remove vocal reference or switch engine.`);
+              setStatus(lateBlock);
               return;
             }
             if (hasReference && altProvider === "elevenlabs") {
-              if (referenceInstrumentalOnly) {
-                setLoading(false);
-                setGenerateBtn("Generate song", false, "generate");
-                setGenerateFieldsLocked(false);
-                setProgress(0);
-                try {
-                  showToast(
-                    "ElevenLabs reference mode uses your hum/voice — switch off instrumental-from-melody.",
-                    { icon: "!", durationMs: 6400 },
-                  );
-                } catch {}
-                setStatus("ElevenLabs: vocal reference needs lyrics + voice mode (not instrumental-from-melody).");
-                return;
-              }
               const sendFile = resolveVocalReferenceForSubmit();
               if (!sendFile?.size) {
                 throw new Error(
@@ -77039,11 +77082,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           )
         ) {
           const providerLabel =
-            getMusicProviderPref() === "lyria"
-              ? "Lyria"
-              : getMusicProviderPref() === "elevenlabs"
-                ? "ElevenLabs"
-                : "MiniMax";
+            musicProviderShortLabel(getMusicProviderPref());
           failMsg = `${providerLabel} lost connection while composing (often 2–3 min). Stay on this screen on Wi‑Fi and try again.`;
         }
         setStatus(`Generation failed: ${failMsg}`);

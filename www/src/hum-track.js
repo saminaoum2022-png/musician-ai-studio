@@ -259,15 +259,16 @@ function parseSunoStatusPayload(data) {
   };
 }
 
-function finishHumTrackSuccess(taskId, instrumentId, tracks) {
+function finishHumTrackSuccess(taskId, instrumentId, tracks, { provider = "suno" } = {}) {
   stopHumTrackPolling();
   humTrackGenerating = false;
   humTrackTaskId = "";
   const preset = getHumTrackPreset(instrumentId);
   const label = preset.label;
   const baseTitle = `Hum Track · ${label}`;
+  const musicProvider = String(provider || "suno").trim().toLowerCase() || "suno";
   const savedEntries = [];
-  tracks.slice(0, 2).forEach((t, i) => {
+  tracks.slice(0, musicProvider === "suno" ? 2 : 1).forEach((t, i) => {
     const fallbackTitle = i === 0 ? baseTitle : `${baseTitle} B`;
     const title = String(t.title || "").trim() || fallbackTitle;
     const proxyUrl = ctx.toAudioProxyUrl(t.audioUrl);
@@ -287,6 +288,7 @@ function finishHumTrackSuccess(taskId, instrumentId, tracks) {
           styleInput: preset.style,
           styleSent: preset.style,
           artworkHint: preset.coverArtHint || "",
+          musicProvider,
           challenge: { id: "hum-track", title: "Hum Track", type: "spark", variant: "spark" },
         },
       }),
@@ -349,18 +351,31 @@ function failHumTrackGeneration(taskId, { failureKind = "generic", title = "Hum 
   } catch {}
 }
 
-function startHumTrackPolling(taskId, instrumentId) {
+function startHumTrackPolling(taskId, instrumentId, { provider = "suno" } = {}) {
   stopHumTrackPolling();
   const maxTries = 160;
   const startedAt = Number(ctx?.getGenerationPending?.()?.startedAt) || Date.now();
   const label = instrumentLabel(instrumentId);
   const baseTitle = `Hum Track · ${label}`;
+  const musicProvider = String(provider || "suno").trim().toLowerCase() || "suno";
+  const statusPath =
+    typeof ctx?.musicStatusApiPath === "function"
+      ? ctx.musicStatusApiPath(taskId)
+      : musicProvider === "elevenlabs" || String(taskId).startsWith("elv_")
+        ? `/api/music/status?taskId=${encodeURIComponent(taskId)}`
+        : `/api/suno/status?taskId=${encodeURIComponent(taskId)}`;
+  const expectedVariants = musicProvider === "suno"
+    ? Math.max(1, Math.min(2, Number(ctx?.generationVariantCount) || 2))
+    : 1;
   humTrackPollTimer = createAdaptivePollLoop({
     startedAt,
     maxTries,
     onTick: async (tries) => {
       try {
-        const r = await fetch(ctx.apiUrl(`/api/suno/status?taskId=${encodeURIComponent(taskId)}`));
+        const tok = ctx.getSupabaseAuthToken?.();
+        const r = await fetch(ctx.apiUrl(statusPath), {
+          headers: tok ? { Authorization: `Bearer ${tok}` } : undefined,
+        });
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data?.error || "Status check failed");
         const state = parseSunoStatusPayload(data);
@@ -390,10 +405,6 @@ function startHumTrackPolling(taskId, instrumentId) {
           });
           return "stop";
         }
-        const expectedVariants = Math.max(
-          1,
-          Math.min(2, Number(ctx?.generationVariantCount) || 2),
-        );
         if (
           state.status === "SUCCESS" &&
           state.hasAudio &&
@@ -412,7 +423,7 @@ function startHumTrackPolling(taskId, instrumentId) {
           return "continue";
         }
         if (state.status === "SUCCESS" && state.hasAudio) {
-          finishHumTrackSuccess(taskId, instrumentId, state.tracks);
+          finishHumTrackSuccess(taskId, instrumentId, state.tracks, { provider: musicProvider });
           return "stop";
         }
         if (tries > 0 && tries % 80 === 0) {
@@ -446,11 +457,15 @@ function startHumTrackPolling(taskId, instrumentId) {
   });
 }
 
-function armHumTrackGeneration(taskId, instrumentId, label) {
+function armHumTrackGeneration(taskId, instrumentId, label, { provider = "suno" } = {}) {
   humTrackTaskId = taskId;
   humTrackGenerating = true;
   const preset = getHumTrackPreset(instrumentId);
   const baseTitle = `Hum Track · ${label}`;
+  const musicProvider = String(provider || "suno").trim().toLowerCase() || "suno";
+  const variantCount = musicProvider === "suno"
+    ? (ctx?.generationVariantCount || 2)
+    : 1;
   ctx?.startParallelCoverForTask?.(
     taskId,
     ctx.buildParallelCoverVariants?.(taskId, {
@@ -461,28 +476,30 @@ function armHumTrackGeneration(taskId, instrumentId, label) {
         instrumentLabel: label,
         styleInput: preset.style,
         styleSent: preset.style,
+        musicProvider,
       },
-      variantCount: ctx?.generationVariantCount || 2,
+      variantCount,
     }) || [],
   );
   ctx?.setGenerationPending?.({
     taskId,
     title: `Hum Track · ${label}`,
-    variantCount: ctx?.generationVariantCount || 2,
+    variantCount,
     source: "hum_track",
     instrumentId,
+    musicProvider,
   });
   ctx?.hideCreateResultCards?.();
   ctx?.syncGenerationPendingLibraryUi?.();
   try {
     ctx?.beginCoachGenerationStatus?.({
-      variantCount: ctx?.generationVariantCount || 2,
+      variantCount,
       pillText: ctx?.coachHumTrackGeneratingPillText?.(label),
     });
   } catch {}
   closeHumTrackUiOnly();
   try { ctx?.openProfileSongsWhileGenerating?.(); } catch {}
-  startHumTrackPolling(taskId, instrumentId);
+  startHumTrackPolling(taskId, instrumentId, { provider: musicProvider });
 }
 
 async function submitHumTrackGeneration() {
@@ -508,6 +525,22 @@ async function submitHumTrackGeneration() {
     return;
   }
 
+  // Admin Settings → engine drives Hum Track (production users stay on Suno).
+  const provider = String(ctx?.getMusicProviderPref?.() || "suno").trim().toLowerCase();
+  const isAdmin = Boolean(ctx?.isAdmin?.());
+  const useEleven =
+    isAdmin && provider === "elevenlabs";
+  const useUnsupportedAlt =
+    isAdmin && (provider === "lyria" || provider === "minimax");
+  if (useUnsupportedAlt) {
+    const label = provider === "lyria" ? "Lyria" : "MiniMax";
+    ctx?.showToast?.(
+      `${label} doesn't support Hum Track yet — switch Settings → engine to Suno or ElevenLabs.`,
+      { icon: "!", durationMs: 7200 },
+    );
+    return;
+  }
+
   humTrackGenerating = true;
   ctx?.hideCreateResultCards?.();
   el("humTrackSheet")?.classList.add("isGenerating");
@@ -523,6 +556,52 @@ async function submitHumTrackGeneration() {
 
   try {
     await ctx.trackCreditsAround("Hum Track", async () => {
+      if (useEleven) {
+        const tok = ctx.getSupabaseAuthToken?.();
+        const payload = {
+          title: `Hum Track · ${label}`,
+          style: preset.style,
+          negativeTags: preset.negativeTags,
+          prompt: "",
+          instrumental: true,
+          hasReference: true,
+          referenceConditionStrength: "high",
+          humTrack: true,
+          instrumentPreset: instrumentId,
+          elevenlabsUseFinetune: ctx?.getElevenlabsFinetunePref?.() !== false,
+        };
+        try {
+          const refMs = await ctx?.estimateBlobDurationMs?.(sendFile);
+          if (refMs) payload.referenceDurationMs = refMs;
+        } catch {}
+        const fd = new FormData();
+        fd.append("payload", JSON.stringify(payload));
+        fd.append("referenceFile", sendFile, sendFile.name);
+        const rr = await fetch(ctx.apiUrl("/api/music/generate?provider=elevenlabs"), {
+          method: "POST",
+          headers: tok ? { Authorization: `Bearer ${tok}` } : undefined,
+          body: fd,
+        });
+        const dd = await rr.json().catch(() => ({}));
+        if (rr.status === 402 || dd?.code === "insufficient_credits") {
+          const need = Number(dd?.needed ?? 12);
+          const have = Number(dd?.balance || 0);
+          throw new Error(
+            `Not enough credits (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`,
+          );
+        }
+        if (!rr.ok) {
+          throw new Error(
+            dd?.error || dd?.msg || dd?.message || "ElevenLabs Hum Track failed to start",
+          );
+        }
+        const taskId = ctx.extractTaskIdLoose(dd);
+        if (!taskId) throw new Error("No task id returned from server");
+        // Immediate ready (rare) — still arm poll so library path is consistent.
+        armHumTrackGeneration(taskId, instrumentId, label, { provider: "elevenlabs" });
+        return dd;
+      }
+
       const fd = new FormData();
       fd.append("action", "add_instrumental");
       fd.append("referenceMode", "vocal_instrumental");
@@ -594,7 +673,7 @@ async function submitHumTrackGeneration() {
       }
       const taskId = ctx.extractTaskIdLoose(dd);
       if (!taskId) throw new Error("No task id returned from server");
-      armHumTrackGeneration(taskId, instrumentId, label);
+      armHumTrackGeneration(taskId, instrumentId, label, { provider: "suno" });
     });
   } catch (e) {
     humTrackGenerating = false;
@@ -628,13 +707,15 @@ function resumeHumTrackIfPending() {
   humTrackInstrument = pending.instrumentId || "piano";
   humTrackGenerating = true;
   const label = instrumentLabel(humTrackInstrument);
+  const musicProvider = String(pending.musicProvider || "").trim().toLowerCase()
+    || (String(pending.taskId).startsWith("elv_") ? "elevenlabs" : "suno");
   try {
     ctx?.beginCoachGenerationStatus?.({
-      variantCount: pending.variantCount || ctx?.generationVariantCount || 2,
+      variantCount: pending.variantCount || (musicProvider === "suno" ? ctx?.generationVariantCount || 2 : 1),
       pillText: ctx?.coachHumTrackGeneratingPillText?.(label),
     });
   } catch {}
-  startHumTrackPolling(pending.taskId, humTrackInstrument);
+  startHumTrackPolling(pending.taskId, humTrackInstrument, { provider: musicProvider });
 }
 
 export function humTrackReadyForGenerate() {

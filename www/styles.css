@@ -24511,8 +24511,30 @@ body[data-route="settings"] main.grid{
 .settingsSection[hidden],
 #settingsMusicProviderSection[hidden],
 #settingsElevenFinetuneRow[hidden],
-#settingsGeminiProducerRow[hidden]{
+#settingsGeminiProducerRow[hidden],
+#settingsNabadVocalChainBlock[hidden]{
   display: none !important;
+}
+.settingsNabadVocalChainBlock{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 10px;
+}
+.settingsNabadVocalChainList{
+  gap: 0;
+}
+.settingsNabadVocalToggle{
+  align-items: center;
+  cursor: pointer;
+  gap: 12px;
+}
+.settingsNabadVocalToggle input[type="checkbox"]{
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  accent-color: var(--accent, #5eead4);
+  flex-shrink: 0;
 }
 .settingsSectionLabel{
   margin: 0 0 10px;

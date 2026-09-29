@@ -378,14 +378,13 @@ function normalizeElevenSongProducerOutput(raw, { instrumental = false, maxStyle
  * Build producer input JSON from clip generate body.
  */
 function buildClipProducerInput(body, flow = "nabad_clip") {
-  const clipVocalProfileId = String(body?.clipVocalProfileId || "").trim();
-  const catalog = clipVocalProfileById(clipVocalProfileId);
   const vocalLyriaHint = buildLyriaVocalProfile({
     vocalGender: String(body?.vocalGender || "").trim(),
-    voiceTimbre: String(body?.voiceTimbre || "").trim(),
-    challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
     dialectHint: String(body?.dialectHint || body?.dialect || "").trim(),
-    clipVocalProfileId,
+    lyrics: String(body?.prompt || "").trim(),
+    scriptFormat: String(body?.scriptFormat || "").trim(),
+    nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
+    useNabadVocalIdentity: true,
   });
   const ideaPrompt = body?.ideaPrompt === true
     || body?.ideaPrompt === 1
@@ -403,8 +402,8 @@ function buildClipProducerInput(body, flow = "nabad_clip") {
     song_key: String(body?.songKey || "").trim(),
     tempo_hint: String(body?.tempo || body?.bpm || "").trim(),
     vocal_gender: String(body?.vocalGender || "").trim(),
-    vocal_character_id: clipVocalProfileId,
-    vocal_character_label: catalog?.label || "",
+    vocal_character_id: "",
+    vocal_character_label: "Nabad Signature",
     vocal_lyria_hint: vocalLyriaHint,
     dialect_hint: String(body?.dialectHint || body?.dialect || "").trim(),
     challenge_id: String(body?.challenge?.id || body?.challengeId || "").trim(),

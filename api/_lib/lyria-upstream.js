@@ -24,6 +24,7 @@ const {
 } = require("./clip-vocal-profiles");
 const { looksLikeArabizi, isArabiziScript, buildLyriaArabiziPerformanceNote } = require("./arabizi");
 const { buildLyriaLebaneseArabicNote, buildLyriaEgyptianArabicNote, dialectFlags } = require("./arabic-dialect-lyrics");
+const { buildNabadVocalPrompt } = require("./nabad-vocal-identity");
 
 const LYRIA_CLIP_MODEL = "lyria-3-clip-preview";
 
@@ -248,7 +249,8 @@ function buildLyriaDialectVocalNote(dialectHint = "", { arabizi = false } = {}) 
 }
 
 /**
- * Positive-only vocal direction for Lyria (no NOT/NO clauses — the model may sing them).
+ * Nabad Signature Vocal Identity for Lyria (replaces old clip vocal characters / timbre map).
+ * Positive-only direction — no NOT/NO clauses (the model may sing them).
  */
 function buildLyriaInlineVocalDirection({
   vocalGender = "",
@@ -257,32 +259,48 @@ function buildLyriaInlineVocalDirection({
   dialectHint = "",
   clipVocalProfileId = "",
   arabizi = false,
+  lyrics = "",
+  scriptFormat = "",
+  nabadVocalToggles = null,
+  useNabadVocalIdentity = true,
 } = {}) {
-  const catalog = clipVocalProfileById(clipVocalProfileId);
   const bits = [];
 
-  if (catalog?.lyriaVocalPrompt) {
-    bits.push(String(catalog.lyriaVocalPrompt).trim());
+  // New strategy: Nabad identity matrix + admin FX chain (ignore legacy clip characters).
+  if (useNabadVocalIdentity) {
+    const nabad = buildNabadVocalPrompt({
+      gender: vocalGender,
+      lyrics,
+      dialectHint,
+      scriptFormat: arabizi ? "arabizi" : scriptFormat,
+      adminToggles: nabadVocalToggles,
+    });
+    if (nabad.styleLine) bits.push(nabad.styleLine);
   } else {
-    const g = String(vocalGender || "").trim().toLowerCase();
-    if (g === "f") {
-      bits.push("Female alto vocal, warm soulful close-mic chest voice");
-    } else if (g === "m") {
-      bits.push("Male tenor vocal, warm modern pop chest voice, on-pitch close-mic");
+    // Legacy path kept for emergency rollback only.
+    const catalog = clipVocalProfileById(clipVocalProfileId);
+    if (catalog?.lyriaVocalPrompt) {
+      bits.push(String(catalog.lyriaVocalPrompt).trim());
     } else {
-      bits.push("Warm conversational lead vocal, close-mic chest voice");
+      const g = String(vocalGender || "").trim().toLowerCase();
+      if (g === "f") {
+        bits.push("Female alto vocal, warm soulful close-mic chest voice");
+      } else if (g === "m") {
+        bits.push("Male tenor vocal, warm modern pop chest voice, on-pitch close-mic");
+      } else {
+        bits.push("Warm conversational lead vocal, close-mic chest voice");
+      }
+      const timbreLine = mapTimbreToLyria(voiceTimbre);
+      if (timbreLine) bits.push(timbreLine);
     }
-    const timbreLine = mapTimbreToLyria(voiceTimbre);
-    if (timbreLine) bits.push(timbreLine);
+    const challengeLine = CHALLENGE_VOCAL_PROFILES[String(challengeId || "").trim()];
+    if (challengeLine) bits.push(challengeLine);
   }
-
-  const challengeLine = CHALLENGE_VOCAL_PROFILES[String(challengeId || "").trim()];
-  if (challengeLine) bits.push(challengeLine);
 
   const dialectLine = buildLyriaDialectVocalNote(dialectHint, { arabizi });
   if (dialectLine) bits.push(dialectLine);
 
-  return bits.join(", ").replace(/\s+/g, " ").trim();
+  return bits.join(" ").replace(/\s+/g, " ").trim();
 }
 
 /** Admin logging only — never append as a labeled block in the Lyria prompt. */
@@ -321,49 +339,17 @@ function mapTimbreToLyria(timbre) {
 }
 
 /**
- * Positive singer profile per Google Lyria prompting guide.
+ * Positive singer profile — Nabad Signature Vocal Identity for Lyria.
  * @see https://ai.google.dev/gemini-api/docs/music-generation
  */
-function buildLyriaVocalProfile({
-  vocalGender = "",
-  voiceTimbre = "",
-  challengeId = "",
-  dialectHint = "",
-  clipVocalProfileId = "",
-} = {}) {
-  const catalog = clipVocalProfileById(clipVocalProfileId);
-  const bits = [];
-
-  if (catalog?.lyriaVocalPrompt) {
-    bits.push(String(catalog.lyriaVocalPrompt).trim());
-  } else {
-    const g = String(vocalGender || "").trim().toLowerCase();
-    let genderProfile = "";
-    if (g === "f") {
-      genderProfile =
-        "Female Alto: warm, soulful, conversational close-mic chest voice";
-    } else if (g === "m") {
-      genderProfile =
-        "Male tenor: warm modern pop chest voice, on-pitch close-mic, radio-ready hook energy";
-    } else {
-      genderProfile =
-        "Warm conversational lead vocal, close-mic chest voice, natural cadence";
-    }
-    bits.push(genderProfile);
-    const timbreLine = mapTimbreToLyria(voiceTimbre);
-    if (timbreLine) bits.push(timbreLine);
-  }
-
-  const challengeLine = CHALLENGE_VOCAL_PROFILES[String(challengeId || "").trim()];
-  if (challengeLine) bits.push(challengeLine);
-
-  const dialect = String(dialectHint || "").trim();
-  if (dialect) {
-    const note = buildLyriaDialectVocalNote(dialect);
-    if (note) bits.push(note);
-  }
-
-  return bits.join(". ").replace(/\.\s*\./g, ".").trim();
+function buildLyriaVocalProfile(opts = {}) {
+  return buildLyriaInlineVocalDirection({
+    ...opts,
+    arabizi: Boolean(opts.arabizi) || isArabiziScript({
+      scriptFormat: opts.scriptFormat,
+      lyrics: opts.lyrics,
+    }),
+  });
 }
 
 /**
@@ -390,6 +376,8 @@ function buildLyriaPrompt({
   photoMood = false,
   durationSec = 0,
   scriptFormat = "",
+  nabadVocalToggles = null,
+  useNabadVocalIdentity = true,
 } = {}) {
   const style = String(enhancedStylePrompt || "").trim();
   const sanitizedStyle = style ? sanitizeStyleForLyria(style) : sanitizeStyleForLyria(stylePrompt);
@@ -436,6 +424,10 @@ function buildLyriaPrompt({
       dialectHint,
       clipVocalProfileId,
       arabizi,
+      lyrics: lyricText || rawLyrics,
+      scriptFormat,
+      nabadVocalToggles,
+      useNabadVocalIdentity,
     });
     if (vocal) direction.push(vocal);
   } else {

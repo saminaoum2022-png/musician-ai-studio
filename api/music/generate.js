@@ -142,18 +142,22 @@ function buildMusicPrompt(body) {
 
 function buildLyriaClipMetaLines(body, lyriaPrompt) {
   const vocalGender = String(body?.vocalGender || "").trim();
-  const clipVocalProfileId = String(body?.clipVocalProfileId || "").trim();
-  const catalog = clipVocalProfileById(clipVocalProfileId);
   const lines = [];
   if (vocalGender === "m" || vocalGender === "f") {
     lines.push(`Singer: ${vocalGender === "f" ? "Female" : "Male"}`);
   } else if (vocalGender === "duo") {
     lines.push("Singer: Duo");
   }
-  if (clipVocalProfileId) lines.push(`clipVocalProfileId: ${clipVocalProfileId}`);
-  if (catalog) lines.push(`Character: ${catalog.label} (${catalog.labelAr})`);
-  const vocalMatch = /Vocal profile: ([^\n]+)/.exec(String(lyriaPrompt || ""));
-  if (vocalMatch?.[1]) lines.push(`Vocal profile: ${vocalMatch[1].trim()}`);
+  const chain = body?.nabadVocalChain || body?.nabadVocalToggles;
+  if (chain && typeof chain === "object") {
+    const on = Object.keys(chain).filter((k) => chain[k]).join(",") || "none";
+    lines.push(`nabadVocalChain: ${on}`);
+  } else {
+    lines.push("nabadVocalChain: defaults");
+  }
+  if (/Nabad identity/i.test(String(lyriaPrompt || ""))) {
+    lines.push("vocalIdentity: nabad_signature");
+  }
   return lines.filter(Boolean);
 }
 
@@ -253,9 +257,12 @@ function buildLyriaPromptFromBody(body, extra = {}) {
     clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
     enhancedStylePrompt: extra.enhancedStylePrompt || "",
     structuredLyrics: extra.structuredLyrics || "",
+    arrangement: extra.arrangement || "",
     photoMood: photoImages.length > 0,
     durationSec: resolveLyriaDurationSec(body),
     scriptFormat: extra.scriptFormat ?? String(body?.scriptFormat || "").trim(),
+    nabadVocalToggles: extra.nabadVocalToggles ?? body?.nabadVocalChain ?? body?.nabadVocalToggles ?? null,
+    useNabadVocalIdentity: extra.useNabadVocalIdentity !== false,
   });
 }
 
@@ -450,6 +457,7 @@ async function runLyriaGenerationJob({
         photoMood: photoImages.length > 0,
         durationSec,
         scriptFormat: String(body?.scriptFormat || "").trim(),
+        nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
       });
     }
 
@@ -583,6 +591,7 @@ async function runLyriaClipGenerationJob({
         photoMood: photoImages.length > 0,
         durationSec: resolveLyriaDurationSec(body),
         scriptFormat: String(body?.scriptFormat || "").trim(),
+        nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
       });
     }
 

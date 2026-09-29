@@ -67,7 +67,7 @@ function murekaErrorMessage(json, status) {
   return `Mureka request failed (${status || "?"})`;
 }
 
-async function murekaFetch(path, { apiKey, method = "GET", body = null, formData = null } = {}) {
+async function murekaFetch(path, { apiKey, method = "GET", body = null } = {}) {
   const key = String(apiKey || "").trim();
   if (!key) return { ok: false, status: 0, error: "missing_mureka_api_key", json: null };
   const url = `${murekaApiBase()}${path.startsWith("/") ? path : `/${path}`}`;
@@ -76,10 +76,7 @@ async function murekaFetch(path, { apiKey, method = "GET", body = null, formData
     Accept: "application/json",
   };
   let payload = null;
-  if (formData != null) {
-    // multipart/form-data — let fetch set the boundary header itself.
-    payload = formData;
-  } else if (body != null) {
+  if (body != null) {
     headers["Content-Type"] = "application/json";
     payload = JSON.stringify(body);
   }
@@ -125,11 +122,10 @@ async function murekaGenerateSong({
   };
   const style = String(prompt || "").trim().slice(0, 2000);
   if (style) body.prompt = style;
+  const g = mapMurekaGender(gender) || String(gender || "").trim();
+  if (g) body.gender = g;
   const vid = resolveMurekaVocalId(vocalId);
   if (vid) body.vocal_id = vid;
-  // A cloned voice already defines the singer — don't also pin a gender on top of it.
-  const g = vid ? "" : mapMurekaGender(gender) || String(gender || "").trim();
-  if (g) body.gender = g;
   const rid = String(referenceId || "").trim();
   if (rid) body.reference_id = rid;
   const mid = String(melodyId || "").trim();
@@ -167,57 +163,6 @@ async function murekaQuerySong({ apiKey, upstreamTaskId }) {
   const tid = encodeURIComponent(String(upstreamTaskId || "").trim());
   if (!tid) return { ok: false, error: "missing_task_id" };
   return murekaFetch(`/v1/song/query/${tid}`, { apiKey, method: "GET" });
-}
-
-/**
- * The vocal-clone docs do not pin the response field name, so read the ID tolerantly:
- * id / vocal_id / vocalId / vocal_clone_id / vocalCloneId (top level or under data / vocal / vocal_clone),
- * then fall back to any string field whose key looks like an id.
- */
-function pickVocalCloneId(json) {
-  const scopes = [json, json?.data, json?.vocal, json?.vocal_clone, json?.vocalClone, json?.result];
-  const names = ["id", "vocal_id", "vocalId", "vocal_clone_id", "vocalCloneId", "voice_id", "voiceId"];
-  for (const scope of scopes) {
-    if (!scope || typeof scope !== "object") continue;
-    for (const n of names) {
-      const v = scope[n];
-      if ((typeof v === "string" || typeof v === "number") && String(v).trim()) return String(v).trim();
-    }
-  }
-  for (const scope of scopes) {
-    if (!scope || typeof scope !== "object") continue;
-    for (const [k, v] of Object.entries(scope)) {
-      if (/(^|_)id$/i.test(k) && !/trace/i.test(k) && (typeof v === "string" || typeof v === "number") && String(v).trim()) {
-        return String(v).trim();
-      }
-    }
-  }
-  return "";
-}
-
-/**
- * Vocal clone: upload a 15–30 s vocal sample (mp3/m4a, <10 MB) → reusable Vocal ID.
- * The Vocal ID is then passed as `vocal_id` on /v1/song/generate.
- */
-async function murekaCloneVocal({ apiKey, bytes, mime = "audio/mpeg", fileName = "vocal.mp3", description = "" } = {}) {
-  if (!bytes || !bytes.length) {
-    return { ok: false, error: "Missing vocal sample audio.", code: "mureka_sample_required" };
-  }
-  const form = new FormData();
-  form.set("file", new Blob([bytes], { type: mime }), fileName);
-  const desc = String(description || "").trim().slice(0, 1024);
-  if (desc) form.set("description", desc);
-
-  const res = await murekaFetch("/v1/song/vocal-clone", { apiKey, method: "POST", formData: form });
-  if (!res.ok) {
-    return { ok: false, error: res.error || "Mureka vocal clone failed", status: res.status, json: res.json, traceId: res.traceId };
-  }
-  const j = res.json || {};
-  const vocalId = pickVocalCloneId(j);
-  if (!vocalId) {
-    return { ok: false, error: "Mureka returned no Vocal ID.", json: j, traceId: res.traceId, code: "mureka_no_vocal_id" };
-  }
-  return { ok: true, vocalId, json: j, traceId: res.traceId };
 }
 
 function pickChoiceAudioUrl(choice) {
@@ -324,7 +269,6 @@ module.exports = {
   resolveMurekaVocalId,
   mapMurekaGender,
   murekaGenerateSong,
-  murekaCloneVocal,
   murekaQuerySong,
   murekaWaitForSong,
   normalizeMurekaChoices,

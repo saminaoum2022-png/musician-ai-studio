@@ -8324,7 +8324,6 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   }
   if (!show) {
     syncSettingsElevenFinetuneRow("suno");
-    syncSettingsMurekaVoiceRow("suno");
     syncSettingsGeminiProducerRow();
     syncSettingsNabadVocalChainRow("suno");
     return;
@@ -8339,236 +8338,9 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   }
   if (sub) sub.textContent = musicProviderSubline(p);
   syncSettingsElevenFinetuneRow(p);
-  syncSettingsMurekaVoiceRow(p);
   syncSettingsGeminiProducerRow();
   syncSettingsNabadVocalChainRow(p);
   try { syncElevenSongLengthPanel(); } catch {}
-}
-
-/* ---------------------------------------------------------------------
- *  Mureka vocal clone (admin): record/upload 15–30 s → Vocal ID → sing with it.
- *  The Vocal ID is stored on this device per account and sent as murekaVocalId.
- * ------------------------------------------------------------------- */
-const MUREKA_VOCAL_ID_LS_KEY = "nabadMurekaVocalId";
-const MUREKA_VOCAL_LABEL_LS_KEY = "nabadMurekaVocalLabel";
-const MUREKA_VOICE_MIN_MS = 15000;
-const MUREKA_VOICE_MAX_MS = 30000;
-
-function murekaVocalKey(base) {
-  const uid = String(authSession?.user?.id || "").trim() || "anon";
-  return `${base}:${uid}`;
-}
-
-function getMurekaVocalId() {
-  try {
-    return String(localStorage.getItem(murekaVocalKey(MUREKA_VOCAL_ID_LS_KEY)) || "").trim();
-  } catch {
-    return "";
-  }
-}
-
-function setMurekaVocalId(id, label = "") {
-  try {
-    localStorage.setItem(murekaVocalKey(MUREKA_VOCAL_ID_LS_KEY), String(id || "").trim());
-    localStorage.setItem(murekaVocalKey(MUREKA_VOCAL_LABEL_LS_KEY), String(label || "").trim());
-  } catch {}
-}
-
-function clearMurekaVocalId() {
-  try {
-    localStorage.removeItem(murekaVocalKey(MUREKA_VOCAL_ID_LS_KEY));
-    localStorage.removeItem(murekaVocalKey(MUREKA_VOCAL_LABEL_LS_KEY));
-  } catch {}
-}
-
-const _murekaVoice = { busy: false, rec: null, stream: null, chunks: [], startedAt: 0, tick: 0, stopTimer: 0, note: "" };
-
-function murekaVoiceSubText() {
-  if (_murekaVoice.rec) {
-    const s = Math.round((Date.now() - _murekaVoice.startedAt) / 1000);
-    return `Recording ${s}s — sing or speak 15–30 s, then tap Stop`;
-  }
-  if (_murekaVoice.busy) return _murekaVoice.note || "Cloning your voice…";
-  const id = getMurekaVocalId();
-  if (id) {
-    let label = "";
-    try { label = String(localStorage.getItem(murekaVocalKey(MUREKA_VOCAL_LABEL_LS_KEY)) || "").trim(); } catch {}
-    return `Voice ready${label ? ` (${label})` : ""} — Mureka songs will sing in it · ${id.slice(0, 10)}…`;
-  }
-  return "No voice yet — record or upload 15–30 s of singing";
-}
-
-function syncSettingsMurekaVoiceRow(providerPref = getMusicProviderPref()) {
-  const row = document.getElementById("settingsMurekaVoiceRow");
-  if (!row) return;
-  const show = Boolean(creditsState.isAdmin) && providerPref === "mureka";
-  row.hidden = !show;
-  row.style.display = show ? "" : "none";
-  if (!show) return;
-  const sub = document.getElementById("settingsMurekaVoiceSub");
-  if (sub) sub.textContent = murekaVoiceSubText();
-  const hasVoice = Boolean(getMurekaVocalId());
-  const rec = Boolean(_murekaVoice.rec);
-  const recBtn = row.querySelector('[data-mureka-voice="record"]');
-  const upBtn = row.querySelector('[data-mureka-voice="upload"]');
-  const clearBtn = row.querySelector('[data-mureka-voice="clear"]');
-  if (recBtn) {
-    recBtn.textContent = rec ? "Stop" : hasVoice ? "Re-record" : "Record";
-    recBtn.classList.toggle("is-active", rec);
-    recBtn.disabled = _murekaVoice.busy && !rec;
-  }
-  if (upBtn) upBtn.disabled = _murekaVoice.busy || rec;
-  if (clearBtn) {
-    clearBtn.hidden = !hasVoice || rec || _murekaVoice.busy;
-    clearBtn.disabled = _murekaVoice.busy;
-  }
-}
-
-async function uploadMurekaVocalSample(fileOrBlob, fileName = "vocal-sample.m4a") {
-  const token = getSupabaseAuthToken();
-  const fd = new FormData();
-  fd.append("file", fileOrBlob, fileName);
-  fd.append("description", "NabadAi admin voice");
-  const r = await fetch(apiUrl("/api/music/vocal-clone?provider=mureka"), {
-    method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: fd,
-  });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok || !d?.vocalId) {
-    const err = new Error(d?.error || "Voice clone failed");
-    err.upstream = d?.upstream;
-    throw err;
-  }
-  return String(d.vocalId);
-}
-
-async function cloneMurekaVoiceFrom(fileOrBlob, fileName, label) {
-  _murekaVoice.busy = true;
-  _murekaVoice.note = "Cloning your voice… (10–40 s)";
-  syncSettingsMurekaVoiceRow("mureka");
-  try {
-    const vocalId = await uploadMurekaVocalSample(fileOrBlob, fileName);
-    setMurekaVocalId(vocalId, label);
-    try { showToast("Voice cloned — Mureka songs will sing in it.", { icon: "🎤", durationMs: 3400 }); } catch {}
-  } catch (e) {
-    try { console.warn("[mureka-voice] clone failed", e?.message, e?.upstream); } catch {}
-    try { showToast(`Voice clone failed: ${String(e?.message || e).slice(0, 140)}`, { icon: "!", durationMs: 5200 }); } catch {}
-  } finally {
-    _murekaVoice.busy = false;
-    _murekaVoice.note = "";
-    syncSettingsMurekaVoiceRow("mureka");
-  }
-}
-
-function stopMurekaVoiceTimers() {
-  if (_murekaVoice.tick) window.clearInterval(_murekaVoice.tick);
-  if (_murekaVoice.stopTimer) window.clearTimeout(_murekaVoice.stopTimer);
-  _murekaVoice.tick = 0;
-  _murekaVoice.stopTimer = 0;
-}
-
-async function startMurekaVoiceRecording() {
-  if (_murekaVoice.rec || _murekaVoice.busy) return;
-  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-    try { showToast("Recording isn't supported here — use Upload.", { icon: "!", durationMs: 3600 }); } catch {}
-    return;
-  }
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-  } catch (e) {
-    try { showToast("Microphone blocked — allow it in iOS Settings, or use Upload.", { icon: "!", durationMs: 4200 }); } catch {}
-    return;
-  }
-  const mimeType = pickRecorderMimeType();
-  let rec;
-  try {
-    rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-  } catch (e) {
-    try { stream.getTracks().forEach((t) => t.stop()); } catch {}
-    try { showToast(`Could not start recorder: ${e?.message || e}`, { icon: "!", durationMs: 4200 }); } catch {}
-    return;
-  }
-  _murekaVoice.stream = stream;
-  _murekaVoice.rec = rec;
-  _murekaVoice.chunks = [];
-  _murekaVoice.startedAt = Date.now();
-  rec.ondataavailable = (e) => {
-    if (e.data && e.data.size) _murekaVoice.chunks.push(e.data);
-  };
-  rec.onstop = async () => {
-    stopMurekaVoiceTimers();
-    const elapsed = Date.now() - _murekaVoice.startedAt;
-    const type = rec.mimeType || mimeType || "audio/mp4";
-    const blob = new Blob(_murekaVoice.chunks, { type });
-    try { _murekaVoice.stream?.getTracks().forEach((t) => t.stop()); } catch {}
-    _murekaVoice.rec = null;
-    _murekaVoice.stream = null;
-    _murekaVoice.chunks = [];
-    syncSettingsMurekaVoiceRow("mureka");
-    if (elapsed < MUREKA_VOICE_MIN_MS - 500) {
-      try { showToast("Too short — Mureka needs at least 15 seconds.", { icon: "!", durationMs: 3600 }); } catch {}
-      return;
-    }
-    if (!blob.size) {
-      try { showToast("Recording was empty — try again.", { icon: "!", durationMs: 3200 }); } catch {}
-      return;
-    }
-    const ext = /webm/i.test(type) ? "webm" : /ogg/i.test(type) ? "ogg" : "m4a";
-    await cloneMurekaVoiceFrom(blob, `vocal-sample.${ext}`, "recorded");
-  };
-  try {
-    rec.start(1000);
-  } catch (e) {
-    try { stream.getTracks().forEach((t) => t.stop()); } catch {}
-    _murekaVoice.rec = null;
-    _murekaVoice.stream = null;
-    try { showToast(`Could not start recording: ${e?.message || e}`, { icon: "!", durationMs: 4200 }); } catch {}
-    syncSettingsMurekaVoiceRow("mureka");
-    return;
-  }
-  _murekaVoice.tick = window.setInterval(() => syncSettingsMurekaVoiceRow("mureka"), 1000);
-  _murekaVoice.stopTimer = window.setTimeout(() => {
-    try { if (_murekaVoice.rec && _murekaVoice.rec.state !== "inactive") _murekaVoice.rec.stop(); } catch {}
-  }, MUREKA_VOICE_MAX_MS);
-  syncSettingsMurekaVoiceRow("mureka");
-}
-
-function stopMurekaVoiceRecording() {
-  try {
-    if (_murekaVoice.rec && _murekaVoice.rec.state !== "inactive") _murekaVoice.rec.stop();
-  } catch {}
-}
-
-function wireSettingsMurekaVoiceOnce() {
-  const picker = document.getElementById("settingsMurekaVoicePicker");
-  if (!picker || picker.dataset.boundMurekaVoice === "1") return;
-  picker.dataset.boundMurekaVoice = "1";
-  const fileInput = document.getElementById("settingsMurekaVoiceFile");
-  picker.addEventListener("click", (ev) => {
-    const btn = ev.target?.closest?.("[data-mureka-voice]");
-    if (!btn || !picker.contains(btn) || !creditsState.isAdmin) return;
-    ev.preventDefault();
-    try { if (typeof haptic === "function") haptic("light"); } catch {}
-    const action = String(btn.getAttribute("data-mureka-voice") || "");
-    if (action === "record") {
-      if (_murekaVoice.rec) stopMurekaVoiceRecording();
-      else void startMurekaVoiceRecording();
-    } else if (action === "upload") {
-      fileInput?.click();
-    } else if (action === "clear") {
-      clearMurekaVocalId();
-      syncSettingsMurekaVoiceRow("mureka");
-      try { showToast("Cloned voice cleared.", { icon: "✓", durationMs: 2400 }); } catch {}
-    }
-  });
-  fileInput?.addEventListener("change", () => {
-    const f = fileInput.files?.[0];
-    fileInput.value = "";
-    if (!f) return;
-    void cloneMurekaVoiceFrom(f, f.name || "vocal-sample.m4a", "uploaded");
-  });
 }
 
 const ELEVENLABS_FINETUNE_LS_KEY = "nabadElevenFinetune";
@@ -8591,7 +8363,6 @@ function setElevenlabsFinetunePref(useFinetune) {
     localStorage.setItem(ELEVENLABS_FINETUNE_LS_KEY, on ? "1" : "0");
   } catch {}
   syncSettingsElevenFinetuneRow(getMusicProviderPref());
-  syncSettingsMurekaVoiceRow(getMusicProviderPref());
   const providerSub = document.getElementById("settingsMusicProviderSub");
   if (providerSub && getMusicProviderPref() === "elevenlabs") {
     providerSub.textContent = musicProviderSubline("elevenlabs");
@@ -8727,7 +8498,6 @@ function syncSettingsElevenFinetuneRow(providerPref = getMusicProviderPref()) {
 }
 
 function wireSettingsMusicProviderOnce() {
-  wireSettingsMurekaVoiceOnce();
   const root = document.getElementById("settingsMusicProviderPicker");
   if (root && root.dataset.boundMusicProvider !== "1") {
     root.dataset.boundMusicProvider = "1";
@@ -8743,7 +8513,6 @@ function wireSettingsMusicProviderOnce() {
       } catch {}
       setMusicProviderPref(pref);
       syncSettingsElevenFinetuneRow(pref);
-      syncSettingsMurekaVoiceRow(pref);
       try {
         const toastMsg =
           pref === "minimax"
@@ -30627,11 +30396,7 @@ function musicProviderSubline(pref) {
       ? "ElevenLabs — NabadAi DNA finetune on v2.5 (~$0.45/song)"
       : "ElevenLabs — base music_v2.5, no finetune (~$0.45/song)";
   }
-  if (pref === "mureka") {
-    return getMurekaVocalId()
-      ? "Mureka — your cloned voice, one variant (~$0.045/song · admin)"
-      : "Mureka — lyrics→song, one variant (~$0.045/song · admin)";
-  }
+  if (pref === "mureka") return "Mureka — lyrics→song, one variant (~$0.045/song · admin)";
   return "Suno — two variants per song";
 }
 
@@ -76820,8 +76585,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       if (useMurekaMusicProvider() && !shouldGenerateInstrumental && creditsState.isAdmin) {
         payload.nabadVocalChain = getNabadVocalChainPrefs();
-        const murekaVocalId = getMurekaVocalId();
-        if (murekaVocalId) payload.murekaVocalId = murekaVocalId;
       }
       if (userAvoidTags) payload.negativeTags = userAvoidTags;
       payload.style = compactStyleForProvider(payload.style, 980);

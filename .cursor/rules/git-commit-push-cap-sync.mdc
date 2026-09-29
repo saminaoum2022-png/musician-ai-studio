@@ -15,6 +15,15 @@ alwaysApply: true
 
 The iOS simulator loads **bundled local `www/`** and, with `npm run sim`, talks to the **staging** API — not nabadai.com.
 
+## Broken-bundle guard (mandatory)
+
+A leftover merge-conflict marker or JS syntax error in `src/app.js` freezes the whole app on the splash. `scripts/verify-bundle.mjs` (`npm run verify:bundle`) blocks that: conflict markers, JS/boot-script syntax, and `www/` mirror drift.
+
+- It runs automatically in `sync:ios` (every `npm run sim` / `run:ios*`), `stamp:build`, `verify:no-producer-ship`, git `pre-commit` / `pre-merge-commit` / `pre-push` (`.githooks/`), and the Vercel build.
+- **After ANY `git merge`, cherry-pick, or rebase — especially `main` ⇄ `staging` — run `npm run verify:bundle` before installing on a device or pushing.** Resolve conflicts by hand; never commit markers.
+- **Never** use `git commit --no-verify` / `git push --no-verify`, and never bypass or delete the check to "get past" a failure. Fix the code.
+- Never install on the phone or push `main` if `verify:bundle` has not passed in that pass.
+
 ## Step 1 — Preview on the simulator (default after any app change; do NOT deploy yet)
 
 When you finish a task that changes tracked project files (`www/`, `src/`, root `index.html` / `styles.css`, etc.), preview it on the simulator **before ending the turn**, without committing or pushing:

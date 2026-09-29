@@ -1,0 +1,4 @@
+#!/bin/sh
+# Last line of defense before staging/main (and therefore Vercel) receive code.
+# Also require the www/ mirror to match so the phone/TestFlight never ships stale code.
+exec node "$(git rev-parse --show-toplevel)/scripts/verify-bundle.mjs"

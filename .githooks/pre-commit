@@ -1,0 +1,3 @@
+#!/bin/sh
+# Block commits that contain merge-conflict markers or JS that cannot parse.
+exec node "$(git rev-parse --show-toplevel)/scripts/verify-bundle.mjs" --no-mirror

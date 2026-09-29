@@ -41,6 +41,7 @@ const {
   buildLyriaDirectStylePrompt,
   buildLyriaArabicPronunciationLine,
   resolveLyriaArabicPronunciationMode,
+  extractLyriaDisplayLyrics,
 } = require("../_lib/lyria-upstream");
 const { clipVocalProfileById } = require("../_lib/clip-vocal-profiles");
 const {
@@ -484,9 +485,12 @@ async function runLyriaGenerationJob({
         alignedWords: upstream.alignedWords,
       });
     }
-    const displayLyrics = producerResult.ok && producerResult.structured_lyrics
-      ? producerResult.structured_lyrics
-      : lyrics;
+    const displayLyrics = String(
+      (producerResult.ok && producerResult.structured_lyrics) ||
+        lyrics ||
+        extractLyriaDisplayLyrics(upstream.data) ||
+        "",
+    ).trim();
     const statusPayload = buildSunoStatusPayload({
       taskId,
       title,
@@ -616,9 +620,12 @@ async function runLyriaClipGenerationJob({
         alignedWords: upstream.alignedWords,
       });
     }
-    const displayLyrics = producerResult.ok && producerResult.structured_lyrics
-      ? producerResult.structured_lyrics
-      : lyrics;
+    const displayLyrics = String(
+      (producerResult.ok && producerResult.structured_lyrics) ||
+        lyrics ||
+        extractLyriaDisplayLyrics(upstream.data) ||
+        "",
+    ).trim();
     const statusPayload = buildSunoStatusPayload({
       taskId,
       title,

@@ -571,6 +571,40 @@ function pickLyriaLyricsPart(textParts) {
   return textParts[0] || "";
 }
 
+/** Strip Lyria timing markers so song-details can show readable lyrics. */
+function formatLyriaLyricsForDisplay(lyricsText) {
+  const lines = [];
+  for (const raw of String(lyricsText || "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) {
+      if (lines.length && lines[lines.length - 1] !== "") lines.push("");
+      continue;
+    }
+    if (/^\[\[[A-D]\d+\]\]$/.test(line)) {
+      lines.push(lyriaSectionToTag(line));
+      continue;
+    }
+    const abs = line.match(/^\[(\d+(?:\.\d+)?):\]\s*(.*)$/);
+    if (abs) {
+      if (String(abs[2] || "").trim()) lines.push(String(abs[2]).trim());
+      continue;
+    }
+    const cont = line.match(/^\[:\]\s*(.*)$/);
+    if (cont) {
+      if (String(cont[1] || "").trim()) lines.push(String(cont[1]).trim());
+      continue;
+    }
+    lines.push(line);
+  }
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function extractLyriaDisplayLyrics(payload) {
+  const textParts = extractLyriaTextParts(payload);
+  const raw = pickLyriaLyricsPart(textParts);
+  return formatLyriaLyricsForDisplay(raw);
+}
+
 function lyriaSectionToTag(line) {
   const m = /^\[\[([A-D])(\d+)\]\]$/.exec(String(line || "").trim());
   if (!m) return String(line || "").trim();
@@ -861,8 +895,10 @@ module.exports = {
   sanitizeStyleForLyria,
   extractLyriaAlignedWords,
   extractLyriaAudio,
+  extractLyriaDisplayLyrics,
   extractLyriaDurationSecs,
   extractLyriaTextParts,
+  formatLyriaLyricsForDisplay,
   isLyriaClipModel,
   lyriaGenerateEnabled,
   lyriaGenerateMusic,

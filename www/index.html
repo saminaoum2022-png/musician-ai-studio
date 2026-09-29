@@ -1379,6 +1379,19 @@
                 <p id="clipVocalCharacterSpec" class="clipVocalCharacterSpec" aria-live="polite"></p>
               </div>
             </div>
+            <div id="elevenSongLengthPanel" class="field grow inputPanel inputPanel--style" hidden>
+              <div class="label inPanelLabel stylePanelHead">
+                <span>Song length</span>
+                <span class="createOptionsFieldHint" id="elevenSongLengthHint">ElevenLabs</span>
+              </div>
+              <div id="elevenSongDurationChipRow" class="optChipRow" role="group" aria-label="ElevenLabs song length">
+                <button type="button" class="optChip isActive" data-opt-value="" aria-pressed="true">Auto (~3 min)</button>
+                <button type="button" class="optChip" data-opt-value="short" aria-pressed="false">~1 min</button>
+                <button type="button" class="optChip" data-opt-value="standard" aria-pressed="false">~2 min</button>
+                <button type="button" class="optChip" data-opt-value="long" aria-pressed="false">~3 min</button>
+                <button type="button" class="optChip" data-opt-value="extended" aria-pressed="false">~5 min</button>
+              </div>
+            </div>
             <div id="createSoloInstrumentalRow" class="createSoloInstrumentalRow field grow inputPanel inputPanel--style" hidden>
               <div class="label inPanelLabel">Song type</div>
               <div id="createSoloTypePills" class="addressPills addressPills--two createSoloTypePills" role="group" aria-label="Song type">
@@ -1493,7 +1506,7 @@
               <summary class="createOptionsGroupHead">Length</summary>
               <div class="createOptionsStack">
                 <div class="optChipGroup">
-                  <span class="optChipLabel">Song length <span class="createOptionsFieldHint">optional target</span></span>
+                  <span class="optChipLabel">Song length <span class="createOptionsFieldHint" id="advancedSongLengthHint">optional target</span></span>
                   <select id="sunoSongDuration" hidden aria-hidden="true" tabindex="-1">
                     <option value="" selected>Auto</option>
                     <option value="short">Short (~1 min)</option>

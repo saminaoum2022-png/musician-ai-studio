@@ -8322,6 +8322,7 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   if (sub) sub.textContent = musicProviderSubline(p);
   syncSettingsElevenFinetuneRow(p);
   syncSettingsGeminiProducerRow();
+  try { syncElevenSongLengthPanel(); } catch {}
 }
 
 const ELEVENLABS_FINETUNE_LS_KEY = "nabadElevenFinetune";
@@ -30267,6 +30268,7 @@ function setMusicProviderPref(pref) {
   try { syncNabadClipCreateUi(); } catch {}
   try { syncCreateHintForSelectedEngine(); } catch {}
   try { syncCreateGenerateDock(); } catch {}
+  try { syncElevenSongLengthPanel(); } catch {}
 }
 
 function formatElevenMusicModelLabel(raw) {
@@ -30303,6 +30305,31 @@ function useLyriaMusicProvider() {
 
 function useElevenlabsMusicProvider() {
   return creditsState.isAdmin && getMusicProviderPref() === "elevenlabs";
+}
+
+/** Admin ElevenLabs: surface song length on Create (maps to music_length_ms). */
+function syncElevenSongLengthPanel() {
+  const panel = document.getElementById("elevenSongLengthPanel");
+  const show = useElevenlabsMusicProvider();
+  if (panel) {
+    panel.hidden = !show;
+    panel.setAttribute("aria-hidden", show ? "false" : "true");
+  }
+  const hint = document.getElementById("elevenSongLengthHint");
+  if (hint) {
+    const preset = String(els.sunoSongDuration?.value || "").trim();
+    const presetSec = { short: 60, standard: 120, long: 180, extended: 300 };
+    const sec = presetSec[preset];
+    hint.textContent = Number.isFinite(sec)
+      ? `ElevenLabs · ~${Math.round(sec / 60)} min`
+      : "ElevenLabs · Auto ~3 min";
+  }
+  const advHint = document.getElementById("advancedSongLengthHint");
+  if (advHint) {
+    advHint.textContent = show
+      ? "ElevenLabs music_length_ms"
+      : "optional target";
+  }
 }
 
 function musicGenerateApiPath() {
@@ -66583,6 +66610,15 @@ function trackRefIsInstrumental(track) {
 function songDetailsLyricsForTrack(track) {
   if (trackRefIsInstrumental(track)) return "";
   const meta = track?.meta || {};
+  if (generationMetaIsIdeaToSong(meta)) {
+    return songDetailsFirstText(
+      meta.generatedLyrics,
+      meta.lyricsInput,
+      meta.finalPrompt,
+      meta.prompt,
+      meta.lyrics,
+    );
+  }
   return songDetailsFirstText(
     meta.lyricsInput,
     meta.finalPrompt,
@@ -66678,7 +66714,7 @@ async function resolveLyricsForTrackRef(t) {
   if (cloudId) {
     const meta = await supabaseFetchSongMetaById(cloudId);
     const fromCloud = songDetailsFirstText(
-      meta?.lyricsInput, meta?.finalPrompt, meta?.prompt, meta?.lyrics, meta?.generatedLyrics,
+      meta?.generatedLyrics, meta?.lyricsInput, meta?.finalPrompt, meta?.prompt, meta?.lyrics,
     );
     if (fromCloud) return found(fromCloud);
   }
@@ -72428,11 +72464,15 @@ function parseSunoGenerationRecordInfo(data) {
       first?.songId ||
       first?.song_id ||
       "";
+    const prompt = String(
+      first?.prompt || first?.lyrics || first?.lyric || first?.text || "",
+    ).trim();
     return {
       audioUrl: String(audioUrl || "").trim(),
       imageUrl,
       title: String(title || "").trim(),
       audioId: String(audioId || "").trim(),
+      prompt,
     };
   };
   const first = pick(arr[0]);
@@ -72440,6 +72480,56 @@ function parseSunoGenerationRecordInfo(data) {
   const hasAudio = Boolean((first && first.audioUrl) || (second && second.audioUrl));
   const audioClipCount = (first?.audioUrl ? 1 : 0) + (second?.audioUrl ? 1 : 0);
   return { status, first, second, hasAudio, audioClipCount };
+}
+
+/** Idea / prompt-to-song generations — lyrics were produced server-side, not typed by the user. */
+function generationMetaIsIdeaToSong(meta) {
+  if (!meta || typeof meta !== "object") return false;
+  if (String(meta.ideaInput || "").trim()) return true;
+  if (meta.ideaPrompt === true || meta.ideaPrompt === "1" || meta.ideaPrompt === 1) return true;
+  const eng = String(meta.engine || "").trim().toLowerCase();
+  return eng === "idea_prompt" || eng === "suno_idea";
+}
+
+/**
+ * When Generate was from Idea/prompt, swap stored lyricsInput (the brief) for the
+ * provider-returned sung lyrics so song details / remix show real lyrics.
+ */
+function mergeGeneratedLyricsIntoMeta(meta, providerLyrics) {
+  const lyrics = String(providerLyrics || "").trim();
+  if (!lyrics) return meta && typeof meta === "object" ? { ...meta } : meta;
+  const next = meta && typeof meta === "object" ? { ...meta } : {};
+  if (!generationMetaIsIdeaToSong(next)) {
+    // Still keep a copy when the provider returned lyrics and we had none.
+    if (!String(next.lyricsInput || next.finalPrompt || "").trim()) {
+      next.generatedLyrics = lyrics;
+      next.lyricsInput = lyrics;
+      next.finalPrompt = lyrics;
+    }
+    return next;
+  }
+  const brief = String(next.ideaInput || next.lyricsInput || "").trim();
+  if (brief && !String(next.ideaInput || "").trim()) next.ideaInput = brief;
+  next.generatedLyrics = lyrics;
+  next.lyricsInput = lyrics;
+  next.finalPrompt = lyrics;
+  return next;
+}
+
+function applyGeneratedLyricsToCreateUi(lyrics, meta) {
+  const text = String(lyrics || "").trim();
+  if (!text || !els.sunoPrompt) return;
+  if (!generationMetaIsIdeaToSong(meta)) return;
+  const current = String(els.sunoPrompt.value || "").trim();
+  const idea = String(meta?.ideaInput || "").trim();
+  if (current && idea && current !== idea && current !== String(meta?.lyricsInput || "").trim()) {
+    // User already edited the box — don't overwrite.
+    return;
+  }
+  els.sunoPrompt.value = text;
+  try { setLyricsInputMode("write", { silent: true, preserveText: true }); } catch {}
+  try { autoResizeLyricsBox(); } catch {}
+  try { snapshotNabadAiLyricsDraft(text); } catch {}
 }
 
 function resolveExpectedGenerationVariants(taskId) {
@@ -72494,6 +72584,8 @@ function addMissingSunoClipsToLibrary(taskId, parsed, { metaBase = {}, kind = "f
   const existing = libraryEntriesForTaskId(tid);
   const saved = [];
   const base = String(baseTitle || "Generated song").trim() || "Generated song";
+  const providerLyrics = String(parsed.first?.prompt || parsed.second?.prompt || "").trim();
+  const mergedMeta = mergeGeneratedLyricsIntoMeta(metaBase, providerLyrics);
   const specs = [
     { clip: parsed.first, variant: "A", titleFallback: base },
     { clip: parsed.second, variant: "B", titleFallback: base.endsWith(" B") ? base : `${base} B` },
@@ -72501,8 +72593,8 @@ function addMissingSunoClipsToLibrary(taskId, parsed, { metaBase = {}, kind = "f
   for (const { clip, variant, titleFallback } of specs) {
     if (!clip?.audioUrl) continue;
     if (libraryAlreadyHasSunoClip(existing, clip)) continue;
-    const pendingPhotoCover = String(metaBase?.imageUrl || "").trim().startsWith("data:")
-      ? metaBase.imageUrl
+    const pendingPhotoCover = String(mergedMeta?.imageUrl || "").trim().startsWith("data:")
+      ? mergedMeta.imageUrl
       : "";
     const entry = addToLibrary({
       title: String(clip.title || "").trim() || titleFallback,
@@ -72511,12 +72603,20 @@ function addMissingSunoClipsToLibrary(taskId, parsed, { metaBase = {}, kind = "f
       taskId: tid,
       audioId: clip.audioId || "",
       kind,
-      meta: { ...(metaBase || {}), variant },
+      meta: { ...(mergedMeta || {}), variant },
     });
     if (entry) {
       saved.push(entry);
       existing.push(entry);
     }
+  }
+  if (providerLyrics) {
+    try { applyGeneratedLyricsToCreateUi(providerLyrics, mergedMeta); } catch {}
+    try {
+      if (lastGenerationMeta && typeof lastGenerationMeta === "object") {
+        lastGenerationMeta = mergeGeneratedLyricsIntoMeta(lastGenerationMeta, providerLyrics);
+      }
+    } catch {}
   }
   return saved;
 }
@@ -75030,6 +75130,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       first?.cover_url ||
       null;
     const title = first?.title || first?.songTitle || first?.song_title || "";
+    const providerLyrics = String(
+      first?.prompt || first?.lyrics || first?.lyric || first?.text || "",
+    ).trim();
     sunoAudioId =
       first?.id ||
       first?.audioId ||
@@ -75091,6 +75194,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       errorMessage,
       finishedAudioUrl: pickSunoFinishedAudioUrl(first),
       durationSec: Number(first?.duration || first?.durationSec || first?.duration_sec || 0) || 0,
+      providerLyrics,
     };
   };
 
@@ -75209,6 +75313,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 ? { ...genMeta, ...photoCoverMeta }
                 : photoCoverMeta;
             }
+            genMeta = mergeGeneratedLyricsIntoMeta(genMeta, state.providerLyrics);
+            try { applyGeneratedLyricsToCreateUi(state.providerLyrics, genMeta); } catch {}
+            try {
+              if (lastGenerationMeta && typeof lastGenerationMeta === "object" && state.providerLyrics) {
+                lastGenerationMeta = mergeGeneratedLyricsIntoMeta(lastGenerationMeta, state.providerLyrics);
+              }
+            } catch {}
             const savedEntries = [];
             if (!chatRemixDone) {
               const variantAEntry = addToLibrary({
@@ -77327,8 +77438,12 @@ function bindOptionChipRow(rowId, selectEl) {
     selectEl.value = String(btn.getAttribute("data-opt-value") || "");
     selectEl.dispatchEvent(new Event("change", { bubbles: true }));
     sync();
+    try { syncElevenSongLengthPanel(); } catch {}
   });
-  selectEl.addEventListener("change", sync);
+  selectEl.addEventListener("change", () => {
+    sync();
+    try { syncElevenSongLengthPanel(); } catch {}
+  });
   _optionChipRowSyncs.push(sync);
   sync();
 }
@@ -77344,6 +77459,7 @@ bindOptionChipRow("prosodyChipRow", els.sunoProsody);
 bindOptionChipRow("beatChipRow", els.sunoBeatStability);
 bindOptionChipRow("voiceRangeChipRow", els.sunoVoiceProfile);
 bindOptionChipRow("songDurationChipRow", els.sunoSongDuration);
+bindOptionChipRow("elevenSongDurationChipRow", els.sunoSongDuration);
 bindOptionChipRow("personaStyleLeadChipRow", els.sunoPersonaStyleLead);
 bindOptionChipRow("personaAdventureChipRow", els.sunoPersonaAdventure);
 bindOptionChipRow("personaAudioInfluenceChipRow", els.sunoPersonaAudioInfluence);

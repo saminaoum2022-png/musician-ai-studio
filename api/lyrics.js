@@ -178,19 +178,31 @@ module.exports = async function handler(req, res) {
         const flags = dialectFlags(dialect, dialectHint);
         const arabicScript = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed });
         if (mode === "diacritics") {
+          const richer = Boolean(flags.isLebanese || flags.isLevantineColloquial || flags.isMsa);
           const diacriticOpts = {
             isMsa: flags.isMsa,
             isLebanese: flags.isLebanese,
             isLevantineColloquial: flags.isLevantineColloquial,
+            richer,
           };
           normalized = lightenSungArabicDiacritics(normalized, diacriticOpts);
           if (countArabicDiacritics(normalized) <= countArabicDiacritics(seed)) {
-            const retry = await tryGeminiLyrics({
-              geminiKey,
-              prompt: [
+            const retryLead = richer
+              ? [
+                "The previous marking was too light — it looks like Generate's hint, not the sung pass.",
+                "ADD generously: sukoon on stopped consonants, shadda, address إنتَ/إنتِ, last-letter vowels,",
+                "and mid-word short vowels wherever the singer could misread (بَعد vs بُعد).",
+                "Keep the same words and section tags. Output lyrics only.",
+              ]
+              : [
                 "The previous marking was too light — it looks like Generate's hint, not the sung pass.",
                 "ADD sukoon on stopped consonants and last-letter vowels the singer might miss.",
                 "Keep the same words and section tags. Output lyrics only.",
+              ];
+            const retry = await tryGeminiLyrics({
+              geminiKey,
+              prompt: [
+                ...retryLead,
                 "",
                 prompt,
               ].join("\n"),
@@ -294,6 +306,7 @@ module.exports = async function handler(req, res) {
             isMsa: flags.isMsa,
             isLebanese: flags.isLebanese,
             isLevantineColloquial: flags.isLevantineColloquial,
+            richer: Boolean(flags.isLebanese || flags.isLevantineColloquial || flags.isMsa),
           });
         } else if (arabicScript && !flags.isMsa) {
           normalized = stripColloquialTanween(normalized);
@@ -714,18 +727,31 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAdd
       : address === "male" ? "رجل (إنتَ · حبيبي)"
       : address === "group" ? "مجموعة (إنتو · حبايبي)"
       : "المخاطَب كما هو مكتوب";
+    const richerLebanese = Boolean(flags.isLebanese || flags.isLevantineColloquial);
+    const sparseOrRicherAr = richerLebanese
+      ? []
+      : buildSparseDiacriticsLinesAr();
+    const sparseOrRicherEn = richerLebanese
+      ? []
+      : buildSparseDiacriticsLinesEn();
+    const leadAr = richerLebanese
+      ? `تشكيل للغناء ب${dialectAr} — أغنى من تلميح التوليد. زيد سكون وحركات وسط/آخر الكلمة وين اللفظ بيتلبس. ممنوع تنوين وإعراب مدرسي.`
+      : `تشكيل للغناء ب${dialectAr} — أكتر من تلميح التوليد. زيد سكون وحركات آخر الكلمة. كثرة الحركات بتقتل الغناء.`;
+    const leadEn = richerLebanese
+      ? `Sung tashkeel for ${dialectSpeak} to ${addressSpeak} — richer than Generate's hint: sukoon + endings + mid-word vowels when ambiguous. No tanween or school nahwi.`
+      : `Sung tashkeel for ${dialectSpeak} to ${addressSpeak} — fuller than Generate's hint: endings + address + sukoon. Heavy tashkeel kills the vocal.`;
     return [
-      `تشكيل للغناء ب${dialectAr} — أكتر من تلميح التوليد. زيد سكون وحركات آخر الكلمة. كثرة الحركات بتقتل الغناء.`,
+      leadAr,
       "الكلمات ممكن تكون بلا حركات أو فيها تلميح خفيف (إنتَ/إنتِ وشدة). هيدي خطوة التشكيل الكاملة للغناء — ممنوع ترجع نفس النص.",
       `العنوان: الأغنية موجهة لـ${addressAr}.`,
       "نفس الأسطر ونفس الوسوم [Verse] [Chorus]. أخرج الكلمات فقط.",
-      ...buildSparseDiacriticsLinesAr(),
+      ...sparseOrRicherAr,
       ...buildDiacriticsDialectLinesAr(flags),
       ...buildDiacriticsAddressLinesAr(address, flags),
-      `Sung tashkeel for ${dialectSpeak} to ${addressSpeak} — fuller than Generate's hint: endings + address + sukoon. Heavy tashkeel kills the vocal.`,
+      leadEn,
       "Input may be plain or only lightly hinted (إنتَ/إنتِ + shadda). ADD more singer-useful marks. Returning the same text is wrong.",
       "Keep the same lines and section tags. Output lyrics only.",
-      ...buildSparseDiacriticsLinesEn(),
+      ...sparseOrRicherEn,
       ...buildDiacriticsDialectLinesEn(flags),
       ...buildDiacriticsAddressLinesEn(address, flags),
       `Variation token: ${nonce}`,

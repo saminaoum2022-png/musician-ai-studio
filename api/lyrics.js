@@ -26,9 +26,39 @@ const {
   stripColloquialTanween,
   countArabicDiacritics,
   stripSungMarksKeepShadda,
-  hintSungArabicDiacritics,
   lightenSungArabicDiacritics,
 } = require("./_lib/arabic-dialect-lyrics");
+
+function postProcessGeneratedArabicLyrics(text, { mode, flags, arabicScript }) {
+  if (!arabicScript || flags.isMsa) return text;
+  let normalized = stripColloquialTanween(text);
+  if (mode === "enhance" || mode === "fix_singing" || mode === "to_arabizi") {
+    return normalized;
+  }
+  if (flags.isLebanese || flags.isLevantineColloquial || flags.isEgyptian) {
+    normalized = lightenSungArabicDiacritics(normalized, {
+      isMsa: flags.isMsa,
+      isLebanese: flags.isLebanese,
+      isLevantineColloquial: flags.isLevantineColloquial,
+      isEgyptian: flags.isEgyptian,
+      richer: true,
+    });
+  }
+  return normalized;
+}
+
+function diacriticsPostOpts(flags) {
+  const richer = Boolean(
+    flags.isLebanese || flags.isLevantineColloquial || flags.isMsa || flags.isEgyptian,
+  );
+  return {
+    isMsa: flags.isMsa,
+    isLebanese: flags.isLebanese,
+    isLevantineColloquial: flags.isLevantineColloquial,
+    isEgyptian: flags.isEgyptian,
+    richer,
+  };
+}
 
 module.exports = async function handler(req, res) {
   setCors(res);
@@ -178,16 +208,10 @@ module.exports = async function handler(req, res) {
         const flags = dialectFlags(dialect, dialectHint);
         const arabicScript = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed });
         if (mode === "diacritics") {
-          const richer = Boolean(flags.isLebanese || flags.isLevantineColloquial || flags.isMsa);
-          const diacriticOpts = {
-            isMsa: flags.isMsa,
-            isLebanese: flags.isLebanese,
-            isLevantineColloquial: flags.isLevantineColloquial,
-            richer,
-          };
+          const diacriticOpts = diacriticsPostOpts(flags);
           normalized = lightenSungArabicDiacritics(normalized, diacriticOpts);
           if (countArabicDiacritics(normalized) <= countArabicDiacritics(seed)) {
-            const retryLead = richer
+            const retryLead = diacriticOpts.richer
               ? [
                 "The previous marking was too light — it looks like Generate's hint, not the sung pass.",
                 "ADD generously: sukoon on stopped consonants, shadda, address إنتَ/إنتِ, last-letter vowels,",
@@ -216,16 +240,8 @@ module.exports = async function handler(req, res) {
               }
             }
           }
-        } else if (arabicScript && !flags.isMsa) {
-          normalized = stripColloquialTanween(normalized);
-          if (
-            (flags.isLebanese || flags.isLevantineColloquial)
-            && mode !== "enhance"
-            && mode !== "fix_singing"
-            && mode !== "to_arabizi"
-          ) {
-            normalized = hintSungArabicDiacritics(normalized);
-          }
+        } else {
+          normalized = postProcessGeneratedArabicLyrics(normalized, { mode, flags, arabicScript });
         }
         if (mode === "remix_reply" && isMetaAiLyrics(normalized)) {
           const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
@@ -302,22 +318,9 @@ module.exports = async function handler(req, res) {
         const flags = dialectFlags(dialect, dialectHint);
         const arabicScript = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed });
         if (mode === "diacritics") {
-          normalized = lightenSungArabicDiacritics(normalized, {
-            isMsa: flags.isMsa,
-            isLebanese: flags.isLebanese,
-            isLevantineColloquial: flags.isLevantineColloquial,
-            richer: Boolean(flags.isLebanese || flags.isLevantineColloquial || flags.isMsa),
-          });
-        } else if (arabicScript && !flags.isMsa) {
-          normalized = stripColloquialTanween(normalized);
-          if (
-            (flags.isLebanese || flags.isLevantineColloquial)
-            && mode !== "enhance"
-            && mode !== "fix_singing"
-            && mode !== "to_arabizi"
-          ) {
-            normalized = hintSungArabicDiacritics(normalized);
-          }
+          normalized = lightenSungArabicDiacritics(normalized, diacriticsPostOpts(flags));
+        } else {
+          normalized = postProcessGeneratedArabicLyrics(normalized, { mode, flags, arabicScript });
         }
         if (mode === "remix_reply" && isMetaAiLyrics(normalized)) {
           const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
@@ -727,19 +730,24 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAdd
       : address === "male" ? "رجل (إنتَ · حبيبي)"
       : address === "group" ? "مجموعة (إنتو · حبايبي)"
       : "المخاطَب كما هو مكتوب";
-    const richerLebanese = Boolean(flags.isLebanese || flags.isLevantineColloquial);
-    const sparseOrRicherAr = richerLebanese
+    const richerLevantine = Boolean(flags.isLebanese || flags.isLevantineColloquial);
+    const richerEgyptian = Boolean(flags.isEgyptian);
+    const sparseOrRicherAr = richerLevantine || richerEgyptian
       ? []
       : buildSparseDiacriticsLinesAr();
-    const sparseOrRicherEn = richerLebanese
+    const sparseOrRicherEn = richerLevantine || richerEgyptian
       ? []
       : buildSparseDiacriticsLinesEn();
-    const leadAr = richerLebanese
-      ? `تشكيل للغناء ب${dialectAr} — أغنى من تلميح التوليد. زيد سكون وحركات وسط/آخر الكلمة وين اللفظ بيتلبس. ممنوع تنوين وإعراب مدرسي.`
-      : `تشكيل للغناء ب${dialectAr} — أكتر من تلميح التوليد. زيد سكون وحركات آخر الكلمة. كثرة الحركات بتقتل الغناء.`;
-    const leadEn = richerLebanese
-      ? `Sung tashkeel for ${dialectSpeak} to ${addressSpeak} — richer than Generate's hint: sukoon + endings + mid-word vowels when ambiguous. No tanween or school nahwi.`
-      : `Sung tashkeel for ${dialectSpeak} to ${addressSpeak} — fuller than Generate's hint: endings + address + sukoon. Heavy tashkeel kills the vocal.`;
+    const leadAr = richerLevantine
+      ? `تشكيل للغناء ب${dialectAr} — أغنى من التوليد. زيد سكون وحركات وسط/آخر الكلمة وين اللفظ بيتلبس. ق→أ، ذ→ز، ظ→ز. ممنوع تنوين وأرقام لاتينية.`
+      : richerEgyptian
+        ? `تشكيل للغناء ب${dialectAr} — أغنى من التوليد. ق→أ (ألبي). ممنوع تنوين وأرقام لاتينية.`
+        : `تشكيل للغناء ب${dialectAr} — أكتر من تلميح التوليد. زيد سكون وحركات آخر الكلمة. كثرة الحركات بتقتل الغناء.`;
+    const leadEn = richerLevantine
+      ? `Sung tashkeel for ${dialectSpeak} to ${addressSpeak} — richer than Generate: sukoon + endings + mid-word vowels. ق→أ, ذ→ز, ظ→ز. No tanween or Latin digits.`
+      : richerEgyptian
+        ? `Sung tashkeel for ${dialectSpeak} to ${addressSpeak} — richer than Generate: Cairo hamza as أ. No tanween or Latin digits.`
+        : `Sung tashkeel for ${dialectSpeak} to ${addressSpeak} — fuller than Generate's hint: endings + address + sukoon. Heavy tashkeel kills the vocal.`;
     return [
       leadAr,
       "الكلمات ممكن تكون بلا حركات أو فيها تلميح خفيف (إنتَ/إنتِ وشدة). هيدي خطوة التشكيل الكاملة للغناء — ممنوع ترجع نفس النص.",

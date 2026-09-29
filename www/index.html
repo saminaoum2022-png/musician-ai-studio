@@ -4317,7 +4317,60 @@
                     <button type="button" class="settingsThemeOpt" data-eleven-finetune="0" role="radio" aria-checked="false">Base</button>
                   </div>
                 </div>
-                <p class="settingsOrbModeIntro">Admin test only. Suno is default (Arabic + two variants). MiniMax is English-only. Lyria uses Google Gemini. ElevenLabs uses music_v2.5 — one variant, good failover A/B. Persona and reference uploads require Suno.</p>
+                <div id="settingsGeminiProducerRow" class="settingsRow settingsThemeRow">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/><path d="M5 19l.8 2.2L8 22l-2.2.8L5 25l-.8-2.2L2 22l2.2-.8L5 19z"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Gemini producer</span>
+                    <span class="settingsRowSub" id="settingsGeminiProducerSub">On — Gemini rewrites style/lyrics before Lyria</span>
+                  </span>
+                  <div id="settingsGeminiProducerPicker" class="settingsThemePicker" role="radiogroup" aria-label="Gemini producer">
+                    <button type="button" class="settingsThemeOpt is-active" data-gemini-producer="1" role="radio" aria-checked="true">On</button>
+                    <button type="button" class="settingsThemeOpt" data-gemini-producer="0" role="radio" aria-checked="false">Off</button>
+                  </div>
+                </div>
+                <div id="settingsNabadVocalChainBlock" class="settingsNabadVocalChainBlock" hidden>
+                  <p class="settingsOrbModeIntro" id="settingsNabadVocalChainTitle">Nabad Audio Processing Chain (A/B Testing) — admin only. Fixes dry vocals; end users never see this.</p>
+                  <div class="settingsList settingsNabadVocalChainList" role="group" aria-labelledby="settingsNabadVocalChainTitle">
+                    <label class="settingsRow settingsNabadVocalToggle">
+                      <span class="settingsRowBody">
+                        <span class="settingsRowTitle">Pitch correction / Auto-Tune</span>
+                        <span class="settingsRowSub">Subtle modern pitch polish on sustained notes</span>
+                      </span>
+                      <input type="checkbox" data-nabad-vocal-fx="auto_tune" checked />
+                    </label>
+                    <label class="settingsRow settingsNabadVocalToggle">
+                      <span class="settingsRowBody">
+                        <span class="settingsRowTitle">Analog saturation</span>
+                        <span class="settingsRowSub">Warm tube glue compression on the lead</span>
+                      </span>
+                      <input type="checkbox" data-nabad-vocal-fx="analog_saturation" checked />
+                    </label>
+                    <label class="settingsRow settingsNabadVocalToggle">
+                      <span class="settingsRowBody">
+                        <span class="settingsRowTitle">Reverb &amp; delay</span>
+                        <span class="settingsRowSub">Lush plate reverb + wide stereo trails</span>
+                      </span>
+                      <input type="checkbox" data-nabad-vocal-fx="reverb_delay" checked />
+                    </label>
+                    <label class="settingsRow settingsNabadVocalToggle">
+                      <span class="settingsRowBody">
+                        <span class="settingsRowTitle">Double tracking</span>
+                        <span class="settingsRowSub">Layered harmonies &amp; vocal stacks</span>
+                      </span>
+                      <input type="checkbox" data-nabad-vocal-fx="double_tracking" checked />
+                    </label>
+                    <label class="settingsRow settingsNabadVocalToggle">
+                      <span class="settingsRowBody">
+                        <span class="settingsRowTitle">Vocal texture / fry</span>
+                        <span class="settingsRowSub">Phrasing texture at phrase endings</span>
+                      </span>
+                      <input type="checkbox" data-nabad-vocal-fx="vocal_texture" checked />
+                    </label>
+                  </div>
+                </div>
+                <p class="settingsOrbModeIntro">Admin test only. Suno is default (Arabic + two variants). MiniMax is English-only. Lyria uses Google Gemini + Nabad vocal identity. ElevenLabs uses music_v2.5 — one variant, good failover A/B. Gemini producer can crowd Lyria 3.5 — toggle Off to send a direct prompt. Persona and reference uploads require Suno.</p>
               </div>
             </section>
 

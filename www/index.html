@@ -233,7 +233,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260929-133033" />
+    <link rel="stylesheet" href="./styles.css?v=20260929-212013" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -4345,7 +4345,11 @@
                   </div>
                 </div>
                 <div id="settingsNabadVocalChainBlock" class="settingsNabadVocalChainBlock" hidden>
+<<<<<<< HEAD
                   <p class="settingsOrbModeIntro" id="settingsNabadVocalChainTitle">Nabad Audio Processing Chain (A/B Testing) — admin only for Lyria + ElevenLabs. Fixes dry vocals; end users never see this.</p>
+=======
+                  <p class="settingsOrbModeIntro" id="settingsNabadVocalChainTitle">Nabad Audio Processing Chain (A/B Testing) — admin only. Fixes dry vocals; end users never see this.</p>
+>>>>>>> main
                   <div class="settingsList settingsNabadVocalChainList" role="group" aria-labelledby="settingsNabadVocalChainTitle">
                     <label class="settingsRow settingsNabadVocalToggle">
                       <span class="settingsRowBody">
@@ -4384,7 +4388,11 @@
                     </label>
                   </div>
                 </div>
+<<<<<<< HEAD
                 <p class="settingsOrbModeIntro">Admin test only. Suno is default (Arabic + two variants). MiniMax is English-only. Lyria and ElevenLabs share Nabad vocal identity + FX A/B toggles. Gemini producer can crowd Lyria 3.5 — toggle Off to send a direct prompt. Persona and reference uploads require Suno.</p>
+=======
+                <p class="settingsOrbModeIntro">Admin test only. Suno is default (Arabic + two variants). MiniMax is English-only. Lyria uses Google Gemini + Nabad vocal identity. ElevenLabs uses music_v2.5 — one variant, good failover A/B. Gemini producer can crowd Lyria 3.5 — toggle Off to send a direct prompt. Persona and reference uploads require Suno.</p>
+>>>>>>> main
               </div>
             </section>
 
@@ -5747,7 +5755,7 @@
         }));
       }
       // Dynamic import so the giant app module does not block the first dots.
-      import("./src/app.js?v=20260929-133033");
+      import("./src/app.js?v=20260929-212013");
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
   

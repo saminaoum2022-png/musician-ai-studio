@@ -318,7 +318,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260929-133033";
+const APP_BUILD = "20260929-212013";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -8325,7 +8325,10 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   syncSettingsElevenFinetuneRow(p);
   syncSettingsGeminiProducerRow();
   syncSettingsNabadVocalChainRow(p);
+<<<<<<< HEAD
   try { syncElevenSongLengthPanel(); } catch {}
+=======
+>>>>>>> main
 }
 
 const ELEVENLABS_FINETUNE_LS_KEY = "nabadElevenFinetune";
@@ -8355,6 +8358,10 @@ function setElevenlabsFinetunePref(useFinetune) {
 }
 
 /** Admin A/B: Gemini producer before Lyria / ElevenLabs (default on). */
+<<<<<<< HEAD
+=======
+const GEMINI_PRODUCER_LS_KEY = "nabadGeminiProducer";
+>>>>>>> main
 function getGeminiProducerPref() {
   if (!creditsState.isAdmin) return true;
   try {
@@ -8439,9 +8446,13 @@ function setNabadVocalChainPref(key, on) {
 
 function syncSettingsNabadVocalChainRow(providerPref = getMusicProviderPref()) {
   const block = document.getElementById("settingsNabadVocalChainBlock");
+<<<<<<< HEAD
   const show =
     Boolean(creditsState.isAdmin)
     && (providerPref === "lyria" || providerPref === "elevenlabs" || providerPref === "mureka");
+=======
+  const show = Boolean(creditsState.isAdmin) && providerPref === "lyria";
+>>>>>>> main
   if (block) {
     block.hidden = !show;
     block.style.display = show ? "" : "none";
@@ -8581,7 +8592,11 @@ function wireSettingsMusicProviderOnce() {
       setNabadVocalChainPref(key, Boolean(input.checked));
       try {
         showToast(
+<<<<<<< HEAD
           `${key.replace(/_/g, " ")} ${input.checked ? "ON" : "OFF"} for Lyria / ElevenLabs vocal A/B.`,
+=======
+          `${key.replace(/_/g, " ")} ${input.checked ? "ON" : "OFF"} for Lyria vocal A/B.`,
+>>>>>>> main
           { icon: "♪", durationMs: 2800 },
         );
       } catch {}

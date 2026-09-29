@@ -24507,7 +24507,8 @@ body[data-route="settings"] main.grid{
 }
 .settingsSection[hidden],
 #settingsMusicProviderSection[hidden],
-#settingsElevenFinetuneRow[hidden]{
+#settingsElevenFinetuneRow[hidden],
+#settingsGeminiProducerRow[hidden]{
   display: none !important;
 }
 .settingsSectionLabel{

@@ -83,6 +83,7 @@ const {
   enrichClipWithGeminiProducer,
   enrichLyriaSongWithGeminiProducer,
   enrichSongWithGeminiProducer,
+  resolveGeminiProducerEnabled,
 } = require("../_lib/clip-gemini-producer");
 const { nabadSongEditEnabled } = require("../_lib/nabad-song-edit-lib");
 
@@ -363,8 +364,9 @@ function scheduleBackgroundWork(promise) {
 function buildLyriaFullSongAdminExtra({ body, producerResult, model = "", lyriaPrompt = "" } = {}) {
   const dialectHintLine = mergeLyriaDialectHint(body);
   const dialectLabel = resolveLyriaDialectLabel(body);
+  const producerUsed = Boolean(producerResult?.ok);
   return [
-    "pipeline: gemini_producer → lyria",
+    producerUsed ? "pipeline: gemini_producer → lyria" : "pipeline: direct → lyria (gemini_producer off)",
     ...(model ? [`lyria_model: ${model}`] : []),
     ...(dialectLabel ? [`dialect: ${dialectLabel}`] : []),
     ...(dialectHintLine ? [`dialect_hint: ${dialectHintLine.slice(0, 400)}`] : []),
@@ -414,6 +416,7 @@ async function runLyriaGenerationJob({
     const durationSec = resolveLyriaDurationSec(body);
     const producerResult = await enrichLyriaSongWithGeminiProducer({
       apiKey,
+      enabled: resolveGeminiProducerEnabled(body, isAdmin),
       input: buildSongProducerInput(
         {
           ...body,
@@ -548,6 +551,7 @@ async function runLyriaClipGenerationJob({
 
     const producerResult = await enrichClipWithGeminiProducer({
       apiKey,
+      enabled: resolveGeminiProducerEnabled(body, isAdmin),
       input: buildClipProducerInput(body, clipFlowLabel),
     });
 
@@ -691,6 +695,7 @@ async function runElevenlabsGenerationJob({
     } else if (geminiApiKey) {
       producerResult = await enrichSongWithGeminiProducer({
         apiKey: geminiApiKey,
+        enabled: resolveGeminiProducerEnabled(body, isAdmin),
         input: buildSongProducerInput({ ...body, musicLengthMs }, "elevenlabs"),
       });
       if (producerResult.ok) {
@@ -1153,13 +1158,14 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   }
 
   const fallbackLyriaPrompt = buildLyriaPromptFromBody(body, { stylePrompt, lyrics, title, instrumental });
+  const producerOn = resolveGeminiProducerEnabled(body, isAdmin);
   const adminDetailBase = buildLyriaRequestDetail({
     flow: LYRIA_FULL_SONG_FLOW,
     model,
     lyriaPrompt: fallbackLyriaPrompt,
     photoCount: photoImages.length,
     extraLines: [
-      "pipeline: gemini_producer → lyria",
+      producerOn ? "pipeline: gemini_producer → lyria" : "pipeline: direct → lyria (gemini_producer off)",
       `lyria_model: ${model}`,
     ],
   });

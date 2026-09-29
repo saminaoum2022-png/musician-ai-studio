@@ -8308,6 +8308,7 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   }
   if (!show) {
     syncSettingsElevenFinetuneRow("suno");
+    syncSettingsGeminiProducerRow();
     return;
   }
   const p = normalizeMusicProviderPref(pref) || "suno";
@@ -8320,9 +8321,11 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   }
   if (sub) sub.textContent = musicProviderSubline(p);
   syncSettingsElevenFinetuneRow(p);
+  syncSettingsGeminiProducerRow();
 }
 
 const ELEVENLABS_FINETUNE_LS_KEY = "nabadElevenFinetune";
+const GEMINI_PRODUCER_LS_KEY = "nabadGeminiProducer";
 
 /** Admin ElevenLabs: use NabadAi DNA finetune (default on). */
 function getElevenlabsFinetunePref() {
@@ -8344,6 +8347,51 @@ function setElevenlabsFinetunePref(useFinetune) {
   const providerSub = document.getElementById("settingsMusicProviderSub");
   if (providerSub && getMusicProviderPref() === "elevenlabs") {
     providerSub.textContent = musicProviderSubline("elevenlabs");
+  }
+}
+
+/** Admin A/B: Gemini producer before Lyria / ElevenLabs (default on). */
+function getGeminiProducerPref() {
+  if (!creditsState.isAdmin) return true;
+  try {
+    const saved = localStorage.getItem(GEMINI_PRODUCER_LS_KEY);
+    if (saved === "0" || saved === "false") return false;
+  } catch {}
+  return true;
+}
+
+function setGeminiProducerPref(on) {
+  if (!creditsState.isAdmin) return;
+  const next = Boolean(on);
+  try {
+    localStorage.setItem(GEMINI_PRODUCER_LS_KEY, next ? "1" : "0");
+  } catch {}
+  syncSettingsGeminiProducerRow();
+}
+
+function syncSettingsGeminiProducerRow() {
+  const row = document.getElementById("settingsGeminiProducerRow");
+  const root = document.getElementById("settingsGeminiProducerPicker");
+  const sub = document.getElementById("settingsGeminiProducerSub");
+  const show = Boolean(creditsState.isAdmin);
+  if (row) {
+    row.hidden = !show;
+    row.style.display = show ? "" : "none";
+  }
+  if (!show) return;
+  const producerOn = getGeminiProducerPref();
+  if (root) {
+    root.querySelectorAll("[data-gemini-producer]").forEach((btn) => {
+      const wantOn = String(btn.getAttribute("data-gemini-producer") || "") === "1";
+      const active = wantOn === producerOn;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-checked", active ? "true" : "false");
+    });
+  }
+  if (sub) {
+    sub.textContent = producerOn
+      ? "On — Gemini rewrites style/lyrics before Lyria"
+      : "Off — direct prompt to Lyria (no Gemini producer)";
   }
 }
 
@@ -8426,6 +8474,30 @@ function wireSettingsMusicProviderOnce() {
           useFinetune
             ? "ElevenLabs finetune ON — NabadAi DNA voice."
             : "ElevenLabs finetune OFF — base music_v2.5 model.",
+          { icon: "♪", durationMs: 3600 },
+        );
+      } catch {}
+    });
+  }
+  const producerRoot = document.getElementById("settingsGeminiProducerPicker");
+  if (producerRoot && producerRoot.dataset.boundGeminiProducer !== "1") {
+    producerRoot.dataset.boundGeminiProducer = "1";
+    producerRoot.addEventListener("click", (ev) => {
+      const btn = ev.target?.closest?.("[data-gemini-producer]");
+      if (!btn || !producerRoot.contains(btn)) return;
+      ev.preventDefault();
+      if (!creditsState.isAdmin) return;
+      const producerOn = String(btn.getAttribute("data-gemini-producer") || "") === "1";
+      if (producerOn === getGeminiProducerPref()) return;
+      try {
+        if (typeof haptic === "function") haptic("light");
+      } catch {}
+      setGeminiProducerPref(producerOn);
+      try {
+        showToast(
+          producerOn
+            ? "Gemini producer ON — rewrites style/lyrics before Lyria."
+            : "Gemini producer OFF — direct prompt to Lyria (A/B).",
           { icon: "♪", durationMs: 3600 },
         );
       } catch {}
@@ -75752,6 +75824,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           watchKind: clipAllowImageOnly ? "photo" : "clip",
           ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
           ...(ideaClip ? { ideaPrompt: true, ideaBrief: userPrompt } : {}),
+          ...(creditsState.isAdmin
+            ? { geminiProducer: getGeminiProducerPref() ? "1" : "0" }
+            : {}),
         };
         if (templateSparkClip) {
           pendingSearchRemixMeta = null;
@@ -75774,7 +75849,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ...(clipArtworkStyle
             ? { artworkStyle: clipArtworkStyle, artworkHint: clipArtworkStyle }
             : {}),
-          musicProvider: "lyria",
+        musicProvider: "lyria",
+          geminiProducer: creditsState.isAdmin ? getGeminiProducerPref() : undefined,
           imageOnlyInstrumental: false,
           hasReference: false,
           templateSparkClip: templateSparkClip || undefined,
@@ -76221,6 +76297,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (useElevenlabsMusicProvider()) {
         payload.elevenlabsUseFinetune = getElevenlabsFinetunePref();
       }
+      if (creditsState.isAdmin) {
+        payload.geminiProducer = getGeminiProducerPref() ? "1" : "0";
+      }
       restoreCreateChallengeContext();
       const remixMeta =
         pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object"
@@ -76263,6 +76342,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         model: payload.model,
         musicProvider: shelfLyriaFull ? "lyria" : getMusicProviderPref(),
         templateSparkFull: shelfLyriaFull || undefined,
+        geminiProducer: creditsState.isAdmin ? getGeminiProducerPref() : undefined,
         imageOnlyInstrumental,
         instrumentalSelected,
         referenceInstrumentalOnly,

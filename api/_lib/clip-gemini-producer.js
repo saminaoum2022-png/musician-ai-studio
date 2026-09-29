@@ -188,6 +188,16 @@ function clipGeminiProducerEnabled() {
   return v === "1" || v === "true" || v === "yes";
 }
 
+/** Admin Settings toggle can override env for A/B (`geminiProducer: "0"|"1"`). */
+function resolveGeminiProducerEnabled(body, isAdmin = false) {
+  if (isAdmin) {
+    const raw = body?.geminiProducer;
+    if (raw === "0" || raw === 0 || raw === false || raw === "false") return false;
+    if (raw === "1" || raw === 1 || raw === true || raw === "true") return true;
+  }
+  return clipGeminiProducerEnabled();
+}
+
 const PRODUCER_MODEL_PREFERRED = [
   "gemini-3.6-flash",
   "gemini-3.5-flash",
@@ -424,10 +434,12 @@ async function enrichWithGeminiProducer({
   timeoutMs,
   maxStyleChars,
   normalizeFn,
+  enabled,
 } = {}) {
   const started = Date.now();
   const instrumental = Boolean(input?.instrumental);
-  if (!clipGeminiProducerEnabled()) {
+  const producerOn = typeof enabled === "boolean" ? enabled : clipGeminiProducerEnabled();
+  if (!producerOn) {
     return { ok: false, used: false, fallback: true, error: "producer_disabled" };
   }
   if (!apiKey) {
@@ -511,18 +523,19 @@ async function enrichWithGeminiProducer({
 }
 
 /** Call Gemini to enrich clip prompts. Returns { ok, ... } — caller falls back on !ok. */
-async function enrichClipWithGeminiProducer({ apiKey, input } = {}) {
+async function enrichClipWithGeminiProducer({ apiKey, input, enabled } = {}) {
   return enrichWithGeminiProducer({
     apiKey,
     input,
     systemPrompt: CLIP_PRODUCER_SYSTEM_PROMPT,
     timeoutMs: PRODUCER_TIMEOUT_MS,
     maxStyleChars: ENHANCED_STYLE_MAX_CHARS,
+    enabled,
   });
 }
 
 /** Full-length song enrichment for ElevenLabs Music (chunk plan + legacy fields). */
-async function enrichSongWithGeminiProducer({ apiKey, input } = {}) {
+async function enrichSongWithGeminiProducer({ apiKey, input, enabled } = {}) {
   return enrichWithGeminiProducer({
     apiKey,
     input,
@@ -530,17 +543,19 @@ async function enrichSongWithGeminiProducer({ apiKey, input } = {}) {
     timeoutMs: SONG_PRODUCER_TIMEOUT_MS,
     maxStyleChars: SONG_ENHANCED_STYLE_MAX_CHARS,
     normalizeFn: normalizeElevenSongProducerOutput,
+    enabled,
   });
 }
 
 /** Full-length Lyria 3.5 song — structured lyrics + rich style (same shape as clip producer). */
-async function enrichLyriaSongWithGeminiProducer({ apiKey, input } = {}) {
+async function enrichLyriaSongWithGeminiProducer({ apiKey, input, enabled } = {}) {
   return enrichWithGeminiProducer({
     apiKey,
     input,
     systemPrompt: LYRIA_SONG_PRODUCER_SYSTEM_PROMPT,
     timeoutMs: SONG_PRODUCER_TIMEOUT_MS,
     maxStyleChars: SONG_ENHANCED_STYLE_MAX_CHARS,
+    enabled,
   });
 }
 
@@ -552,6 +567,7 @@ module.exports = {
   buildClipProducerInput,
   buildSongProducerInput,
   clipGeminiProducerEnabled,
+  resolveGeminiProducerEnabled,
   enrichClipWithGeminiProducer,
   enrichSongWithGeminiProducer,
   enrichLyriaSongWithGeminiProducer,

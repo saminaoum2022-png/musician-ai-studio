@@ -288,16 +288,21 @@ module.exports = async function handler(req, res) {
           const fixed = await repairMetaAiLyrics({ runLyrics, prompt, text: normalized, temperature: geminiTemperature });
           if (fixed) normalized = fixed;
         }
+        const skipComplianceRepair =
+          primaryLyricsProvider === "openai"
+          && !/^(1|true|yes)$/i.test(String(process.env.OPENAI_LYRICS_COMPLIANCE_REPAIR || "").trim());
         const repaired = mode === "enhance" || mode === "diacritics" || mode === "fix_singing" || mode === "to_arabizi"
           ? { text: normalized, provider: usageProvider }
-          : await maybeRepairOnce({
-            text: normalized,
-            prompt,
-            complianceTerms,
-            sunoKey: "",
-            runLyrics,
-            temperature: geminiTemperature,
-          });
+          : skipComplianceRepair
+            ? { text: normalized, provider: usageProvider }
+            : await maybeRepairOnce({
+              text: normalized,
+              prompt,
+              complianceTerms,
+              sunoKey: "",
+              runLyrics,
+              temperature: geminiTemperature,
+            });
         if (String(repaired.provider || "").includes(usageProvider)) {
           queueLogProviderUsage({ provider: usageProvider, kind: "lyrics" });
         }
@@ -311,6 +316,7 @@ module.exports = async function handler(req, res) {
             mode,
             model: llmResult.model || "",
             openaiApi: llmResult.openaiApi || "",
+            complianceRepair: skipComplianceRepair ? "skipped_openai" : (repaired.provider?.includes("repair") ? "ran" : "none"),
             ...(usedGeminiAfterOpenAi
               ? {
                 openai: "failed",
@@ -1176,6 +1182,23 @@ function buildPrompt({
   ].join("\n");
 }
 
+/** OpenAI lyrics — avoid over-qafiya (AAAA) that full Gemini prompts can encourage. */
+const OPENAI_RHYME_CREATIVE_LINES = [
+  "Story and natural dialect first — do not sacrifice word choice for rhyme.",
+  "Do NOT make every line in a section share the same ending (no AAAA / one-sound blocks).",
+  "Prefer varied singable patterns: ABAB, ABCB, AABB couplets, hook repetition in chorus only, or loose assonance.",
+  "Near-rhyme is fine; two rhyming lines then two different endings is OK in Lebanese pop.",
+  "Never print rhyme scheme labels (AABB, BBBB, etc.) in the output.",
+];
+
+function openAiRhymeLinesForSeed(seed) {
+  const s = String(seed || "");
+  const extra = /موزون|موزونة|قافية|qafiy/i.test(s)
+    ? ["If the idea asks for موزونة/قافية: couplet-level rhyme (two lines), not four identical أوزان on every verse line."]
+    : [];
+  return [...OPENAI_RHYME_CREATIVE_LINES, ...extra];
+}
+
 /** Shorter user prompt for OpenAI only — post-process + Gemini path keep the full rule set. */
 function buildOpenAISlimPrompt({
   seed,
@@ -1239,7 +1262,7 @@ function buildOpenAISlimPrompt({
     return [
       "Write remix reply lyrics: Person B answers Person A's song story. Human singer only — never mention AI.",
       ...structureBlock,
-      "End-rhyme (qafiya) within each section; similar line length.",
+      ...openAiRhymeLinesForSeed(seed),
       dialectVoice,
       dialectLine ? `Dialect: ${dialectLine}` : "",
       style ? `Style/mood: ${style}` : "",
@@ -1280,6 +1303,7 @@ function buildOpenAISlimPrompt({
     return [
       "Arrange user's lyrics for singing — keep their words and story, add section tags and light flow polish only.",
       ...structureBlock,
+      ...openAiRhymeLinesForSeed(seed),
       dialectVoice,
       dialectLine ? `Dialect: ${dialectLine}` : "",
       style ? `Style/mood: ${style}` : "",
@@ -1302,7 +1326,8 @@ function buildOpenAISlimPrompt({
   return [
     "Write singable song lyrics from the idea below. Output lyrics + English section tags only — no notes, BPM, or explanations.",
     ...structureBlock,
-    "Rhythm: balanced line length; end-rhyme (qafiya) within each section where natural.",
+    "Keep lines a similar speakable length (وزن) — singable, not poetry-drill.",
+    ...openAiRhymeLinesForSeed(seed),
     useArabizi ? "Write in Arabizi (Latin letters, spoken sounds)." : "",
     dialectVoice,
     dialectLine ? `Dialect: ${dialectLine}` : "",

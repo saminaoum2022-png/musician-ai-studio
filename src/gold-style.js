@@ -235,6 +235,67 @@ export async function saveOwnGoldStyle(uid, style) {
 
 /* ── Rendering ─────────────────────────────────────────────────────────────── */
 
+const GOLD_AVATAR_WRAP_SEL =
+  ".followActAvatar, .messagesRowAvatarWrap, .messagesInboxPresenceAvatarWrap, .discoverLiveAv, .friendsWtfAvatar, .followActEmptyFace, .discoverFeedFollowAv";
+
+function goldAvatarWrapFor(el) {
+  if (!el?.matches) return null;
+  if (el.matches(GOLD_AVATAR_WRAP_SEL)) return el;
+  return el.closest?.(GOLD_AVATAR_WRAP_SEL) || null;
+}
+
+function goldUserIdForEl(el) {
+  if (!el) return "";
+  const direct = String(el.getAttribute?.("data-gold-user-id") || el.getAttribute?.("data-avatar-user-id") || "").trim();
+  if (direct) return direct;
+  const wrap = goldAvatarWrapFor(el);
+  if (!wrap) return "";
+  return String(wrap.getAttribute("data-gold-user-id") || wrap.getAttribute("data-avatar-user-id") || "").trim();
+}
+
+function resolveGoldStyleForUser(uid, cloudMap) {
+  const id = String(uid || "").trim();
+  if (!id) return null;
+  if (cloudMap?.has(id)) return cloudMap.get(id) || null;
+  return readLocalGoldStyle(id);
+}
+
+let _goldHydrateRaf = 0;
+let _goldHydrateRoot = null;
+
+/** Debounced batch paint for list UIs (feed, chat, Live now, etc.). */
+export function scheduleHydrateGoldAvatars(root) {
+  _goldHydrateRoot = root || _goldHydrateRoot || document;
+  if (_goldHydrateRaf) return;
+  _goldHydrateRaf = requestAnimationFrame(() => {
+    _goldHydrateRaf = 0;
+    const r = _goldHydrateRoot || document;
+    _goldHydrateRoot = null;
+    void hydrateGoldAvatarsInRoot(r);
+  });
+}
+
+/** Apply stored Gold ring + emblem to avatars under `root` (one cloud fetch for all user ids). */
+export async function hydrateGoldAvatarsInRoot(root) {
+  const scope = root?.querySelectorAll ? root : document;
+  if (!goldUiEnabled()) {
+    scope.querySelectorAll(GOLD_AVATAR_WRAP_SEL).forEach((w) => applyGoldToAvatarWrap(w, null));
+    return;
+  }
+  const wrapToUid = new Map();
+  scope.querySelectorAll("[data-gold-user-id], [data-avatar-user-id]").forEach((el) => {
+    const uid = goldUserIdForEl(el);
+    const wrap = goldAvatarWrapFor(el) || (uid && el.matches?.(GOLD_AVATAR_WRAP_SEL) ? el : null);
+    if (!uid || !wrap) return;
+    wrapToUid.set(wrap, uid);
+  });
+  if (!wrapToUid.size) return;
+  const cloud = await fetchGoldStyles([...wrapToUid.values()]);
+  for (const [wrap, uid] of wrapToUid) {
+    applyGoldToAvatarWrap(wrap, resolveGoldStyleForUser(uid, cloud));
+  }
+}
+
 /** Paint (or clear) the ring + emblem on an avatar wrapper. Safe to call repeatedly. */
 export function applyGoldToAvatarWrap(wrap, style) {
   if (!wrap) return;

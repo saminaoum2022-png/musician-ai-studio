@@ -320,6 +320,7 @@ import {
   configureGoldStyle,
   fetchGoldStyles,
   goldUiEnabled,
+  scheduleHydrateGoldAvatars,
   readLocalGoldStyle,
   writeLocalGoldStyle,
 } from "./gold-style.js";
@@ -8741,6 +8742,7 @@ try {
   mountFixedOverlaysToBody();
   bindDiscoveryDiscoverControls();
   wireCreateChooserSheetOnce();
+  wireInAppHashLinksOnce();
   wireRouteLinkHapticsOnce();
   bindFriendsPageOnce();
   wireFriendsComposeFabOnce();
@@ -14071,13 +14073,14 @@ function discoverSuggestedCreatorsFromTracks(tracks, profMap, limit = 12) {
     .filter(Boolean);
 }
 
-function discoverFeedCreatorAvatarHtml(prof, handle) {
+function discoverFeedCreatorAvatarHtml(prof, handle, userId = "") {
   const raw = String(prof?.avatar || "").trim();
   const letter = String(handle || "C").replace(/^@/, "").slice(0, 1).toUpperCase() || "C";
+  const uidAttr = userId ? ` data-gold-user-id="${escapeHtml(String(userId))}"` : "";
   if (isRealUserAvatarUrl(raw)) {
-    return `<span class="discoverFeedFollowAv" aria-hidden="true"><img src="${escapeHtml(normalizeProfileAvatarForImg(raw))}" alt="" loading="lazy" decoding="async" /></span>`;
+    return `<span class="discoverFeedFollowAv"${uidAttr} aria-hidden="true"><img src="${escapeHtml(normalizeProfileAvatarForImg(raw))}" alt="" loading="lazy" decoding="async" /></span>`;
   }
-  return `<span class="discoverFeedFollowAv" aria-hidden="true"><span class="discoverFeedFollowAvFallback">${escapeHtml(letter)}</span></span>`;
+  return `<span class="discoverFeedFollowAv"${uidAttr} aria-hidden="true"><span class="discoverFeedFollowAvFallback">${escapeHtml(letter)}</span></span>`;
 }
 
 function discoverFeedFollowCardHtml(creator) {
@@ -14087,7 +14090,7 @@ function discoverFeedFollowCardHtml(creator) {
   return `
     <article class="discoverFeedFollowCard">
       <button type="button" class="discoverFeedFollowAvBtn" data-discover-creator="${encodeURIComponent(handle)}" aria-label="View @${escapeHtml(handle)} profile">
-        ${discoverFeedCreatorAvatarHtml(prof, handle)}
+        ${discoverFeedCreatorAvatarHtml(prof, handle, userId)}
       </button>
       <span class="discoverFeedFollowHandle">${feedUsernameHtml(handle, prof, { className: "discoverFeedFollowHandle" })}</span>
       <button
@@ -14594,7 +14597,7 @@ function discoverLiveNowInnerHtml() {
     const cover = p.songCover ? `<span class="discoverLiveCover"><img src="${escapeHtml(p.songCover)}" alt="" loading="lazy" decoding="async" /></span>` : "";
     return `
       <button type="button" class="discoverLiveItem" data-discover-live="${i}" aria-label="${escapeHtml(name)} is listening${p.songTitle ? ` to ${escapeHtml(p.songTitle)}` : ""}">
-        <span class="discoverLiveRing"><span class="discoverLiveAv">${messagesAvatarHtml(f.avatar, name, "discoverLiveAvImg")}</span>${cover}</span>
+        <span class="discoverLiveRing"><span class="discoverLiveAv" data-gold-user-id="${escapeHtml(String(f.userId || ""))}">${messagesAvatarHtml(f.avatar, name, "discoverLiveAvImg")}</span>${cover}</span>
         <strong class="discoverLiveName">${escapeHtml(name)}</strong>
         <small class="discoverLiveTag">Live</small>
       </button>`;
@@ -14625,7 +14628,7 @@ function connectPresenceInnerHtml() {
     const name = String(f.username || "friend").replace(/^@/, "");
     return `
       <button type="button" class="discoverLiveItem" data-discover-live="${i}" aria-label="${escapeHtml(name)} is listening${p.songTitle ? ` to ${escapeHtml(p.songTitle)}` : ""}">
-        <span class="discoverLiveRing"><span class="discoverLiveAv">${messagesAvatarHtml(f.avatar, name, "discoverLiveAvImg")}</span></span>
+        <span class="discoverLiveRing"><span class="discoverLiveAv" data-gold-user-id="${escapeHtml(String(f.userId || ""))}">${messagesAvatarHtml(f.avatar, name, "discoverLiveAvImg")}</span></span>
         <strong class="discoverLiveName">${escapeHtml(name)}</strong>
         <small class="discoverLiveTag">${escapeHtml(String(p.songTitle || "Live").slice(0, 16))}</small>
       </button>`;
@@ -14655,6 +14658,10 @@ function paintDiscoverLiveNow() {
     }
     presence.hidden = !ph;
   }
+  try {
+    scheduleHydrateGoldAvatars(document.getElementById("discoverLiveNow"));
+    scheduleHydrateGoldAvatars(document.getElementById("connectPresence"));
+  } catch {}
 }
 
 let _connectPresenceTimer = 0;
@@ -14758,6 +14765,7 @@ function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
   mount.innerHTML = renderDiscoverFeedTabPanel(_discoverFeedTab, tracks, profMap);
   mount.classList.remove("isLoading");
   mount.removeAttribute("aria-busy");
+  try { scheduleHydrateGoldAvatars(mount); } catch {}
   if (_discoverFeedTab === "for-you") {
     bindDiscoverFeaturedHeroCarousel(mount);
     void refreshDiscoverLiveFriends();
@@ -17950,6 +17958,7 @@ function renderFriendsFeedList(listEl, statusEl, items, profMap, { resetPage = t
   listEl.innerHTML = friendsFeedRowsHtml(visible, profMap) + friendsFeedLoadMoreHtml(remaining);
   wireFriendsFeedLoadMoreOnce();
   observeFriendsFeedLoadMore(listEl);
+  try { scheduleHydrateGoldAvatars(listEl); } catch {}
   return true;
 }
 
@@ -20417,6 +20426,100 @@ function wireCreateChooserSheetOnce() {
   });
 }
 
+/** In-app `#/…` routes — avoid WKWebView treating `<a href="#/…">` as a full document load (boot splash flash). */
+function navigateInAppHash(rawHref) {
+  let hash = String(rawHref || "").trim();
+  if (!hash) return;
+  if (!hash.startsWith("#")) hash = `#/${hash.replace(/^\/+/, "")}`;
+  if (!hash.startsWith("#/")) return;
+  if (location.hash === hash) {
+    scheduleApplyRoute();
+    return;
+  }
+  try {
+    location.hash = hash;
+  } catch {
+    try { history.replaceState(null, "", hash); } catch {}
+    scheduleApplyRoute();
+  }
+}
+
+function inAppHashFromLinkHref(rawHref) {
+  const raw = String(rawHref || "").trim();
+  if (!raw || raw === "#" || raw === "#/" || /^mailto:|^tel:/i.test(raw)) return "";
+  if (raw.startsWith("#/")) return raw;
+  if (raw.startsWith("#")) return `#/${raw.slice(1).replace(/^\/+/, "")}`;
+  try {
+    const u = new URL(raw, location.href);
+    if (u.origin !== location.origin) return "";
+    const path = u.pathname || "/";
+    if (path !== "/" && !/\/index\.html$/i.test(path)) return "";
+    if (u.hash && u.hash.startsWith("#/")) return u.hash;
+  } catch {}
+  return "";
+}
+
+function inAppHashLinkFromEventTarget(target) {
+  const a = target?.closest?.("a[href]");
+  if (!a) return null;
+  if (a.target === "_blank" || a.hasAttribute("download")) return null;
+  if (a.closest(".mobileTabbar")) return null;
+  const hash = inAppHashFromLinkHref(a.getAttribute("href"));
+  return hash ? { a, hash } : null;
+}
+
+/** Friends / feed profile taps — never rely on default `<a href="#/u/…">` on native. */
+function closestFeedProfileLink(target, root) {
+  const a = target?.closest?.(
+    "a.followActAvatar, a.followActUserLink, a.followActRepostByLink, a.friendsWtfAvatar, a.friendsWtfText, a.followActEmptyFace, a.feedReplyAvatar, a.feedReplyName, a[data-route-link=\"user\"]",
+  );
+  if (!a || (root && !root.contains(a))) return null;
+  return a;
+}
+
+function navigateFeedProfileLink(anchor) {
+  const hash = inAppHashFromLinkHref(anchor?.getAttribute?.("href"));
+  if (!hash) return false;
+  try { haptic("light"); } catch {}
+  navigateInAppHash(hash);
+  return true;
+}
+
+function interceptFeedProfileLinkClick(e, root) {
+  const a = closestFeedProfileLink(e.target, root);
+  if (!a) return false;
+  e.preventDefault();
+  e.stopPropagation();
+  navigateFeedProfileLink(a);
+  return true;
+}
+
+function wireInAppHashLinksOnce() {
+  if (document.documentElement.dataset.wiredInAppHashLinks) return;
+  document.documentElement.dataset.wiredInAppHashLinks = "1";
+  const onInAppHashPointer = (e) => {
+    if (e.isPrimary === false) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const hit = inAppHashLinkFromEventTarget(e.target);
+    if (!hit) return;
+    // Same pattern as bottom tabs — block WebKit’s default link follow on touch.
+    e.preventDefault();
+  };
+  document.addEventListener("pointerdown", onInAppHashPointer, { capture: true, passive: false });
+  document.addEventListener(
+    "click",
+    (e) => {
+      if (e.defaultPrevented) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const hit = inAppHashLinkFromEventTarget(e.target);
+      if (!hit) return;
+      e.preventDefault();
+      navigateInAppHash(hit.hash);
+    },
+    true,
+  );
+}
+
 function wireRouteLinkHapticsOnce() {
   if (document.documentElement.dataset.wiredRouteLinkHaptics) return;
   document.documentElement.dataset.wiredRouteLinkHaptics = "1";
@@ -21571,7 +21674,7 @@ function whoToFollowSectionHtml(creators) {
       : `<span class="friendsWtfFallback">${escapeHtml(initials)}</span>`;
     return `
       <li class="friendsWtfRow" data-friends-wtf-row="${safeUid}">
-        <a class="friendsWtfAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="@${safeHandle} profile">
+        <a class="friendsWtfAvatar" href="${escapeHtml(href)}" data-route-link="user" data-gold-user-id="${safeUid}" aria-label="@${safeHandle} profile">
           ${avatarHtml}
         </a>
         <a class="friendsWtfText" href="${escapeHtml(href)}" data-route-link="user">
@@ -22985,6 +23088,7 @@ async function enrichFriendsFeedAfterPaint({
           shown: _friendsFeedShown,
         };
         persistFriendsFeedSnapshot();
+        try { scheduleHydrateGoldAvatars(listEl); } catch {}
       })();
     };
     if (typeof requestIdleCallback === "function") {
@@ -23260,13 +23364,16 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
             const av = c.avatar
               ? `<img src="${escapeHtml(c.avatar)}" alt="" width="44" height="44" decoding="async" />`
               : `<span class="followActEmptyFaceFallback">${escapeHtml(c.handle.slice(0, 2).toUpperCase())}</span>`;
-            return `<a class="followActEmptyFace" href="${escapeHtml(href)}" data-route-link="user" title="@${escapeHtml(c.handle)}">${av}</a>`;
+            return `<a class="followActEmptyFace friendsWtfAvatar" href="${escapeHtml(href)}" data-route-link="user" data-gold-user-id="${escapeHtml(String(c.userId || ""))}" title="@${escapeHtml(c.handle)}">${av}</a>`;
           })
           .join("")}</div>`;
         const wrap = statusEl.querySelector(".discoveryEmptyWrap");
         if (!wrap) return;
         const cta = wrap.querySelector(".discoveryEmptyCta");
-        if (cta) cta.insertAdjacentHTML("beforebegin", faces);
+        if (cta) {
+          cta.insertAdjacentHTML("beforebegin", faces);
+          try { scheduleHydrateGoldAvatars(wrap); } catch {}
+        }
       })();
       return;
     }
@@ -23413,6 +23520,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
         shown: _friendsFeedShown,
       };
       persistFriendsFeedSnapshot();
+      try { scheduleHydrateGoldAvatars(listEl); } catch {}
     } else {
       observeFriendsFeedLoadMore(listEl);
       _friendsFeedSnapshot = {
@@ -23697,9 +23805,8 @@ function bindFriendsPageOnce() {
         else if (kind === "analytics") void openSongAnalyticsSheet(actBtn);
         return;
       }
-      if (e.target.closest(".followActAvatar")) return;
+      if (interceptFeedProfileLinkClick(e, friendsPage)) return;
       const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActQuoteCard, .feedRecPlatter");
-      if (pl?.classList?.contains?.("followActUserLink")) return;
       if (!pl || !friendsPage.contains(pl)) return;
       e.preventDefault();
       if (
@@ -23727,7 +23834,7 @@ function wireUserPublicFollowActHostOnce(host) {
       openDiscoverTrackSheetFromEl(menuBtn);
       return;
     }
-    if (e.target.closest(".followActAvatar, .followActUserLink")) return;
+    if (interceptFeedProfileLinkClick(e, host)) return;
     const actBtn = e.target.closest("[data-friends-act]");
     if (actBtn && host.contains(actBtn)) {
       const kind = actBtn.getAttribute("data-friends-act");
@@ -39192,7 +39299,7 @@ function wireProfileFollowActFeedListOnce(host) {
       openDiscoverTrackSheetFromEl(sheetBtn);
       return;
     }
-    if (e.target.closest(".followActAvatar, .followActUserLink")) return;
+    if (interceptFeedProfileLinkClick(e, host)) return;
     const actBtn = e.target.closest("[data-friends-act]");
     if (actBtn && host.contains(actBtn)) {
       const kind = actBtn.getAttribute("data-friends-act");
@@ -42934,7 +43041,10 @@ function paintConnectMeCard() {
     return;
   }
   host.hidden = false;
-  if (!host.querySelector(".messagesInboxPresence")) host.innerHTML = messagesInboxMeHeaderHtml();
+  if (!host.querySelector(".messagesInboxPresence")) {
+    host.innerHTML = messagesInboxMeHeaderHtml();
+    try { scheduleHydrateGoldAvatars(host); } catch {}
+  }
 }
 
 function syncMessagesInboxPresenceCard() {
@@ -42943,7 +43053,10 @@ function syncMessagesInboxPresenceCard() {
   if (!existing) return;
   const view = messagesInboxPresenceView();
   const sig = messagesInboxPresencePaintSig(view);
-  if (existing.dataset.presencePaint === sig) return;
+  if (existing.dataset.presencePaint === sig) {
+    try { scheduleHydrateGoldAvatars(existing); } catch {}
+    return;
+  }
   existing.dataset.presencePaint = sig;
 
   const card = existing.querySelector(".messagesInboxPresenceCard");
@@ -42964,6 +43077,9 @@ function syncMessagesInboxPresenceCard() {
     const name = String(activeProfile?.displayName || "").trim() || (username ? `@${username}` : "You");
     wrapEl.innerHTML = messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar");
     wrapEl.dataset.avatarKey = avatarKey;
+    const meId = String(authSession?.user?.id || activeProfile?.id || "").trim();
+    if (meId) wrapEl.setAttribute("data-gold-user-id", meId);
+    else wrapEl.removeAttribute("data-gold-user-id");
   }
 
   const lineEl = existing.querySelector(".messagesInboxPresenceLine");
@@ -42981,6 +43097,7 @@ function syncMessagesInboxPresenceCard() {
   } else if (detailEl) {
     detailEl.remove();
   }
+  try { scheduleHydrateGoldAvatars(existing); } catch {}
 }
 
 function presenceTick() {
@@ -43873,7 +43990,7 @@ function messagesInboxThreadRowHtml(t) {
   const previewHtml = `<span class="messagesRowPreviewLine">${statusTick}${userTextHtml(previewText, { tag: "span", className: "messagesRowPreview", escapeHtml })}</span>`;
   return `
     <button type="button" class="messagesRow${unread ? " is-unread" : ""}" data-messages-thread="${escapeHtml(threadId)}">
-      <span class="messagesRowAvatarWrap${inboxPresenceWrapClass(t)}">${messagesAvatarHtml(t?.partnerAvatar, handle)}</span>
+      <span class="messagesRowAvatarWrap${inboxPresenceWrapClass(t)}" data-gold-user-id="${escapeHtml(String(t?.partnerUserId || ""))}">${messagesAvatarHtml(t?.partnerAvatar, handle)}</span>
       <span class="messagesRowBody">
         <span class="messagesRowTop">
           <strong class="messagesRowHandle">${escapeHtml(handle ? `@${handle.replace(/^@/, "")}` : "creator")}</strong>
@@ -43892,7 +44009,7 @@ function messagesInboxRequestRowHtml(req) {
   const when = req?.createdAt ? relativeTime(new Date(req.createdAt).getTime()) : "";
   return `
     <article class="messagesRequestRow" data-messages-request="${escapeHtml(requestId)}">
-      ${messagesAvatarHtml(req?.fromAvatar, handle)}
+      <span class="messagesRowAvatarWrap" data-gold-user-id="${escapeHtml(String(req?.fromUserId || ""))}">${messagesAvatarHtml(req?.fromAvatar, handle)}</span>
       <div class="messagesRequestBody">
         <div class="messagesRequestTop">
           <strong class="messagesRowHandle">@${escapeHtml(handle || "creator")}</strong>
@@ -43989,6 +44106,7 @@ function renderMessagesInbox() {
   _messagesInboxPaintSig = listHtml;
   mount.innerHTML = listHtml;
   if (statusEl) statusEl.hidden = true;
+  try { scheduleHydrateGoldAvatars(mount); } catch {}
 }
 
 function deliveryFieldsFromServer(row) {
@@ -47752,7 +47870,7 @@ function messagesPresencePreviewHtml() {
   const wrapClass = view.live ? " is-online" : "";
   return `
     <div class="messagesPresencePreviewCard" data-presence-status="${escapeHtml(view.status)}"${style}>
-      <span class="messagesInboxPresenceAvatarWrap${wrapClass}">${messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar")}</span>
+      <span class="messagesInboxPresenceAvatarWrap${wrapClass}" data-gold-user-id="${escapeHtml(String(authSession?.user?.id || activeProfile?.id || ""))}">${messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar")}</span>
       <span class="messagesInboxPresenceCopy">
         <span class="messagesInboxPresenceKicker">People see</span>
         <strong class="messagesInboxPresenceLine">${escapeHtml(view.line)}</strong>
@@ -47921,7 +48039,7 @@ function messagesInboxMeHeaderHtml() {
   return `
     <section class="messagesInboxPresence" data-presence-paint="${paint}">
       <button type="button" class="messagesInboxPresenceCard" data-messages-me-header data-presence-status="${escapeHtml(view.status)}"${style}>
-        <span class="messagesInboxPresenceAvatarWrap${wrapClass}" data-avatar-key="${avatarKey}">${messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar")}</span>
+        <span class="messagesInboxPresenceAvatarWrap${wrapClass}" data-avatar-key="${avatarKey}" data-gold-user-id="${escapeHtml(String(authSession?.user?.id || activeProfile?.id || ""))}">${messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar")}</span>
         <span class="messagesInboxPresenceCopy">
           <span class="messagesInboxPresenceKicker">Your presence</span>
           <strong class="messagesInboxPresenceLine">${escapeHtml(view.line)}</strong>
@@ -50259,7 +50377,7 @@ function navigateActivityActorProfile(href) {
   if (!raw) return;
   try { haptic("light"); } catch {}
   _userPublicReturnHash = "#/activity";
-  location.hash = raw.startsWith("#") ? raw : `#${raw}`;
+  navigateInAppHash(raw);
 }
 
 function activityRowTitleHtml(n, titleText, { splitTap = false } = {}) {
@@ -63116,7 +63234,7 @@ function bindProfileSongsSegmentOnce() {
         return;
       }
       if (e.target.closest(".followActMenuWrap, [data-follow-status-menu], [data-follow-status-delete]")) return;
-      if (e.target.closest(".followActAvatar, .followActUserLink")) return;
+      if (interceptFeedProfileLinkClick(e, actList)) return;
       const actBtn = e.target.closest("[data-friends-act]");
       if (actBtn && actList.contains(actBtn)) {
         const kind = actBtn.getAttribute("data-friends-act");
@@ -80293,7 +80411,10 @@ try {
     getActivePersonaId,
     personaTypeLabel,
     getAuthSession: () => authSession,
-    onGoldStyleChanged: () => { try { syncOwnGoldRing(); } catch {} },
+    onGoldStyleChanged: () => {
+      try { syncOwnGoldRing(); } catch {}
+      try { scheduleHydrateGoldAvatars(document.getElementById("connectMe")); } catch {}
+    },
     getAuthToken: () => getSupabaseAuthToken(),
     apiUrl,
     showOutOfCreditsPrompt,

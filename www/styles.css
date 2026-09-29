@@ -70953,6 +70953,40 @@ body[data-route] .userPublicArtistBadge.hasGold[data-gold-ring]::before{ display
 .userPublicArtistBadge.isShowingPhoto .goldRingLayer,
 .aaFlipBadge--empty .goldRingLayer{ display: none; }
 
+/* List / social avatars — same ring, scaled to smaller circles */
+.followActAvatar.hasGold,
+.messagesRowAvatarWrap.hasGold,
+.messagesInboxPresenceAvatarWrap.hasGold,
+.discoverLiveAv.hasGold,
+.friendsWtfAvatar.hasGold,
+.discoverFeedFollowAv.hasGold{
+  position: relative;
+  overflow: visible;
+}
+.followActAvatar.hasGold .goldRingLayer,
+.messagesRowAvatarWrap.hasGold .goldRingLayer,
+.messagesInboxPresenceAvatarWrap.hasGold .goldRingLayer,
+.discoverLiveAv.hasGold .goldRingLayer,
+.friendsWtfAvatar.hasGold .goldRingLayer,
+.discoverFeedFollowAv.hasGold .goldRingLayer{
+  --gold-gap: 2px;
+  --gold-w: 2px;
+}
+.followActAvatar.hasGold .goldTopper,
+.messagesRowAvatarWrap.hasGold .goldTopper,
+.discoverLiveAv.hasGold .goldTopper,
+.friendsWtfAvatar.hasGold .goldTopper{
+  width: max(11px, 40%);
+}
+.discoverFeedFollowAv.hasGold .goldTopper{ width: 36px; }
+body #discoveryFollowingList .followAct--friendsFeed .followActAvatar.isLive.hasGold[data-gold-ring]{
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 /* ── Artist Avatar sheet: hero preview + Gold style ── */
 .aaHero{ display: flex; flex-direction: column; align-items: center; padding: 54px 0 20px; }
 .aaHeroAvatar{

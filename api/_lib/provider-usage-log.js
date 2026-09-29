@@ -25,7 +25,7 @@ const USAGE_RATES = Object.freeze({
     cover_image: Number(process.env.CLOUDFLARE_USD_PER_IMAGE || "0.002"),
   },
   openai: {
-    lyrics: Number(process.env.OPENAI_USD_LYRICS || "0.004"),
+    lyrics: Number(process.env.OPENAI_USD_LYRICS || "0.001"),
   },
 });
 

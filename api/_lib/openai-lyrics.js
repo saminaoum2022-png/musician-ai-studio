@@ -2,17 +2,14 @@
  * OpenAI ChatGPT lyrics generation (same prompts/post-process as Gemini in /api/lyrics).
  *
  * Model chain (Vercel Preview env) — no GPT-4.x defaults:
- *   OPENAI_LYRICS_MODEL=gpt-6-astra           — primary (default)
- *   OPENAI_LYRICS_FALLBACK_MODEL=gpt-6.1-sol  — if Astra errors or rate-limits
+ *   OPENAI_LYRICS_MODEL=gpt-6-luna            — primary (default, cheap test tier)
+ *   OPENAI_LYRICS_FALLBACK_MODEL=gpt-6.1-sol  — if Luna errors
  * Or override the full chain:
- *   OPENAI_LYRICS_MODELS=gpt-6-astra,gpt-6.1-sol
+ *   OPENAI_LYRICS_MODELS=gpt-6-luna,gpt-6.1-sol,gpt-6-astra
  */
 
-const LYRICS_SYSTEM = [
-  "You write song lyrics only. Follow the user instructions exactly.",
-  "No preamble, no explanations, no BPM or meter notes inside the lyrics unless the user asked for section tags only.",
-  "For Lebanese and Levantine requests: use real spoken dialect words (Beirut/Lebanese lexicon), not formal MSA dressed as dialect.",
-].join(" ");
+const LYRICS_SYSTEM =
+  "Expert songwriter. Output lyrics with section tags only — no preamble or production notes in the lyrics body.";
 
 function safeJson(text) {
   try {
@@ -66,7 +63,7 @@ function parseLyricsModelChain() {
   }
   const primary =
     String(process.env.OPENAI_LYRICS_MODEL || "").trim()
-    || "gpt-6-astra";
+    || "gpt-6-luna";
   const fallback =
     String(process.env.OPENAI_LYRICS_FALLBACK_MODEL || "").trim()
     || "gpt-6.1-sol";
@@ -172,7 +169,7 @@ async function listOpenAIModelIds(key) {
 }
 
 function discoverLyricsModelCandidates(ids) {
-  const want = [/astra/i, /6\.1[-_]?sol/i, /6-1-sol/i, /gpt-6/i];
+  const want = [/luna/i, /6\.1[-_]?sol/i, /6-1-sol/i, /astra/i, /gpt-6/i];
   const hits = [];
   for (const id of ids) {
     if (want.some((re) => re.test(id))) hits.push(id);

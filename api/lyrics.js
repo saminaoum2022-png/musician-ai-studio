@@ -149,7 +149,16 @@ module.exports = async function handler(req, res) {
     const nonce = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
     const promptSeed = mode === "diacritics" ? stripSungMarksKeepShadda(seed) : seed;
     const lyricsTarget = String(body?.lyricsTarget || "").trim().toLowerCase() === "lyria" ? "lyria" : "suno";
-    const prompt = buildPrompt({
+    const openaiKeyEarly = process.env.OPENAI_API_KEY || "";
+    const geminiKeyEarly = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const primaryForPrompt = resolvePrimaryLyricsProvider(lyricsProvider, {
+      openaiKey: openaiKeyEarly,
+      geminiKey: geminiKeyEarly,
+    });
+    const useOpenAiSlimPrompt =
+      !sunoLyricsRequested && primaryForPrompt === "openai";
+    const buildLyricsPrompt = useOpenAiSlimPrompt ? buildOpenAISlimPrompt : buildPrompt;
+    const prompt = buildLyricsPrompt({
       seed: promptSeed,
       style,
       mode,
@@ -1152,6 +1161,142 @@ function buildPrompt({
     style ? `Style/Tags: ${style}` : "Style/Tags: none",
     seed ? `Use this seed idea:\n${seed}` : "No seed provided; create a coherent theme.",
   ].join("\n");
+}
+
+/** Shorter user prompt for OpenAI only — post-process + Gemini path keep the full rule set. */
+function buildOpenAISlimPrompt({
+  seed,
+  style,
+  mode,
+  nonce,
+  dialect,
+  dialectHint,
+  arabicAddress = "",
+  sourceLyrics,
+  sourceTitle,
+  sourceCreator,
+  scriptFormat = "latin",
+  lyricsTarget = "suno",
+}) {
+  const heavyModes = new Set(["diacritics", "enhance", "fix_singing", "singability_check", "to_arabizi"]);
+  if (heavyModes.has(mode)) {
+    return buildPrompt({
+      seed,
+      style,
+      mode,
+      nonce,
+      dialect,
+      dialectHint,
+      arabicAddress,
+      sourceLyrics,
+      sourceTitle,
+      sourceCreator,
+      scriptFormat,
+      lyricsTarget,
+    });
+  }
+
+  const forLyria = lyricsTarget === "lyria";
+  const flags = dialectFlags(dialect, dialectHint);
+  const useArabizi = scriptFormat === "arabizi" || (scriptFormat !== "arabic" && looksLikeArabizi(seed));
+  const dialectLine = [dialect, dialectHint].filter(Boolean).join(" · ");
+
+  const structureBlock = forLyria
+    ? [
+      "Song shape (~3 min / Lyria): [Verse 1] max 4 lines · [Chorus] 3–4 hook lines · [Verse 2] max 4 · [Chorus] same hook · optional [Bridge] 2 lines. Max 18 sung lines. English section tags only.",
+    ]
+    : [
+      "Full song: [Verse 1], [Chorus], [Verse 2], [Chorus], [Bridge], [Final Chorus] — singable pop structure.",
+    ];
+
+  let dialectVoice = "Match the target dialect in spoken vocabulary, not MSA.";
+  if (flags.isLebanese) {
+    dialectVoice = "Lebanese (Beirut): real daily words — شو، هيك، معي، عم، منيح، يلّا. Plain Arabic script, no tashkeel. ق→أ, ذ/ظ→ز. No commas inside lines.";
+  } else if (flags.isEgyptian) {
+    dialectVoice = "Egyptian Masri colloquial, plain script, no tashkeel. No commas inside lines.";
+  } else if (flags.isLevantineColloquial) {
+    dialectVoice = "Levantine colloquial, plain script, ق→أ. No commas inside lines.";
+  } else if (flags.isMsa) {
+    dialectVoice = "Modern Standard Arabic only if the seed asks for it.";
+  } else if (isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed })) {
+    dialectVoice = "Colloquial Arabic as implied by dialect hint — plain script, no tashkeel.";
+  }
+
+  if (mode === "remix_reply") {
+    return [
+      "Write remix reply lyrics: Person B answers Person A's song story. Human singer only — never mention AI.",
+      ...structureBlock,
+      "End-rhyme (qafiya) within each section; similar line length.",
+      dialectVoice,
+      dialectLine ? `Dialect: ${dialectLine}` : "",
+      style ? `Style/mood: ${style}` : "",
+      sourceTitle ? `Original: ${sourceTitle}` : "",
+      "",
+      "Original lyrics:",
+      sourceLyrics || "",
+      "",
+      seed ? `Your angle:\n${seed}` : "",
+    ].filter(Boolean).join("\n");
+  }
+
+  if (mode === "challenge_clip") {
+    return [
+      "Short ~28s clip lyrics only.",
+      "[Verse] optional 2 lines · [Chorus] 2–4 lines, clean ending. Max 8 lines.",
+      dialectVoice,
+      dialectLine ? `Dialect: ${dialectLine}` : "",
+      style ? `Style/mood: ${style}` : "",
+      "",
+      seed || "",
+    ].filter(Boolean).join("\n");
+  }
+
+  if (mode === "challenge") {
+    return [
+      "Short challenge draft — not a full album song.",
+      "[Verse 1] max 4 · optional [Pre-Chorus] 2 · [Chorus] max 4. Max 12 lines.",
+      dialectVoice,
+      dialectLine ? `Dialect: ${dialectLine}` : "",
+      style ? `Style/mood: ${style}` : "",
+      "",
+      seed || "",
+    ].filter(Boolean).join("\n");
+  }
+
+  if (mode === "arrange") {
+    return [
+      "Arrange user's lyrics for singing — keep their words and story, add section tags and light flow polish only.",
+      ...structureBlock,
+      dialectVoice,
+      dialectLine ? `Dialect: ${dialectLine}` : "",
+      style ? `Style/mood: ${style}` : "",
+      "",
+      seed || "",
+    ].filter(Boolean).join("\n");
+  }
+
+  if (mode === "continue") {
+    return [
+      "Continue these lyrics in the same voice — do not rewrite existing lines.",
+      dialectVoice,
+      dialectLine ? `Dialect: ${dialectLine}` : "",
+      style ? `Style/mood: ${style}` : "",
+      "",
+      seed || "",
+    ].filter(Boolean).join("\n");
+  }
+
+  return [
+    "Write singable song lyrics from the idea below. Output lyrics + English section tags only — no notes, BPM, or explanations.",
+    ...structureBlock,
+    "Rhythm: balanced line length; end-rhyme (qafiya) within each section where natural.",
+    useArabizi ? "Write in Arabizi (Latin letters, spoken sounds)." : "",
+    dialectVoice,
+    dialectLine ? `Dialect: ${dialectLine}` : "",
+    style ? `Style/mood: ${style}` : "",
+    seed ? `Idea:\n${seed}` : "Invent a coherent theme.",
+    `Ref: ${nonce}`,
+  ].filter(Boolean).join("\n");
 }
 
 function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {

@@ -40,6 +40,13 @@ function rhymeKey(word) {
 
 export { looksLikeArabizi };
 
+function wantsArabicSingabilityAudit(text) {
+  const t = String(text || "");
+  if (/[\u0600-\u06FF]/.test(t)) return true;
+  if (looksLikeArabizi(t)) return true;
+  return false;
+}
+
 function lastWord(line) {
   const parts = String(line || "").trim().split(/\s+/).filter(Boolean);
   return parts[parts.length - 1] || "";
@@ -127,6 +134,7 @@ function pushWarning(warnings, seen, item) {
 export function computeLocalSingability(text) {
   const warnings = [];
   const seen = new Set();
+  const ar = wantsArabicSingabilityAudit(text);
   const sections = parseLyricSections(text);
   if (!sections.some((s) => s.lines.length >= 2)) {
     return {
@@ -152,14 +160,18 @@ export function computeLocalSingability(text) {
           level: "high",
           section: name,
           line: idx + 1,
-          message: `Line ${idx + 1} looks long (${syll} beats) — the singer may rush or slur.`,
+          message: ar
+            ? `السطر ${idx + 1} طويل (${syll} مقطع تقريباً) — المغني ممكن يستعجل أو يلعّب الكلمات.`
+            : `Line ${idx + 1} looks long (${syll} beats) — the singer may rush or slur.`,
         });
       } else if (syll >= 14) {
         pushWarning(warnings, seen, {
           level: "medium",
           section: name,
           line: idx + 1,
-          message: `Line ${idx + 1} is fairly long — consider shortening for cleaner singing.`,
+          message: ar
+            ? `السطر ${idx + 1} طويل شوي — قصّر لو بدك غناء أوضح.`
+            : `Line ${idx + 1} is fairly long — consider shortening for cleaner singing.`,
         });
       }
     });
@@ -176,7 +188,9 @@ export function computeLocalSingability(text) {
           level: isChorus ? "high" : "medium",
           section: name,
           line: j + 1,
-          message: `Lines ${i + 1} and ${j + 1} have uneven length — balance وزن/meter for smoother vocals.`,
+          message: ar
+            ? `السطر ${i + 1} و${j + 1} الوزن مو متوازن — وحّد المقاطع عشان الغناء يمشي أنعم.`
+            : `Lines ${i + 1} and ${j + 1} have uneven length — balance وزن/meter for smoother vocals.`,
         });
       }
 
@@ -188,7 +202,9 @@ export function computeLocalSingability(text) {
           level: isChorus ? "high" : "medium",
           section: name,
           line: j + 1,
-          message: `Lines ${i + 1} and ${j + 1} may not rhyme (قافية) — this section's ${pairLabel} usually shares an ending sound.`,
+          message: ar
+            ? `السطر ${i + 1} و${j + 1} القافية مش متطابقة — جرّب نفس صوت آخر الكلمة.`
+            : `Lines ${i + 1} and ${j + 1} may not rhyme (قافية) — this section's ${pairLabel} usually shares an ending sound.`,
         });
       }
 
@@ -197,7 +213,9 @@ export function computeLocalSingability(text) {
           level: "low",
           section: name,
           line: j + 1,
-          message: `Lines ${i + 1} and ${j + 1} could mirror each other more (parallel Levantine couplet / موازي) — same slot and similar مقاطع help vocals lock in.`,
+          message: ar
+            ? `السطر ${i + 1} و${j + 1} فيهم موازي أضعف — نفس البداية أو نفس شكل السطر بيساعد الغناء.`
+            : `Lines ${i + 1} and ${j + 1} could mirror each other more (parallel Levantine couplet / موازي) — same slot and similar مقاطع help vocals lock in.`,
         });
       }
     }
@@ -207,7 +225,9 @@ export function computeLocalSingability(text) {
         level: "low",
         section: name,
         line: 1,
-        message: "Section has only one line — add a matching line if you want a paired hook.",
+        message: ar
+          ? "القسم فيه سطر واحد — ضيف سطر ثاني إذا بدك hook مزدوج."
+          : "Section has only one line — add a matching line if you want a paired hook.",
       });
     }
 
@@ -218,7 +238,9 @@ export function computeLocalSingability(text) {
           level: isChorus ? "high" : "medium",
           section: name,
           line: null,
-          message: "Rhyme pattern looks loose — pick a clear scheme (AABB, ABAB, ABBA, ABCB, AAAA, AAAB, AABA, etc.) and match it within this section.",
+          message: ar
+            ? "نمط القافية فاتر — ثبّت scheme واضح (AABB, ABAB, ABBA, ABCB…) وتمسّك فيه بالقسم."
+            : "Rhyme pattern looks loose — pick a clear scheme (AABB, ABAB, ABBA, ABCB, AAAA, AAAB, AABA, etc.) and match it within this section.",
         });
       }
     }
@@ -229,10 +251,14 @@ export function computeLocalSingability(text) {
   const score = Math.max(35, 100 - high * 18 - medium * 8);
   const ready = high === 0 && medium <= 1;
   const summary = !warnings.length
-    ? "Lines look balanced — good for singing."
+    ? (ar ? "الأسطر متوازنة — مناسبة للغناء." : "Lines look balanced — good for singing.")
     : high
-      ? `${high} serious issue${high > 1 ? "s" : ""} may make the AI singer stumble.`
-      : `${warnings.length} minor tweak${warnings.length > 1 ? "s" : ""} could help vocals land cleaner.`;
+      ? (ar
+        ? `${high} ملاحظ${high > 1 ? "ات" : "ة"} مهمة — المغني AI ممكن يتعثّر.`
+        : `${high} serious issue${high > 1 ? "s" : ""} may make the AI singer stumble.`)
+      : (ar
+        ? `${warnings.length} تعديل${warnings.length > 1 ? "ات" : ""} صغيرة بتريّح الغناء.`
+        : `${warnings.length} minor tweak${warnings.length > 1 ? "s" : ""} could help vocals land cleaner.`);
 
   return {
     score,

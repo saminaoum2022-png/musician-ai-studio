@@ -709,7 +709,7 @@ function parseSingabilityReport(text) {
   return {
     score,
     ready: ready ?? (score != null ? score >= 75 && !warnings.some((w) => w.level === "high") : null),
-    summary: summary || (warnings.length ? "Review singability warnings before generating." : "Looks singable."),
+    summary: summary || (warnings.length ? "راجع ملاحظات الغناء قبل ما تولّد." : "الكلمات تبدو جاهزة للغناء."),
     warnings,
   };
 }
@@ -953,9 +953,19 @@ function buildPrompt({
     ].filter(Boolean).join("\n");
   }
   if (mode === "singability_check") {
+    const arabicAudit = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed });
     return [
       "You are a lyrics coach for AI music singing (Suno/Lyria). Analyze singability only — do NOT rewrite lyrics.",
       "Focus on: line length balance (wazen/وزن), end-rhyme (qafiya/قافية), chorus hook fit, lines that are too long or uneven.",
+      ...(arabicAudit
+        ? [
+          "AUDIT LANGUAGE (required): Write summary and every warning message in Arabic — clear Levantine or simple فصحى, friendly coach tone.",
+          "Keep section names exactly as in the lyrics tags (English OK: Verse 1, Chorus, Bridge). JSON keys stay English.",
+          "You may keep technical labels inside messages when clearer: Chorus, Verse, قافية, وزن, موازي, مقاطع.",
+        ]
+        : [
+          "Write summary and warning messages in the same language as the lyrics.",
+        ]),
       ...(useArabizi
         ? [
           "Lyrics are in Arabizi (Latin phonetic spelling). Analyze rhyme by spoken ending sounds (-ak, -na, -eh, etc.).",
@@ -974,6 +984,9 @@ function buildPrompt({
       "For Arabic lyrics, comment on colloquial singability — uneven مقاطع make the AI singer stumble.",
       "Return ONLY valid JSON (no markdown) with this shape:",
       '{"score":0-100,"ready":true|false,"summary":"one sentence","warnings":[{"level":"high|medium|low","section":"Chorus","line":2,"message":"..."}]}',
+      ...(arabicAudit
+        ? ['Example message (Arabic): "السطر 2 في الـ Chorus أطول من 1 — وحّد الوزن عشان الغناء يطلع أنظف."']
+        : []),
       "- score: 100 = very singable for AI vocals; below 60 = likely problems.",
       "- ready: true only if safe to generate without edits.",
       "- warnings: 0-8 specific issues; line is 1-based within that section.",

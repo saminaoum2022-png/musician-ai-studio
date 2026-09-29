@@ -6767,19 +6767,20 @@ const LYRICS_ARABIC_DIALECT_VALUE = {
   sudanese: "Sudanese Arabic",
   msa: "Modern Standard Arabic",
 };
-/** Auto-filled into hidden sunoDialectHint — /api/lyrics (Gemini) reads this for dialect + accent. */
+/** Auto-filled into hidden sunoDialectHint — /api/lyrics (Gemini) + Lyria dialect note.
+ *  Positive-only: never "NOT Egyptian / NOT MSA" — Lyria latches onto the negated words. */
 const LYRICS_ARABIC_DIALECT_HINT = {
   lebanese:
-    "Lebanese Beirut colloquial singing; qaf as hamza (2); soft spoken vowels; use معي not معايا, بخيالي not في خيالي, no Egyptian ب- verb prefix; NOT Egyptian; NOT formal MSA/nahwi.",
-  syrian: "Syrian Levantine colloquial; qaf as hamza (2); spoken vowels; NOT Egyptian.",
-  palestinian: "Palestinian Levantine colloquial; qaf as hamza (2); spoken vowels; NOT Egyptian.",
+    "Lebanese Beirut colloquial singing; qaf as hamza (2); soft spoken vowels; prefer معي، بخيالي، شو، هيك، عم; Levantine present without Egyptian ب- verb prefix.",
+  syrian: "Syrian Levantine colloquial; qaf as hamza (2); spoken Levantine vowels and phrasing.",
+  palestinian: "Palestinian Levantine colloquial; qaf as hamza (2); spoken Levantine vowels and phrasing.",
   egyptian:
-    "Egyptian Masri colloquial singing; use معايا not معي, في خيالي not بخيالي, Egyptian ب- verb prefix (بيحلى، بيقول); prefer إزاي، كده، أوي، عايز، دلوقتي; NOT Levantine; NOT formal MSA/nahwi.",
-  iraqi: "Iraqi colloquial; NOT Egyptian or Gulf.",
-  gulf: "Khaleeji/Gulf colloquial; NOT Egyptian or Levantine.",
-  moroccan: "Moroccan Darija colloquial; NOT Egyptian or Levantine.",
-  tunisian: "Tunisian colloquial; NOT Egyptian or Levantine.",
-  sudanese: "Sudanese colloquial; NOT Egyptian.",
+    "Egyptian Masri colloquial singing; prefer معايا، في خيالي، إزاي، كده، أوي، عايز، دلوقتي; Egyptian ب- verb prefix (بيحلى، بيقول); Cairo spoken Masri.",
+  iraqi: "Iraqi colloquial singing; Baghdad spoken vowels and phrasing.",
+  gulf: "Khaleeji/Gulf colloquial singing; Gulf spoken vowels and phrasing.",
+  moroccan: "Moroccan Darija colloquial singing; Maghrebi spoken vowels and phrasing.",
+  tunisian: "Tunisian colloquial singing; Maghrebi spoken vowels and phrasing.",
+  sudanese: "Sudanese colloquial singing; Sudanese spoken vowels and phrasing.",
   msa: "Modern Standard Arabic (formal).",
 };
 
@@ -9628,9 +9629,9 @@ const CHALLENGE_LANGUAGES = [
   {
     id: "levantine",
     label: "Levantine Arabic",
-    prompt: "Use Levantine Arabic (Lebanese/Syrian/Palestinian). Avoid Egyptian dialect.",
+    prompt: "Use Levantine Arabic (Lebanese/Syrian/Palestinian) colloquial lyrics.",
     dialect: "Lebanese Arabic",
-    dialectHint: "Lebanese Beirut colloquial; qaf as hamza; NOT Egyptian; NOT formal MSA.",
+    dialectHint: "Lebanese Beirut colloquial; qaf as hamza; spoken Levantine vowels.",
   },
   {
     id: "neutral-arabic",
@@ -10661,7 +10662,7 @@ function renderDiscoverHookRushCardHtml() {
   const hook = CHALLENGE_IDEAS.find((c) => String(c.id) === "hook-rush");
   if (!hook) return "";
   const blurb = String(hook.prompt || "").trim()
-    || "Make the first 15 seconds impossible to skip — no long intro, just the part people replay.";
+    || "Make the first 15 seconds impossible to skip — cold open straight into the part people replay.";
   return `
     <section class="challengeFeatureCard discoverSparksFeature" aria-labelledby="discoverHookRushTitle">
       <div class="challengeFeatureTop">
@@ -10853,14 +10854,20 @@ function paintDiscoverTopSectionsLoading() {
 const TEMPLATE_GENERATION_AVOID_TAGS =
   "crowd noise, audience cheering, screaming, shouty vocals, stadium ambience, sports sfx, PA announcer, ultras chant, zaghrouta, mahraganat";
 
-/** Appended to template/campaign styles so Suno keeps vocals studio-polished. */
+/** Appended to template/campaign styles so vocals stay studio-polished (positive-only for Lyria). */
 const TEMPLATE_GENERATION_STYLE_SUFFIX =
-  "studio vocal, polished mix, no crowd sfx or stadium ambience";
+  "studio vocal, polished mix, intimate close-mic studio ambience";
 
 function withTemplateStyleGuard(style) {
   const base = String(style || "").trim();
   if (!base) return TEMPLATE_GENERATION_STYLE_SUFFIX;
-  if (base.toLowerCase().includes("no crowd sfx")) return base;
+  if (base.toLowerCase().includes("intimate close-mic studio ambience")) return base;
+  if (base.toLowerCase().includes("no crowd sfx")) {
+    // Legacy templates may still carry the old suffix — strip the negative clause.
+    return `${base.replace(/,?\s*no crowd sfx or stadium ambience/gi, "").replace(/,\s*,/g, ",").trim()}, ${TEMPLATE_GENERATION_STYLE_SUFFIX}`
+      .replace(/,\s*,/g, ",")
+      .trim();
+  }
   return `${base}, ${TEMPLATE_GENERATION_STYLE_SUFFIX}`;
 }
 
@@ -10897,7 +10904,7 @@ const CAMPAIGN_TEAM_PROFILES = {
   morocco: {
     defaultLang: "ar",
     dialect: "Maghrebi Arabic",
-    dialectHint: "Moroccan Arabic (Darija). Not Egyptian or Levantine.",
+    dialectHint: "Moroccan Arabic (Darija), Maghrebi spoken colloquial.",
     rootsLabel: "Chaabi",
     styles: {
       pop: "Moroccan chaabi pop, gnawa accents, modern Maghrebi pop, warm vocal, 100 bpm",
@@ -10936,7 +10943,7 @@ const CAMPAIGN_TEAM_PROFILES = {
   saudi: {
     defaultLang: "ar",
     dialect: "Gulf Arabic",
-    dialectHint: "Khaleeji/Gulf Arabic. Not Egyptian or Levantine.",
+    dialectHint: "Khaleeji/Gulf Arabic, Gulf spoken colloquial.",
     rootsLabel: "Khaleeji",
     styles: {
       pop: "Khaleeji pop, modern Gulf pop, glossy production, warm vocal, 98 bpm",
@@ -10949,7 +10956,7 @@ const CAMPAIGN_TEAM_PROFILES = {
   qatar: {
     defaultLang: "ar",
     dialect: "Gulf Arabic",
-    dialectHint: "Khaleeji/Gulf Arabic. Not Egyptian or Levantine.",
+    dialectHint: "Khaleeji/Gulf Arabic, Gulf spoken colloquial.",
     rootsLabel: "Khaleeji",
     styles: {
       pop: "Khaleeji pop, modern Gulf pop, warm lead vocal, 98 bpm",
@@ -10975,7 +10982,7 @@ const CAMPAIGN_TEAM_PROFILES = {
   jordan: {
     defaultLang: "ar",
     dialect: "Levantine Arabic",
-    dialectHint: "Levantine Arabic (Jordanian). Not Egyptian.",
+    dialectHint: "Levantine Arabic (Jordanian), spoken Levantine colloquial.",
     rootsLabel: "Dabke",
     styles: {
       pop: "Levantine Arabic pop, modern Jordan pop, warm vocal, 102 bpm",
@@ -19773,12 +19780,12 @@ function challengeDurationStyleClause(challengeId) {
     return lyriaClipDurationStyleClause(id);
   }
   if (["tiktok-teaser", "hook-rush", "three-word-hook", "arabic-trend-byte"].includes(id)) {
-    return "Short clip under 45 seconds, hook-focused, no full-length song";
+    return "Short clip under 45 seconds, hook-focused, compact form";
   }
   if (HUM_CHALLENGE_IDS.has(id) || PHOTO_CHALLENGE_IDS.has(id)) {
-    return "Short clip under 75 seconds, compact form, no full-length song";
+    return "Short clip under 75 seconds, compact form";
   }
-  return "Short clip under 2 minutes, compact form, no 4-minute arrangement";
+  return "Short clip under 2 minutes, compact form";
 }
 
 function lyriaClipDurationStyleClause(challengeId) {
@@ -19793,7 +19800,7 @@ function lyriaClipDurationStyleClause(challengeId) {
     return "~28 second clip, verse plus chorus only, complete phrase, natural ending";
   }
   if (id === "dabke-drop") {
-    return "~28 second dabke chorus clip, clap-ready, festive close, no long intro";
+    return "~28 second dabke chorus clip, clap-ready, festive close, cold open";
   }
   if (PHOTO_CHALLENGE_IDS.has(id)) {
     return "~28 second photo-mood clip, one verse and chorus, complete ending";
@@ -30489,7 +30496,7 @@ function isLyricsBriefOrInstructions(text) {
   if (/^(اكتب|حوّل|خلّيها|غنّي|صفّق|مزاج|مقطع|كورس|أغنية)/m.test(t)) return true;
   if (/~\d+\s*sec|max \d+ line|Tap ✦|not a full song|optional;|when ready/i.test(t)) return true;
   if (/One short verse|One chorus \(2|Keep words short|No bridge\. No second|e\.g\./i.test(t)) return true;
-  if (/اكتب بالأحرف العربية فقط|Write the lyrics in English|ممنوع فرانكو|Never Latin, Franco/i.test(t)) return true;
+  if (/اكتب بالأحرف العربية فقط|اكتب الكلمات بالأحرف العربية فقط|Write the lyrics in English|ممنوع فرانكو|Never Latin, Franco/i.test(t)) return true;
   if (/\[(?:Verse|Chorus|Pre-chorus|Intro)\]\s*[—\-–:].*\b(lines?|hook|whisper|quiet|before|after)\b/i.test(t)) return true;
   if (/\b\d+\s*[-–]?\s*\d*\s*lines?\b/i.test(t) && /\[(?:Verse|Chorus)/i.test(t)) return true;
   if (linesLookLikeInstructions(t)) return true;
@@ -77459,17 +77466,17 @@ function addStyleTags(tags) {
 const STYLE_GENRE_PRESETS = Object.freeze({
   "Levantine Dabke": Object.freeze({
     prompt:
-      "Levantine dabke, mijwiz, davul and tabla, ktakufti 6/8 dabkeh rhythm, festive line-dance energy, NOT Egyptian shaabi",
+      "Levantine dabke, mijwiz, davul and tabla, ktakufti 6/8 dabkeh rhythm, festive line-dance energy, Syrian Lebanese wedding groove",
     suggestedTempo: "120 BPM",
   }),
   "Levantine Pop": Object.freeze({
     prompt:
-      "Levantine Arabic pop, emotional pop vocal, Syrian Lebanese melody, 4/4 modern pop production, oud and synth accents, NOT dabke, NOT Egyptian shaabi, NOT classic tarab",
+      "Levantine Arabic pop, emotional pop vocal, Syrian Lebanese melody, 4/4 modern pop production, oud and synth accents, radio ballad energy",
     suggestedTempo: "Mid Tempo",
   }),
   Tarab: Object.freeze({
     prompt:
-      "Classic Arabic tarab, oud and strings, ornamented vocals, emotional mawwal phrasing, Levantine tarab, NOT dance pop",
+      "Classic Arabic tarab, oud and strings, ornamented vocals, emotional mawwal phrasing, Levantine tarab, slow cinematic build",
     suggestedTempo: "Slow",
   }),
 });

@@ -895,7 +895,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAdd
       "Avoid generic filler every user would get — make hooks specific to the brief's photo, mood, and creative angle.",
       "Invent a fresh opening image and hook. Do not reuse a previous draft for the same brief.",
       ...(scriptFormat === "arabic"
-        ? ["Write in Arabic script only. Never Latin, Franco, or Arabizi."]
+        ? ["Write in Arabic script only."]
         : []),
       `Variation token: ${nonce}`,
       ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
@@ -908,7 +908,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAdd
   }
   if (mode === "challenge") {
     return [
-      "You are writing a SHORT lyric draft for a music challenge — NOT a full commercial song.",
+      "You are writing a SHORT lyric draft for a music challenge — keep it compact.",
       "Do NOT write a complete song. Do NOT include [Intro], [Verse 2], [Bridge], [Final Chorus], or [Outro].",
       "Output lyrics only with at most 3 sections:",
       "[Verse 1] — 4 lines max",
@@ -921,7 +921,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAdd
       "Do not include metadata, notes, or descriptions.",
       "Invent a fresh opening image and hook. Do not reuse a previous draft for the same brief.",
       ...(scriptFormat === "arabic"
-        ? ["Write in Arabic script only. Never Latin, Franco, or Arabizi."]
+        ? ["Write in Arabic script only."]
         : []),
       `Variation token: ${nonce}`,
       ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
@@ -1006,9 +1006,9 @@ function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
       );
     }
     const lead = isLebanese
-      ? "Lebanese Arabic colloquial pop lyrics, Beirut dialect, qaf as hamza, tight sukoon word endings, NO tanween, NOT Egyptian, NOT formal MSA."
+      ? "Lebanese Arabic colloquial pop lyrics, Beirut dialect, qaf as hamza, tight sukoon word endings, spoken Levantine vowels."
       : isEgyptian
-      ? "Egyptian Masri colloquial pop lyrics, Cairo dialect, ب- present prefix on verbs, authentic Masri vocabulary, NO tanween, NOT Levantine, NOT formal MSA."
+      ? "Egyptian Masri colloquial pop lyrics, Cairo dialect, ب- present prefix on verbs, authentic Masri vocabulary, spoken Cairo vowels."
       : d
       ? `${d} colloquial sung lyrics.`
       : "Arabic colloquial sung lyrics.";

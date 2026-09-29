@@ -108,7 +108,7 @@ function buildToArabiziConversionLines({ dialect = "", dialectHint = "" } = {}) 
     if (!lebanese && /syrian|palestinian|سور|فلسط/.test(blob)) {
       lines.push(
         "",
-        "Dialect color: Syrian/Palestinian Levantine — same Franco number system, slight spoken color from dialect hint; still NOT Fusha.",
+        "Dialect color: Syrian/Palestinian Levantine — same Franco number system, slight spoken color from dialect hint; colloquial Levantine Franco.",
       );
     }
     if (dialect) lines.push(`Dialect label: ${dialect}`);
@@ -118,10 +118,10 @@ function buildToArabiziConversionLines({ dialect = "", dialectHint = "" } = {}) 
 
   if (isEgyptian) {
     return [
-      "Convert Arabic lyrics to Franco-Arabic (Arabizi) for Lyria singing — Egyptian Masri colloquial, NOT English.",
-      "Keep SAME words, lines, section tags. Output Latin only, no Arabic script.",
-      "Masri map: 2=hamza/ق glottal, 3=ع, 7=ح, kh=خ, gh=غ. No apostrophes. No letter q.",
-      "Masri vowels: preserve Masri imala and spoken endings — do NOT Levantinize.",
+      "Convert Arabic lyrics to Franco-Arabic (Arabizi) for Lyria singing — Egyptian Masri colloquial phonetics.",
+      "Keep SAME words, lines, section tags. Output Latin only, Arabic script off.",
+      "Masri map: 2=hamza/ق glottal, 3=ع, 7=ح, kh=خ, gh=غ. Skip apostrophes and letter q.",
+      "Masri vowels: preserve Masri imala and spoken endings — keep Cairo Masri color.",
       "Keep [Verse] [Chorus] tags in English.",
       dialect ? `Dialect: ${dialect}` : "",
       dialectHint ? `Hint: ${dialectHint}` : "",
@@ -130,9 +130,9 @@ function buildToArabiziConversionLines({ dialect = "", dialectHint = "" } = {}) 
 
   if (isGulf) {
     return [
-      "Convert Arabic lyrics to Franco-Arabic (Arabizi) for Lyria singing — Khaleeji/Gulf colloquial, NOT English.",
-      "Keep SAME words, lines, section tags. Output Latin only, no Arabic script.",
-      "Map: 2=hamza/ق, 3=ع, 7=ح, kh=خ, gh=غ. No apostrophes. No letter q.",
+      "Convert Arabic lyrics to Franco-Arabic (Arabizi) for Lyria singing — Khaleeji/Gulf colloquial phonetics.",
+      "Keep SAME words, lines, section tags. Output Latin only, Arabic script off.",
+      "Map: 2=hamza/ق, 3=ع, 7=ح, kh=خ, gh=غ. Skip apostrophes and letter q.",
       "Keep [Verse] [Chorus] tags in English.",
       dialect ? `Dialect: ${dialect}` : "",
       dialectHint ? `Hint: ${dialectHint}` : "",
@@ -140,9 +140,9 @@ function buildToArabiziConversionLines({ dialect = "", dialectHint = "" } = {}) 
   }
 
   return [
-    "Convert Arabic lyrics to Franco-Arabic (Arabizi) for Lyria 3.5 — colloquial Arabic phonetics, NOT English.",
+    "Convert Arabic lyrics to Franco-Arabic (Arabizi) for Lyria 3.5 — colloquial Arabic phonetics.",
     "Keep SAME words, story, line count, section tags. Output Latin only.",
-    "Map: 2=glottal/qaf, 3=ع, 7=ح, kh=خ, gh=غ. No apostrophes. No letter q. Numbers 2, 3, 7 only.",
+    "Map: 2=glottal/qaf, 3=ع, 7=ح, kh=خ, gh=غ. Skip apostrophes and letter q. Numbers 2, 3, 7 only.",
     "Keep [Verse] [Chorus] tags in English.",
     dialect ? `Dialect: ${dialect}` : "",
     dialectHint ? `Hint: ${dialectHint}` : "",
@@ -152,13 +152,13 @@ function buildToArabiziConversionLines({ dialect = "", dialectHint = "" } = {}) 
 function buildArabiziPromptLines({ dialect = "", dialectHint = "" } = {}) {
   const levantine = isLevantineDialect(dialect, dialectHint);
   return [
-    "SCRIPT (required): Write ALL lyrics in Franco-Arabic (Arabizi) — Latin phonetic spelling for Lyria 3.5 (Arabic words, NOT English).",
-    "Do NOT use Arabic script. Do NOT write English words unless the song is intentionally mixed.",
+    "SCRIPT (required): Write ALL lyrics in Franco-Arabic (Arabizi) — Latin phonetic spelling for Lyria 3.5 (Arabic words sung as Arabic).",
+    "Use Latin phonetic spelling only. Keep Arabic meaning; skip Arabic script for this pass.",
     levantine
       ? [
         "Lebanese/Levantine Franco spelling (Lyria 3.5):",
         "- Imala: word endings use e/eh (kelme, 7elwe); short i as i/ee (mish, kill); past tense e (chefna).",
-        "- 2 = silent qaf/hamza (2albi, wa2et) — NEVER apostrophe or letter q",
+        "- 2 = silent qaf/hamza (2albi, wa2et) — use digit 2, skip apostrophe and letter q",
         "- 3 = ع, 7 = ح, kh = خ, gh = غ; h = هـ (haydak, huwwi)",
         "- ch = ش for shou/chou words; keep spelling consistent within the song",
         "- Double end consonants when spoken (taraktinne)",
@@ -166,9 +166,9 @@ function buildArabiziPromptLines({ dialect = "", dialectHint = "" } = {}) {
       ].join("\n")
       : [
         "Franco map: 2=glottal, 3=ع, 7=ح, kh=خ, gh=غ — match target dialect spoken sounds.",
-        "No apostrophes. No letter q. Keep spelling consistent within the song.",
+        "Skip apostrophes and letter q. Keep spelling consistent within the song.",
       ].join("\n"),
-    "Keep section tags in English: [Verse] [Chorus] etc. No tashkeel. No Arabic script.",
+    "Keep section tags in English: [Verse] [Chorus] etc. Latin phonetic lyrics only.",
     dialect ? `Dialect flavor: ${dialect}` : "",
     dialectHint ? `Dialect hint: ${dialectHint}` : "",
   ].filter(Boolean);
@@ -179,14 +179,13 @@ function buildLyriaArabiziPerformanceNote({ dialect = "", dialectHint = "" } = {
   const levantine = isLevantineDialect(dialect, dialectHint);
   const label = levantine ? "Lebanese Beirut colloquial Arabic" : "colloquial Arabic";
   return [
-    `CRITICAL — FRANCO-ARABIC LYRICS (${label} in Latin letters, NOT English text):`,
-    "- Sing as a native Arabic speaker with authentic dialect pronunciation — NEVER read lines as English words.",
+    `FRANCO-ARABIC LYRICS (${label} in Latin letters — sing as Arabic phonetics):`,
+    "- Sing as a native Arabic speaker with authentic dialect pronunciation.",
     "- Latin spellings are phonetic Arabic only: Arabic vowels, Arabic stress, Levantine imala (e/eh endings).",
-    "- 2 = glottal/qaf (2albi), 3 = ع, 7 = ح, kh = خ, gh = غ; h = هـ — NOT English letter-by-letter phonics.",
-    "- Do NOT read digit 2 as the English word 'two' — it is a glottal stop marker only.",
+    "- 2 = glottal/qaf (2albi), 3 = ع, 7 = ح, kh = خ, gh = غ; h = هـ — digit markers for Arabic sounds.",
+    "- Digit 2 is a glottal stop marker only.",
     "- Double consonants at word end = gemination — hold the doubled letter (taraktinne).",
-    "- No English accent, no anglicized syllables.",
-    levantine ? "- Lebanese spoken qaf/hamza = 2 — never classical /q/ or /k/." : "",
+    levantine ? "- Lebanese spoken qaf/hamza = 2 — soft glottal, colloquial Levantine color." : "",
   ].filter(Boolean).join("\n");
 }
 

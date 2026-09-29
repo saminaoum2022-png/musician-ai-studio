@@ -295,6 +295,7 @@ module.exports = async function handler(req, res) {
             lyricsProvider: usageProvider,
             mode,
             model: llmResult.model || "",
+            openaiApi: llmResult.openaiApi || "",
             [usageProvider]: "ok",
           },
         }, {

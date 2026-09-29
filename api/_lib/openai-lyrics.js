@@ -1,6 +1,18 @@
 /**
  * OpenAI ChatGPT lyrics generation (same prompts/post-process as Gemini in /api/lyrics).
+ *
+ * Model chain (Vercel Preview env) — no GPT-4.x defaults:
+ *   OPENAI_LYRICS_MODEL=gpt-6-astra           — primary (default)
+ *   OPENAI_LYRICS_FALLBACK_MODEL=gpt-6.1-sol  — if Astra errors or rate-limits
+ * Or override the full chain:
+ *   OPENAI_LYRICS_MODELS=gpt-6-astra,gpt-6.1-sol
  */
+
+const LYRICS_SYSTEM = [
+  "You write song lyrics only. Follow the user instructions exactly.",
+  "No preamble, no explanations, no BPM or meter notes inside the lyrics unless the user asked for section tags only.",
+  "For Lebanese and Levantine requests: use real spoken dialect words (Beirut/Lebanese lexicon), not formal MSA dressed as dialect.",
+].join(" ");
 
 function safeJson(text) {
   try {
@@ -23,10 +35,108 @@ function extractChatCompletionText(data) {
   return "";
 }
 
-function defaultModels() {
-  const fromEnv = String(process.env.OPENAI_LYRICS_MODEL || "").trim();
-  const list = [fromEnv, "gpt-4.1-mini", "gpt-4o-mini", "gpt-4o"].filter(Boolean);
-  return [...new Set(list)];
+function extractResponsesText(data) {
+  if (typeof data?.output_text === "string") return data.output_text.trim();
+  const parts = [];
+  for (const o of data?.output || []) {
+    for (const c of o?.content || []) {
+      if (c?.type === "output_text" && typeof c?.text === "string") parts.push(c.text);
+      if (c?.type === "text" && typeof c?.text === "string") parts.push(c.text);
+    }
+  }
+  return parts.join("\n").trim();
+}
+
+function parseLyricsModelChain() {
+  const rawList = String(process.env.OPENAI_LYRICS_MODELS || "").trim();
+  if (rawList) {
+    return [...new Set(rawList.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean))];
+  }
+  const primary =
+    String(process.env.OPENAI_LYRICS_MODEL || "").trim()
+    || "gpt-6-astra";
+  const fallback =
+    String(process.env.OPENAI_LYRICS_FALLBACK_MODEL || "").trim()
+    || "gpt-6.1-sol";
+  return [...new Set([primary, fallback].filter(Boolean))];
+}
+
+async function callOpenAIResponses({ key, model, prompt, temperature }) {
+  const r = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      input: [
+        { role: "system", content: LYRICS_SYSTEM },
+        { role: "user", content: String(prompt || "") },
+      ],
+      temperature: Number(temperature) || 0.9,
+    }),
+  });
+  const text = await r.text().catch(() => "");
+  const data = safeJson(text) || {};
+  if (!r.ok) {
+    return {
+      ok: false,
+      error: data?.error?.message || data?.error?.code || text || `HTTP ${r.status}`,
+      api: "responses",
+    };
+  }
+  const out = extractResponsesText(data);
+  if (!out) return { ok: false, error: "empty response", api: "responses" };
+  return { ok: true, lyrics: out, model, api: "responses" };
+}
+
+async function callOpenAIChatCompletions({ key, model, prompt, temperature }) {
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: Number(temperature) || 0.9,
+      messages: [
+        { role: "system", content: LYRICS_SYSTEM },
+        { role: "user", content: String(prompt || "") },
+      ],
+    }),
+  });
+  const text = await r.text().catch(() => "");
+  const data = safeJson(text) || {};
+  if (!r.ok) {
+    return {
+      ok: false,
+      error: data?.error?.message || data?.error?.code || text || `HTTP ${r.status}`,
+      api: "chat",
+    };
+  }
+  const out = extractChatCompletionText(data);
+  if (!out) return { ok: false, error: "empty response", api: "chat" };
+  return { ok: true, lyrics: out, model, api: "chat" };
+}
+
+async function callOpenAIModel({ key, model, prompt, temperature }) {
+  const preferChat = /^(1|true|yes)$/i.test(String(process.env.OPENAI_LYRICS_PREFER_CHAT || "").trim());
+
+  if (!preferChat) {
+    const res = await callOpenAIResponses({ key, model, prompt, temperature });
+    if (res.ok) return res;
+    const chat = await callOpenAIChatCompletions({ key, model, prompt, temperature });
+    if (chat.ok) return { ...chat, fallbackApi: res.error ? `responses:${String(res.error).slice(0, 80)}` : "" };
+    return chat;
+  }
+
+  const chat = await callOpenAIChatCompletions({ key, model, prompt, temperature });
+  if (chat.ok) return chat;
+  const res = await callOpenAIResponses({ key, model, prompt, temperature });
+  if (res.ok) return { ...res, fallbackApi: `chat:${String(chat.error).slice(0, 80)}` };
+  return chat;
 }
 
 async function tryOpenAILyrics({
@@ -38,45 +148,25 @@ async function tryOpenAILyrics({
   const key = String(openaiKey || process.env.OPENAI_API_KEY || "").trim();
   if (!key) return { ok: false, error: "missing_openai_key" };
 
-  const models = model ? [String(model).trim()] : defaultModels();
+  const models = model ? [String(model).trim()] : parseLyricsModelChain();
   let lastError = "unknown";
 
   for (const m of models) {
     if (!m) continue;
     try {
-      const r = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: m,
-          temperature: Number(temperature) || 0.9,
-          messages: [
-            {
-              role: "system",
-              content:
-                "You write song lyrics only. Follow the user instructions exactly. No preamble or explanation.",
-            },
-            { role: "user", content: String(prompt || "") },
-          ],
-        }),
-      });
-      const text = await r.text().catch(() => "");
-      const data = safeJson(text) || {};
-      if (!r.ok) {
-        lastError = data?.error?.message || data?.error?.code || text || `HTTP ${r.status}`;
-        continue;
+      const result = await callOpenAIModel({ key, model: m, prompt, temperature });
+      if (result?.ok) {
+        return {
+          ok: true,
+          lyrics: result.lyrics,
+          model: result.model,
+          openaiApi: result.api,
+          ...(result.fallbackApi ? { openaiApiNote: result.fallbackApi } : {}),
+        };
       }
-      const out = extractChatCompletionText(data);
-      if (!out) {
-        lastError = "empty response";
-        continue;
-      }
-      return { ok: true, lyrics: out, model: m };
+      lastError = `${m}: ${result?.error || "failed"} (${result?.api || "?"})`;
     } catch (e) {
-      lastError = String(e?.message || e || "openai_failed").slice(0, 280);
+      lastError = `${m}: ${String(e?.message || e || "openai_failed").slice(0, 200)}`;
     }
   }
   return { ok: false, error: String(lastError).slice(0, 280) };
@@ -94,4 +184,5 @@ function openAiLyricsAllowedForRequest(lyricsProvider) {
 module.exports = {
   tryOpenAILyrics,
   openAiLyricsAllowedForRequest,
+  parseLyricsModelChain,
 };

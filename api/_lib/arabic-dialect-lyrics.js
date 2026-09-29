@@ -1,15 +1,56 @@
 /** Colloquial Arabic + Lebanese tashkeel rules for Gemini lyrics and Lyria. */
 
+/**
+ * True only when the hint *requests* MSA/fusha — not when it says "NOT formal MSA".
+ * Dialect chips historically include contrastive "NOT MSA/nahwi" clauses; matching those
+ * as MSA flipped Lebanese/Egyptian off and pushed Lyria into فصحى delivery.
+ */
+function hintRequestsFormalMsa(blob = "") {
+  const text = String(blob || "").toLowerCase();
+  if (!text.trim()) return false;
+  // Colloquial dialect name always wins over a negated MSA mention in the same hint.
+  if (hasPositiveDialectKeyword(text)) return false;
+  if (
+    /\b(not|no|never|avoid|without)\b[^.\n|;]{0,48}\b(msa|modern standard|fusha|fus'?ha|formal arabic|classical arabic|nahwi|فصحى|فصح)\b/.test(
+      text,
+    )
+  ) {
+    return false;
+  }
+  return /\bmsa\b|modern standard|fusha|fus'?ha|formal arabic|classical arabic|\bnahwi\b|فصحى|فصح/.test(
+    text,
+  );
+}
+
+/** Strip "NOT Egyptian / no MSA …" clauses so contrastive text does not flip dialect flags. */
+function scrubNegatedDialectClauses(blob = "") {
+  return String(blob || "")
+    .replace(
+      /\b(not|no|never|avoid|without)\b[^.\n|;]{0,56}/gi,
+      " ",
+    )
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function hasPositiveDialectKeyword(blob = "") {
+  return /\b(lebanese|beirut|syrian|palestinian|jordanian|levantine|egyptian|masri|iraqi|gulf|khaleeji|moroccan|darija|tunisian|sudanese|شامي|لبناني|مصري|عراقي|خليج)\b/.test(
+    String(blob || "").toLowerCase(),
+  );
+}
+
 function dialectFlags(dialect = "", dialectHint = "") {
   const blob = `${dialect} ${dialectHint}`.toLowerCase();
-  const isMsa = /\bmsa\b|modern standard|fusha|fus'?ha|formal arabic|classical arabic|فصحى|فصح/.test(blob);
-  const isEgyptian = /egyptian|masri|مصر|cairo/.test(blob) && !isMsa;
-  const isLebanese = /lebanese|لبنان|بيروت|beirut/.test(blob) && !isEgyptian && !isMsa;
-  const isIraqi = /iraqi|عراق|baghdad/.test(blob) && !isEgyptian && !isMsa;
-  const isGulf = /gulf|khaleeji|خليج|kuwait|emirati|saudi/.test(blob) && !isIraqi && !isEgyptian && !isMsa;
-  const isMaghrebi = /maghrebi|moroccan|darija|دارجة|tunisian|تونس/.test(blob) && !isMsa;
+  const positive = scrubNegatedDialectClauses(blob);
+  const isMsa = hintRequestsFormalMsa(blob);
+  const isEgyptian = /egyptian|masri|مصر|cairo/.test(positive) && !isMsa;
+  const isLebanese = /lebanese|لبنان|بيروت|beirut/.test(positive) && !isEgyptian && !isMsa;
+  const isIraqi = /iraqi|عراق|baghdad/.test(positive) && !isEgyptian && !isMsa;
+  const isGulf = /gulf|khaleeji|خليج|kuwait|emirati|saudi/.test(positive) && !isIraqi && !isEgyptian && !isMsa;
+  const isMaghrebi = /maghrebi|moroccan|darija|دارجة|tunisian|تونس/.test(positive) && !isMsa;
   const isLevantineColloquial =
-    (isLebanese || /syrian|palestinian|jordanian|levantine|سور|فلسط|shami/.test(blob)) && !isEgyptian && !isMsa;
+    (isLebanese || /syrian|palestinian|jordanian|levantine|سور|فلسط|shami/.test(positive)) && !isEgyptian && !isMsa;
   return { blob, isMsa, isLebanese, isEgyptian, isIraqi, isGulf, isMaghrebi, isLevantineColloquial };
 }
 
@@ -483,6 +524,7 @@ module.exports = {
   applySparseSungDiacritics,
   hintSungArabicDiacritics,
   lightenSungArabicDiacritics,
+  hintRequestsFormalMsa,
   buildLyriaLebaneseArabicNote,
   buildLyriaEgyptianArabicNote,
   buildEgyptianLexiconLines,

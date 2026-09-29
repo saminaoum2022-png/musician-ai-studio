@@ -169,6 +169,7 @@ function buildArabiziPromptLines({ dialect = "", dialectHint = "" } = {}) {
         "Keep spelling consistent within the song.",
       ].join("\n"),
     "Keep section tags in English: [Verse] [Chorus] etc. Latin phonetic lyrics only.",
+    "No commas, semicolons, or colons inside lyric lines — line breaks only.",
     dialect ? `Dialect flavor: ${dialect}` : "",
     dialectHint ? `Dialect hint: ${dialectHint}` : "",
   ].filter(Boolean);

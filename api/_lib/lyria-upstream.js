@@ -23,6 +23,7 @@ const {
   defaultClipVocalProfileForGender,
 } = require("./clip-vocal-profiles");
 const { looksLikeArabizi, isArabiziScript, buildLyriaArabiziPerformanceNote } = require("./arabizi");
+const { stripInlinePunctuationFromSungLine } = require("./sung-lyrics-punctuation");
 const {
   buildLyriaLebaneseArabicNote,
   buildLyriaEgyptianArabicNote,
@@ -530,7 +531,7 @@ function sanitizeLyriaLyricsForSinging(text) {
     if (/^\[[^\]]+\]\s*[—\-–:]\s*(lines?|hook|whisper|quiet|before|after|begin|add|keep|write)\b/i.test(t)) {
       continue;
     }
-    out.push(t);
+    out.push(stripInlinePunctuationFromSungLine(t));
   }
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }

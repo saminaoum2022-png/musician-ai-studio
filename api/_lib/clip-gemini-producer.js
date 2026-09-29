@@ -4,6 +4,7 @@
  */
 
 const { buildLyriaVocalProfile, clipVocalProfileById, sanitizeLyriaLyricsForSinging, normalizeLyriaArrangementLines } = require("./lyria-upstream");
+const { stripInlinePunctuationFromLyrics } = require("./sung-lyrics-punctuation");
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const PRODUCER_TIMEOUT_MS = Number(process.env.CLIP_GEMINI_PRODUCER_TIMEOUT_MS || 15000);
@@ -151,6 +152,7 @@ OUTPUT SCHEMA:
 - Do NOT use [Intro], [Pre-Chorus], [Outro], [Final Chorus], or a third verse unless lyrics_raw already contains them — then trim, do not expand.
 - Structure tags MUST be plain English section labels ONLY — NO timestamps inside tags.
 - NEVER put timing, BPM, dialect notes, style directions, or "Create a song…" inside structured_lyrics — Lyria will sing them.
+- NO commas, semicolons, colons, or bullets inside lyric lines — Lyria reads them like tashkeel; use line breaks only.
 - One hum-able chorus hook. Honor target_length_seconds — less lyric text is better than cramming.
 - End on a complete phrase — never mid-word or mid-sentence.
 - If instrumental is true, return "".
@@ -271,7 +273,7 @@ function normalizeProducerOutput(raw, { instrumental = false, maxStyleChars = EN
   }
   // Keep sung lyrics clean — strip instruction / timing bleed before Lyria.
   if (structured) {
-    structured = sanitizeLyriaLyricsForSinging(structured);
+    structured = stripInlinePunctuationFromLyrics(sanitizeLyriaLyricsForSinging(structured));
   }
   if (arrangement) {
     arrangement = normalizeLyriaArrangementLines(arrangement);

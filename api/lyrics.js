@@ -28,6 +28,10 @@ const {
   stripSungMarksKeepShadda,
   lightenSungArabicDiacritics,
 } = require("./_lib/arabic-dialect-lyrics");
+const {
+  stripInlinePunctuationFromLyrics,
+  NO_PUNCTUATION_IN_SUNG_LYRICS_LINES,
+} = require("./_lib/sung-lyrics-punctuation");
 
 function postProcessGeneratedArabicLyrics(text, { mode, flags, arabicScript }) {
   if (!arabicScript || flags.isMsa) return text;
@@ -706,6 +710,7 @@ function buildPrompt({
   lyricsTarget = "suno",
 }) {
   const forLyria = lyricsTarget === "lyria";
+  const punctuationLines = NO_PUNCTUATION_IN_SUNG_LYRICS_LINES;
   const dialectLines = [
     dialect ? `Target dialect/accent: ${dialect}` : "",
     dialectHint ? `Dialect hint line (follow this flavor): ${dialectHint}` : "",
@@ -800,6 +805,7 @@ function buildPrompt({
       leadEn,
       "Input may be plain or only lightly hinted (إنتَ/إنتِ + shadda). ADD more singer-useful marks. Returning the same text is wrong.",
       "Keep the same lines and section tags. Output lyrics only.",
+      ...punctuationLines,
       ...sparseOrRicherEn,
       ...buildDiacriticsDialectLinesEn(flags),
       ...buildDiacriticsAddressLinesEn(address, flags),
@@ -820,6 +826,7 @@ function buildPrompt({
       ...POP_RHYME_METER_LINES_LIGHT,
       ...(useArabizi ? scriptLines : ["Do NOT add heavy vowel marks (tashkeel) — that is a separate step."]),
       "Output lyrics only with section tags. No explanations or metadata.",
+      ...punctuationLines,
       `Variation token: ${nonce}`,
       ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
       ...(dialectLines ? [dialectLines] : []),
@@ -832,6 +839,7 @@ function buildPrompt({
   if (mode === "fix_singing") {
     return [
       ...FIX_SINGING_LINES,
+      ...punctuationLines,
       ...(useArabizi ? scriptLines : []),
       `Variation token: ${nonce}`,
       ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
@@ -887,6 +895,7 @@ function buildPrompt({
       "Do NOT copy long phrases from the original. Do NOT rearrange the original lines.",
       "Match the original song's language and emotional world unless the remixer's angle says otherwise.",
       "Output lyrics only with section tags.",
+      ...punctuationLines,
       "If the remixer's angle asks for ONLY specific sections (e.g. just [Verse 2], just [Chorus], Verse 2 + Chorus), output ONLY those sections — not a full song.",
       forLyria
         ? "Otherwise use this compact Lyria structure (max ~3 min):"
@@ -924,6 +933,7 @@ function buildPrompt({
       "Do NOT change theme or language. Do NOT invent a new story.",
       "Keep original lines as much as possible; only reorganize and lightly polish for flow.",
       "Output lyrics only with section tags.",
+      ...punctuationLines,
       ...(useArabizi ? scriptLines : []),
       ...(forLyria
         ? LYRIA_COMPACT_LYRICS_RULES
@@ -953,6 +963,7 @@ function buildPrompt({
       "Continue the user's lyrics in the same mood, theme, and language.",
       "Do not rewrite existing lines.",
       "Output lyrics only.",
+      ...punctuationLines,
       ...(useArabizi ? scriptLines : []),
       ...POP_RHYME_METER_LINES_CONTINUE,
       ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
@@ -969,6 +980,7 @@ function buildPrompt({
       "You are writing lyrics for a ~28 SECOND music clip (Lyria) — NOT a full song.",
       "The clip MUST end on a complete phrase. Nothing cut mid-word or mid-sentence.",
       "Output lyrics only with at most 2 sections:",
+      ...punctuationLines,
       "[Verse] — 2 lines max (optional; skip if the brief is chorus-only)",
       "[Chorus] — 2 to 4 lines max, one repeatable hook",
       "Total: 8 lines maximum. Short syllables. Conversational, not shouty.",
@@ -996,6 +1008,7 @@ function buildPrompt({
       "You are writing a SHORT lyric draft for a music challenge — keep it compact.",
       "Do NOT write a complete song. Do NOT include [Intro], [Verse 2], [Bridge], [Final Chorus], or [Outro].",
       "Output lyrics only with at most 3 sections:",
+      ...punctuationLines,
       "[Verse 1] — 4 lines max",
       "[Pre-Chorus] — 2 lines max (optional; omit if not needed)",
       "[Chorus] — 4 lines max, with one repeatable hook",
@@ -1022,6 +1035,7 @@ function buildPrompt({
       ? "Write compact singable lyrics for Google Lyria full song generation (~3 minutes)."
       : "Write complete singable lyrics for AI song generation.",
     "Output lyrics only.",
+    ...punctuationLines,
     ...(useArabizi ? scriptLines : []),
     ...(forLyria
       ? LYRIA_COMPACT_LYRICS_RULES
@@ -1203,7 +1217,7 @@ function extractTextLoose(data) {
 
 function sanitizeLyricsOutput(input) {
   const allowedHeader = /^\[(verse|chorus|bridge|outro|intro|final chorus|pre-chorus|hook|refrain|verse \d+|chorus \d+)\]$/i;
-  return String(input || "")
+  const filtered = String(input || "")
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean)
@@ -1216,6 +1230,7 @@ function sanitizeLyricsOutput(input) {
     })
     .join("\n")
     .trim();
+  return stripInlinePunctuationFromLyrics(filtered);
 }
 
 function extractComplianceTerms({ seed, style }) {

@@ -1182,14 +1182,7 @@ function buildPrompt({
   ].join("\n");
 }
 
-/** OpenAI lyrics — avoid over-qafiya (AAAA) that full Gemini prompts can encourage. */
-const OPENAI_RHYME_CREATIVE_LINES = [
-  "Story and natural dialect first — do not sacrifice word choice for rhyme.",
-  "Do NOT make every line in a section share the same ending (no AAAA / one-sound blocks).",
-  "Prefer varied singable patterns: ABAB, ABCB, AABB couplets, hook repetition in chorus only, or loose assonance.",
-  "Near-rhyme is fine; two rhyming lines then two different endings is OK in Lebanese pop.",
-  "Never print rhyme scheme labels (AABB, BBBB, etc.) in the output.",
-];
+const { OPENAI_RHYME_CREATIVE_LINES } = require("./_lib/openai-lyrics-prompt-archive");
 
 function openAiRhymeLinesForSeed(seed) {
   const s = String(seed || "");
@@ -1199,8 +1192,60 @@ function openAiRhymeLinesForSeed(seed) {
   return [...OPENAI_RHYME_CREATIVE_LINES, ...extra];
 }
 
-/** Shorter user prompt for OpenAI only — post-process + Gemini path keep the full rule set. */
-function buildOpenAISlimPrompt({
+function openAiMinimalDialectLine(dialect) {
+  const d = String(dialect || "").trim();
+  return d ? `Dialect: ${d}` : "";
+}
+
+function openAiMinimalAddressLine(arabicAddress, dialectHint) {
+  const address = normalizeArabicAddress(arabicAddress, dialectHint);
+  if (address === "female") return "Address: sung to a woman (إنتِ، حبيبتي، غالية).";
+  if (address === "male") return "Address: sung to a man (إنتَ، حبيبي، غالي).";
+  if (address === "group") return "Address: sung to a group (إنتو، حبايبي، غاليين).";
+  return "";
+}
+
+/** OpenAI test mode: dialect + address + user text only (see openai-lyrics-prompt-archive.js). */
+function buildOpenAIMinimalUserPrompt({
+  seed,
+  mode,
+  dialect,
+  dialectHint,
+  arabicAddress = "",
+  sourceLyrics,
+  sourceTitle,
+  scriptFormat = "latin",
+}) {
+  const heavyModes = new Set(["diacritics", "enhance", "fix_singing", "singability_check", "to_arabizi"]);
+  if (heavyModes.has(mode)) {
+    return null;
+  }
+
+  const useArabizi = scriptFormat === "arabizi" || (scriptFormat !== "arabic" && looksLikeArabizi(seed));
+  const core = [
+    openAiMinimalDialectLine(dialect),
+    openAiMinimalAddressLine(arabicAddress, dialectHint),
+    useArabizi ? "Language: Arabizi (Latin letters, spoken sounds)." : "",
+  ].filter(Boolean);
+
+  if (mode === "remix_reply") {
+    return [
+      ...core,
+      sourceTitle ? `Original song: ${sourceTitle}` : "",
+      sourceLyrics ? `Original lyrics:\n${sourceLyrics}` : "",
+      seed ? String(seed).trim() : "",
+    ].filter(Boolean).join("\n\n");
+  }
+
+  if (mode === "challenge_clip" || mode === "challenge" || mode === "arrange" || mode === "continue") {
+    return [...core, seed ? String(seed).trim() : ""].filter(Boolean).join("\n\n");
+  }
+
+  return [...core, seed ? String(seed).trim() : ""].filter(Boolean).join("\n\n");
+}
+
+/** Restore slim-v1: OPENAI_LYRICS_PROMPT=slim-v1 on Vercel Preview. */
+function buildOpenAISlimPromptStructured({
   seed,
   style,
   mode,
@@ -1335,6 +1380,17 @@ function buildOpenAISlimPrompt({
     seed ? `Idea:\n${seed}` : "Invent a coherent theme.",
     `Ref: ${nonce}`,
   ].filter(Boolean).join("\n");
+}
+
+/** OpenAI user prompt — minimal by default; Gemini path unchanged (buildPrompt). */
+function buildOpenAISlimPrompt(opts) {
+  const mode = String(process.env.OPENAI_LYRICS_PROMPT || "minimal").trim().toLowerCase();
+  if (mode === "slim-v1" || mode === "structured") {
+    return buildOpenAISlimPromptStructured(opts);
+  }
+  const minimal = buildOpenAIMinimalUserPrompt(opts);
+  if (minimal != null) return minimal;
+  return buildOpenAISlimPromptStructured(opts);
 }
 
 function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {

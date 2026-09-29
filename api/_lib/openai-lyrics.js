@@ -8,8 +8,26 @@
  *   OPENAI_LYRICS_MODELS=gpt-6-luna,gpt-6.1-sol,gpt-6-astra
  */
 
-const LYRICS_SYSTEM =
-  "Expert songwriter. Output lyrics with section tags only — no preamble or production notes in the lyrics body.";
+const { OPENAI_SLIM_V1_SYSTEM } = require("./openai-lyrics-prompt-archive");
+
+const LYRICS_SYSTEM_LEGACY = OPENAI_SLIM_V1_SYSTEM;
+
+/** minimal (default): no system message. slim-v1: legacy expert-songwriter line. Override with OPENAI_LYRICS_SYSTEM. */
+function resolveOpenAiLyricsSystem() {
+  const custom = process.env.OPENAI_LYRICS_SYSTEM;
+  if (custom != null && String(custom).trim() !== "") return String(custom).trim();
+  const mode = String(process.env.OPENAI_LYRICS_PROMPT || "minimal").trim().toLowerCase();
+  if (mode === "slim-v1" || mode === "structured") return LYRICS_SYSTEM_LEGACY;
+  return "";
+}
+
+function openAiChatMessages(prompt) {
+  const system = resolveOpenAiLyricsSystem();
+  const messages = [];
+  if (system) messages.push({ role: "system", content: system });
+  messages.push({ role: "user", content: String(prompt || "") });
+  return messages;
+}
 
 function safeJson(text) {
   try {
@@ -79,10 +97,7 @@ async function callOpenAIResponses({ key, model, prompt, temperature }) {
     },
     body: JSON.stringify({
       model,
-      input: [
-        { role: "system", content: LYRICS_SYSTEM },
-        { role: "user", content: String(prompt || "") },
-      ],
+      input: openAiChatMessages(prompt),
       ...(generationTemperature(model, temperature) != null
         ? { temperature: generationTemperature(model, temperature) }
         : {}),
@@ -114,10 +129,7 @@ async function callOpenAIChatCompletions({ key, model, prompt, temperature }) {
       ...(generationTemperature(model, temperature) != null
         ? { temperature: generationTemperature(model, temperature) }
         : {}),
-      messages: [
-        { role: "system", content: LYRICS_SYSTEM },
-        { role: "user", content: String(prompt || "") },
-      ],
+      messages: openAiChatMessages(prompt),
     }),
   });
   const text = await r.text().catch(() => "");

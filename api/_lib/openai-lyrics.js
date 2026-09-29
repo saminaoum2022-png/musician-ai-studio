@@ -47,6 +47,18 @@ function extractResponsesText(data) {
   return parts.join("\n").trim();
 }
 
+function openAiModelSkipsTemperature(model) {
+  const m = String(model || "").trim().toLowerCase();
+  return /^gpt-6/i.test(m) || /^o[134]/i.test(m);
+}
+
+function generationTemperature(model, temperature) {
+  if (openAiModelSkipsTemperature(model)) return null;
+  const t = Number(temperature);
+  if (!Number.isFinite(t)) return 0.9;
+  return t;
+}
+
 function parseLyricsModelChain() {
   const rawList = String(process.env.OPENAI_LYRICS_MODELS || "").trim();
   if (rawList) {
@@ -74,7 +86,9 @@ async function callOpenAIResponses({ key, model, prompt, temperature }) {
         { role: "system", content: LYRICS_SYSTEM },
         { role: "user", content: String(prompt || "") },
       ],
-      temperature: Number(temperature) || 0.9,
+      ...(generationTemperature(model, temperature) != null
+        ? { temperature: generationTemperature(model, temperature) }
+        : {}),
     }),
   });
   const text = await r.text().catch(() => "");
@@ -100,7 +114,9 @@ async function callOpenAIChatCompletions({ key, model, prompt, temperature }) {
     },
     body: JSON.stringify({
       model,
-      temperature: Number(temperature) || 0.9,
+      ...(generationTemperature(model, temperature) != null
+        ? { temperature: generationTemperature(model, temperature) }
+        : {}),
       messages: [
         { role: "system", content: LYRICS_SYSTEM },
         { role: "user", content: String(prompt || "") },

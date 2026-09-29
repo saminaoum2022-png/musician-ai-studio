@@ -1,6 +1,6 @@
 /**
  * POST /api/lyrics
- * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics"|"enhance"|"fix_singing"|"singability_check"|"to_arabizi", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini"|"suno", scriptFormat?: "arabic"|"arabizi"|"auto" }
+ * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics"|"enhance"|"fix_singing"|"singability_check"|"to_arabizi", lyricsTarget?: "suno"|"lyria", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini"|"suno", scriptFormat?: "arabic"|"arabizi"|"auto" }
  *
  * Provider: Gemini by default (GEMINI_API_KEY; rhyme/qafiya in buildPrompt).
  * Suno only when lyricsProvider is explicitly "suno" (costs Suno credits).
@@ -140,7 +140,21 @@ module.exports = async function handler(req, res) {
               : detectModeFromSeed(seed, body?.mode);
     const nonce = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
     const promptSeed = mode === "diacritics" ? stripSungMarksKeepShadda(seed) : seed;
-    const prompt = buildPrompt({ seed: promptSeed, style, mode, nonce, dialect, dialectHint, arabicAddress, sourceLyrics, sourceTitle, sourceCreator, scriptFormat });
+    const lyricsTarget = String(body?.lyricsTarget || "").trim().toLowerCase() === "lyria" ? "lyria" : "suno";
+    const prompt = buildPrompt({
+      seed: promptSeed,
+      style,
+      mode,
+      nonce,
+      dialect,
+      dialectHint,
+      arabicAddress,
+      sourceLyrics,
+      sourceTitle,
+      sourceCreator,
+      scriptFormat,
+      lyricsTarget,
+    });
     const sunoPrompt = buildSunoPrompt({ seed, style, mode, dialect, dialectHint });
     const complianceTerms = mode === "remix_reply"
       ? [...new Set([
@@ -656,6 +670,19 @@ async function withOptionalSingability(payload, {
   return payload;
 }
 
+/** Google Lyria caps near ~3 minutes — long lyric sheets make the model rush or lose the groove. */
+const LYRIA_COMPACT_LYRICS_RULES = [
+  "Target: full song for Google Lyria (~180 seconds / 3 minutes maximum). Every sung line must fit in that time.",
+  "Use ONLY this compact structure:",
+  "[Verse 1] — 4 lines max",
+  "[Chorus] — 3–4 lines max (one sticky hook — repeat the SAME chorus lines in the second chorus)",
+  "[Verse 2] — 4 lines max",
+  "[Chorus] — same hook lines as the first chorus",
+  "Optional [Bridge] — 2 lines max ONLY if the story needs one turn (otherwise skip)",
+  "Do NOT include [Intro], [Pre-Chorus], [Outro], [Final Chorus], Verse 3+, or multiple bridges.",
+  "Total sung lines: 18 maximum. Keep lines short and conversational.",
+];
+
 const REMIX_REPLY_GUARDRAILS = [
   "STRICT — you are writing lyrics for a HUMAN singer (Person B) answering another HUMAN singer (Person A).",
   "NEVER mention AI, artificial intelligence, systems, algorithms, data, chatbots, robots, or software.",
@@ -664,7 +691,21 @@ const REMIX_REPLY_GUARDRAILS = [
   "Echo specific feelings, names, or images from the original song so the reply clearly connects.",
 ];
 
-function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAddress = "", sourceLyrics, sourceTitle, sourceCreator, scriptFormat = "latin" }) {
+function buildPrompt({
+  seed,
+  style,
+  mode,
+  nonce,
+  dialect,
+  dialectHint,
+  arabicAddress = "",
+  sourceLyrics,
+  sourceTitle,
+  sourceCreator,
+  scriptFormat = "latin",
+  lyricsTarget = "suno",
+}) {
+  const forLyria = lyricsTarget === "lyria";
   const dialectLines = [
     dialect ? `Target dialect/accent: ${dialect}` : "",
     dialectHint ? `Dialect hint line (follow this flavor): ${dialectHint}` : "",
@@ -847,15 +888,21 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAdd
       "Match the original song's language and emotional world unless the remixer's angle says otherwise.",
       "Output lyrics only with section tags.",
       "If the remixer's angle asks for ONLY specific sections (e.g. just [Verse 2], just [Chorus], Verse 2 + Chorus), output ONLY those sections — not a full song.",
-      "Otherwise use this full structure:",
-      "[Verse 1]",
-      "[Pre-Chorus]",
-      "[Chorus]",
-      "[Verse 2]",
-      "[Chorus]",
-      "[Bridge]",
-      "[Final Chorus]",
-      "[Outro]",
+      forLyria
+        ? "Otherwise use this compact Lyria structure (max ~3 min):"
+        : "Otherwise use this full structure:",
+      ...(forLyria
+        ? LYRIA_COMPACT_LYRICS_RULES
+        : [
+          "[Verse 1]",
+          "[Pre-Chorus]",
+          "[Chorus]",
+          "[Verse 2]",
+          "[Chorus]",
+          "[Bridge]",
+          "[Final Chorus]",
+          "[Outro]",
+        ]),
       "Verse 1 may acknowledge what the original said; chorus should feel like the direct answer or counter-voice.",
       ...POP_RHYME_METER_LINES,
       `Variation token: ${nonce}`,
@@ -878,15 +925,19 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAdd
       "Keep original lines as much as possible; only reorganize and lightly polish for flow.",
       "Output lyrics only with section tags.",
       ...(useArabizi ? scriptLines : []),
-      "Use structure:",
-      "[Verse 1]",
-      "[Chorus]",
-      "[Verse 2]",
-      "[Chorus]",
-      "[Bridge]",
-      "[Final Chorus]",
-      "[Outro]",
-      "In [Outro], include a clear musical ending phrase.",
+      ...(forLyria
+        ? LYRIA_COMPACT_LYRICS_RULES
+        : [
+          "Use structure:",
+          "[Verse 1]",
+          "[Chorus]",
+          "[Verse 2]",
+          "[Chorus]",
+          "[Bridge]",
+          "[Final Chorus]",
+          "[Outro]",
+          "In [Outro], include a clear musical ending phrase.",
+        ]),
       ...POP_RHYME_METER_LINES_LIGHT,
       `Variation token: ${nonce}`,
       ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
@@ -967,20 +1018,26 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAdd
     ].join("\n");
   }
   return [
-    "Write complete singable lyrics for AI song generation.",
+    forLyria
+      ? "Write compact singable lyrics for Google Lyria full song generation (~3 minutes)."
+      : "Write complete singable lyrics for AI song generation.",
     "Output lyrics only.",
     ...(useArabizi ? scriptLines : []),
-    "Use this structure exactly:",
-    "[Intro]",
-    "[Verse 1]",
-    "[Pre-Chorus]",
-    "[Chorus]",
-    "[Verse 2]",
-    "[Chorus]",
-    "[Bridge]",
-    "[Final Chorus]",
-    "[Outro]",
-    "Make the [Outro] contain a clear ending phrase so the song can finish naturally.",
+    ...(forLyria
+      ? LYRIA_COMPACT_LYRICS_RULES
+      : [
+        "Use this structure exactly:",
+        "[Intro]",
+        "[Verse 1]",
+        "[Pre-Chorus]",
+        "[Chorus]",
+        "[Verse 2]",
+        "[Chorus]",
+        "[Bridge]",
+        "[Final Chorus]",
+        "[Outro]",
+        "Make the [Outro] contain a clear ending phrase so the song can finish naturally.",
+      ]),
     ...POP_RHYME_METER_LINES,
     `Variation token: ${nonce}`,
     ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),

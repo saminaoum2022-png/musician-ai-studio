@@ -6688,6 +6688,7 @@ async function draftIdeaIntoLyricsForGenerate({ seed, style, dialect, dialectHin
       dialect,
       dialectHint,
       lyricsProvider: resolveLyricsProviderForMode("full"),
+      lyricsTarget: resolveLyricsTargetForMusicProvider(),
       scriptFormat: resolveLyricsScriptFormat(),
     }),
   });
@@ -6826,6 +6827,14 @@ function arabicDialectAccentStyleNote() {
 /** Gemini for ✦ Generate lyrics (all dialects) — rhyme/qafiya rules live in /api/lyrics buildPrompt. */
 function resolveLyricsProviderForMode(_mode) {
   return "gemini";
+}
+
+/** Suno-style long form vs Lyria ~3 min compact sections — see LYRIA_COMPACT_LYRICS_RULES in /api/lyrics. */
+function resolveLyricsTargetForMusicProvider() {
+  try {
+    if (useLyriaForThisGenerate()) return "lyria";
+  } catch {}
+  return "suno";
 }
 
 function resolveLyricsScriptFormat() {
@@ -74224,6 +74233,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           dialect,
           dialectHint: lyricDialectHint,
           lyricsProvider,
+          lyricsTarget: resolveLyricsTargetForMusicProvider(),
           scriptFormat: resolveLyricsScriptFormat(),
           includeSingability,
           ...(remixReplyBody || {}),
@@ -76576,6 +76586,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               dialect,
               dialectHint: lyricDialectHint,
               lyricsProvider: resolveLyricsProviderForMode("arrange"),
+              lyricsTarget: resolveLyricsTargetForMusicProvider(),
             }),
           });
           const dd = await rr.json().catch(() => ({}));

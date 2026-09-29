@@ -401,9 +401,9 @@ function buildLyriaPrompt({
   const direction = [];
 
   if (Number.isFinite(duration) && duration >= 30 && !clip) {
-    const mins = Math.max(1, Math.round(duration / 60));
+    const sec = Math.round(duration);
     direction.push(
-      `Target length about ${mins} minute${mins === 1 ? "" : "s"} (${Math.round(duration)} seconds) — full song with clear sections`,
+      `Target length about ${sec} seconds (Lyria max ~3 minutes) — fit all sung lyrics in that time; fewer sections and shorter lines beat a long lyric sheet`,
     );
   }
 
@@ -417,7 +417,7 @@ function buildLyriaPrompt({
     );
   } else {
     direction.push(
-      "Catchy radio-ready song with a memorable melodic hook in the first chorus, strong groove, and clear verse/chorus contrast",
+      "Compact catchy song: one memorable chorus hook, strong groove, verse/chorus contrast — do not rush through many lyric sections",
     );
   }
 
@@ -484,7 +484,9 @@ function buildLyriaPrompt({
   }
 
   blocks.push("");
-  blocks.push("Write and perform original catchy lyrics matching this direction. Prefer a sticky chorus hook.");
+  blocks.push(
+    "Write and perform original compact lyrics matching this direction (~18 lines max: Verse, Chorus, Verse, Chorus, optional short Bridge). Prefer one sticky chorus hook.",
+  );
   return blocks.join("\n").slice(0, 8000);
 }
 

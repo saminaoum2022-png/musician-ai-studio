@@ -68,7 +68,7 @@ const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const PRO_PRICES = { weekly: 3.99, monthly: 9.99 };
-const SONG_CREDIT_COST = Math.max(1, Number(process.env.FULL_SONG_CREDIT_COST || 12));
+const SONG_CREDIT_COST = Math.max(1, Number(process.env.FULL_SONG_CREDIT_COST || 15));
 const CLIP_CREDIT_COST = Math.max(
   1,
   Number(process.env.LYRIA_CLIP_CREDIT_COST || process.env.TEMPLATE_SPARK_CLIP_COST || 10),

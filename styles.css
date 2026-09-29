@@ -27450,6 +27450,19 @@ main.grid > [data-route="pro"].routeEnter--present{
   font-weight: 500;
   color: rgba(232,238,247,0.52);
 }
+.proSpecialOffer{
+  margin: 12px auto 0;
+  max-width: 36ch;
+  font-size: 12.5px;
+  line-height: 1.45;
+  font-weight: 550;
+  color: rgba(180, 230, 210, 0.78);
+}
+.proSpecialOffer--ar{
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(180, 230, 210, 0.62);
+}
 .proPlans{
   display: flex;
   flex-direction: column;
@@ -60957,12 +60970,19 @@ html[data-theme="light"] .proHeroTitle{
   color: var(--text-primary);
 }
 html[data-theme="light"] .proHeroLead,
+html[data-theme="light"] .proSpecialOffer,
 html[data-theme="light"] .proSubscribeSub,
 html[data-theme="light"] .proStatusNote,
 html[data-theme="light"] .proActiveStatusPlan,
 html[data-theme="light"] .proActiveStatusRenew,
 html[data-theme="light"] .proActiveStatusManage{
   color: var(--text-secondary);
+}
+html[data-theme="light"] .proSpecialOffer{
+  color: #0f766e;
+}
+html[data-theme="light"] .proSpecialOffer--ar{
+  color: rgba(15, 118, 110, 0.78);
 }
 html[data-theme="light"] .proActiveStatusTitle{
   color: var(--text-primary);

@@ -3,7 +3,7 @@
  * Tune credit amounts here before App Store Connect / RevenueCat go live.
  */
 
-export const FULL_SONG_CREDIT_COST = 12;
+export const FULL_SONG_CREDIT_COST = 15;
 export const NABAD_PRODUCER_CREDIT_COST = 50;
 
 /** @typedef {"weekly"|"monthly"} ProPlanId */
@@ -38,7 +38,7 @@ export const PRO_PLANS = Object.freeze([
     trialDays: 0,
     trialLabel: "",
     creditsPerPeriod: 1000,
-    bonusCredits: 200,
+    bonusCredits: 0,
     creditsNote: "Credits added each month · giftable",
     badge: "",
     saveBadge: "Save ~17%",
@@ -47,8 +47,8 @@ export const PRO_PLANS = Object.freeze([
   },
 ]);
 
-/** Shown on trial start (weekly path). Match first paid week unless you change it. */
-export const PRO_TRIAL_CREDITS = 400;
+/** Trial start grant (weekly path). Paid weeks still get creditsPerPeriod (400). */
+export const PRO_TRIAL_CREDITS = 90;
 
 export const PRO_MASTER = Object.freeze({
   productId: "com.nabadai.music.studio_pro_master",
@@ -65,7 +65,7 @@ export const PRO_FEATURES = Object.freeze([
   {
     key: "credits",
     label: "Weekly or monthly credits",
-    sub: "400/week on Weekly · 1,000 + 200 bonus/month on Monthly — giftable each renewal",
+    sub: "90 on trial start · 400/week on Weekly · 1,000/month on Monthly — giftable each renewal",
   },
   {
     key: "coach",
@@ -101,7 +101,7 @@ export const PRO_FEATURES = Object.freeze([
  * Pro monthly stays the best deal overall (same rate + features).
  */
 const MONTHLY_PRO_PRICE = 9.99;
-const MONTHLY_PRO_CREDITS = 1000 + 200; // base + bonus
+const MONTHLY_PRO_CREDITS = 1000;
 const SUBSCRIPTION_CREDIT_RATE = MONTHLY_PRO_PRICE / MONTHLY_PRO_CREDITS;
 
 /** Markup over subscription $/credit — lower on larger packs. */
@@ -113,7 +113,7 @@ const PACK_TIER_MARKUP = Object.freeze({
 
 function packCreditsForPrice(priceUsd, markup) {
   const raw = priceUsd / (SUBSCRIPTION_CREDIT_RATE * markup);
-  return Math.max(12, Math.round(raw / 10) * 10); // round to nearest 10
+  return Math.max(15, Math.round(raw / 10) * 10); // round to nearest 10
 }
 
 export const CREDIT_PACKS = Object.freeze([
@@ -164,12 +164,14 @@ export function subscriptionCreditUnitPrice() {
 export const PRO_LAUNCH_COPY = Object.freeze({
   eyebrow: "",
   lead: "Weekly or monthly credits, Studio, cover refresh, unlimited Coach, and private song analytics.",
+  specialOffer:
+    "Special offer: enjoy reduced credit costs for song generation for a limited time. Standard generation rates will apply when the offer ends.",
   footnote:
-    "1 full song = 12 credits (2 versions). Subscription credits are paid credits — you can create or gift them. Cancel anytime in Settings → Subscriptions.",
+    "1 full song = 15 credits (2 versions). Subscription credits are paid credits — you can create or gift them. Cancel anytime in Settings → Subscriptions.",
   packsHeadline: "Only need a few songs?",
   packsLead: "Buy credits anytime.\nNo subscription required.",
   creditsFinePrint: [
-    "1 full song = 12 credits (2 versions).",
+    "1 full song = 15 credits (2 versions).",
     "Subscription credits and purchased credits are both giftable.",
     "Paid credits never expire. Unused trial credits end if you don’t subscribe.",
   ],
@@ -178,6 +180,12 @@ export const PRO_LAUNCH_COPY = Object.freeze({
   webReady: "Subscribe with card. Cancel anytime from Manage subscription.",
   webSoon: "Web checkout is being set up — check back soon.",
   webOnly: "Subscriptions are available in the NabadAi iPhone app.",
+});
+
+/** Arabic strings for the in-app Pro page when the UI is Arabic. */
+export const PRO_LAUNCH_COPY_AR = Object.freeze({
+  specialOffer:
+    "عرض خاص: استمتع بتكاليف رصيد مخفّضة لتوليد الأغاني لفترة محدودة. تُطبَّق الأسعار العادية عند انتهاء العرض.",
 });
 
 export function planCreditsTotal(plan) {

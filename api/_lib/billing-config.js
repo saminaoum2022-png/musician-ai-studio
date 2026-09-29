@@ -6,11 +6,11 @@ const PRO_PRODUCTS = Object.freeze({
   "com.nabadai.music.pro.weekly": {
     planId: "weekly",
     creditsPerPeriod: 400,
-    trialCredits: 400,
+    trialCredits: 90,
   },
   "com.nabadai.music.pro.monthly": {
     planId: "monthly",
-    creditsPerPeriod: 1200,
+    creditsPerPeriod: 1000,
     trialCredits: 0,
   },
 });

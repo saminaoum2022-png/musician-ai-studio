@@ -7,7 +7,7 @@
  *   (used by ../_lib/credits-auth to verify the user and debit credits)
  *
  * Credit handling:
- *  - Debits FULL_SONG_COST (12 credits) BEFORE calling Suno.
+ *  - Debits FULL_SONG_COST (15 credits) BEFORE calling Suno.
  *  - Refunds the full amount if Suno rejects the request synchronously.
  *  - Async failures (copyright, content policy, verify_failed) are refunded
  *    by suno-generation-watch via suno-watch-refund when the task is confirmed failed.
@@ -31,7 +31,7 @@ const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
 const { formatRequestDetail, sunoErrorMessage, logSunoGeneration } = require("../_lib/suno-admin-log");
 const { requireProForWebApi } = require("../_lib/pro-web-gate");
 
-const FULL_SONG_COST = 12;
+const FULL_SONG_COST = 15;
 
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;

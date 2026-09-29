@@ -53,7 +53,7 @@ const { DEFAULT_SUNO_MODEL, normalizeSunoModel, sunoModelSupportsDuration } = re
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 // Reference-audio generations (remix / cover / hum / extend) produce full
 // song output (2 variants) — same credit cost as a normal generation.
-const STEMS_REMIX_COST = 12;
+const STEMS_REMIX_COST = 15;
 // Vocal isolation / stem split on Suno is much cheaper than generation.
 const STEMS_VOCAL_COST = 2;
 

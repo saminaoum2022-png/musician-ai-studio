@@ -25259,7 +25259,7 @@ function chatVoiceNoteRemixStyle(mood) {
   return VOICE_CLIP_MOODS[mood] || VOICE_CLIP_MOODS.soft;
 }
 
-const CHAT_VOICE_REMIX_GO_LABEL = "Remix · 12 credits";
+const CHAT_VOICE_REMIX_GO_LABEL = "Remix · 15 credits";
 
 function persistPendingVoiceClipShare(next) {
   _pendingVoiceClipShare = next || null;
@@ -33911,7 +33911,7 @@ async function supabaseAuthedFetch(url, init = {}) {
  *
  *  Server side: api/credits/* and api/_lib/credits-auth.js.
  * ----------------------------------------------------------------- */
-const FULL_SONG_CREDIT_COST = 12;
+const FULL_SONG_CREDIT_COST = 15;
 const LYRIA_CLIP_CREDIT_COST = 10;
 const NABAD_CLIP_CREDIT_COST = LYRIA_CLIP_CREDIT_COST;
 const TEMPLATE_SPARK_CLIP_CREDIT_COST = LYRIA_CLIP_CREDIT_COST;
@@ -51326,7 +51326,7 @@ function renderMashupPage() {
   if (els.btnMashupGenerate) {
     els.btnMashupGenerate.disabled = !ready;
     if (!_mashupState.generating && !_mashupState.starting) {
-      els.btnMashupGenerate.textContent = "Mashup · 12 credits";
+      els.btnMashupGenerate.textContent = "Mashup · 15 credits";
       els.btnMashupGenerate.classList.remove("isStarting");
     }
   }

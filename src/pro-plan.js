@@ -5,7 +5,6 @@
 import {
   PRO_FEATURES,
   PRO_LAUNCH_COPY,
-  PRO_LAUNCH_COPY_AR,
   PRO_PLANS,
   planCreditsMeta,
 } from "./pro-plan-config.js";
@@ -88,6 +87,16 @@ function planCardHtml(plan, selected) {
         </span>
       </span>
     </button>`;
+}
+
+function planCardsHtml(selected) {
+  return PRO_PLANS.map((p) => {
+    let html = planCardHtml(p, selected);
+    if (p.id === "monthly") {
+      html += `<p class="proSpecialOffer" role="note">${esc(PRO_LAUNCH_COPY.specialOffer)}</p>`;
+    }
+    return html;
+  }).join("");
 }
 
 function benefitsListHtml() {
@@ -346,7 +355,7 @@ function paintCta() {
 function paintPlanCards() {
   const grid = mount()?.querySelector(".proPlanGrid");
   if (!grid) return;
-  grid.innerHTML = PRO_PLANS.map((p) => planCardHtml(p, _selectedPlan)).join("");
+  grid.innerHTML = planCardsHtml(_selectedPlan);
   paintCta();
   paintSubscribedState();
 }
@@ -421,8 +430,6 @@ function renderProPlanPage({ preserveTab = true } = {}) {
             <span class="proHeroTitleLine">Sound pro.</span>
           </h3>
           <p class="proHeroLead">${esc(PRO_LAUNCH_COPY.lead)}</p>
-          <p class="proSpecialOffer" role="note">${esc(PRO_LAUNCH_COPY.specialOffer)}</p>
-          <p class="proSpecialOffer proSpecialOffer--ar" dir="rtl" lang="ar" role="note">${esc(PRO_LAUNCH_COPY_AR.specialOffer)}</p>
         </div>
 
         <section class="proMain" aria-label="Pro plans">
@@ -430,7 +437,7 @@ function renderProPlanPage({ preserveTab = true } = {}) {
             <div class="proTabPanel isActive" data-pro-tab-panel="pro" role="tabpanel" aria-labelledby="proTabPro">
               <section class="proPlans" aria-label="Choose a plan">
                 <div class="proPlanGrid">
-                  ${PRO_PLANS.map((p) => planCardHtml(p, _selectedPlan)).join("")}
+                  ${planCardsHtml(_selectedPlan)}
                 </div>
               </section>
             </div>

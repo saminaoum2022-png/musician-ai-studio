@@ -215,7 +215,12 @@ module.exports = async function handler(req, res) {
         temperature: geminiTemperature,
       });
       if (llmResult?.ok) {
-        const usageProvider = primaryLyricsProvider === "openai" ? "openai" : "gemini";
+        const usedGeminiAfterOpenAi = llmResult.fallbackFrom === "openai";
+        const usageProvider = usedGeminiAfterOpenAi
+          ? "gemini"
+          : primaryLyricsProvider === "openai"
+            ? "openai"
+            : "gemini";
         if (mode === "singability_check") {
           const report = parseSingabilityReport(llmResult.lyrics);
           if (!report) {
@@ -293,10 +298,18 @@ module.exports = async function handler(req, res) {
           debug: {
             nonce,
             lyricsProvider: usageProvider,
+            requestedLyricsProvider: primaryLyricsProvider,
             mode,
             model: llmResult.model || "",
             openaiApi: llmResult.openaiApi || "",
-            [usageProvider]: "ok",
+            ...(usedGeminiAfterOpenAi
+              ? {
+                openai: "failed",
+                openaiError: String(llmResult.openaiError || "").slice(0, 400),
+                openaiAttempts: llmResult.openaiAttempts || [],
+                geminiFallback: "1",
+              }
+              : { [usageProvider]: "ok" }),
           },
         }, {
           includeSingability,
@@ -309,6 +322,12 @@ module.exports = async function handler(req, res) {
           nonce,
         }));
       }
+      const openaiDetail = primaryLyricsProvider === "openai"
+        ? {
+          openaiAttempts: llmResult?.attempts || [],
+          hint: "Check OPENAI_API_KEY on Vercel Preview and model ids (gpt-6-astra, gpt-6.1-sol). OpenAI Logs → Completions after a successful call.",
+        }
+        : {};
       return json(res, 502, {
         error: `${primaryLyricsProvider} lyrics provider unavailable: ${llmResult?.error || "failed"}`,
         provider: "none",
@@ -316,6 +335,7 @@ module.exports = async function handler(req, res) {
           nonce,
           lyricsProvider: primaryLyricsProvider,
           [primaryLyricsProvider]: llmResult?.error || "failed",
+          ...openaiDetail,
         },
       });
     }
@@ -453,19 +473,30 @@ function resolvePrimaryLyricsProvider(lyricsProvider, { openaiKey, geminiKey } =
   return "";
 }
 
+function allowOpenAiGeminiFallback() {
+  return /^(1|true|yes)$/i.test(String(process.env.OPENAI_LYRICS_GEMINI_FALLBACK || "").trim());
+}
+
 function makeRunLyrics({ primaryLyricsProvider, geminiKey, openaiKey, geminiPreferredModels }) {
   return async function runLyrics({ prompt, temperature = 0.9 }) {
     if (primaryLyricsProvider === "openai" && openaiKey) {
       const o = await tryOpenAILyrics({ openaiKey, prompt, temperature });
       if (o?.ok) return o;
-      if (geminiKey) {
+      if (allowOpenAiGeminiFallback() && geminiKey) {
         const g = await tryGeminiLyrics({
           geminiKey,
           prompt,
           temperature,
           preferredModels: geminiPreferredModels,
         });
-        if (g?.ok) return { ...g, fallbackFrom: "openai" };
+        if (g?.ok) {
+          return {
+            ...g,
+            fallbackFrom: "openai",
+            openaiError: o?.error || "openai_failed",
+            openaiAttempts: o?.attempts || [],
+          };
+        }
       }
       return o;
     }

@@ -122,7 +122,8 @@ async function callOpenAIChatCompletions({ key, model, prompt, temperature }) {
 }
 
 async function callOpenAIModel({ key, model, prompt, temperature }) {
-  const preferChat = /^(1|true|yes)$/i.test(String(process.env.OPENAI_LYRICS_PREFER_CHAT || "").trim());
+  // Chat Completions is what shows in platform Logs → Completions for most keys.
+  const preferChat = !/^(0|false|no)$/i.test(String(process.env.OPENAI_LYRICS_PREFER_CHAT || "1").trim());
 
   if (!preferChat) {
     const res = await callOpenAIResponses({ key, model, prompt, temperature });
@@ -139,6 +140,30 @@ async function callOpenAIModel({ key, model, prompt, temperature }) {
   return chat;
 }
 
+async function listOpenAIModelIds(key) {
+  try {
+    const r = await fetch("https://api.openai.com/v1/models", {
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    const data = safeJson(await r.text().catch(() => "")) || {};
+    if (!r.ok) return [];
+    return (Array.isArray(data?.data) ? data.data : [])
+      .map((row) => String(row?.id || "").trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function discoverLyricsModelCandidates(ids) {
+  const want = [/astra/i, /6\.1[-_]?sol/i, /6-1-sol/i, /gpt-6/i];
+  const hits = [];
+  for (const id of ids) {
+    if (want.some((re) => re.test(id))) hits.push(id);
+  }
+  return [...new Set(hits)];
+}
+
 async function tryOpenAILyrics({
   openaiKey,
   prompt,
@@ -146,30 +171,56 @@ async function tryOpenAILyrics({
   model = null,
 } = {}) {
   const key = String(openaiKey || process.env.OPENAI_API_KEY || "").trim();
-  if (!key) return { ok: false, error: "missing_openai_key" };
+  if (!key) return { ok: false, error: "missing_openai_key", attempts: [] };
 
-  const models = model ? [String(model).trim()] : parseLyricsModelChain();
+  let models = model ? [String(model).trim()] : parseLyricsModelChain();
+  const attempts = [];
   let lastError = "unknown";
 
-  for (const m of models) {
-    if (!m) continue;
-    try {
-      const result = await callOpenAIModel({ key, model: m, prompt, temperature });
-      if (result?.ok) {
-        return {
-          ok: true,
-          lyrics: result.lyrics,
-          model: result.model,
-          openaiApi: result.api,
-          ...(result.fallbackApi ? { openaiApiNote: result.fallbackApi } : {}),
-        };
+  async function tryModels(modelList) {
+    for (const m of modelList) {
+      if (!m) continue;
+      try {
+        const result = await callOpenAIModel({ key, model: m, prompt, temperature });
+        if (result?.ok) {
+          return {
+            ok: true,
+            lyrics: result.lyrics,
+            model: result.model,
+            openaiApi: result.api,
+            attempts,
+            ...(result.fallbackApi ? { openaiApiNote: result.fallbackApi } : {}),
+          };
+        }
+        const err = `${result?.error || "failed"} (${result?.api || "?"})`;
+        attempts.push({ model: m, error: err.slice(0, 220) });
+        lastError = `${m}: ${err}`;
+      } catch (e) {
+        const err = String(e?.message || e || "openai_failed").slice(0, 200);
+        attempts.push({ model: m, error: err });
+        lastError = `${m}: ${err}`;
       }
-      lastError = `${m}: ${result?.error || "failed"} (${result?.api || "?"})`;
-    } catch (e) {
-      lastError = `${m}: ${String(e?.message || e || "openai_failed").slice(0, 200)}`;
+    }
+    return null;
+  }
+
+  let hit = await tryModels(models);
+  if (hit) return hit;
+
+  if (/^(1|true|yes)$/i.test(String(process.env.OPENAI_LYRICS_AUTO_DISCOVER || "1").trim())) {
+    const ids = await listOpenAIModelIds(key);
+    const discovered = discoverLyricsModelCandidates(ids).filter((id) => !models.includes(id));
+    if (discovered.length) {
+      models = [...models, ...discovered];
+      hit = await tryModels(discovered);
+      if (hit) return hit;
+    }
+    if (ids.length && attempts.length) {
+      lastError = `${lastError}; discover: tried ${models.join(", ")}; account has ${ids.length} models`;
     }
   }
-  return { ok: false, error: String(lastError).slice(0, 280) };
+
+  return { ok: false, error: String(lastError).slice(0, 400), attempts };
 }
 
 function openAiLyricsAllowedForRequest(lyricsProvider) {

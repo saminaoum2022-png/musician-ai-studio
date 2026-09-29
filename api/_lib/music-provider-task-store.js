@@ -10,6 +10,7 @@ function providerFolder(taskId) {
   const tid = String(taskId || "").trim();
   if (tid.startsWith("lyr_")) return "lyria";
   if (tid.startsWith("elv_")) return "elevenlabs";
+  if (tid.startsWith("mur_")) return "mureka";
   return "minimax";
 }
 
@@ -61,7 +62,13 @@ function buildArchiveRecoveryStatusPayload({ taskId, audioUrl }) {
     title: "Generated song",
     prompt: "",
   };
-  const prov = tid.startsWith("lyr_") ? "lyria" : tid.startsWith("elv_") ? "elevenlabs" : "minimax";
+  const prov = tid.startsWith("lyr_")
+    ? "lyria"
+    : tid.startsWith("elv_")
+      ? "elevenlabs"
+      : tid.startsWith("mur_")
+        ? "mureka"
+        : "minimax";
   return {
     code: 200,
     data: {
@@ -104,7 +111,12 @@ async function loadMusicProviderTaskStatus({ userId, taskId }) {
 
 function isMusicProviderTaskId(taskId) {
   const tid = String(taskId || "").trim();
-  return tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_");
+  return (
+    tid.startsWith("mmx_")
+    || tid.startsWith("lyr_")
+    || tid.startsWith("elv_")
+    || tid.startsWith("mur_")
+  );
 }
 
 function isMinimaxTaskId(taskId) {
@@ -119,6 +131,10 @@ function isElevenlabsTaskId(taskId) {
   return String(taskId || "").trim().startsWith("elv_");
 }
 
+function isMurekaTaskId(taskId) {
+  return String(taskId || "").trim().startsWith("mur_");
+}
+
 // Back-compat aliases for MiniMax spike call sites.
 const saveMinimaxTaskStatus = saveMusicProviderTaskStatus;
 const loadMinimaxTaskStatus = loadMusicProviderTaskStatus;
@@ -130,6 +146,7 @@ module.exports = {
   isMinimaxTaskId,
   isLyriaTaskId,
   isElevenlabsTaskId,
+  isMurekaTaskId,
   saveMinimaxTaskStatus,
   loadMinimaxTaskStatus,
   taskObjectKey,

@@ -131,7 +131,7 @@ function isLikelySunoOriginCdnUrl(url) {
 function isSunoMusicGenerationTaskId(taskId) {
   const tid = String(taskId || "").trim();
   if (!tid) return false;
-  if (/^(mmx_|lyr_|elv_)/i.test(tid)) return false;
+  if (/^(mmx_|lyr_|elv_|mur_)/i.test(tid)) return false;
   return true;
 }
 

@@ -8508,7 +8508,9 @@ function wireSettingsMusicProviderOnce() {
                 ? getElevenlabsFinetunePref()
                   ? "ElevenLabs enabled — NabadAi DNA finetune on."
                   : "ElevenLabs enabled — base model (no finetune)."
-                : "Suno engine restored (two variants).";
+                : pref === "mureka"
+                  ? "Mureka engine enabled — lyrics→song (~$0.045). Admin only."
+                  : "Suno engine restored (two variants).";
         showToast(toastMsg, {
           icon: pref === "suno" ? "✓" : "♪",
           durationMs: 3600,
@@ -30333,7 +30335,7 @@ function deepFindTaskIdString(obj, depth = 0) {
 }
 
 const MUSIC_PROVIDER_LS_KEY = "nabadMusicProvider";
-const MUSIC_PROVIDER_PREFS = ["suno", "minimax", "lyria", "elevenlabs"];
+const MUSIC_PROVIDER_PREFS = ["suno", "minimax", "lyria", "elevenlabs", "mureka"];
 
 function normalizeMusicProviderPref(raw) {
   const v = String(raw || "").trim().toLowerCase();
@@ -30379,6 +30381,7 @@ function musicProviderSubline(pref) {
       ? "ElevenLabs — NabadAi DNA finetune on v2.5 (~$0.45/song)"
       : "ElevenLabs — base music_v2.5, no finetune (~$0.45/song)";
   }
+  if (pref === "mureka") return "Mureka — lyrics→song, one variant (~$0.045/song · admin)";
   return "Suno — two variants per song";
 }
 
@@ -30386,12 +30389,13 @@ function musicProviderShortLabel(pref = getMusicProviderPref()) {
   if (pref === "minimax") return "MiniMax";
   if (pref === "lyria") return "Lyria";
   if (pref === "elevenlabs") return "ElevenLabs";
+  if (pref === "mureka") return "Mureka";
   return "Suno";
 }
 
 function useAltMusicProvider() {
   const pref = getMusicProviderPref();
-  return creditsState.isAdmin && (pref === "minimax" || pref === "lyria" || pref === "elevenlabs");
+  return creditsState.isAdmin && (pref === "minimax" || pref === "lyria" || pref === "elevenlabs" || pref === "mureka");
 }
 
 function useMinimaxMusicProvider() {
@@ -30404,6 +30408,10 @@ function useLyriaMusicProvider() {
 
 function useElevenlabsMusicProvider() {
   return creditsState.isAdmin && getMusicProviderPref() === "elevenlabs";
+}
+
+function useMurekaMusicProvider() {
+  return creditsState.isAdmin && getMusicProviderPref() === "mureka";
 }
 
 /**
@@ -30480,6 +30488,7 @@ function musicGenerateApiPath() {
   if (pref === "minimax") return "/api/music/generate?provider=minimax";
   if (pref === "lyria") return "/api/music/generate?provider=lyria";
   if (pref === "elevenlabs") return "/api/music/generate?provider=elevenlabs";
+  if (pref === "mureka") return "/api/music/generate?provider=mureka";
   return "/api/suno/generate";
 }
 
@@ -30980,7 +30989,7 @@ function openNabadClipFlow() {
 
 function musicStatusApiPath(taskId) {
   const tid = String(taskId || "").trim();
-  if (tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_")) {
+  if (tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_") || tid.startsWith("mur_")) {
     return `/api/music/status?taskId=${encodeURIComponent(tid)}`;
   }
   return `/api/suno/status?taskId=${encodeURIComponent(tid)}`;
@@ -30988,7 +30997,7 @@ function musicStatusApiPath(taskId) {
 
 function isSingleVariantMusicTask(taskId) {
   const tid = String(taskId || "").trim();
-  return tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_");
+  return tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_") || tid.startsWith("mur_");
 }
 
 /** Suno full songs (not Lyria/MiniMax/ElevenLabs) — need archive on native. */
@@ -31006,9 +31015,11 @@ function trackMusicProvider(track) {
   if (fromMeta.includes("lyria")) return "lyria";
   if (fromMeta.includes("minimax")) return "minimax";
   if (fromMeta.includes("eleven")) return "elevenlabs";
+  if (fromMeta.includes("mureka")) return "mureka";
   if (tid.startsWith("lyr_")) return "lyria";
   if (tid.startsWith("mmx_")) return "minimax";
   if (tid.startsWith("elv_")) return "elevenlabs";
+  if (tid.startsWith("mur_")) return "mureka";
   return "suno";
 }
 
@@ -58496,9 +58507,11 @@ function buildProofEngineLabel(post, { admin = false } = {}) {
         ? "ElevenLabs"
         : provider === "minimax"
           ? "MiniMax"
-          : provider === "suno"
-            ? "Suno"
-            : provider.charAt(0).toUpperCase() + provider.slice(1);
+          : provider === "mureka"
+            ? "Mureka"
+            : provider === "suno"
+              ? "Suno"
+              : provider.charAt(0).toUpperCase() + provider.slice(1);
 
   const modelSuffix =
     model && (!provider || provider === "suno")
@@ -72677,7 +72690,7 @@ function applyGeneratedLyricsToCreateUi(lyrics, meta) {
 
 function resolveExpectedGenerationVariants(taskId) {
   const tid = String(taskId || "").trim();
-  if (tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_")) return 1;
+  if (tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_") || tid.startsWith("mur_")) return 1;
   const pending = getGenerationPending();
   if (tid && pending?.taskId && String(pending.taskId) === tid) {
     return Math.max(

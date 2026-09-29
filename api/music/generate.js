@@ -1,9 +1,10 @@
 /**
- * Provider-neutral full song generation — MiniMax + Lyria + ElevenLabs admin spikes.
+ * Provider-neutral full song generation — MiniMax + Lyria + ElevenLabs + Mureka admin spikes.
  *
- * POST /api/music/generate?provider=minimax|lyria|elevenlabs
+ * POST /api/music/generate?provider=minimax|lyria|elevenlabs|mureka
  *   Same auth/credits shell as /api/suno/generate; admin-only unless
- *   MINIMAX_GENERATE_ENABLED=1, LYRIA_GENERATE_ENABLED=1, or ELEVENLABS_GENERATE_ENABLED=1.
+ *   MINIMAX_GENERATE_ENABLED=1, LYRIA_GENERATE_ENABLED=1, ELEVENLABS_GENERATE_ENABLED=1,
+ *   or MUREKA_GENERATE_ENABLED=1.
  *
  * Env:
  * - MINIMAX_API_KEY, MINIMAX_KEY_KIND, MINIMAX_MUSIC_MODEL, MINIMAX_GENERATE_ENABLED
@@ -11,6 +12,7 @@
  * - CLIP_GEMINI_PRODUCER_ENABLED=1 — Gemini prompt enrichment for clips + ElevenLabs (staging preview)
  * - CLIP_GEMINI_PRODUCER_MODEL — optional override; else tries 3.6 → 3.5 → 2.5 flash
  * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_FINETUNE_ID, ELEVENLABS_GENERATE_ENABLED
+ * - MUREKA_API_KEY, MUREKA_MUSIC_MODEL, MUREKA_VOCAL_ID, MUREKA_GENERATE_ENABLED
  */
 const crypto = require("crypto");
 const Busboy = require("busboy");
@@ -68,6 +70,15 @@ const {
   verifyElevenFinetuneAccess,
 } = require("../_lib/elevenlabs-music-upstream");
 const {
+  murekaGenerateEnabled,
+  murekaGenerateSong,
+  murekaWaitForSong,
+  murekaUserMessage,
+  resolveMurekaModel,
+  resolveMurekaVocalId,
+  mapMurekaGender,
+} = require("../_lib/mureka-upstream");
+const {
   saveMusicProviderTaskStatus,
   providerFolder,
 } = require("../_lib/music-provider-task-store");
@@ -102,6 +113,7 @@ const MINIMAX_PROVIDER_COST_USD = Number(process.env.MINIMAX_USD_PER_TRACK || "0
 const LYRIA_PROVIDER_COST_USD = Number(process.env.LYRIA_USD_PER_TRACK || "0.08");
 const LYRIA_CLIP_COST_USD = Number(process.env.LYRIA_CLIP_USD || "0.04");
 const ELEVENLABS_PROVIDER_COST_USD = Number(process.env.ELEVENLABS_USD_PER_TRACK || "0.45");
+const MUREKA_PROVIDER_COST_USD = Number(process.env.MUREKA_USD_PER_TRACK || "0.045");
 
 function minimaxGenerateEnabled() {
   const v = String(process.env.MINIMAX_GENERATE_ENABLED || "").trim().toLowerCase();
@@ -114,6 +126,7 @@ function resolveProvider(req) {
     const p = String(url.searchParams.get("provider") || "minimax").trim().toLowerCase();
     if (p === "lyria") return "lyria";
     if (p === "elevenlabs" || p === "eleven") return "elevenlabs";
+    if (p === "mureka" || p === "mur") return "mureka";
     return "minimax";
   } catch {
     return "minimax";
@@ -122,7 +135,13 @@ function resolveProvider(req) {
 
 function newTaskId(provider) {
   const prefix =
-    provider === "lyria" ? "lyr" : provider === "elevenlabs" ? "elv" : "mmx";
+    provider === "lyria"
+      ? "lyr"
+      : provider === "elevenlabs"
+        ? "elv"
+        : provider === "mureka"
+          ? "mur"
+          : "mmx";
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "")}`;
 }
 
@@ -1752,6 +1771,243 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   });
 }
 
+async function runMurekaGenerationJob({
+  userId,
+  isAdmin,
+  taskId,
+  audioId,
+  apiKey,
+  lyrics,
+  stylePrompt,
+  title,
+  model,
+  vocalId,
+  gender,
+  body,
+}) {
+  const fail = async (msg) => {
+    if (!isAdmin) {
+      await refund(userId, FULL_SONG_COST, "refund_full_song", "mureka_upstream").catch(() => null);
+    }
+    const statusPayload = buildFailedStatusPayload({
+      taskId,
+      provider: "mureka",
+      errorMessage: msg,
+    });
+    await saveMusicProviderTaskStatus({ userId, taskId, statusPayload }).catch(() => null);
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: isAdmin ? "failed" : "refunded",
+      error_message: msg,
+    });
+  };
+
+  try {
+    const started = await murekaGenerateSong({
+      apiKey,
+      lyrics,
+      prompt: stylePrompt,
+      model,
+      n: 1,
+      gender,
+      vocalId,
+      referenceId: String(body?.murekaReferenceId || "").trim(),
+      melodyId: String(body?.murekaMelodyId || "").trim(),
+      stream: false,
+    });
+    if (!started.ok) {
+      await fail(murekaUserMessage(started.error));
+      return;
+    }
+
+    const waited = await murekaWaitForSong({
+      apiKey,
+      upstreamTaskId: started.upstreamTaskId,
+    });
+    if (!waited.ok) {
+      await fail(murekaUserMessage(waited.error));
+      return;
+    }
+
+    const archived = await persistRemoteAudio({
+      userId,
+      taskId,
+      remoteUrl: waited.audioUrl,
+    });
+    if (!archived.ok) {
+      await fail(archived.error || "Could not archive Mureka audio.");
+      return;
+    }
+
+    const statusPayload = buildSunoStatusPayload({
+      taskId,
+      title,
+      lyrics,
+      audioUrl: archived.url,
+      audioId,
+      provider: "mureka",
+    });
+    statusPayload._murekaUpstreamTaskId = started.upstreamTaskId;
+    statusPayload._murekaModel = waited.model || started.model || model;
+    if (vocalId) statusPayload._murekaVocalId = vocalId;
+    const stored = await saveMusicProviderTaskStatus({ userId, taskId, statusPayload });
+    if (!stored.ok) {
+      console.warn("[music/generate] mureka task store failed (audio ok)", stored.error);
+    }
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: "completed",
+      provider_cost_usd: MUREKA_PROVIDER_COST_USD,
+      request_detail: [
+        "flow: mureka",
+        `upstream: ${started.upstreamTaskId}`,
+        waited.model || started.model ? `model: ${waited.model || started.model}` : "",
+        vocalId ? `vocal_id: ${vocalId}` : "",
+      ].filter(Boolean).join("\n"),
+    });
+  } catch (e) {
+    console.error("[music/generate] mureka background job failed", taskId, e);
+    await fail(e?.message || "Couldn't generate this song — try again.");
+  }
+}
+
+async function handleMurekaGenerate(req, res, { user, isAdmin, body }) {
+  const apiKey = process.env.MUREKA_API_KEY || "";
+  if (!apiKey) return sendJson(res, 500, { error: "Missing MUREKA_API_KEY on server" });
+
+  if (!isAdmin && !murekaGenerateEnabled()) {
+    return sendJson(res, 403, {
+      error: "Mureka generation is admin-only on this environment.",
+      code: "mureka_admin_only",
+    });
+  }
+
+  if (body?.personaId) {
+    return sendJson(res, 400, {
+      error: "Mureka spike does not support persona yet — clear persona or switch engine.",
+      code: "mureka_unsupported",
+    });
+  }
+
+  if (body?.hasReference || body?.referenceAudio || body?.referenceAudioUrl) {
+    return sendJson(res, 400, {
+      error: "Mureka spike does not support hum/reference yet — clear audio or switch engine.",
+      code: "mureka_unsupported",
+    });
+  }
+
+  if (body?.instrumental) {
+    return sendJson(res, 400, {
+      error: "Mureka instrumental isn't wired yet — uncheck instrumental or switch engine.",
+      code: "mureka_unsupported",
+    });
+  }
+
+  let balanceAfterDebit = null;
+  if (!isAdmin) {
+    const debit = await callRpc("consume_credits", {
+      p_user_id: user.userId,
+      p_amount: FULL_SONG_COST,
+      p_reason: "full_song",
+      p_ref: "mureka",
+    });
+    if (!debit.ok || !debit.data?.ok) {
+      const status = String(debit.data?.status || "");
+      if (status === "insufficient") {
+        return sendJson(res, 402, {
+          error: "Not enough credits",
+          code: "insufficient_credits",
+          balance: Number(debit.data?.balance || 0),
+          needed: FULL_SONG_COST,
+        });
+      }
+      return sendJson(res, 500, { error: "Credit check failed", details: debit.data || debit.error || null });
+    }
+    balanceAfterDebit = Number(debit.data?.balance || 0);
+  }
+
+  const lyrics = String(body?.prompt || "").trim();
+  if (!lyrics) {
+    return sendJson(res, 400, {
+      error: "Mureka needs lyrics — add lyrics and try again.",
+      code: "mureka_lyrics_required",
+    });
+  }
+
+  const stylePrompt = buildMusicPrompt(body);
+  const title = String(body?.title || "").trim();
+  const model = resolveMurekaModel(body?.murekaModel);
+  const vocalId = resolveMurekaVocalId(body?.murekaVocalId);
+  const gender = mapMurekaGender(body?.vocalGender) || String(body?.vocalGender || "").trim();
+  const taskId = newTaskId("mureka");
+  const audioId = `${taskId}_a`;
+
+  await logMusicGeneration({
+    userId: user.userId,
+    taskId,
+    kind: body?.watchKind === "photo" ? "photo" : "song",
+    provider: "mureka",
+    prompt: buildPromptLabel(lyrics, stylePrompt, title),
+    requestDetail: [
+      "flow: mureka",
+      model ? `model: ${model}` : "",
+      vocalId ? `vocal_id: ${vocalId}` : "",
+      gender ? `gender: ${gender}` : "",
+    ].filter(Boolean).join("\n"),
+    status: "pending",
+    creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
+    providerCostUsd: MUREKA_PROVIDER_COST_USD,
+  });
+
+  const pendingPayload = buildPendingStatusPayload({ taskId, provider: "mureka" });
+  if (vocalId) pendingPayload._murekaVocalId = vocalId;
+  pendingPayload._murekaModel = model;
+  const pendingStored = await saveMusicProviderTaskStatus({
+    userId: user.userId,
+    taskId,
+    statusPayload: pendingPayload,
+  });
+  if (!pendingStored.ok) {
+    if (!isAdmin) {
+      await refund(user.userId, FULL_SONG_COST, "refund_full_song", "mureka_task_store").catch(() => null);
+    }
+    return sendJson(res, 500, {
+      error: "Could not start Mureka generation — try again.",
+      details: pendingStored.error || null,
+    });
+  }
+
+  scheduleBackgroundWork(
+    runMurekaGenerationJob({
+      userId: user.userId,
+      isAdmin,
+      taskId,
+      audioId,
+      apiKey,
+      lyrics,
+      stylePrompt,
+      title,
+      model,
+      vocalId,
+      gender,
+      body,
+    }),
+  );
+
+  return sendJson(res, 200, {
+    code: 200,
+    data: { taskId, audioId, status: "PENDING" },
+    _provider: "mureka",
+    _model: model,
+    _murekaVocalId: vocalId || undefined,
+    _ready: false,
+    _variantCount: 1,
+    _credits: {
+      spent: isAdmin ? 0 : FULL_SONG_COST,
+      balance: balanceAfterDebit,
+      admin: isAdmin || undefined,
+    },
+  });
+}
+
 const ELEVEN_REFERENCE_UPLOAD_MAX_BYTES = 15 * 1024 * 1024;
 
 function readElevenlabsMultipartBody(req) {
@@ -1844,6 +2100,9 @@ module.exports = async function handler(req, res) {
     }
     if (provider === "elevenlabs") {
       return handleElevenlabsGenerate(req, res, { user, isAdmin, body });
+    }
+    if (provider === "mureka") {
+      return handleMurekaGenerate(req, res, { user, isAdmin, body });
     }
     return handleMinimaxGenerate(req, res, { user, isAdmin, body });
   } catch (e) {

@@ -95,7 +95,7 @@ function clipAudioId(clip, taskId, index) {
   const fromClip = String(clip?.id || clip?.audioId || clip?.audio_id || "").trim();
   if (fromClip) return fromClip;
   const tid = String(taskId || "").trim();
-  if (tid.startsWith("lyr_") || tid.startsWith("mmx_") || tid.startsWith("elv_")) {
+  if (tid.startsWith("lyr_") || tid.startsWith("mmx_") || tid.startsWith("elv_") || tid.startsWith("mur_")) {
     return `${tid}_${index === 0 ? "a" : index === 1 ? "b" : index + 1}`;
   }
   return "";

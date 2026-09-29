@@ -6824,8 +6824,12 @@ function arabicDialectAccentStyleNote() {
   return "";
 }
 
-/** Gemini for ✦ Generate lyrics (all dialects) — rhyme/qafiya rules live in /api/lyrics buildPrompt. */
+/** ✦ Generate lyrics engine — staging can bake ChatGPT via nabadOpenaiLyricsUi in env.client.js. */
 function resolveLyricsProviderForMode(_mode) {
+  try {
+    const env = window.__NABAD_CLIENT_ENV__ || {};
+    if (env.nabadOpenaiLyricsUi) return "openai";
+  } catch {}
   return "gemini";
 }
 

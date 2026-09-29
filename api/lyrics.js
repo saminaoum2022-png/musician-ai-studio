@@ -1,11 +1,13 @@
 /**
  * POST /api/lyrics
- * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics"|"enhance"|"fix_singing"|"singability_check"|"to_arabizi", lyricsTarget?: "suno"|"lyria", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini"|"suno", scriptFormat?: "arabic"|"arabizi"|"auto" }
+ * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics"|"enhance"|"fix_singing"|"singability_check"|"to_arabizi", lyricsTarget?: "suno"|"lyria", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini"|"openai"|"chatgpt"|"suno", scriptFormat?: "arabic"|"arabizi"|"auto" }
  *
  * Provider: Gemini by default (GEMINI_API_KEY; rhyme/qafiya in buildPrompt).
+ * OpenAI when lyricsProvider is openai/chatgpt and OPENAI_LYRICS is allowed (Preview or OPENAI_LYRICS_ENABLED=1).
  * Suno only when lyricsProvider is explicitly "suno" (costs Suno credits).
  */
 const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
+const { tryOpenAILyrics, openAiLyricsAllowedForRequest } = require("./_lib/openai-lyrics");
 const {
   looksLikeArabizi,
   resolveScriptFormat,
@@ -192,39 +194,46 @@ module.exports = async function handler(req, res) {
 
     const debug = {};
     const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY || "";
+    const primaryLyricsProvider = resolvePrimaryLyricsProvider(lyricsProvider, { openaiKey, geminiKey });
+    const runLyrics = makeRunLyrics({
+      primaryLyricsProvider,
+      geminiKey,
+      openaiKey,
+      geminiPreferredModels,
+    });
     if (!sunoLyricsRequested) {
-      if (!geminiKey) {
+      if (!primaryLyricsProvider) {
         return json(res, 502, {
-          error: "Gemini lyrics provider unavailable: missing GEMINI_API_KEY",
+          error: "Lyrics provider unavailable: missing GEMINI_API_KEY or OpenAI not enabled",
           provider: "none",
-          debug: { nonce, gemini: "missing_gemini_key" },
+          debug: { nonce, lyricsProvider: lyricsProvider || "gemini", openai: openaiKey ? "disabled" : "missing_key" },
         });
       }
-      const gemResult = await tryGeminiLyrics({
-        geminiKey,
+      const llmResult = await runLyrics({
         prompt,
         temperature: geminiTemperature,
-        preferredModels: geminiPreferredModels,
       });
-      if (gemResult?.ok) {
+      if (llmResult?.ok) {
+        const usageProvider = primaryLyricsProvider === "openai" ? "openai" : "gemini";
         if (mode === "singability_check") {
-          const report = parseSingabilityReport(gemResult.lyrics);
+          const report = parseSingabilityReport(llmResult.lyrics);
           if (!report) {
             return json(res, 502, {
               error: "Could not read singability check — try again.",
               provider: "none",
-              debug: { nonce, gemini: "bad_json", mode },
+              debug: { nonce, [usageProvider]: "bad_json", mode },
             });
           }
-          queueLogProviderUsage({ provider: "gemini", kind: "lyrics" });
+          queueLogProviderUsage({ provider: usageProvider, kind: "lyrics" });
           return json(res, 200, {
             ok: true,
             singability: report,
-            provider: "gemini",
-            debug: { nonce, gemini: "ok", mode },
+            provider: usageProvider,
+            debug: { nonce, [usageProvider]: "ok", mode },
           });
         }
-        let normalized = sanitizeLyricsOutput(gemResult.lyrics);
+        let normalized = sanitizeLyricsOutput(llmResult.lyrics);
         const flags = dialectFlags(dialect, dialectHint);
         const arabicScript = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed });
         if (mode === "diacritics") {
@@ -243,15 +252,13 @@ module.exports = async function handler(req, res) {
                 "ADD sukoon on stopped consonants and last-letter vowels the singer might miss.",
                 "Keep the same words and section tags. Output lyrics only.",
               ];
-            const retry = await tryGeminiLyrics({
-              geminiKey,
+            const retry = await runLyrics({
               prompt: [
                 ...retryLead,
                 "",
                 prompt,
               ].join("\n"),
               temperature: Math.max(Number(geminiTemperature) || 0.38, 0.5),
-              preferredModels: geminiPreferredModels,
             });
             if (retry?.ok) {
               const retried = lightenSungArabicDiacritics(sanitizeLyricsOutput(retry.lyrics), diacriticOpts);
@@ -264,26 +271,32 @@ module.exports = async function handler(req, res) {
           normalized = postProcessGeneratedArabicLyrics(normalized, { mode, flags, arabicScript });
         }
         if (mode === "remix_reply" && isMetaAiLyrics(normalized)) {
-          const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
+          const fixed = await repairMetaAiLyrics({ runLyrics, prompt, text: normalized, temperature: geminiTemperature });
           if (fixed) normalized = fixed;
         }
         const repaired = mode === "enhance" || mode === "diacritics" || mode === "fix_singing" || mode === "to_arabizi"
-          ? { text: normalized, provider: "gemini" }
+          ? { text: normalized, provider: usageProvider }
           : await maybeRepairOnce({
             text: normalized,
             prompt,
             complianceTerms,
             sunoKey: "",
-            geminiKey,
+            runLyrics,
             temperature: geminiTemperature,
           });
-        if (String(repaired.provider || "").includes("gemini")) {
-          queueLogProviderUsage({ provider: "gemini", kind: "lyrics" });
+        if (String(repaired.provider || "").includes(usageProvider)) {
+          queueLogProviderUsage({ provider: usageProvider, kind: "lyrics" });
         }
         return json(res, 200, await withOptionalSingability({
           lyrics: repaired.text,
-          provider: repaired.provider || "gemini",
-          debug: { nonce, gemini: "ok", lyricsProvider: "gemini", mode, model: gemResult.model || "" },
+          provider: repaired.provider || usageProvider,
+          debug: {
+            nonce,
+            lyricsProvider: usageProvider,
+            mode,
+            model: llmResult.model || "",
+            [usageProvider]: "ok",
+          },
         }, {
           includeSingability,
           mode,
@@ -296,9 +309,13 @@ module.exports = async function handler(req, res) {
         }));
       }
       return json(res, 502, {
-        error: `Gemini lyrics provider unavailable: ${gemResult?.error || "failed"}`,
+        error: `${primaryLyricsProvider} lyrics provider unavailable: ${llmResult?.error || "failed"}`,
         provider: "none",
-        debug: { nonce, gemini: gemResult?.error || "failed", lyricsProvider: "gemini" },
+        debug: {
+          nonce,
+          lyricsProvider: primaryLyricsProvider,
+          [primaryLyricsProvider]: llmResult?.error || "failed",
+        },
       });
     }
 
@@ -429,7 +446,41 @@ async function trySunoLyrics({ sunoKey, prompt, callBackUrl }) {
   }
 }
 
-async function maybeRepairOnce({ text, prompt, complianceTerms, sunoKey, geminiKey, temperature = 0.9 }) {
+function resolvePrimaryLyricsProvider(lyricsProvider, { openaiKey, geminiKey } = {}) {
+  if (openAiLyricsAllowedForRequest(lyricsProvider) && openaiKey) return "openai";
+  if (geminiKey) return "gemini";
+  return "";
+}
+
+function makeRunLyrics({ primaryLyricsProvider, geminiKey, openaiKey, geminiPreferredModels }) {
+  return async function runLyrics({ prompt, temperature = 0.9 }) {
+    if (primaryLyricsProvider === "openai" && openaiKey) {
+      const o = await tryOpenAILyrics({ openaiKey, prompt, temperature });
+      if (o?.ok) return o;
+      if (geminiKey) {
+        const g = await tryGeminiLyrics({
+          geminiKey,
+          prompt,
+          temperature,
+          preferredModels: geminiPreferredModels,
+        });
+        if (g?.ok) return { ...g, fallbackFrom: "openai" };
+      }
+      return o;
+    }
+    if (geminiKey) {
+      return tryGeminiLyrics({
+        geminiKey,
+        prompt,
+        temperature,
+        preferredModels: geminiPreferredModels,
+      });
+    }
+    return { ok: false, error: "no_lyrics_engine" };
+  };
+}
+
+async function maybeRepairOnce({ text, prompt, complianceTerms, sunoKey, runLyrics, geminiKey, temperature = 0.9 }) {
   if (isCompliantEnough(text, complianceTerms)) return { text };
   const repairPrompt = [
     "Rewrite the lyrics to strictly follow the original request.",
@@ -442,11 +493,15 @@ async function maybeRepairOnce({ text, prompt, complianceTerms, sunoKey, geminiK
     "Current non-compliant output to repair:",
     text,
   ].join("\n");
-  if (geminiKey) {
-    const g = await tryGeminiLyrics({ geminiKey, prompt: repairPrompt, temperature });
+  const runner = runLyrics || (geminiKey
+    ? (opts) => tryGeminiLyrics({ geminiKey, ...opts })
+    : null);
+  if (runner) {
+    const g = await runner({ prompt: repairPrompt, temperature });
     if (g?.ok) {
       const out = sanitizeLyricsOutput(g.lyrics);
-      if (out) return { text: out, provider: "gemini-repair" };
+      const tag = g.fallbackFrom ? "gemini-repair" : (g.model && String(g.model).includes("gpt") ? "openai-repair" : "gemini-repair");
+      if (out) return { text: out, provider: tag };
     }
   }
   return { text };
@@ -469,7 +524,7 @@ function isMetaAiLyrics(text) {
   return patterns.some((re) => re.test(t));
 }
 
-async function repairMetaAiLyrics({ geminiKey, prompt, text, temperature = 0.72 }) {
+async function repairMetaAiLyrics({ runLyrics, geminiKey, prompt, text, temperature = 0.72 }) {
   const repairPrompt = [
     "The lyrics below broke the rules by describing AI, software, systems, data, or having no heart/soul.",
     "Rewrite as a HUMAN singer replying to another human in the same love/story song.",
@@ -482,7 +537,11 @@ async function repairMetaAiLyrics({ geminiKey, prompt, text, temperature = 0.72 
     "Bad meta output to replace:",
     text,
   ].join("\n");
-  const g = await tryGeminiLyrics({ geminiKey, prompt: repairPrompt, temperature });
+  const runner = runLyrics || (geminiKey
+    ? (opts) => tryGeminiLyrics({ geminiKey, ...opts })
+    : null);
+  if (!runner) return "";
+  const g = await runner({ prompt: repairPrompt, temperature });
   if (!g?.ok) return "";
   const out = sanitizeLyricsOutput(g.lyrics);
   return out && !isMetaAiLyrics(out) ? out : "";

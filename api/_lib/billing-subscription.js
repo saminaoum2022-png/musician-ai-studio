@@ -107,6 +107,18 @@ async function fetchProSubscriptionRow(userId) {
   return row || null;
 }
 
+/** After a new monthly INITIAL, bump created_at so legacy cutoff no longer applies. */
+async function refreshMonthlySubscriptionStart(userId) {
+  const uid = cleanUserId(userId);
+  if (!uid) return { ok: false };
+  const now = new Date().toISOString();
+  return restWrite(`pro_subscriptions?user_id=eq.${encodeURIComponent(uid)}`, {
+    method: "PATCH",
+    body: { created_at: now, updated_at: now },
+    prefer: "return=minimal",
+  });
+}
+
 const WEEKLY_TRIAL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Sandbox weekly trials renew daily — don't flip trialing → active or extend the trial end. */
@@ -409,6 +421,7 @@ async function applyRevenueCatEvent(event) {
     statusFromRevenueCatEvent(eventType, periodType, expirationMs, productId),
     periodType,
   );
+  const existingBeforeUpsert = await fetchProSubscriptionRow(userId);
   const subRes = await upsertProSubscription({
     userId,
     provider: "revenuecat",
@@ -431,6 +444,9 @@ async function applyRevenueCatEvent(event) {
       periodType,
       eventType,
       subscriptionStatus: status,
+      userId,
+      subscriptionCreatedAt: existingBeforeUpsert?.created_at,
+      previousPlanId: existingBeforeUpsert?.plan_id,
     });
     const trialGrant = isTrialGrant({
       periodType,
@@ -449,6 +465,14 @@ async function applyRevenueCatEvent(event) {
       bucket: trialGrant ? "trial" : "paid",
       convertTrial: !trialGrant,
     });
+    // New monthly commitment (including re-subscribe after expire) → leave legacy 1,200.
+    if (
+      plan.planId === "monthly" &&
+      String(eventType).toUpperCase() === "INITIAL_PURCHASE" &&
+      !trialGrant
+    ) {
+      await refreshMonthlySubscriptionStart(userId);
+    }
   }
 
   return {
@@ -561,4 +585,6 @@ module.exports = {
   grantCreditsOnce,
   fetchRevenueCatSubscriber,
   pickActiveProSubscription,
+  fetchProSubscriptionRow,
+  refreshMonthlySubscriptionStart,
 };

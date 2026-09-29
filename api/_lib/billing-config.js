@@ -2,6 +2,10 @@
  * Server-side billing config — keep in sync with src/pro-plan-config.js product IDs.
  */
 
+const {
+  MONTHLY_LEGACY_1200_USER_IDS: MONTHLY_LEGACY_1200_USER_IDS_HARDCODED,
+} = require("./monthly-legacy-allowlist");
+
 const PRO_PRODUCTS = Object.freeze({
   "com.nabadai.music.pro.weekly": {
     planId: "weekly",
@@ -14,6 +18,58 @@ const PRO_PRODUCTS = Object.freeze({
     trialCredits: 0,
   },
 });
+
+/** Old monthly allotment (1,000 + 200 bonus) for grandfathered renewals only. */
+const MONTHLY_LEGACY_CREDITS = 1200;
+
+/**
+ * Monthly subs that started before the 1,000-credit plan shipped keep 1,200 on
+ * renewal until they expire and re-subscribe (created_at is then refreshed).
+ * Match staging push of the 1,000 plan (2026-09-29).
+ */
+const MONTHLY_LEGACY_CUTOFF_MS = Date.parse("2026-09-29T16:00:00.000Z");
+
+function parseMonthlyLegacyAllowlistIds() {
+  const fromEnv = String(process.env.MONTHLY_LEGACY_1200_USER_IDS || "")
+    .split(/[,;\s]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => /^[0-9a-f-]{36}$/.test(s));
+  const fromFile = (MONTHLY_LEGACY_1200_USER_IDS_HARDCODED || [])
+    .map((s) => String(s || "").trim().toLowerCase())
+    .filter((s) => /^[0-9a-f-]{36}$/.test(s));
+  return new Set([...fromFile, ...fromEnv]);
+}
+
+const MONTHLY_LEGACY_1200_USER_IDS = parseMonthlyLegacyAllowlistIds();
+
+function isMonthlyLegacyAllowlisted(userId) {
+  const uid = String(userId || "").trim().toLowerCase();
+  return Boolean(uid && MONTHLY_LEGACY_1200_USER_IDS.has(uid));
+}
+
+/**
+ * Paid monthly grant amount. New subscribers (INITIAL_PURCHASE) always get 1,000.
+ * Legacy allowlisted / pre-cutoff continuous monthlies get 1,200 on renewals.
+ * Weekly → monthly upgrades are not legacy (previousPlanId !== "monthly").
+ */
+function monthlyPaidCredits({
+  userId,
+  eventType,
+  subscriptionCreatedAt,
+  previousPlanId,
+} = {}) {
+  const type = String(eventType || "").toUpperCase();
+  const defaultCredits = PRO_PRODUCTS["com.nabadai.music.pro.monthly"].creditsPerPeriod;
+  if (type === "INITIAL_PURCHASE") return defaultCredits;
+  if (isMonthlyLegacyAllowlisted(userId)) return MONTHLY_LEGACY_CREDITS;
+  const prevPlan = String(previousPlanId || "").trim().toLowerCase();
+  if (prevPlan && prevPlan !== "monthly") return defaultCredits;
+  const createdMs = Date.parse(String(subscriptionCreatedAt || ""));
+  if (Number.isFinite(createdMs) && createdMs < MONTHLY_LEGACY_CUTOFF_MS) {
+    return MONTHLY_LEGACY_CREDITS;
+  }
+  return defaultCredits;
+}
 
 const CREDIT_PACK_PRODUCTS = Object.freeze({
   "com.nabadai.music.credits.12": 200,
@@ -46,7 +102,15 @@ function creditsForPackProductId(productId) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-function creditsForSubscriptionGrant({ productId, periodType, eventType, subscriptionStatus }) {
+function creditsForSubscriptionGrant({
+  productId,
+  periodType,
+  eventType,
+  subscriptionStatus,
+  userId,
+  subscriptionCreatedAt,
+  previousPlanId,
+} = {}) {
   const plan = planForProductId(productId);
   if (!plan) return 0;
   const period = String(periodType || "").toUpperCase();
@@ -54,6 +118,42 @@ function creditsForSubscriptionGrant({ productId, periodType, eventType, subscri
   const status = String(subscriptionStatus || "").toLowerCase();
   if (plan.trialCredits > 0 && (period === "TRIAL" || status === "trialing")) {
     return type === "INITIAL_PURCHASE" ? plan.trialCredits : 0;
+  }
+  if (plan.planId === "monthly") {
+    return monthlyPaidCredits({
+      userId,
+      eventType: type,
+      subscriptionCreatedAt,
+      previousPlanId,
+    });
+  }
+  return plan.creditsPerPeriod;
+}
+
+/** Stripe path — plan object instead of Apple product id. */
+function creditsForPlanGrant({
+  plan,
+  eventType,
+  userId,
+  subscriptionCreatedAt,
+  previousPlanId,
+  periodType,
+  subscriptionStatus,
+} = {}) {
+  if (!plan) return 0;
+  const period = String(periodType || "").toUpperCase();
+  const type = String(eventType || "").toUpperCase();
+  const status = String(subscriptionStatus || "").toLowerCase();
+  if (plan.trialCredits > 0 && (period === "TRIAL" || status === "trialing")) {
+    return type === "INITIAL_PURCHASE" ? plan.trialCredits : 0;
+  }
+  if (plan.planId === "monthly") {
+    return monthlyPaidCredits({
+      userId,
+      eventType: type,
+      subscriptionCreatedAt,
+      previousPlanId,
+    });
   }
   return plan.creditsPerPeriod;
 }
@@ -134,9 +234,15 @@ module.exports = {
   STUDIO_PRO_MASTER_REDEEMED_EVENT,
   ENTITLEMENT_PRO,
   CREDIT_GRANT_EVENT_TYPES,
+  MONTHLY_LEGACY_CREDITS,
+  MONTHLY_LEGACY_CUTOFF_MS,
+  MONTHLY_LEGACY_1200_USER_IDS,
+  isMonthlyLegacyAllowlisted,
+  monthlyPaidCredits,
   planForProductId,
   creditsForPackProductId,
   creditsForSubscriptionGrant,
+  creditsForPlanGrant,
   statusFromRevenueCatEvent,
   stripePriceIds,
   isStripeConfigured,

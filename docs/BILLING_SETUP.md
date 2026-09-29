@@ -66,13 +66,23 @@ iPhone (RevenueCat SDK)
   → app calls POST /api/billing/sync (backup)
 ```
 
-## Credit grants (from pro-plan-config.js)
+## Credit grants (from pro-plan-config.js / billing-config.js)
 
 | Plan | Credits |
 |------|---------|
 | Weekly trial start | 90 |
 | Weekly (paid renewal) | 400 |
-| Monthly | 1,000 |
+| Monthly (new subscribers) | 1,000 |
+| Monthly (legacy allowlist / pre-cutoff renewals) | 1,200 |
+
+Legacy monthly: accounts that started monthly before `2026-09-29T16:00:00Z`, or UUIDs in
+`api/_lib/monthly-legacy-allowlist.js` / env `MONTHLY_LEGACY_1200_USER_IDS`, keep **1,200**
+on each renewal until they expire. A new monthly `INITIAL_PURCHASE` always grants **1,000**
+and refreshes `pro_subscriptions.created_at` so re-subscribers do not stay on 1,200.
+
+To print current monthlies: run `supabase/list_monthly_legacy_candidates.sql`, then paste
+UUIDs into `monthly-legacy-allowlist.js` (optional; cutoff already covers them).
+
 
 ## Not in v1 (can add later)
 

@@ -8,12 +8,15 @@ const {
   planForStripePriceId,
   stripePriceIdForPlan,
   statusFromStripeSubscription,
+  creditsForPlanGrant,
   CREDIT_GRANT_EVENT_TYPES,
 } = require("./billing-config");
 const {
   cleanUserId,
   upsertProSubscription,
   grantCreditsOnce,
+  fetchProSubscriptionRow,
+  refreshMonthlySubscriptionStart,
 } = require("./billing-subscription");
 const { expireUnusedTrialCredits } = require("./trial-credits");
 const { fetchProSubscriptionForUser } = require("./pro-subscription");
@@ -333,6 +336,7 @@ async function applyStripeInvoicePaid(invoice) {
   let amount = 0;
   let eventType = "RENEWAL";
   let grantEventId = String(invoiceObj.id).trim();
+  const existingSub = await fetchProSubscriptionRow(userId);
 
   if (billingReason === "subscription_create") {
     eventType = "INITIAL_PURCHASE";
@@ -340,13 +344,27 @@ async function applyStripeInvoicePaid(invoice) {
     const resolved = await resolveStripeTrialCreditAmount(stripe, sub, plan, status, userId);
     amount = Number(resolved.amount || 0);
     if (amount <= 0 && status === "active") {
-      amount = plan.creditsPerPeriod;
+      amount = creditsForPlanGrant({
+        plan,
+        eventType,
+        userId,
+        subscriptionCreatedAt: existingSub?.created_at,
+        previousPlanId: existingSub?.plan_id,
+        subscriptionStatus: status,
+      });
     }
   } else if (billingReason === "subscription_cycle") {
     if (status === "trialing") {
       return { ok: true, kind: "trial_cycle_skip", userId };
     }
-    amount = plan.creditsPerPeriod;
+    amount = creditsForPlanGrant({
+      plan,
+      eventType,
+      userId,
+      subscriptionCreatedAt: existingSub?.created_at,
+      previousPlanId: existingSub?.plan_id,
+      subscriptionStatus: status,
+    });
   } else {
     return { ok: true, kind: "ignored_billing_reason", userId, billingReason };
   }
@@ -367,6 +385,15 @@ async function applyStripeInvoicePaid(invoice) {
     bucket: status === "trialing" ? "trial" : "paid",
     convertTrial: status !== "trialing",
   });
+
+  if (
+    planId === "monthly" &&
+    eventType === "INITIAL_PURCHASE" &&
+    status !== "trialing" &&
+    grant?.granted > 0
+  ) {
+    await refreshMonthlySubscriptionStart(userId);
+  }
 
   return { ok: true, kind: "invoice", userId, planId, grant };
 }
@@ -573,12 +600,19 @@ async function ensureStripeInitialCreditsGranted(sub) {
   const resolved = await resolveStripeTrialCreditAmount(stripe, sub, plan, status, userId);
   let amount = Number(resolved.amount || 0);
   if (amount <= 0 && status === "active") {
-    amount = plan.creditsPerPeriod;
+    const existingSub = await fetchProSubscriptionRow(userId);
+    amount = creditsForPlanGrant({
+      plan,
+      eventType: "INITIAL_PURCHASE",
+      userId,
+      subscriptionCreatedAt: existingSub?.created_at,
+      subscriptionStatus: status,
+    });
   }
   if (amount <= 0) return { granted: 0, skipped: true, blocked: Boolean(resolved.blocked) };
 
   const eventKey = `sub_initial:${sub.id}`;
-  return grantCreditsOnce({
+  const grant = await grantCreditsOnce({
     eventId: `stripe:${eventKey}`,
     userId,
     amount,
@@ -590,6 +624,10 @@ async function ensureStripeInitialCreditsGranted(sub) {
     bucket: status === "trialing" ? "trial" : "paid",
     convertTrial: status !== "trialing",
   });
+  if (planId === "monthly" && status !== "trialing" && grant?.granted > 0) {
+    await refreshMonthlySubscriptionStart(userId);
+  }
+  return grant;
 }
 
 async function syncStripeSubscriber(userId) {

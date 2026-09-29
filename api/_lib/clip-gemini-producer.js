@@ -3,7 +3,7 @@
  * Opt-in via CLIP_GEMINI_PRODUCER_ENABLED=1 (staging preview first).
  */
 
-const { buildLyriaVocalProfile, clipVocalProfileById } = require("./lyria-upstream");
+const { buildLyriaVocalProfile, clipVocalProfileById, sanitizeLyriaLyricsForSinging, normalizeLyriaArrangementLines } = require("./lyria-upstream");
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const PRODUCER_TIMEOUT_MS = Number(process.env.CLIP_GEMINI_PRODUCER_TIMEOUT_MS || 15000);
@@ -25,11 +25,12 @@ OUTPUT SCHEMA:
 - If idea_brief is set (prompt-to-song): WRITE original singable lyrics that fulfill the brief. Do NOT copy the brief, challenge instructions, line counts, or phrases like "Write a clip" into sung lines.
 - Else if lyrics_raw is set: the user provided lyrics — preserve their words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines. You may only trim if clearly too long for ~28s.
 - Structure tags MUST be in English only, on their own lines, e.g.:
-  [Quick Catchy Intro · 0:00–0:04]
-  [Main Hook / Chorus Drop · 0:04–0:22]
-  [Punchy Outro · 0:22–0:28]
+  [Quick Catchy Intro]
+  [Main Hook / Chorus Drop]
+  [Punchy Outro]
 - Clip arc: optional micro-intro → main hook/chorus (required) → punchy outro. NOT a full song (no second verse, bridge, or long intro).
 - Fit ~28 seconds at natural vocal pace (~4–10 short lines depending on language).
+- NEVER put timing stamps, BPM, or production instructions inside structured_lyrics — Lyria may sing them.
 - End on a complete phrase — never mid-word or mid-sentence.
 - If instrumental is true, return "".
 
@@ -127,51 +128,63 @@ Return ONLY the JSON object.`;
 
 const LYRIA_SONG_PRODUCER_SYSTEM_PROMPT = `You are an expert music producer for NabadAi full-length songs (~2–3 minutes) powered by Google Lyria 3.5.
 
-Transform the user's raw inputs into a production-ready brief for Lyria. Return ONLY valid JSON with exactly two string fields. No markdown, no code fences, no commentary, no extra keys.
+Transform the user's raw inputs into a production-ready brief for Lyria. Return ONLY valid JSON with exactly three string fields. No markdown, no code fences, no commentary, no extra keys.
 
 OUTPUT SCHEMA:
 {
   "structured_lyrics": "<string>",
+  "arrangement": "<string>",
   "enhanced_style_prompt": "<string>"
 }
 
-=== structured_lyrics ===
-- If idea_brief is set (prompt-to-song): WRITE original singable lyrics that fulfill the brief. Do NOT copy the brief or challenge instructions into sung lines.
-- Else if lyrics_raw is set: the user provided lyrics — preserve their words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines. Do NOT add tanwin or formal MSA endings the user did not write.
-- Structure tags MUST be in English only, on their own lines, e.g.:
-  [Intro · 0:00–0:15]
-  [Verse 1 · 0:15–0:45]
-  [Chorus · 0:45–1:15]
-  [Verse 2 · 1:15–1:45]
-  [Final Chorus · 1:45–2:30]
-  [Outro · 2:30–2:50]
-- Full song arc: intro → verse → chorus → verse → chorus/bridge → resolved outro. Honor target_length_seconds from input.
+=== structured_lyrics (SUNG WORDS ONLY) ===
+- If idea_brief is set (prompt-to-song): WRITE original catchy singable lyrics that fulfill the brief. Do NOT copy the brief, challenge instructions, line counts, or phrases like "Write a song" / "Create a" into sung lines.
+- Else if lyrics_raw is set: preserve the user's words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines. Do NOT add tanwin or formal MSA endings the user did not write.
+- Structure tags MUST be plain English section labels ONLY — NO timestamps inside tags:
+  [Intro]
+  [Verse 1]
+  [Chorus]
+  [Verse 2]
+  [Bridge]
+  [Final Chorus]
+  [Outro]
+- NEVER put timing, BPM, dialect notes, style directions, or "Create a song…" inside structured_lyrics — Lyria will sing them.
+- Full song arc with a sticky chorus hook people can hum after one listen. Honor target_length_seconds.
 - End on a complete phrase — never mid-word or mid-sentence.
 - If instrumental is true, return "".
+
+=== arrangement (TIMING AS ARRANGEMENT LINES — NOT LYRICS) ===
+- REQUIRED for full songs. Use Google Lyria timing format, one section per line:
+  [0:00 - 0:12] Intro: soft motif establishing the hook melody
+  [0:12 - 0:42] Verse 1: intimate vocal, sparse drums, leave space
+  [0:42 - 1:10] Chorus: full band, sticky melodic hook, higher energy
+  [1:10 - 1:40] Verse 2: add harmony bed, keep groove pocket
+  [1:40 - 2:10] Chorus: bigger drums, hook lands harder
+  [2:10 - 2:30] Bridge: contrast texture, then lift
+  [2:30 - 2:55] Final Chorus / Outro: peak then resolve cleanly
+- Times must add up near target_length_seconds (±15s). Instrumental: still provide arrangement, no vocal cues.
+- Describe instruments / dynamics / hook placement — NEVER put sung lyric words here.
 
 === ARABIZI (when script_format is "arabizi") ===
 - Lyrics are Arabizi: colloquial Arabic in Latin letters for Lyria — NOT English lyrics.
 - Preserve the user's Arabizi spelling exactly — do NOT translate to English or Arabic script.
-- enhanced_style_prompt MUST include vocal direction matching dialect_hint (e.g. native Egyptian Masri or Lebanese Beirut), "authentic colloquial Arabic pronunciation", "Arabizi phonetic lyrics — sing as Arabic NOT English", "NOT English-accented delivery".
+- enhanced_style_prompt MUST include vocal direction matching dialect_hint (e.g. native Egyptian Masri or Lebanese Beirut), "authentic colloquial Arabic pronunciation", "Arabizi phonetic lyrics — sing as Arabic NOT English".
 
 === enhanced_style_prompt ===
-Rich sonic specification for Lyria. Target length: 1200–2000 characters max.
+Rich sonic brief for Lyria. Target 900–1800 characters. Prioritize CATCHY melodic hooks and clear groove — not a stacked plugin list.
 
-Include ALL when inferable (use sensible genre defaults if missing — never stay vague):
+Include when inferable:
 1. Duration: match target_length_seconds (e.g. "~180 second full song").
-2. Tempo: exact BPM (integer) + rhythmic feel (dabke ~120–130, ballad ~70–90, pop ~100–115).
+2. Tempo: exact BPM + feel (dabke ~120–130, ballad ~70–90, pop ~100–115).
 3. Key / scale — honor song_key if provided.
-4. Genre + mood in producer language.
-5. Layers: sub-bass, drums/percussion, harmonic bed, lead elements, ear-candy, transitions.
-6. Song dynamics: build across sections — sparse intro, fuller chorus, breathing bridge, resolved outro.
-7. Vocal: gender, character, delivery from inputs; merge vocal_lyria_hint if present.
-   Conversational, warm, close-mic — NO shouting or stadium belt unless user asked.
-8. Mix: density, brightness, space per section feel.
-9. Arabic/dialect: if dialect_hint mentions MSA/formal, allow formal vocal color; otherwise colloquial spoken delivery — NO tanween unless user asked for MSA; honor dialect_hint for vocabulary and vocal color (Lebanese sukoon vs Egyptian Masri ب- prefix, etc.).
+4. Genre + mood in producer language — concrete and vivid.
+5. ONE memorable melodic hook a listener can hum; verse/chorus contrast; pocketed drums.
+6. Layers: pick a clear lead + harmonic bed + bass + drum identity (do not stack every instrument).
+7. Dynamics: sparse intro → fuller chorus → breathing bridge → resolved outro.
+8. Vocal: gender, character, close-mic conversational delivery from inputs; merge vocal_lyria_hint if present.
+9. Arabic/dialect: honor dialect_hint for vocabulary and vocal color when present.
 
-Dialect: if dialect_hint is set (Levantine, Gulf, Egyptian, MSA, etc.), reflect in vocal color and rhythm — tasteful, not stereotyped.
-
-Be specific ("palm-muted guitar stabs", "808 on downbeats", "mijwiz hook") — avoid vague filler alone.
+Be specific ("palm-muted guitar stabs", "808 on downbeats", "mijwiz hook") — avoid vague filler.
 
 Return ONLY the JSON object.`;
 
@@ -246,15 +259,28 @@ function normalizeProducerOutput(raw, { instrumental = false, maxStyleChars = EN
   let structured = instrumental
     ? ""
     : String(raw.structured_lyrics || raw.structuredLyrics || "").trim();
-  if (!enhanced) return null;
+  let arrangement = String(raw.arrangement || raw.arrangement_lines || raw.arrangementLines || "").trim();
+  if (!enhanced && !arrangement) return null;
+  if (!enhanced && arrangement) {
+    enhanced = "Catchy full-band arrangement with a memorable melodic hook and clear verse/chorus contrast.";
+  }
   const cap = Math.max(400, Number(maxStyleChars) || ENHANCED_STYLE_MAX_CHARS);
   if (enhanced.length > cap) {
     enhanced = enhanced.slice(0, cap).trim();
   }
-  return {
+  // Keep sung lyrics clean — strip instruction / timing bleed before Lyria.
+  if (structured) {
+    structured = sanitizeLyriaLyricsForSinging(structured);
+  }
+  if (arrangement) {
+    arrangement = normalizeLyriaArrangementLines(arrangement);
+  }
+  const out = {
     structured_lyrics: structured,
     enhanced_style_prompt: enhanced,
   };
+  if (arrangement) out.arrangement = arrangement;
+  return out;
 }
 
 function normalizeElevenProducerChunk(raw, fallbackStyleTags = []) {
@@ -417,6 +443,9 @@ function appendProducerAdminDetail(baseDetail, producerResult) {
   if (producerResult.latencyMs != null) lines.push(`gemini_producer_ms: ${producerResult.latencyMs}`);
   if (producerResult.enhanced_style_prompt) {
     lines.push(`enhanced_style_prompt: ${producerResult.enhanced_style_prompt.slice(0, 600)}`);
+  }
+  if (producerResult.arrangement) {
+    lines.push(`arrangement: ${String(producerResult.arrangement).slice(0, 500)}`);
   }
   if (producerResult.structured_lyrics) {
     lines.push(`structured_lyrics: ${producerResult.structured_lyrics.slice(0, 400)}`);

@@ -318,7 +318,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260929-212013";
+const APP_BUILD = "20260929-214055";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3974,7 +3974,7 @@ function exitAltCreateFlowToCreate() {
   flushTabRouteNavigation("generate", "#/generate");
 }
 
-const MOBILE_TAB_LIGHTWEIGHT = new Set(["discover", "messages", "challenges", "activity", "profile"]);
+const MOBILE_TAB_LIGHTWEIGHT = new Set(["discover", "messages", "activity", "profile"]);
 /** Sub-screens opened from profile chrome — instant swap, no full applyRoute replay. */
 const SECONDARY_ROUTE_LIGHTWEIGHT = new Set(["settings", "credits", "profile-edit", "pro"]);
 let _secondaryNavFromClick = false;
@@ -4256,9 +4256,10 @@ function finishTabRouteEnter(route, prevRoute) {
       deferRouteIdle(() => void enterActivityRoute({ reset: !hasActivityCache }));
     }
   } else if (wanted === "challenges") {
-    bindChallengesPageOnce();
-    renderHomeDesk();
-    void loadAppTourModule().then((m) => m.scheduleHomeTourIfNeeded());
+    // Retired Create hub — never paint it from the lightweight tab path.
+    try { history.replaceState(null, "", "#/generate"); } catch {}
+    syncRoutePanelVisibility("generate");
+    try { restoreCreatePageOnRouteEnter(); } catch {}
   } else if (wanted === "profile") {
     enterProfileRouteHooks({ skipHeavy: shouldSkipRouteHeavy("profile") });
   }
@@ -4279,32 +4280,39 @@ function finishTabRouteEnter(route, prevRoute) {
 }
 
 function flushTabRouteNavigation(route, targetHash) {
+  let nextRoute = String(route || "").trim();
+  let nextHash = String(targetHash || "").trim();
+  // Retired Create hub — never enter it via the tab fast-path.
+  if (nextRoute === "challenges" || /^#\/challenges\b/i.test(nextHash)) {
+    nextRoute = "generate";
+    nextHash = "#/generate";
+  }
   const prevBodyRoute = String(document.body.getAttribute("data-route") || "").trim();
   const prev = tabBarRouteKey(prevBodyRoute);
   bumpApplyRouteGeneration();
-  if (prev !== route) invalidateInFlightRouteFeedWork(prev, route);
-  if (prevBodyRoute === "generate" && route !== "generate") {
+  if (prev !== nextRoute) invalidateInFlightRouteFeedWork(prev, nextRoute);
+  if (prevBodyRoute === "generate" && nextRoute !== "generate") {
     leaveGenerateRouteCleanup();
   }
-  if (route === "discover") {
+  if (nextRoute === "discover") {
     try { document.body.classList.remove("discoverReelInShell"); } catch {}
     try { sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, "for-you"); } catch {}
   }
   _tabNavFromClick = true;
-  if (location.hash !== targetHash) {
+  if (location.hash !== nextHash) {
     try {
-      location.hash = targetHash.startsWith("#") ? targetHash.slice(1) : targetHash;
+      location.hash = nextHash.startsWith("#") ? nextHash.slice(1) : nextHash;
     } catch {
-      location.hash = targetHash;
+      location.hash = nextHash;
     }
   }
-  syncRoutePanelVisibility(route);
+  syncRoutePanelVisibility(nextRoute);
   if (_applyRouteRaf) {
     cancelAnimationFrame(_applyRouteRaf);
     _applyRouteRaf = 0;
   }
-  if (MOBILE_TAB_LIGHTWEIGHT.has(route)) {
-    finishTabRouteEnter(route, prevBodyRoute);
+  if (MOBILE_TAB_LIGHTWEIGHT.has(nextRoute)) {
+    finishTabRouteEnter(nextRoute, prevBodyRoute);
     return;
   }
   if (_applyRouteInFlight) {
@@ -6509,9 +6517,11 @@ function applyRoute({ passGen } = {}) {
     }
   }
   if (wanted === "challenges") {
-    bindChallengesPageOnce();
-    renderHomeDesk();
-    void loadAppTourModule().then((m) => m.scheduleHomeTourIfNeeded());
+    // Belt-and-suspenders: demoteBareCreateHub should already have rewritten this.
+    try { history.replaceState(null, "", "#/generate"); } catch {}
+    wanted = "generate";
+    syncRoutePanelVisibility("generate");
+    try { restoreCreatePageOnRouteEnter(); } catch {}
   }
   if (wanted === "activity") {
     bindActivityPageOnce();
@@ -8065,6 +8075,11 @@ function scheduleInitialHash() {
         /* keep onboarding hash */
       } else if (isAppLoggedIn() && String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] === "auth") {
         try {
+          location.hash = "#/discover";
+        } catch {}
+      } else if (/^#\/challenges\b/i.test(String(location.hash || ""))) {
+        // Older builds persisted #/challenges — rewrite before first applyRoute.
+        try {
           location.hash = "#/generate";
         } catch {}
       }
@@ -8325,10 +8340,7 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   syncSettingsElevenFinetuneRow(p);
   syncSettingsGeminiProducerRow();
   syncSettingsNabadVocalChainRow(p);
-<<<<<<< HEAD
   try { syncElevenSongLengthPanel(); } catch {}
-=======
->>>>>>> main
 }
 
 const ELEVENLABS_FINETUNE_LS_KEY = "nabadElevenFinetune";
@@ -8358,10 +8370,6 @@ function setElevenlabsFinetunePref(useFinetune) {
 }
 
 /** Admin A/B: Gemini producer before Lyria / ElevenLabs (default on). */
-<<<<<<< HEAD
-=======
-const GEMINI_PRODUCER_LS_KEY = "nabadGeminiProducer";
->>>>>>> main
 function getGeminiProducerPref() {
   if (!creditsState.isAdmin) return true;
   try {
@@ -8446,13 +8454,9 @@ function setNabadVocalChainPref(key, on) {
 
 function syncSettingsNabadVocalChainRow(providerPref = getMusicProviderPref()) {
   const block = document.getElementById("settingsNabadVocalChainBlock");
-<<<<<<< HEAD
   const show =
     Boolean(creditsState.isAdmin)
     && (providerPref === "lyria" || providerPref === "elevenlabs" || providerPref === "mureka");
-=======
-  const show = Boolean(creditsState.isAdmin) && providerPref === "lyria";
->>>>>>> main
   if (block) {
     block.hidden = !show;
     block.style.display = show ? "" : "none";
@@ -8592,11 +8596,7 @@ function wireSettingsMusicProviderOnce() {
       setNabadVocalChainPref(key, Boolean(input.checked));
       try {
         showToast(
-<<<<<<< HEAD
           `${key.replace(/_/g, " ")} ${input.checked ? "ON" : "OFF"} for Lyria / ElevenLabs vocal A/B.`,
-=======
-          `${key.replace(/_/g, " ")} ${input.checked ? "ON" : "OFF"} for Lyria vocal A/B.`,
->>>>>>> main
           { icon: "♪", durationMs: 2800 },
         );
       } catch {}

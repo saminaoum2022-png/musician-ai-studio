@@ -236,7 +236,7 @@ export async function saveOwnGoldStyle(uid, style) {
 /* ── Rendering ─────────────────────────────────────────────────────────────── */
 
 const GOLD_AVATAR_WRAP_SEL =
-  ".followActAvatar, .messagesRowAvatarWrap, .messagesInboxPresenceAvatarWrap, .discoverLiveAv, .friendsWtfAvatar, .followActEmptyFace, .discoverFeedFollowAv";
+  ".followActAvatar, .messagesRowAvatarWrap, .discoverLiveAv, .friendsWtfAvatar, .followActEmptyFace, .discoverFeedFollowAv";
 
 function goldAvatarWrapFor(el) {
   if (!el?.matches) return null;
@@ -278,6 +278,8 @@ export function scheduleHydrateGoldAvatars(root) {
 /** Apply stored Gold ring + emblem to avatars under `root` (one cloud fetch for all user ids). */
 export async function hydrateGoldAvatarsInRoot(root) {
   const scope = root?.querySelectorAll ? root : document;
+  // Presence card: plain circular profile photo only — no Gold frame.
+  scope.querySelectorAll(".messagesInboxPresenceAvatarWrap").forEach((w) => applyGoldToAvatarWrap(w, null));
   if (!goldUiEnabled()) {
     scope.querySelectorAll(GOLD_AVATAR_WRAP_SEL).forEach((w) => applyGoldToAvatarWrap(w, null));
     return;

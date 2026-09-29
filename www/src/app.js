@@ -43041,10 +43041,7 @@ function paintConnectMeCard() {
     return;
   }
   host.hidden = false;
-  if (!host.querySelector(".messagesInboxPresence")) {
-    host.innerHTML = messagesInboxMeHeaderHtml();
-    try { scheduleHydrateGoldAvatars(host); } catch {}
-  }
+  if (!host.querySelector(".messagesInboxPresence")) host.innerHTML = messagesInboxMeHeaderHtml();
 }
 
 function syncMessagesInboxPresenceCard() {
@@ -43053,10 +43050,7 @@ function syncMessagesInboxPresenceCard() {
   if (!existing) return;
   const view = messagesInboxPresenceView();
   const sig = messagesInboxPresencePaintSig(view);
-  if (existing.dataset.presencePaint === sig) {
-    try { scheduleHydrateGoldAvatars(existing); } catch {}
-    return;
-  }
+  if (existing.dataset.presencePaint === sig) return;
   existing.dataset.presencePaint = sig;
 
   const card = existing.querySelector(".messagesInboxPresenceCard");
@@ -43077,9 +43071,8 @@ function syncMessagesInboxPresenceCard() {
     const name = String(activeProfile?.displayName || "").trim() || (username ? `@${username}` : "You");
     wrapEl.innerHTML = messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar");
     wrapEl.dataset.avatarKey = avatarKey;
-    const meId = String(authSession?.user?.id || activeProfile?.id || "").trim();
-    if (meId) wrapEl.setAttribute("data-gold-user-id", meId);
-    else wrapEl.removeAttribute("data-gold-user-id");
+    wrapEl.removeAttribute("data-gold-user-id");
+    try { applyGoldToAvatarWrap(wrapEl, null); } catch {}
   }
 
   const lineEl = existing.querySelector(".messagesInboxPresenceLine");
@@ -43097,7 +43090,6 @@ function syncMessagesInboxPresenceCard() {
   } else if (detailEl) {
     detailEl.remove();
   }
-  try { scheduleHydrateGoldAvatars(existing); } catch {}
 }
 
 function presenceTick() {
@@ -47870,7 +47862,7 @@ function messagesPresencePreviewHtml() {
   const wrapClass = view.live ? " is-online" : "";
   return `
     <div class="messagesPresencePreviewCard" data-presence-status="${escapeHtml(view.status)}"${style}>
-      <span class="messagesInboxPresenceAvatarWrap${wrapClass}" data-gold-user-id="${escapeHtml(String(authSession?.user?.id || activeProfile?.id || ""))}">${messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar")}</span>
+      <span class="messagesInboxPresenceAvatarWrap${wrapClass}">${messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar")}</span>
       <span class="messagesInboxPresenceCopy">
         <span class="messagesInboxPresenceKicker">People see</span>
         <strong class="messagesInboxPresenceLine">${escapeHtml(view.line)}</strong>
@@ -48039,7 +48031,7 @@ function messagesInboxMeHeaderHtml() {
   return `
     <section class="messagesInboxPresence" data-presence-paint="${paint}">
       <button type="button" class="messagesInboxPresenceCard" data-messages-me-header data-presence-status="${escapeHtml(view.status)}"${style}>
-        <span class="messagesInboxPresenceAvatarWrap${wrapClass}" data-avatar-key="${avatarKey}" data-gold-user-id="${escapeHtml(String(authSession?.user?.id || activeProfile?.id || ""))}">${messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar")}</span>
+        <span class="messagesInboxPresenceAvatarWrap${wrapClass}" data-avatar-key="${avatarKey}">${messagesAvatarHtml(activeProfile?.avatar, username || name, "messagesInboxPresenceAvatar")}</span>
         <span class="messagesInboxPresenceCopy">
           <span class="messagesInboxPresenceKicker">Your presence</span>
           <strong class="messagesInboxPresenceLine">${escapeHtml(view.line)}</strong>
@@ -80411,10 +80403,7 @@ try {
     getActivePersonaId,
     personaTypeLabel,
     getAuthSession: () => authSession,
-    onGoldStyleChanged: () => {
-      try { syncOwnGoldRing(); } catch {}
-      try { scheduleHydrateGoldAvatars(document.getElementById("connectMe")); } catch {}
-    },
+    onGoldStyleChanged: () => { try { syncOwnGoldRing(); } catch {} },
     getAuthToken: () => getSupabaseAuthToken(),
     apiUrl,
     showOutOfCreditsPrompt,

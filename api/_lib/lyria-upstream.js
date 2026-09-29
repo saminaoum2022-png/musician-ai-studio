@@ -23,7 +23,12 @@ const {
   defaultClipVocalProfileForGender,
 } = require("./clip-vocal-profiles");
 const { looksLikeArabizi, isArabiziScript, buildLyriaArabiziPerformanceNote } = require("./arabizi");
-const { buildLyriaLebaneseArabicNote, buildLyriaEgyptianArabicNote, dialectFlags } = require("./arabic-dialect-lyrics");
+const {
+  buildLyriaLebaneseArabicNote,
+  buildLyriaEgyptianArabicNote,
+  dialectFlags,
+  hintRequestsFormalMsa,
+} = require("./arabic-dialect-lyrics");
 const { buildNabadVocalPrompt } = require("./nabad-vocal-identity");
 
 const LYRIA_CLIP_MODEL = "lyria-3-clip-preview";
@@ -200,12 +205,11 @@ function resolveLyriaDialectLabel(body = {}) {
   return String(body?.style || "").match(/\bDialect:\s*([^|,]+)/i)?.[1]?.trim() || "";
 }
 
-/** msa = formal allowed; dialect = colloquial + no tanwin; natural = Arabic lyrics but no dialect chip. */
+/** msa = formal allowed; dialect = colloquial; natural = Arabic lyrics but no dialect chip. */
 function resolveLyriaArabicPronunciationMode({ dialectHint = "", lyrics = "" } = {}) {
   const blob = String(dialectHint || "").toLowerCase();
-  if (
-    /\bmsa\b|modern standard|fusha|fus'?ha|formal arabic|classical arabic|\bnahwi\b|فصحى|فصح/.test(blob)
-  ) {
+  // "NOT formal MSA/nahwi" in dialect chips must NOT flip us into فصحى mode.
+  if (hintRequestsFormalMsa(blob)) {
     return "msa";
   }
   if (looksLikeArabizi(String(lyrics || ""))) return "arabizi";
@@ -216,16 +220,17 @@ function resolveLyriaArabicPronunciationMode({ dialectHint = "", lyrics = "" } =
 
 function buildLyriaArabiziVocalNote(dialectHint = "") {
   const hint = String(dialectHint || "").trim();
+  // Positive-only — Lyria may sing "NOT English" as English.
   if (/lebanese|beirut/i.test(hint)) {
-    return "Native Lebanese Arabic lead vocal, authentic Beirut colloquial pronunciation and vowels, NOT English-accented delivery";
+    return "Native Lebanese Arabic lead vocal, authentic Beirut colloquial pronunciation and vowels";
   }
   if (/syrian|palestinian|levantine/i.test(hint)) {
-    return "Native Levantine Arabic lead vocal, authentic colloquial pronunciation, NOT English-accented delivery";
+    return "Native Levantine Arabic lead vocal, authentic colloquial pronunciation";
   }
   if (/egyptian|masri/i.test(hint)) {
-    return "Native Egyptian Arabic lead vocal, authentic Masri colloquial pronunciation and vowels, NOT English-accented delivery";
+    return "Native Egyptian Arabic lead vocal, authentic Masri colloquial pronunciation and vowels";
   }
-  return "Native Arabic dialect lead vocal, authentic colloquial pronunciation, NOT English-accented delivery";
+  return "Native Arabic dialect lead vocal, authentic colloquial pronunciation";
 }
 
 function buildLyriaDialectVocalNote(dialectHint = "", { arabizi = false } = {}) {
@@ -244,8 +249,12 @@ function buildLyriaDialectVocalNote(dialectHint = "", { arabizi = false } = {}) 
     return "Egyptian Masri colloquial vocal, Cairo accent, warm conversational delivery, authentic Masri pronunciation.";
   }
   if (/gulf|khaleeji/i.test(hint)) return "Gulf Khaleeji colloquial vocal delivery.";
-  const short = hint.split(" — ")[0].split(".")[0].trim().slice(0, 100);
-  return short ? `${short}, colloquial conversational vocal delivery.` : "";
+  if (/iraqi/i.test(hint)) return "Iraqi colloquial vocal, warm conversational delivery.";
+  if (/moroccan|darija/i.test(hint)) return "Moroccan Darija colloquial vocal delivery.";
+  if (/tunisian/i.test(hint)) return "Tunisian colloquial vocal delivery.";
+  if (/sudanese/i.test(hint)) return "Sudanese colloquial vocal delivery.";
+  // Never forward raw chip text (often has NOT MSA / no tanween) — Lyria may latch onto the negated words.
+  return "Colloquial Arabic vocal, warm conversational spoken delivery.";
 }
 
 /**
@@ -317,13 +326,13 @@ function buildLyriaArabicPronunciationLine(mode, dialectHint = "") {
     if (flags.isEgyptian) {
       return buildLyriaEgyptianArabicNote();
     }
-    return [hint || "colloquial Arabic dialect", "spoken vowels only; no tanween"].filter(Boolean).join(" — ");
+    return hint || "colloquial Arabic dialect, spoken conversational pronunciation";
   }
   if (mode === "natural") {
     return "Arabic lyrics: colloquial spoken pronunciation.";
   }
   if (mode === "arabizi") {
-    return "Arabizi: Arabic language in Latin letters — native colloquial Arabic pronunciation, NOT English.";
+    return "Arabizi: Arabic language in Latin letters — native colloquial Arabic pronunciation.";
   }
   return "";
 }

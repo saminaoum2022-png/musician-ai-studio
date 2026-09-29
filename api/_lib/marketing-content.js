@@ -180,8 +180,7 @@ function defaultHomeContentEn() {
           { label: "NabadAi Studio & cover refresh" },
           { label: "Song analytics & Pro badge" },
         ],
-        specialOffer:
-          "Special offer: enjoy reduced credit costs for song generation for a limited time. Standard generation rates will apply when the offer ends.",
+        specialOffer: "Limited-time: songs cost fewer credits than usual.",
         finePrint: "1 full song = 15 credits (2 versions). Cancel anytime in Settings.",
         ctaLabel: "View plans",
         ctaHref: "/app/#/pro",
@@ -446,8 +445,7 @@ function defaultHomeContentAr() {
           { label: "NabadAi Studio وتجديد الغلاف" },
           { label: "تحليلات الأغاني وشارة Pro" },
         ],
-        specialOffer:
-          "عرض خاص: استمتع بتكاليف رصيد مخفّضة لتوليد الأغاني لفترة محدودة. تُطبَّق الأسعار العادية عند انتهاء العرض.",
+        specialOffer: "عرض لفترة محدودة: الأغاني تكلف رصيداً أقل من المعتاد.",
         finePrint: "أغنية كاملة = 15 رصيد (نسختان). إلغاء في أي وقت من الإعدادات.",
         ctaLabel: "عرض الخطط",
         ctaHref: "/app/#/pro",

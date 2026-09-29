@@ -27451,17 +27451,16 @@ main.grid > [data-route="pro"].routeEnter--present{
   color: rgba(232,238,247,0.52);
 }
 .proSpecialOffer{
-  margin: 12px auto 0;
-  max-width: 36ch;
-  font-size: 12.5px;
-  line-height: 1.45;
+  margin: 2px 4px 4px 18px;
+  max-width: none;
+  font-size: 12px;
+  line-height: 1.4;
   font-weight: 550;
+  text-align: left;
   color: rgba(180, 230, 210, 0.78);
 }
-.proSpecialOffer--ar{
-  margin-top: 6px;
-  font-size: 12px;
-  color: rgba(180, 230, 210, 0.62);
+.proPlanGrid > .proSpecialOffer{
+  margin-top: 0;
 }
 .proPlans{
   display: flex;
@@ -60980,9 +60979,6 @@ html[data-theme="light"] .proActiveStatusManage{
 }
 html[data-theme="light"] .proSpecialOffer{
   color: #0f766e;
-}
-html[data-theme="light"] .proSpecialOffer--ar{
-  color: rgba(15, 118, 110, 0.78);
 }
 html[data-theme="light"] .proActiveStatusTitle{
   color: var(--text-primary);

@@ -164,8 +164,7 @@ export function subscriptionCreditUnitPrice() {
 export const PRO_LAUNCH_COPY = Object.freeze({
   eyebrow: "",
   lead: "Weekly or monthly credits, Studio, cover refresh, unlimited Coach, and private song analytics.",
-  specialOffer:
-    "Special offer: enjoy reduced credit costs for song generation for a limited time. Standard generation rates will apply when the offer ends.",
+  specialOffer: "Limited-time: songs cost fewer credits than usual.",
   footnote:
     "1 full song = 15 credits (2 versions). Subscription credits are paid credits — you can create or gift them. Cancel anytime in Settings → Subscriptions.",
   packsHeadline: "Only need a few songs?",
@@ -180,12 +179,6 @@ export const PRO_LAUNCH_COPY = Object.freeze({
   webReady: "Subscribe with card. Cancel anytime from Manage subscription.",
   webSoon: "Web checkout is being set up — check back soon.",
   webOnly: "Subscriptions are available in the NabadAi iPhone app.",
-});
-
-/** Arabic strings for the in-app Pro page when the UI is Arabic. */
-export const PRO_LAUNCH_COPY_AR = Object.freeze({
-  specialOffer:
-    "عرض خاص: استمتع بتكاليف رصيد مخفّضة لتوليد الأغاني لفترة محدودة. تُطبَّق الأسعار العادية عند انتهاء العرض.",
 });
 
 export function planCreditsTotal(plan) {

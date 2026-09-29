@@ -8441,7 +8441,7 @@ function syncSettingsNabadVocalChainRow(providerPref = getMusicProviderPref()) {
   const block = document.getElementById("settingsNabadVocalChainBlock");
   const show =
     Boolean(creditsState.isAdmin)
-    && (providerPref === "lyria" || providerPref === "elevenlabs");
+    && (providerPref === "lyria" || providerPref === "elevenlabs" || providerPref === "mureka");
   if (block) {
     block.hidden = !show;
     block.style.display = show ? "" : "none";
@@ -76566,6 +76566,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         }
       }
       if (useElevenlabsMusicProvider() && !shouldGenerateInstrumental && creditsState.isAdmin) {
+        payload.nabadVocalChain = getNabadVocalChainPrefs();
+      }
+      if (useMurekaMusicProvider() && !shouldGenerateInstrumental && creditsState.isAdmin) {
         payload.nabadVocalChain = getNabadVocalChainPrefs();
       }
       if (userAvoidTags) payload.negativeTags = userAvoidTags;

@@ -99,6 +99,7 @@ const {
   resolveGeminiProducerEnabled,
 } = require("../_lib/clip-gemini-producer");
 const { nabadSongEditEnabled } = require("../_lib/nabad-song-edit-lib");
+const { mergeNabadVocalIntoStylePrompt } = require("../_lib/nabad-vocal-identity");
 
 const LYRIA_FULL_SONG_FLOW = "lyria_full_song";
 const FULL_SONG_COST = 12;
@@ -1777,6 +1778,7 @@ async function runMurekaGenerationJob({
   taskId,
   audioId,
   apiKey,
+  geminiApiKey,
   lyrics,
   stylePrompt,
   title,
@@ -1802,10 +1804,41 @@ async function runMurekaGenerationJob({
   };
 
   try {
+    let effectiveLyrics = lyrics;
+    let effectiveStyle = stylePrompt;
+    let producerResult = { ok: false, used: false, fallback: true };
+
+    if (geminiApiKey) {
+      producerResult = await enrichSongWithGeminiProducer({
+        apiKey: geminiApiKey,
+        enabled: resolveGeminiProducerEnabled(body, isAdmin),
+        input: buildSongProducerInput(body, "mureka"),
+      });
+      if (producerResult.ok) {
+        if (producerResult.structured_lyrics) {
+          effectiveLyrics = producerResult.structured_lyrics;
+        }
+        if (producerResult.enhanced_style_prompt) {
+          effectiveStyle = producerResult.enhanced_style_prompt;
+        }
+      }
+    }
+
+    const nabadVocalToggles = body?.nabadVocalChain || body?.nabadVocalToggles || null;
+    const dialectHint = mergeLyriaDialectHint(body);
+    const scriptFormat = String(body?.scriptFormat || "").trim();
+    effectiveStyle = mergeNabadVocalIntoStylePrompt(effectiveStyle, {
+      gender: body?.vocalGender || gender,
+      lyrics: effectiveLyrics,
+      dialectHint,
+      scriptFormat,
+      adminToggles: nabadVocalToggles,
+    });
+
     const started = await murekaGenerateSong({
       apiKey,
-      lyrics,
-      prompt: stylePrompt,
+      lyrics: effectiveLyrics,
+      prompt: effectiveStyle,
       model,
       n: 1,
       gender,
@@ -1841,7 +1874,7 @@ async function runMurekaGenerationJob({
     const statusPayload = buildSunoStatusPayload({
       taskId,
       title,
-      lyrics,
+      lyrics: effectiveLyrics,
       audioUrl: archived.url,
       audioId,
       provider: "mureka",
@@ -1849,6 +1882,7 @@ async function runMurekaGenerationJob({
     statusPayload._murekaUpstreamTaskId = started.upstreamTaskId;
     statusPayload._murekaModel = waited.model || started.model || model;
     if (vocalId) statusPayload._murekaVocalId = vocalId;
+    if (producerResult.ok) statusPayload._geminiProducer = true;
     const stored = await saveMusicProviderTaskStatus({ userId, taskId, statusPayload });
     if (!stored.ok) {
       console.warn("[music/generate] mureka task store failed (audio ok)", stored.error);
@@ -1861,6 +1895,8 @@ async function runMurekaGenerationJob({
         `upstream: ${started.upstreamTaskId}`,
         waited.model || started.model ? `model: ${waited.model || started.model}` : "",
         vocalId ? `vocal_id: ${vocalId}` : "",
+        producerResult.ok ? "geminiProducer: on" : "geminiProducer: off",
+        nabadVocalToggles ? "nabadVocalChain: on" : "",
       ].filter(Boolean).join("\n"),
     });
   } catch (e) {
@@ -1982,6 +2018,7 @@ async function handleMurekaGenerate(req, res, { user, isAdmin, body }) {
       taskId,
       audioId,
       apiKey,
+      geminiApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "",
       lyrics,
       stylePrompt,
       title,

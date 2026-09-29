@@ -157,8 +157,9 @@ function buildLebaneseSungDiacriticsGuideAr() {
     "مطلوب: العنوان إنتَ / إنتِ / إنتو فقط — ممنوع قلبكَ/قلبكِ (خلّيها قلبك).",
     "مطلوب عند اللبس: حركة وسط الكلمة إذا المغنّي ممكن يقرأ غلط (مثال: بَعد vs بُعد، حَبّ vs حِبّ) — مش على كل حرف.",
     "مطلوب: حركات آخر الكلمة القصيرة وين بتوجّه اللفظ (هوّي، هيدي، منيحْ).",
-    "ممنوع: تنوين (ًٌٍ)، إعراب نحوي، تشكيل مدرسي كامل لكل حرف، أو قلب لقاف فصحى — ق = همزة (2).",
-    "أمثلة صح: شفتْك، خلّصْ، عمْ بَحكي، إنتَ، إنتِ، هوّي، منّيحْ، 2albi مكتوبة قلبي.",
+    "ممنوع: تنوين (ًٌٍ)، إعراب نحوي، تشكيل مدرسي كامل لكل حرف، أو قلب لقاف فصحى.",
+    "مطلوب: بدّل كل حرف ق بالرقم 2 عشان المغنّي ما يقراها /q/ — مثال: قلبي → 2لبي، قلت → 2لت، قال → 2ال (مش kalbi).",
+    "أمثلة صح: شفتْك، خلّصْ، عمْ بَحكي، إنتَ، إنتِ، هوّي، منّيحْ، 2لبي.",
   ];
 }
 
@@ -170,8 +171,9 @@ function buildLebaneseSungDiacriticsGuideEn() {
     "ADD: address marks إنتَ / إنتِ / إنتو only — NEVER mark kaf (قلبك not قلبكَ/قلبكِ).",
     "ADD mid-word short vowels when the singer could misread (بَعد vs بُعد) — not on every letter.",
     "ADD last-letter short vowels that steer spoken Lebanese (هوّي، هيدي، منيحْ).",
-    "NEVER tanween (ًٌٍ), nahwi case endings, full textbook vowelization, or classical /q/ — ق = hamza (2).",
-    "Good examples: شفتْك، خلّصْ، عمْ بَحكي، إنتَ، إنتِ، هوّي، منّيحْ.",
+    "NEVER tanween (ًٌٍ), nahwi case endings, or full textbook vowelization.",
+    "REQUIRED: rewrite every Arabic qaf ق as the digit 2 so the singer says hamza /ʔ/ — قلبي → 2لبي, قلت → 2لت (NOT kalbi/qalbi).",
+    "Good examples: شفتْك، خلّصْ، عمْ بَحكي، إنتَ، إنتِ، هوّي، منّيحْ، 2لبي.",
   ];
 }
 
@@ -187,7 +189,8 @@ function buildLevantineDiacriticsLinesAr() {
   return [
     "شامي للغناء (أغنى من التلميح): زيد سكون على المسكور + شدة + حركة آخر الكلمة + وسط الكلمة إذا اللفظ بيتلبس.",
     "العنوان إنتَ/إنتِ/إنتو فقط — ممنوع قلبكَ/قلبكِ.",
-    "ممنوع: تنوين (ًٌٍ)، إعراب مدرسي، أو تشكيل كل حرف. ق = همزة (2).",
+    "ممنوع: تنوين (ًٌٍ)، إعراب مدرسي، أو تشكيل كل حرف.",
+    "مطلوب: بدّل كل ق بالرقم 2 (قلبي → 2لبي) مش /q/ فصحى.",
   ];
 }
 
@@ -195,7 +198,8 @@ function buildLevantineDiacriticsLinesEn() {
   return [
     "Levantine sung pass (richer than hint): ADD sukoon on stopped letters + shadda + ending vowels + mid-word vowels when ambiguous.",
     "Address إنتَ/إنتِ/إنتو only — NEVER mark kaf on قلبك/معك.",
-    "NO tanween (ًٌٍ), NO nahwi, NO full textbook marks. Qaf ق = hamza (2).",
+    "NO tanween (ًٌٍ), NO nahwi, NO full textbook marks.",
+    "REQUIRED: rewrite every qaf ق as digit 2 (قلبي → 2لبي) — never classical /q/.",
   ];
 }
 
@@ -482,6 +486,7 @@ function hintSungArabicDiacritics(input) {
 /**
  * Post-process Gemini tashkeel: drop tanween; keep sukoon for Lebanese/Levantine/MSA;
  * for Lebanese/Levantine sung Add-vowels, also keep mid-word short vowels.
+ * Lebanese/Levantine: rewrite qaf ق → digit 2 so AI singers say /ʔ/ (2albi) not /q/ (kalbi).
  */
 function lightenSungArabicDiacritics(input, {
   isMsa = false,
@@ -498,7 +503,21 @@ function lightenSungArabicDiacritics(input, {
   if (!keepSukoon) {
     text = text.replace(/\u0652/g, "");
   }
-  return applySparseSungDiacritics(text, { keepSukoon, preserveMidWordVowels });
+  text = applySparseSungDiacritics(text, { keepSukoon, preserveMidWordVowels });
+  if (isLebanese || isLevantineColloquial) {
+    text = rewriteLebaneseQafAsTwo(text);
+  }
+  return text;
+}
+
+/**
+ * Lebanese/Levantine sung spelling: ق is hamza in speech.
+ * AI singers often read ق as classical /q/ (قلبي → "kalbi").
+ * Rewrite to digit 2 (Arabizi) so they sing 2لبي → "2albi".
+ * Does NOT touch kaf ك.
+ */
+function rewriteLebaneseQafAsTwo(input) {
+  return String(input || "").replace(/\u0642/g, "2");
 }
 
 function buildLyriaLebaneseArabicNote() {
@@ -556,6 +575,7 @@ module.exports = {
   applySparseSungDiacritics,
   hintSungArabicDiacritics,
   lightenSungArabicDiacritics,
+  rewriteLebaneseQafAsTwo,
   hintRequestsFormalMsa,
   buildLyriaLebaneseArabicNote,
   buildLyriaEgyptianArabicNote,

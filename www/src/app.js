@@ -8439,7 +8439,9 @@ function setNabadVocalChainPref(key, on) {
 
 function syncSettingsNabadVocalChainRow(providerPref = getMusicProviderPref()) {
   const block = document.getElementById("settingsNabadVocalChainBlock");
-  const show = Boolean(creditsState.isAdmin) && providerPref === "lyria";
+  const show =
+    Boolean(creditsState.isAdmin)
+    && (providerPref === "lyria" || providerPref === "elevenlabs");
   if (block) {
     block.hidden = !show;
     block.style.display = show ? "" : "none";
@@ -8577,7 +8579,7 @@ function wireSettingsMusicProviderOnce() {
       setNabadVocalChainPref(key, Boolean(input.checked));
       try {
         showToast(
-          `${key.replace(/_/g, " ")} ${input.checked ? "ON" : "OFF"} for Lyria vocal A/B.`,
+          `${key.replace(/_/g, " ")} ${input.checked ? "ON" : "OFF"} for Lyria / ElevenLabs vocal A/B.`,
           { icon: "♪", durationMs: 2800 },
         );
       } catch {}
@@ -76549,6 +76551,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (creditsState.isAdmin) {
           payload.nabadVocalChain = getNabadVocalChainPrefs();
         }
+      }
+      if (useElevenlabsMusicProvider() && !shouldGenerateInstrumental && creditsState.isAdmin) {
+        payload.nabadVocalChain = getNabadVocalChainPrefs();
       }
       if (userAvoidTags) payload.negativeTags = userAvoidTags;
       payload.style = compactStyleForProvider(payload.style, 980);

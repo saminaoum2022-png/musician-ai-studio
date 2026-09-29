@@ -6,6 +6,10 @@
 const ELEVEN_MUSIC_URL = "https://api.elevenlabs.io/v1/music";
 const ELEVEN_MUSIC_DETAILED_URL = "https://api.elevenlabs.io/v1/music/detailed";
 const ELEVEN_MUSIC_PLAN_URL = "https://api.elevenlabs.io/v1/music/plan";
+const {
+  buildNabadVocalElevenTags,
+  mergeNabadVocalIntoStylePrompt,
+} = require("./nabad-vocal-identity");
 
 const ELEVEN_POSITIVE_STYLE_PAD = [
   "professional studio production",
@@ -218,27 +222,53 @@ function resolveElevenVocalPositiveTags({
   voiceTimbre = "",
   instrumental = false,
   bpmTag = "",
+  nabadVocalToggles = null,
+  dialectHint = "",
+  lyrics = "",
+  scriptFormat = "",
+  useNabadVocalIdentity = true,
 } = {}) {
   if (instrumental) return [];
   const g = String(vocalGender || "").trim().toLowerCase();
   const timbre = String(voiceTimbre || "").trim().toLowerCase();
   const tags = [];
   if (bpmTag) tags.push(bpmTag);
-  tags.push(
-    "on-pitch accurate vocals",
-    "tempo-locked to the beat",
-    "concise syllables no melisma",
-    "conversational pop vocal",
-    "rhythmic tight vocal phrasing",
-    "natural mid-range pitch",
-    "clear diction",
-    "close-mic studio vocal",
-  );
-  if (g === "f" || g === "female") {
-    tags.push("bright clear female vocal", "warm female pop voice");
-  } else if (g === "m" || g === "male") {
-    tags.push("warm male tenor vocal", "male pop vocal not baritone");
+
+  if (useNabadVocalIdentity) {
+    const nabad = buildNabadVocalElevenTags({
+      gender: vocalGender,
+      lyrics,
+      dialectHint,
+      scriptFormat,
+      adminToggles: nabadVocalToggles,
+    });
+    tags.push(...(nabad.tags || []));
+    tags.push(
+      "on-pitch accurate vocals",
+      "tempo-locked to the beat",
+      "conversational pop vocal",
+      "rhythmic tight vocal phrasing",
+      "clear diction",
+      "close-mic studio vocal",
+    );
+  } else {
+    tags.push(
+      "on-pitch accurate vocals",
+      "tempo-locked to the beat",
+      "concise syllables no melisma",
+      "conversational pop vocal",
+      "rhythmic tight vocal phrasing",
+      "natural mid-range pitch",
+      "clear diction",
+      "close-mic studio vocal",
+    );
+    if (g === "f" || g === "female") {
+      tags.push("bright clear female vocal", "warm female pop voice");
+    } else if (g === "m" || g === "male") {
+      tags.push("warm male tenor vocal", "male pop vocal");
+    }
   }
+
   if (timbre.includes("warm")) tags.push("warm intimate vocal tone");
   if (timbre.includes("bright") || timbre.includes("pop")) tags.push("bright forward vocal presence");
   if (timbre.includes("deep") || timbre.includes("grit")) {
@@ -261,14 +291,34 @@ function sectionElevenVocalBoost(sectionText = "") {
   return ["conversational on-beat verse delivery", "natural phrasing locked to rhythm"];
 }
 
-/** Apply singer-gender + performance tags to every chunk (ElevenLabs path only). */
+/** Apply singer-gender + Nabad FX tags to every chunk (ElevenLabs path only). */
 function applyElevenVocalStylesToPlan(
   plan,
-  { vocalGender = "", voiceTimbre = "", instrumental = false, bpm = null } = {},
+  {
+    vocalGender = "",
+    voiceTimbre = "",
+    instrumental = false,
+    bpm = null,
+    nabadVocalToggles = null,
+    dialectHint = "",
+    lyrics = "",
+    scriptFormat = "",
+    useNabadVocalIdentity = true,
+  } = {},
 ) {
   if (!plan?.chunks?.length || instrumental) return plan;
   const bpmTag = formatBpmTag(bpm);
-  const baseVocal = resolveElevenVocalPositiveTags({ vocalGender, voiceTimbre, instrumental, bpmTag });
+  const baseVocal = resolveElevenVocalPositiveTags({
+    vocalGender,
+    voiceTimbre,
+    instrumental,
+    bpmTag,
+    nabadVocalToggles,
+    dialectHint,
+    lyrics,
+    scriptFormat,
+    useNabadVocalIdentity,
+  });
   const chunks = plan.chunks.map((c) => {
     const sectionBoost = sectionElevenVocalBoost(c.text);
     const positive_styles = ensureMinPositiveStyles([
@@ -307,11 +357,26 @@ function finalizeElevenSongPlan(
     instrumental = false,
     vocalGender = "",
     voiceTimbre = "",
+    nabadVocalToggles = null,
+    dialectHint = "",
+    lyrics = "",
+    scriptFormat = "",
+    useNabadVocalIdentity = true,
   } = {},
 ) {
   if (!plan?.chunks?.length) return plan;
   const bpm = resolvePlanBpm(plan, stylePrompt);
-  let out = applyElevenVocalStylesToPlan(plan, { vocalGender, voiceTimbre, instrumental, bpm });
+  let out = applyElevenVocalStylesToPlan(plan, {
+    vocalGender,
+    voiceTimbre,
+    instrumental,
+    bpm,
+    nabadVocalToggles,
+    dialectHint,
+    lyrics,
+    scriptFormat,
+    useNabadVocalIdentity,
+  });
   out = applyNegativeStylesToPlan(out, negativeTags, { instrumental });
   out = scaleCompositionPlanDuration(out, musicLengthMs);
   const styleTags = splitElevenStyleTags(stylePrompt);
@@ -1080,10 +1145,23 @@ function buildElevenPlanCreatePrompt({
   lyrics = "",
   instrumental = false,
   vocalGender = "",
+  nabadVocalToggles = null,
+  dialectHint = "",
+  scriptFormat = "",
+  useNabadVocalIdentity = true,
 } = {}) {
   const bits = [];
   const songTitle = String(title || "").trim();
-  const style = String(stylePrompt || "").trim();
+  let style = String(stylePrompt || "").trim();
+  if (!instrumental && useNabadVocalIdentity) {
+    style = mergeNabadVocalIntoStylePrompt(style, {
+      gender: vocalGender,
+      lyrics,
+      dialectHint,
+      scriptFormat,
+      adminToggles: nabadVocalToggles,
+    });
+  }
   const lyricPreview = String(lyrics || "").trim().slice(0, 400);
   if (songTitle) bits.push(`Song title: ${songTitle}`);
   if (style) bits.push(`Production brief (English style tags only, no artist names): ${style}`);
@@ -1095,15 +1173,24 @@ function buildElevenPlanCreatePrompt({
     const g = String(vocalGender || "").trim().toLowerCase();
     const bpmHint = extractBpmFromText(style);
     const tempoLine = bpmHint
-      ? `Tempo: ${bpmHint} BPM — vocals MUST stay locked to this tempo; concise syllables on the beat, no rubato or slow legato.`
-      : "Vocals must stay locked to the track tempo — concise syllables on the beat, no rubato or slow legato.";
-    if (g === "f" || g === "female") {
+      ? `Tempo: ${bpmHint} BPM — vocals stay locked to this tempo; concise syllables on the beat.`
+      : "Vocals stay locked to the track tempo — concise syllables on the beat.";
+    if (useNabadVocalIdentity) {
+      const nabad = buildNabadVocalElevenTags({
+        gender: vocalGender,
+        lyrics,
+        dialectHint,
+        scriptFormat,
+        adminToggles: nabadVocalToggles,
+      });
+      if (nabad.styleLine) bits.push(`Vocal identity: ${nabad.styleLine}`);
+    } else if (g === "f" || g === "female") {
       bits.push(
-        "Vocalist: female — bright clear tone, conversational on-beat pop delivery, on-pitch mid-range, NOT theatrical or ballad-slow.",
+        "Vocalist: female — bright clear tone, conversational on-beat pop delivery, on-pitch mid-range.",
       );
     } else if (g === "m" || g === "male") {
       bits.push(
-        "Vocalist: male TENOR — warm conversational pop delivery on the beat, on-pitch mid-range (not deep bass/baritone), NOT theatrical or ballad-slow.",
+        "Vocalist: male — warm conversational pop delivery on the beat, on-pitch mid-range tenor.",
       );
     }
     bits.push(tempoLine);
@@ -1188,6 +1275,11 @@ function buildCompositionPlanFromProducerChunks({
   instrumental = false,
   vocalGender = "",
   voiceTimbre = "",
+  nabadVocalToggles = null,
+  dialectHint = "",
+  lyrics = "",
+  scriptFormat = "",
+  useNabadVocalIdentity = true,
 }) {
   const rawList = Array.isArray(producerChunks) ? producerChunks : [];
   if (rawList.length < 2) return null;
@@ -1247,7 +1339,19 @@ function buildCompositionPlanFromProducerChunks({
 
   return finalizeElevenSongPlan(
     { chunks },
-    { stylePrompt, negativeTags, musicLengthMs, instrumental, vocalGender, voiceTimbre },
+    {
+      stylePrompt,
+      negativeTags,
+      musicLengthMs,
+      instrumental,
+      vocalGender,
+      voiceTimbre,
+      nabadVocalToggles,
+      dialectHint,
+      lyrics,
+      scriptFormat,
+      useNabadVocalIdentity,
+    },
   );
 }
 
@@ -1268,26 +1372,50 @@ async function buildElevenSongCompositionPlan({
   producerChunks = null,
   vocalGender = "",
   voiceTimbre = "",
+  nabadVocalToggles = null,
+  dialectHint = "",
+  scriptFormat = "",
+  useNabadVocalIdentity = true,
 }) {
   const lyricSource = String(structuredLyrics || lyrics || "").trim();
+  let effectiveStyle = String(stylePrompt || "").trim();
+  if (!instrumental && useNabadVocalIdentity) {
+    effectiveStyle = mergeNabadVocalIntoStylePrompt(effectiveStyle, {
+      gender: vocalGender,
+      lyrics: lyricSource,
+      dialectHint,
+      scriptFormat,
+      adminToggles: nabadVocalToggles,
+    });
+  }
   const finalizeOpts = {
-    stylePrompt,
+    stylePrompt: effectiveStyle,
     negativeTags,
     musicLengthMs,
     instrumental,
     vocalGender,
     voiceTimbre,
+    nabadVocalToggles,
+    dialectHint,
+    lyrics: lyricSource,
+    scriptFormat,
+    useNabadVocalIdentity,
   };
 
   if (Array.isArray(producerChunks) && producerChunks.length >= 2) {
     const geminiPlan = buildCompositionPlanFromProducerChunks({
       producerChunks,
       musicLengthMs,
-      stylePrompt,
+      stylePrompt: effectiveStyle,
       negativeTags,
       instrumental,
       vocalGender,
       voiceTimbre,
+      nabadVocalToggles,
+      dialectHint,
+      lyrics: lyricSource,
+      scriptFormat,
+      useNabadVocalIdentity,
     });
     if (geminiPlan?.chunks?.length >= 2) {
       return {
@@ -1300,11 +1428,15 @@ async function buildElevenSongCompositionPlan({
   }
 
   const planPrompt = buildElevenPlanCreatePrompt({
-    stylePrompt,
+    stylePrompt: effectiveStyle,
     title,
     lyrics: lyricSource,
     instrumental,
     vocalGender,
+    nabadVocalToggles,
+    dialectHint,
+    scriptFormat,
+    useNabadVocalIdentity,
   });
 
   let created = await elevenlabsCreateCompositionPlan({
@@ -1451,9 +1583,23 @@ function buildElevenReferenceCompositionPlan({
   negativeTags = "",
   vocalGender = "",
   voiceTimbre = "",
+  nabadVocalToggles = null,
+  dialectHint = "",
+  scriptFormat = "",
+  useNabadVocalIdentity = true,
 } = {}) {
   const lengthMs = Math.min(120000, resolveElevenMusicLengthMs(musicLengthMs));
-  const styles = splitElevenStyleTags(stylePrompt);
+  let effectiveStyle = String(stylePrompt || "").trim();
+  if (!instrumental && useNabadVocalIdentity) {
+    effectiveStyle = mergeNabadVocalIntoStylePrompt(effectiveStyle, {
+      gender: vocalGender,
+      lyrics,
+      dialectHint,
+      scriptFormat,
+      adminToggles: nabadVocalToggles,
+    });
+  }
+  const styles = splitElevenStyleTags(effectiveStyle);
   styles.push("match reference vocal timbre and melody");
   const negative_styles = splitElevenNegativeStyleTags(negativeTags, { instrumental });
 
@@ -1496,7 +1642,19 @@ function buildElevenReferenceCompositionPlan({
         },
       ],
     },
-    { stylePrompt, negativeTags, musicLengthMs: lengthMs, instrumental, vocalGender, voiceTimbre },
+    {
+      stylePrompt: effectiveStyle,
+      negativeTags,
+      musicLengthMs: lengthMs,
+      instrumental,
+      vocalGender,
+      voiceTimbre,
+      nabadVocalToggles,
+      dialectHint,
+      lyrics: lyricText,
+      scriptFormat,
+      useNabadVocalIdentity,
+    },
   );
 }
 
@@ -1509,9 +1667,22 @@ function buildElevenMusicPrompt({
   title = "",
   instrumental = false,
   vocalGender = "",
+  nabadVocalToggles = null,
+  dialectHint = "",
+  scriptFormat = "",
+  useNabadVocalIdentity = true,
 } = {}) {
   const bits = [];
-  const style = String(stylePrompt || "").trim();
+  let style = String(stylePrompt || "").trim();
+  if (!instrumental && useNabadVocalIdentity) {
+    style = mergeNabadVocalIntoStylePrompt(style, {
+      gender: vocalGender,
+      lyrics,
+      dialectHint,
+      scriptFormat,
+      adminToggles: nabadVocalToggles,
+    });
+  }
   const lyricText = String(lyrics || "").trim();
   const songTitle = String(title || "").trim();
   const bpmHint = extractBpmFromText(style);
@@ -1521,19 +1692,30 @@ function buildElevenMusicPrompt({
   if (instrumental) {
     bits.push("Instrumental only — no vocals, no lyrics.");
   } else {
-    const g = String(vocalGender || "").trim().toLowerCase();
-    if (g === "f" || g === "female") {
-      bits.push(
-        "Vocal performance: female — on-pitch, conversational on-beat pop delivery, concise syllables, NOT theatrical or slow legato.",
-      );
-    } else if (g === "m" || g === "male") {
-      bits.push(
-        "Vocal performance: male TENOR — on-pitch, conversational on-beat pop delivery, concise syllables, NOT theatrical or slow legato.",
-      );
+    if (useNabadVocalIdentity) {
+      const nabad = buildNabadVocalElevenTags({
+        gender: vocalGender,
+        lyrics: lyricText,
+        dialectHint,
+        scriptFormat,
+        adminToggles: nabadVocalToggles,
+      });
+      if (nabad.styleLine) bits.push(`Vocal performance: ${nabad.styleLine}`);
+    } else {
+      const g = String(vocalGender || "").trim().toLowerCase();
+      if (g === "f" || g === "female") {
+        bits.push(
+          "Vocal performance: female — on-pitch, conversational on-beat pop delivery, concise syllables.",
+        );
+      } else if (g === "m" || g === "male") {
+        bits.push(
+          "Vocal performance: male — on-pitch, conversational on-beat pop delivery, concise syllables.",
+        );
+      }
     }
     if (bpmHint) {
       bits.push(
-        `Sing strictly at ${bpmHint} BPM — lock vocals to the beat; do not stretch syllables or drag behind the rhythm.`,
+        `Sing strictly at ${bpmHint} BPM — lock vocals to the beat; keep syllables concise and on rhythm.`,
       );
     }
     if (lyricText) {

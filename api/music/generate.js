@@ -739,6 +739,9 @@ async function runElevenlabsGenerationJob({
         : null;
     const vocalGender = String(body?.vocalGender || "").trim();
     const voiceTimbre = String(body?.voiceTimbre || "").trim();
+    const nabadVocalToggles = body?.nabadVocalChain || body?.nabadVocalToggles || null;
+    const dialectHint = mergeLyriaDialectHint(body);
+    const scriptFormat = String(body?.scriptFormat || "").trim();
     const isSongInpaint = Boolean(editCompositionPlan);
     if (!isSongInpaint && !finalCompositionPlan?.chunks?.length) {
     const planBuilt = await buildElevenSongCompositionPlan({
@@ -754,6 +757,9 @@ async function runElevenlabsGenerationJob({
       producerChunks,
       vocalGender,
       voiceTimbre,
+      nabadVocalToggles,
+      dialectHint,
+      scriptFormat,
     });
     if (planBuilt.ok && planBuilt.plan?.chunks?.length) {
       finalCompositionPlan = planBuilt.plan;
@@ -780,6 +786,9 @@ async function runElevenlabsGenerationJob({
             negativeTags: body?.negativeTags,
             vocalGender,
             voiceTimbre,
+            nabadVocalToggles,
+            dialectHint,
+            scriptFormat,
           });
           elevenPlanSource = "reference_fallback_empty_chunks";
         } else {
@@ -815,6 +824,9 @@ async function runElevenlabsGenerationJob({
         negativeTags: body?.negativeTags,
         vocalGender,
         voiceTimbre,
+        nabadVocalToggles,
+        dialectHint,
+        scriptFormat,
       });
       elevenPlanSource = "reference_fallback";
     } else {
@@ -829,6 +841,9 @@ async function runElevenlabsGenerationJob({
         title,
         instrumental,
         vocalGender,
+        nabadVocalToggles,
+        dialectHint,
+        scriptFormat,
       });
       elevenPlanSource = "prompt_fallback";
     }
@@ -1653,6 +1668,9 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     title,
     instrumental,
     vocalGender: String(body?.vocalGender || "").trim(),
+    nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
+    dialectHint: mergeLyriaDialectHint(body),
+    scriptFormat: String(body?.scriptFormat || "").trim(),
   });
 
   const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";

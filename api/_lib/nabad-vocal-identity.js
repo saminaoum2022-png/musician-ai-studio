@@ -17,6 +17,62 @@ const NABAD_VOCAL_FX = Object.freeze({
     "subtle vocal fry and expressive phrasing texture at phrase endings",
 });
 
+/** Short ElevenLabs positive_styles for each FX toggle (chunk-friendly). */
+const NABAD_VOCAL_FX_ELEVEN_TAGS = Object.freeze({
+  auto_tune: [
+    "polished modern pitch-correction",
+    "subtle digital Auto-Tune on sustained notes",
+  ],
+  analog_saturation: [
+    "warm analog tube saturation",
+    "heavily compressed lead vocal glued to the beat",
+  ],
+  reverb_delay: [
+    "wet vocal mix",
+    "lush plate reverb",
+    "wide stereo delay trails",
+  ],
+  double_tracking: [
+    "double-tracked lead vocal",
+    "stereo-widened backing harmony layers",
+  ],
+  vocal_texture: [
+    "subtle vocal fry at phrase endings",
+    "expressive phrasing texture",
+  ],
+});
+
+const NABAD_VOCAL_MATRIX_ELEVEN_TAGS = Object.freeze({
+  male_ar: [
+    "Nabad male Arabic vocal identity",
+    "warm baritone-tenor range",
+    "conversational delivery",
+    "microtonal oriental runs",
+    "melismatic ornaments",
+  ],
+  male_en: [
+    "Nabad male English vocal identity",
+    "warm baritone-tenor range",
+    "rhythmic syncopated delivery",
+    "smooth modern R&B phrasing",
+  ],
+  female_ar: [
+    "Nabad female Arabic vocal identity",
+    "intimate breathy whisper-pop",
+    "rich emotional chest voice",
+    "soft vibrato",
+    "oriental melismatic ornaments",
+  ],
+  female_en: [
+    "Nabad female English vocal identity",
+    "intimate breathy whisper-pop",
+    "silky smooth vocal agility",
+    "airy head-voice transitions",
+    "soft vibrato",
+    "layered harmonies",
+  ],
+});
+
 const NABAD_VOCAL_FX_KEYS = Object.freeze(Object.keys(NABAD_VOCAL_FX));
 
 /** Default signature chain — on for everyone until admin toggles for A/B. */
@@ -158,14 +214,59 @@ function buildNabadVocalPrompt({
   };
 }
 
+/**
+ * ElevenLabs-friendly short positive_styles from the same Nabad identity + FX chain.
+ */
+function buildNabadVocalElevenTags({
+  gender = "",
+  language = "",
+  lyrics = "",
+  dialectHint = "",
+  scriptFormat = "",
+  adminToggles = null,
+  toggles = null,
+} = {}) {
+  const built = buildNabadVocalPrompt({
+    gender,
+    language,
+    lyrics,
+    dialectHint,
+    scriptFormat,
+    adminToggles,
+    toggles,
+  });
+  const matrixTags = NABAD_VOCAL_MATRIX_ELEVEN_TAGS[built.matrixKey] || NABAD_VOCAL_MATRIX_ELEVEN_TAGS.female_en;
+  const fxTags = NABAD_VOCAL_FX_KEYS.filter((k) => built.toggles[k])
+    .flatMap((k) => NABAD_VOCAL_FX_ELEVEN_TAGS[k] || []);
+  const tags = [...matrixTags, ...fxTags].map((t) => String(t).trim()).filter(Boolean);
+  return {
+    ...built,
+    tags: [...new Set(tags)],
+  };
+}
+
+/** Append Nabad vocal style line onto a freeform style prompt (ElevenLabs / fallback). */
+function mergeNabadVocalIntoStylePrompt(stylePrompt = "", nabadOpts = {}) {
+  const built = buildNabadVocalPrompt(nabadOpts);
+  const base = String(stylePrompt || "").trim();
+  if (!built.styleLine) return base;
+  if (!base) return built.styleLine;
+  if (base.includes("Nabad identity") || base.includes("Audio FX Chain:")) return base;
+  return `${base}. ${built.styleLine}`.replace(/\s+/g, " ").trim().slice(0, 2000);
+}
+
 module.exports = {
   NABAD_VOCAL_FX,
   NABAD_VOCAL_FX_KEYS,
   NABAD_VOCAL_FX_DEFAULTS,
+  NABAD_VOCAL_FX_ELEVEN_TAGS,
   NABAD_VOCAL_MATRIX,
+  NABAD_VOCAL_MATRIX_ELEVEN_TAGS,
   buildNabadVocalFxChain,
   buildNabadVocalPrompt,
+  buildNabadVocalElevenTags,
   buildNabadVocalStyleLine,
+  mergeNabadVocalIntoStylePrompt,
   normalizeNabadGender,
   normalizeNabadLanguage,
   normalizeNabadVocalToggles,

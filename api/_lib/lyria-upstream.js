@@ -367,8 +367,10 @@ function buildLyriaVocalProfile({
 }
 
 /**
- * Build a Lyria prompt: one musical-direction paragraph, then lyrics only.
- * Google guidance: separate instructions from lyrics — labeled meta blocks get sung.
+ * Build a Lyria prompt: musical direction + arrangement timing ABOVE lyrics.
+ * Google guidance: separate instructions from lyrics — labeled meta / direction
+ * blocks get sung if mixed into the lyric section.
+ * Timing as arrangement lines: [0:00 - 0:12] Intro: soft motif…
  * @see https://ai.google.dev/gemini-api/docs/music-generation
  */
 function buildLyriaPrompt({
@@ -384,13 +386,17 @@ function buildLyriaPrompt({
   clipVocalProfileId = "",
   enhancedStylePrompt = "",
   structuredLyrics = "",
+  arrangement = "",
   photoMood = false,
   durationSec = 0,
   scriptFormat = "",
 } = {}) {
   const style = String(enhancedStylePrompt || "").trim();
   const sanitizedStyle = style ? sanitizeStyleForLyria(style) : sanitizeStyleForLyria(stylePrompt);
-  const lyricText = String(structuredLyrics || lyrics || "").trim();
+  const rawLyrics = String(structuredLyrics || lyrics || "").trim();
+  const lyricText = instrumental ? "" : sanitizeLyriaLyricsForSinging(rawLyrics);
+  const arrangementText = String(arrangement || "").trim()
+    || (clip ? "" : extractArrangementFromMixedLyrics(rawLyrics));
   const songTitle = String(title || "").trim();
   const duration = Number(durationSec);
   const arabizi = isArabiziScript({ scriptFormat, lyrics: lyricText });
@@ -399,7 +405,9 @@ function buildLyriaPrompt({
 
   if (Number.isFinite(duration) && duration >= 30 && !clip) {
     const mins = Math.max(1, Math.round(duration / 60));
-    direction.push(`Approximately ${mins} minute${mins === 1 ? "" : "s"} (${Math.round(duration)} seconds)`);
+    direction.push(
+      `Target length about ${mins} minute${mins === 1 ? "" : "s"} (${Math.round(duration)} seconds) — full song with clear sections`,
+    );
   }
 
   if (photoMood) {
@@ -409,6 +417,10 @@ function buildLyriaPrompt({
   if (clip) {
     direction.push(
       "Short hook-focused music clip about 28 seconds, one optional verse plus one chorus, end on a complete phrase",
+    );
+  } else {
+    direction.push(
+      "Catchy radio-ready song with a memorable melodic hook in the first chorus, strong groove, and clear verse/chorus contrast",
     );
   }
 
@@ -427,33 +439,144 @@ function buildLyriaPrompt({
     });
     if (vocal) direction.push(vocal);
   } else {
-    direction.push("Instrumental only, no vocals");
+    direction.push("Instrumental only, no vocals, no sung words");
   }
 
   const directionText = direction.filter(Boolean).join(". ").replace(/\.\s*\./g, ".").trim();
 
+  const blocks = [];
   if (instrumental) {
-    return `Create an instrumental track. ${directionText}.`.slice(0, 8000);
+    blocks.push(`Create an instrumental track. ${directionText}.`);
+  } else {
+    blocks.push(`Create a song. ${directionText}.`);
+  }
+
+  if (arabizi && !instrumental) {
+    blocks.push(
+      buildLyriaArabiziPerformanceNote({
+        dialect: dialectHint,
+        dialectHint,
+      }),
+    );
+  }
+
+  // Arrangement timing ABOVE lyrics — docs format, never mixed into sung lines.
+  const arrLines = normalizeLyriaArrangementLines(arrangementText);
+  if (arrLines) {
+    blocks.push("");
+    blocks.push("Arrangement:");
+    blocks.push(arrLines);
+  }
+
+  if (instrumental) {
+    return blocks.join("\n").slice(0, 8000);
   }
 
   if (lyricText) {
-    const lines = [
-      `Create a song. ${directionText}.`,
-      "",
-      "With the following lyrics:",
-      "",
-      lyricText,
-    ];
-    if (arabizi) {
-      lines.splice(1, 0, buildLyriaArabiziPerformanceNote({
-        dialect: dialectHint,
-        dialectHint,
-      }));
-    }
-    return lines.join("\n").slice(0, 8000);
+    blocks.push("");
+    blocks.push("Sing only the lyrics below. Do not sing any text above this line.");
+    blocks.push("");
+    blocks.push("Lyrics:");
+    blocks.push("");
+    blocks.push(lyricText);
+    return blocks.join("\n").slice(0, 8000);
   }
 
-  return `Create a song. ${directionText}. Write and perform original lyrics matching this direction.`.slice(0, 8000);
+  blocks.push("");
+  blocks.push("Write and perform original catchy lyrics matching this direction. Prefer a sticky chorus hook.");
+  return blocks.join("\n").slice(0, 8000);
+}
+
+/**
+ * Strip instruction / meta lines so Lyria does not sing the brief.
+ * Keeps simple [Verse] / [Chorus] tags and singable lyric lines only.
+ */
+function sanitizeLyriaLyricsForSinging(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const out = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t) {
+      if (out.length && out[out.length - 1] !== "") out.push("");
+      continue;
+    }
+    // Drop arrangement timing lines that leaked into lyrics.
+    if (/^\[\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}\]/.test(t)) continue;
+    if (/^Arrangement\s*:/i.test(t)) continue;
+    if (/^Musical direction\s*:/i.test(t)) continue;
+    if (/^Lyrics\s*:/i.test(t)) continue;
+    if (/^Create\b/i.test(t) && !/^\[[^\]]+\]/.test(t)) continue;
+    if (/^(Write|Turn|Make|Build|Challenge|Describe|Paste|Start with|Keep |Add |Use |Pick |Flip |Begin)\b/i.test(t)
+      && !/^\[[^\]]+\]/.test(t)) {
+      continue;
+    }
+    if (/^(اكتب|حوّل|خلّيها|غنّي|صفّق|مزاج|مقطع|كورس|أغنية)/.test(t)) continue;
+    if (/^~\d+\s*sec|^max \d+ line|Tap ✦|not a full song|optional;|when ready/i.test(t)) continue;
+    if (/^Dialect\s*:|^Hint\s*:|^Arabic address\s*:|^Timing lock\s*:|^Cover art\s*:|^Voice timbre\s*:/i.test(t)) continue;
+    if (/^Approximately \d+|^Target length|^Duration\s*:/i.test(t)) continue;
+    if (/^Sing only the lyrics|^Do not sing any text/i.test(t)) continue;
+    if (/^With the following lyrics/i.test(t)) continue;
+    // Normalize section tags: strip embedded timing " · 0:00–0:15"
+    if (/^\[[^\]]+\]\s*$/.test(t)) {
+      const cleaned = t.replace(/\s*[·•]\s*\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}\s*/g, "").trim();
+      if (cleaned) out.push(cleaned);
+      continue;
+    }
+    // Drop "section: instruction" meta lines without sung words
+    if (/^\[[^\]]+\]\s*[—\-–:]\s*(lines?|hook|whisper|quiet|before|after|begin|add|keep|write)\b/i.test(t)) {
+      continue;
+    }
+    out.push(t);
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Pull arrangement timing lines if they were mixed into a producer lyric blob. */
+function extractArrangementFromMixedLyrics(text) {
+  const lines = String(text || "").split(/\r?\n/);
+  const arr = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (/^\[\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}\]/.test(t)) arr.push(t);
+  }
+  return arr.join("\n").trim();
+}
+
+/**
+ * Normalize arrangement to docs format:
+ * [0:00 - 0:12] Intro: soft motif…
+ * Also accepts producer tags like [Intro · 0:00–0:15] description
+ */
+function normalizeLyriaArrangementLines(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const out = [];
+  for (const line of raw.split(/\r?\n/)) {
+    let t = line.trim();
+    if (!t || /^Arrangement\s*:/i.test(t)) continue;
+    // Already docs format
+    if (/^\[\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}\]/.test(t)) {
+      t = t.replace(/^\[(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})\]\s*/, (_, a, b) => `[${a} - ${b}] `);
+      out.push(t.replace(/\s+/g, " ").trim());
+      continue;
+    }
+    // [Intro · 0:00–0:15] or [Intro · 0:00–0:15] soft motif
+    const m = /^\[([^\]]+?)\s*[·•]\s*(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})\s*\]\s*(.*)$/.exec(t);
+    if (m) {
+      const section = String(m[1] || "").trim();
+      const start = m[2];
+      const end = m[3];
+      const rest = String(m[4] || "").trim();
+      out.push(`[${start} - ${end}] ${section}${rest ? `: ${rest}` : ""}`.replace(/\s+/g, " ").trim());
+      continue;
+    }
+    // Bare instruction line without timestamps — keep if it looks like arrangement prose
+    if (/^(Intro|Verse|Chorus|Bridge|Outro|Pre-Chorus|Hook)\b/i.test(t) && t.includes(":")) {
+      out.push(t);
+    }
+  }
+  return out.join("\n").trim();
 }
 
 function decodeInlineAudio(inline) {
@@ -463,8 +586,15 @@ function decodeInlineAudio(inline) {
   try {
     const buffer = Buffer.from(data, "base64");
     if (!buffer.length) return null;
-    const mime = String(inline?.mimeType || inline?.mime_type || "audio/mpeg").split(";")[0].trim();
-    return { buffer, mimeType: mime || "audio/mpeg" };
+    let mime = String(inline?.mimeType || inline?.mime_type || "").split(";")[0].trim();
+    // Sniff WAV/RIFF when mime is missing or generic.
+    if ((!mime || mime === "audio" || mime === "application/octet-stream") && buffer.length >= 12) {
+      if (buffer.slice(0, 4).toString("ascii") === "RIFF" && buffer.slice(8, 12).toString("ascii") === "WAVE") {
+        mime = "audio/wav";
+      }
+    }
+    if (!mime) mime = "audio/mpeg";
+    return { buffer, mimeType: mime };
   } catch {
     return null;
   }
@@ -775,16 +905,23 @@ async function lyriaGenerateViaGenerateContent({ apiKey, model, prompt }) {
 async function lyriaGenerateViaInteractions({ apiKey, model, prompt, photoImages = [] }) {
   const resolvedModel = resolveLyriaModel(model);
   const images = Array.isArray(photoImages) ? photoImages : [];
+  // Full songs: request WAV for higher fidelity (Interactions API). Clip stays default MP3.
+  const wantWav = !isLyriaClipModel(resolvedModel);
+  const body = {
+    model: resolvedModel,
+    input: buildLyriaInteractionsInput(prompt, images),
+  };
+  if (wantWav) {
+    body.response_format = { type: "audio" };
+  }
   const r = await fetch(LYRIA_INTERACTIONS_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Api-Revision": "2026-05-20",
       "x-goog-api-key": String(apiKey || "").trim(),
     },
-    body: JSON.stringify({
-      model: resolvedModel,
-      input: buildLyriaInteractionsInput(prompt, images),
-    }),
+    body: JSON.stringify(body),
   });
   const text = await r.text().catch(() => "");
   const data = safeJson(text);
@@ -799,6 +936,7 @@ async function lyriaGenerateViaInteractions({ apiKey, model, prompt, photoImages
     alignedWords,
     model: resolvedModel,
     api: "interactions",
+    responseFormat: wantWav ? "wav" : "mp3",
     userMessage: lyriaUserMessage(r.status, data, text),
   };
 }
@@ -859,6 +997,8 @@ module.exports = {
   buildLyriaArabicPronunciationLine,
   buildLyriaDirectStylePrompt,
   sanitizeStyleForLyria,
+  sanitizeLyriaLyricsForSinging,
+  normalizeLyriaArrangementLines,
   extractLyriaAlignedWords,
   extractLyriaAudio,
   extractLyriaDurationSecs,

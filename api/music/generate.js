@@ -41,6 +41,8 @@ const {
   buildLyriaDirectStylePrompt,
   buildLyriaArabicPronunciationLine,
   resolveLyriaArabicPronunciationMode,
+  extractLyriaDisplayLyrics,
+  sanitizeLyriaLyricsForSinging,
 } = require("../_lib/lyria-upstream");
 const { clipVocalProfileById } = require("../_lib/clip-vocal-profiles");
 const {
@@ -260,14 +262,16 @@ async function persistAudioBuffer({ userId, taskId, buffer, contentType = "audio
   if (!buffer || !Buffer.isBuffer(buffer) || buffer.length < 128) {
     return { ok: false, error: "missing_audio_bytes" };
   }
-  const ext = String(contentType).includes("wav") ? "wav" : "mp3";
+  const ext = /wav|wave|lpcm|pcm/i.test(String(contentType)) ? "wav" : "mp3";
   const folder = providerFolder(taskId);
   const key = `${userId}/${folder}/${taskId}.${ext}`;
   const up = await uploadObject({
     bucket: BUCKET,
     key,
     body: buffer,
-    contentType: String(contentType).includes("audio") ? contentType : "audio/mpeg",
+    contentType: String(contentType).includes("audio")
+      ? contentType
+      : (ext === "wav" ? "audio/wav" : "audio/mpeg"),
   });
   if (!up.ok) return { ok: false, error: up.error || "upload_failed" };
   return { ok: true, url: up.url };
@@ -439,6 +443,7 @@ async function runLyriaGenerationJob({
         clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
         enhancedStylePrompt: producerResult.enhanced_style_prompt,
         structuredLyrics: producerResult.structured_lyrics,
+        arrangement: producerResult.arrangement || "",
         photoMood: photoImages.length > 0,
         durationSec,
         scriptFormat: String(body?.scriptFormat || "").trim(),
@@ -481,9 +486,14 @@ async function runLyriaGenerationJob({
         alignedWords: upstream.alignedWords,
       });
     }
-    const displayLyrics = producerResult.ok && producerResult.structured_lyrics
-      ? producerResult.structured_lyrics
-      : lyrics;
+    const displayLyrics = sanitizeLyriaLyricsForSinging(
+      String(
+        (producerResult.ok && producerResult.structured_lyrics) ||
+          lyrics ||
+          extractLyriaDisplayLyrics(upstream.data) ||
+          "",
+      ),
+    );
     const statusPayload = buildSunoStatusPayload({
       taskId,
       title,
@@ -565,6 +575,7 @@ async function runLyriaClipGenerationJob({
         clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
         enhancedStylePrompt: producerResult.enhanced_style_prompt,
         structuredLyrics: producerResult.structured_lyrics,
+        arrangement: producerResult.arrangement || "",
         photoMood: photoImages.length > 0,
         durationSec: resolveLyriaDurationSec(body),
         scriptFormat: String(body?.scriptFormat || "").trim(),
@@ -612,9 +623,14 @@ async function runLyriaClipGenerationJob({
         alignedWords: upstream.alignedWords,
       });
     }
-    const displayLyrics = producerResult.ok && producerResult.structured_lyrics
-      ? producerResult.structured_lyrics
-      : lyrics;
+    const displayLyrics = sanitizeLyriaLyricsForSinging(
+      String(
+        (producerResult.ok && producerResult.structured_lyrics) ||
+          lyrics ||
+          extractLyriaDisplayLyrics(upstream.data) ||
+          "",
+      ),
+    );
     const statusPayload = buildSunoStatusPayload({
       taskId,
       title,

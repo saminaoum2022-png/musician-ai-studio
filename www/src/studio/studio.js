@@ -49,7 +49,6 @@ const DEFAULT_MIX = Object.freeze({
   fxCompress: 0,
   fxEq: 0,
   fxDeesser: 0,
-  fxPitch: 0,
 });
 
 /** Applied after each new take — start on Studio preset so polish is audible immediately. */
@@ -70,7 +69,6 @@ const POST_RECORD_MIX = Object.freeze({
   fxCompress: 40,
   fxEq: 0,
   fxDeesser: 30,
-  fxPitch: 30,
 });
 
 function applyPostRecordMixDefaults() {
@@ -85,29 +83,29 @@ const FINISH_LABELS = {
   punchy: "Punchy",
 };
 
-/** Style preset tabs on Preview + Mix — mix FX + finish in one tap, including pitch correction. */
+/** Style preset tabs on Preview + Mix — mix FX + finish in one tap (no pitch correction). */
 const STYLE_TAB_IDS = Object.freeze(["original", "natural", "studio", "pop", "custom"]);
 
 const STYLE_TABS = Object.freeze({
   original: {
     label: "Original",
     finish: "balanced",
-    mix: { voiceVol: 50, vocalGain: 50, musicVol: 70, fxVocalEnhance: 0, fxDenoise: 0, fxCompress: 0, fxDeesser: 0, fxPitch: 0, reverb: 0 },
+    mix: { voiceVol: 50, vocalGain: 50, musicVol: 70, fxVocalEnhance: 0, fxDenoise: 0, fxCompress: 0, fxDeesser: 0, reverb: 0 },
   },
   natural: {
     label: "Natural",
     finish: "warm",
-    mix: { voiceVol: 52, vocalGain: 50, musicVol: 70, fxVocalEnhance: 45, fxDenoise: 0, fxCompress: 28, fxDeesser: 22, fxPitch: 15, reverb: 14 },
+    mix: { voiceVol: 52, vocalGain: 50, musicVol: 70, fxVocalEnhance: 45, fxDenoise: 0, fxCompress: 28, fxDeesser: 22, reverb: 14 },
   },
   studio: {
     label: "Studio",
     finish: "balanced",
-    mix: { voiceVol: 54, vocalGain: 52, musicVol: 68, fxVocalEnhance: 70, fxDenoise: 0, fxCompress: 40, fxDeesser: 30, fxPitch: 30, reverb: 18 },
+    mix: { voiceVol: 54, vocalGain: 52, musicVol: 68, fxVocalEnhance: 70, fxDenoise: 0, fxCompress: 40, fxDeesser: 30, reverb: 18 },
   },
   pop: {
     label: "Pop",
     finish: "bright",
-    mix: { voiceVol: 56, vocalGain: 54, musicVol: 66, fxVocalEnhance: 62, fxDenoise: 0, fxCompress: 55, fxDeesser: 34, fxPitch: 45, reverb: 22 },
+    mix: { voiceVol: 56, vocalGain: 54, musicVol: 66, fxVocalEnhance: 62, fxDenoise: 0, fxCompress: 55, fxDeesser: 34, reverb: 22 },
   },
   custom: { label: "Custom", finish: null, mix: null },
 });
@@ -294,7 +292,7 @@ function mixFxValue(m, key) {
 }
 
 function ensureMixFx(m) {
-  for (const k of ["fxDenoise", "fxVocalEnhance", "fxCompress", "fxEq", "fxDeesser", "fxPitch"]) {
+  for (const k of ["fxDenoise", "fxVocalEnhance", "fxCompress", "fxEq", "fxDeesser"]) {
     m[k] = mixFxValue(m, k);
   }
 }
@@ -809,55 +807,6 @@ function defaultVocalTitle() {
   return srcTitle ? `${srcTitle} — my version` : "Studio song";
 }
 
-/** Post-render reveal — makes the real mastering pass (finish chain + LUFS target) visible
- *  and earned, instead of silently dropping straight into the naming screen. */
-function renderMasterReveal(root) {
-  screen = "master-reveal";
-  clearStudioOverlays(root);
-  const pending = current?._pendingSave;
-  if (!pending?.rendered) { renderSaveDetails(root); return; }
-  const m = current.mix || DEFAULT_MIX;
-  const finishId = FINISH_PRESETS[m.finish] ? m.finish : "balanced";
-  const preset = FINISH_PRESETS[finishId];
-  const finishLabel = FINISH_LABELS[finishId] || finishId;
-  const take = engine?.getActiveTake?.();
-  const wave = takeWaveMeta(take);
-  const srcTitle = String(pending.sourceTitle || "").trim();
-
-  root.innerHTML = `
-    <div class="studio studioMasterReveal" data-studio-screen="master-reveal">
-      <div class="studioMasterRevealTop">
-        <div class="studioMasterCheck" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M20 6 9 17l-5-5"/></svg>
-        </div>
-        <h1 class="studioMasterRevealTitle">Mastered</h1>
-        <p class="studioMasterRevealSub">${esc(finishLabel)} preset · ${preset.targetLufs} LUFS, streaming-ready loudness</p>
-      </div>
-
-      <div class="studioMasterCard">
-        <div class="studioMasterCardKicker">${srcTitle ? "MY VOCALS" : "QUICK TAKE"}</div>
-        <div class="studioMasterCardTitle">${esc(pending.title || defaultVocalTitle())}</div>
-        <div class="studioMasterCardMeta">${fmtTime(pending.rendered.durationSec || 0)} · ${esc(finishLabel)} mix</div>
-        <div class="studioMasterCardWave" aria-hidden="true">${peaksHtml(wave.peaks)}</div>
-      </div>
-
-      <div class="studioMasterFacts">
-        <div class="studioMasterFactRow"><span>Compression, EQ, de-essing</span><span class="studioMasterFactGood">Applied</span></div>
-        <div class="studioMasterFactDivider" aria-hidden="true"></div>
-        <div class="studioMasterFactRow"><span>Loudness target</span><span>${preset.targetLufs} LUFS</span></div>
-      </div>
-
-      <div class="studioFooter">
-        <button type="button" class="studioPrimary" data-master-continue>Continue</button>
-      </div>
-    </div>`;
-
-  root.querySelector("[data-master-continue]")?.addEventListener("click", () => {
-    bridge.haptic?.("light");
-    renderSaveDetails(root);
-  });
-}
-
 function renderSaveDetails(root) {
   screen = "save-details";
   clearStudioOverlays(root);
@@ -951,74 +900,64 @@ async function confirmSaveVocal(root, title) {
 /* Screen: Lobby (no song yet — quick take, projects, recordings)              */
 /* -------------------------------------------------------------------------- */
 
-function lobbyRailItems() {
-  const recs = listRecordings().map((r) => ({
-    kind: "rec",
-    id: r.id,
-    title: r.name,
-    sub: "Quick take",
-    durationSec: r.durationSec,
-    ts: r.createdAt || 0,
-  }));
-  const projects = listProjects().map((p) => ({
-    kind: "proj",
-    id: p.id,
-    title: p.track?.title || p.name,
-    sub: "Project",
-    durationSec: 0,
-    ts: p.updatedAt || p.createdAt || 0,
-  }));
-  return [...recs, ...projects].sort((a, b) => b.ts - a.ts);
-}
-
 function renderLobby(root) {
   screen = "lobby";
+  const projects = listProjects();
   const recs = listRecordings();
-  const railItems = lobbyRailItems();
 
   root.innerHTML = `
-    <div class="studio studioLobby studioLobby--v2" data-studio-screen="lobby">
-      ${headerHtml("STUDIO")}
+    <div class="studio studioLobby" data-studio-screen="lobby">
+      ${headerHtml("NABADAI STUDIO")}
 
-      <h1 class="studioLobbyQuestion">What are we<br/>making today?</h1>
-
-      <div class="studioMicHeroWrap">
-        <span class="studioMicHeroGlow" aria-hidden="true"></span>
-        <button type="button" class="studioMicHero" data-studio-quick aria-label="Start recording">
-          <svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
-            <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/>
-            <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/>
-          </svg>
-        </button>
+      <div class="studioLobbyHead">
+        <h1 class="studioTitle">Studio</h1>
+        <p class="studioArtist">Record over a song, or catch a quick idea before it’s gone.</p>
       </div>
-      <div class="studioMicHeroLabel">Tap to record</div>
-      <div class="studioMicHeroSub">Just your voice — no setup, no song required</div>
 
-      <button type="button" class="studioQuickTake studioQuickTake--alt studioSecondaryRow" data-studio-newproject>
+      <button type="button" class="studioQuickTake" data-studio-quick>
+        <span class="studioQuickIco" aria-hidden="true">●</span>
+        <span class="studioQuickBody">
+          <span class="studioQuickTitle">Quick take</span>
+          <span class="studioQuickSub">Record a fast idea — just your voice, no music.</span>
+        </span>
+      </button>
+
+      <button type="button" class="studioQuickTake studioQuickTake--alt" data-studio-newproject>
         <span class="studioQuickIco studioQuickIco--alt" aria-hidden="true">♪</span>
         <span class="studioQuickBody">
-          <span class="studioQuickTitle">Sing over a song</span>
-          <span class="studioQuickSub">Pick something from your library</span>
+          <span class="studioQuickTitle">New project</span>
+          <span class="studioQuickSub">Load a song from your library to sing over.</span>
         </span>
         <span class="studioChoiceChev" aria-hidden="true">→</span>
       </button>
 
       <div class="studioLobbySection">
         <div class="studioLobbySectionTop">
-          <span class="studioLobbyKicker">Continue where you left off</span>
-          ${recs.length ? `<button type="button" class="studioLink" data-studio-open-recordings>See all</button>` : ""}
+          <span class="studioLobbyKicker">Recordings</span>
+          <button type="button" class="studioLink" data-studio-open-recordings>See all${recs.length ? ` (${recs.length})` : ""}</button>
         </div>
-        ${railItems.length
-          ? `<div class="studioRail">${railItems.map((it) => `
-              <div class="studioRailCard">
-                <button type="button" class="studioRailMain" data-${it.kind === "rec" ? "rec-open" : "proj-open"}="${esc(it.id)}">
-                  <span class="studioRailWave" aria-hidden="true">${miniWaveHtml(it.id)}</span>
-                  <span class="studioRailName">${esc(it.title)}</span>
-                  <span class="studioRailMeta">${it.durationSec ? `${fmtTime(it.durationSec)} · ` : ""}${esc(it.sub)}</span>
+        ${recs.length
+          ? `<div class="studioMiniList">${recs.slice(0, 3).map((r) => `
+              <button type="button" class="studioMiniRow" data-rec-open="${esc(r.id)}">
+                <span class="studioMiniIco" aria-hidden="true">▶</span>
+                <span class="studioMiniName">${esc(r.name)}</span>
+                <span class="studioMiniMeta">${fmtTime(r.durationSec)}</span>
+              </button>`).join("")}</div>`
+          : `<p class="studioLobbyEmpty">No recordings yet.</p>`}
+      </div>
+
+      <div class="studioLobbySection">
+        <div class="studioLobbySectionTop"><span class="studioLobbyKicker">Projects</span></div>
+        ${projects.length
+          ? `<div class="studioMiniList">${projects.slice(0, 6).map((p) => `
+              <div class="studioMiniRow studioMiniRow--proj">
+                <button type="button" class="studioMiniMain" data-proj-open="${esc(p.id)}">
+                  <span class="studioMiniIco" aria-hidden="true">♪</span>
+                  <span class="studioMiniName">${esc(p.name)}${p.track?.title ? ` · ${esc(p.track.title)}` : ""}</span>
                 </button>
-                <button type="button" class="studioRailDel" data-${it.kind === "rec" ? "rec-del" : "proj-del"}="${esc(it.id)}" aria-label="Delete">✕</button>
+                <button type="button" class="studioMiniDel" data-proj-del="${esc(p.id)}" aria-label="Delete project">✕</button>
               </div>`).join("")}</div>`
-          : `<p class="studioLobbyEmpty">Nothing yet — tap the mic above to make your first take.</p>`}
+          : `<p class="studioLobbyEmpty">Open a song → ⋯ → <b>Open in Studio</b> to start a project.</p>`}
       </div>
     </div>`;
 
@@ -1058,14 +997,6 @@ function bindLobby(root) {
       void deleteProjectWithBlobs(b.getAttribute("data-proj-del")).then(() => renderLobby(root));
     }),
   );
-  root.querySelectorAll("[data-rec-del]").forEach((b) =>
-    b.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      bridge.haptic?.("light");
-      await deleteRecording(b.getAttribute("data-rec-del"));
-      renderLobby(root);
-    }),
-  );
 }
 
 function startQuickTake(root) {
@@ -1080,7 +1011,7 @@ function startQuickTake(root) {
     timedLines: null,
     timedFetched: true,
   };
-  renderRoomCheck(root);
+  renderRecording(root);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1294,7 +1225,7 @@ function bindHome(root) {
   root.querySelector("[data-studio-start]")?.addEventListener("click", () => {
     bridge.haptic?.("medium");
     stopStudioPlayback();
-    renderRoomCheck(root);
+    renderRecording(root);
   });
   root.querySelector("[data-studio-preview]")?.addEventListener("click", async () => {
     bridge.haptic?.("light");
@@ -1459,124 +1390,6 @@ function updateHomeLyrics(root) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Screen: Room check — quick, honest mic/room read + 3-2-1 before recording   */
-/* -------------------------------------------------------------------------- */
-
-function renderRoomCheck(root) {
-  screen = "roomcheck";
-  clearStudioOverlays(root);
-  root.innerHTML = `
-    <div class="studio studioRoomCheck" data-studio-screen="roomcheck">
-      <button type="button" class="studioBack studioRoomCheckBack" data-room-back aria-label="Back">
-        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M15.5 4.5 8 12l7.5 7.5 1.4-1.4L10.8 12l6.1-6.1z"/></svg>
-      </button>
-      <button type="button" class="studioRoomCheckSkip" data-room-skip>Skip</button>
-
-      <div class="studioRoomCheckKicker">BEFORE YOU RECORD</div>
-
-      <div class="studioRoomCheckMicWrap">
-        <span class="studioRoomCheckRing studioRoomCheckRing--1" aria-hidden="true"></span>
-        <span class="studioRoomCheckRing studioRoomCheckRing--2" aria-hidden="true"></span>
-        <div class="studioRoomCheckMic" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="34" height="34">
-            <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/>
-            <path fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/>
-          </svg>
-        </div>
-      </div>
-
-      <div class="studioRoomCheckHeadline" data-room-headline>Checking your room…</div>
-      <div class="studioRoomCheckSub" data-room-sub>One moment</div>
-
-      <div class="studioRoomCheckStats" data-room-stats hidden>
-        <div class="studioRoomCheckStat">
-          <div class="studioRoomCheckStatVal" data-room-noise-val>—</div>
-          <div class="studioRoomCheckStatLbl">ROOM NOISE</div>
-        </div>
-        <div class="studioRoomCheckStatDivider" aria-hidden="true"></div>
-        <div class="studioRoomCheckStat">
-          <div class="studioRoomCheckStatVal" data-room-rate-val>—</div>
-          <div class="studioRoomCheckStatLbl">SAMPLE RATE</div>
-        </div>
-      </div>
-
-      <div class="studioRoomCheckCountdownWrap" data-room-countdown-wrap hidden>
-        <svg class="studioRoomCheckRingSvg" viewBox="0 0 76 76" width="76" height="76" aria-hidden="true">
-          <circle cx="38" cy="38" r="33" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="4"/>
-          <circle class="studioRoomCheckRingProgress" cx="38" cy="38" r="33" fill="none" stroke="url(#roomCheckGrad)" stroke-width="4" stroke-linecap="round" data-room-ring/>
-          <defs><linearGradient id="roomCheckGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8f74ff"/><stop offset="100%" stop-color="#22C5A9"/></linearGradient></defs>
-        </svg>
-        <div class="studioRoomCheckCountdownNum" data-room-countdown>3</div>
-      </div>
-    </div>`;
-  bindRoomCheck(root);
-}
-
-function bindRoomCheck(root) {
-  let cancelled = false;
-  const proceed = () => {
-    if (cancelled) return;
-    cancelled = true;
-    renderRecording(root);
-  };
-  root.querySelector("[data-room-back]")?.addEventListener("click", () => {
-    cancelled = true;
-    bridge.haptic?.("light");
-    current = null;
-    renderLobby(root);
-  });
-  root.querySelector("[data-room-skip]")?.addEventListener("click", () => {
-    bridge.haptic?.("light");
-    proceed();
-  });
-
-  void (async () => {
-    // Deliberately NOT calling the native mic probe (AVAudioEngine) here: on a real
-    // device it can leave the audio session in a state that blocks the WKWebView
-    // getUserMedia call recording actually uses right after, causing a hang where
-    // the app looks frozen and never records. The ceremony (rings + countdown) is
-    // the real value here, so we keep that and skip the risky native measurement.
-    const noiseLabel = null;
-    const noiseGood = true;
-    const sampleRateLabel = null;
-    if (cancelled) return;
-
-    const headline = root.querySelector("[data-room-headline]");
-    const sub = root.querySelector("[data-room-sub]");
-    const stats = root.querySelector("[data-room-stats]");
-    if (noiseLabel) {
-      if (headline) headline.textContent = noiseGood ? "Your room sounds good" : "There’s some background noise";
-      if (sub) sub.textContent = noiseGood ? "Healthy signal, low background noise." : "A quieter spot will help — but you’re good to go.";
-      const noiseVal = root.querySelector("[data-room-noise-val]");
-      if (noiseVal) noiseVal.textContent = noiseLabel;
-      const rateVal = root.querySelector("[data-room-rate-val]");
-      if (rateVal) rateVal.textContent = sampleRateLabel || "—";
-      if (stats) stats.hidden = false;
-    } else {
-      if (headline) headline.textContent = "Ready when you are";
-      if (sub) sub.textContent = "Find a quiet spot and get close to the mic.";
-    }
-    if (cancelled) return;
-
-    const wrap = root.querySelector("[data-room-countdown-wrap]");
-    const num = root.querySelector("[data-room-countdown]");
-    const ring = root.querySelector("[data-room-ring]");
-    if (wrap) wrap.hidden = false;
-    if (ring) ring.classList.add("isRunning");
-    let n = 3;
-    const showNext = () => {
-      if (cancelled) return;
-      if (n === 0) { proceed(); return; }
-      if (num) num.textContent = String(n);
-      bridge.haptic?.("light");
-      n -= 1;
-      setTimeout(showNext, 700);
-    };
-    showNext();
-  })();
-}
-
-/* -------------------------------------------------------------------------- */
 /* Screen: Recording (scaffold — real mic wiring runs on device)               */
 /* -------------------------------------------------------------------------- */
 
@@ -1594,26 +1407,10 @@ function renderRecording(root) {
 
       <div class="studioCountIn" data-studio-countin hidden><span>3</span></div>
 
-      ${memo
-        ? `<div class="studioRecWaves">
-            <div class="studioRecWave studioRecWave--voice" data-studio-voicewave aria-hidden="true">${waveBarsHtml(64)}</div>
-          </div>`
-        : `<div class="studioTwoTrack">
-            <div class="studioTwoTrackLane studioTwoTrackLane--voice">
-              <div class="studioTwoTrackLabel studioTwoTrackLabel--voice">
-                <span class="studioTwoTrackLabelIco" aria-hidden="true">${studioIco("voice")}</span>
-                <span>YOUR VOICE</span>
-              </div>
-              <div class="studioRecWave studioRecWave--voice" data-studio-voicewave aria-hidden="true">${waveBarsHtml(48)}</div>
-            </div>
-            <div class="studioTwoTrackLane studioTwoTrackLane--guide">
-              <div class="studioTwoTrackLabel studioTwoTrackLabel--guide">
-                <span>INSTRUMENTAL</span>
-                <span class="studioTwoTrackLabelSub">${esc(safe(current?.track?.title) || "")}</span>
-              </div>
-              <div class="studioRecWave studioRecWave--guide" aria-hidden="true">${waveBarsHtml(48)}</div>
-            </div>
-          </div>`}
+      <div class="studioRecWaves">
+        ${memo ? "" : `<div class="studioRecWave studioRecWave--guide" aria-hidden="true">${waveBarsHtml(64)}</div>`}
+        <div class="studioRecWave studioRecWave--voice" data-studio-voicewave aria-hidden="true">${waveBarsHtml(64)}</div>
+      </div>
 
       ${memo
         ? `<div class="studioRecLyric studioRecLyric--memo">Sing or hum your idea — we’ll save it.</div>`
@@ -1890,13 +1687,6 @@ function refreshMixSlidersUi(root, m) {
   root.querySelectorAll("[data-studio-finish] .studioSegBtn").forEach((btn) => {
     btn.classList.toggle("isActive", btn.getAttribute("data-finish") === m.finish);
   });
-  root.querySelectorAll("[data-mix-toggle]").forEach((btn) => {
-    const k = btn.getAttribute("data-mix-toggle");
-    if (!k) return;
-    const on = mixFxValue(m, k) > 0;
-    btn.classList.toggle("isOn", on);
-    btn.setAttribute("aria-checked", String(on));
-  });
 }
 
 function updateStyleTabUi(root, activeId) {
@@ -1916,11 +1706,11 @@ function applyStyleTab(root, take, tabId, state) {
   const tab = STYLE_TABS[tabId];
   if (!tab?.mix) return;
   m.styleTab = tabId;
-  for (const k of ["voiceVol", "vocalGain", "musicVol", "fxVocalEnhance", "fxDenoise", "fxCompress", "fxDeesser", "fxEq", "fxPitch", "reverb"]) {
+  for (const k of ["voiceVol", "vocalGain", "musicVol", "fxVocalEnhance", "fxDenoise", "fxCompress", "fxDeesser", "fxEq", "reverb"]) {
     if (tab.mix[k] != null) m[k] = tab.mix[k];
   }
   if (state?.fromAi && state.aiRec?.mix) {
-    for (const k of ["voiceVol", "vocalGain", "musicVol", "fxVocalEnhance", "fxDenoise", "fxCompress", "fxDeesser", "fxEq", "fxPitch", "reverb"]) {
+    for (const k of ["voiceVol", "vocalGain", "musicVol", "fxVocalEnhance", "fxDenoise", "fxCompress", "fxDeesser", "fxEq", "reverb"]) {
       if (state.aiRec.mix[k] != null) m[k] = state.aiRec.mix[k];
     }
     if (state.aiRec.finish) m.finish = state.aiRec.finish;
@@ -1958,6 +1748,7 @@ function renderPreviewMix(root, take) {
   const wave = takeWaveMeta(take);
   const dur = wave.contentDur || engine?.guideDuration || 0;
   const aiRec = buildAiMixRecommendation(take, current?.track);
+  const mixPanel = m.mixPanel || "basic";
   const takeNum = take ? (takes.findIndex((t) => t.id === take.id) + 1) || 1 : 1;
 
   root.innerHTML = `
@@ -1981,53 +1772,33 @@ function renderPreviewMix(root, take) {
       </div>
       <div class="studioReviewTime studioFinishTime"><span data-studio-pos>0:00</span> <span class="studioReviewTimeSep">/</span> <span>${fmtTime(dur)}</span></div>
 
-      <div class="studioAbToggle" role="group" aria-label="Raw vs processed">
-        <button type="button" class="studioAbBtn" data-ab-mode="raw">Raw</button>
-        <button type="button" class="studioAbBtn isActive" data-ab-mode="processed">Processed</button>
-      </div>
-      <p class="studioAbHint">Tap to A/B — hear exactly what the chain is doing</p>
-
       ${aiMixCardHtml(aiRec)}
-
-      <section class="studioChainSection">
-        <span class="studioMixLabel">Tone</span>
-        <div class="studioToneChips studioSeg--finish" data-studio-finish role="group" aria-label="Finish preset">
-          ${FINISH_IDS.map((id) =>
-            `<button type="button" class="studioSegBtn studioToneChip${m.finish === id ? " isActive" : ""}" data-finish="${id}">${esc(FINISH_LABELS[id] || id)}</button>`,
-          ).join("")}
-        </div>
-      </section>
 
       <div class="studioPresetBlock">
         <span class="studioMixLabel">Style preset</span>
         ${stylePresetTabsHtml(m.styleTab)}
-        <p class="studioSyncHint studioPresetHint">Tap a preset for a quick recipe, tap <strong>Apply AI Mix</strong>, or fine-tune the chain below.</p>
+        <p class="studioSyncHint studioPresetHint">Use <strong>Vocal enhancer</strong> in Advanced, or tap <strong>Apply AI Mix</strong>. Music stays as-is — we only polish your voice.</p>
       </div>
 
-      <section class="studioChainSection">
-        <span class="studioMixLabel">Signal chain</span>
-        <div class="studioChainList">
-          ${chainSliderRow("fxPitch", "Pitch correction", "Snaps toward the note, keeps it musical", "note", m, "Natural", "Tight", { highlight: true, badge: "NEW" })}
-          ${chainToggleRow("fxCompress", "Compression", "Evens out loud and quiet moments", "compress", m, 40)}
-          ${chainToggleRow("fxEq", "EQ", "Warmth + presence, cuts the mud", "eq", m, 50)}
-          ${chainToggleRow("fxDeesser", "De-esser", "Tames harsh S's without thinning the vocal", "deess", m, 30)}
-          ${chainToggleRow("reverb", "Reverb", "A little room, not a cave", "reverb", m, 15)}
-        </div>
-      </section>
+      <div class="studioMixTabs" role="tablist" aria-label="Mix controls">
+        <button type="button" class="studioMixTab${mixPanel === "basic" ? " isActive" : ""}" data-mix-panel="basic" role="tab" aria-selected="${mixPanel === "basic"}">Basic</button>
+        <button type="button" class="studioMixTab${mixPanel === "advanced" ? " isActive" : ""}" data-mix-panel="advanced" role="tab" aria-selected="${mixPanel === "advanced"}">Advanced</button>
+      </div>
 
-      <section class="studioChainSection">
-        <span class="studioMixLabel">Levels</span>
+      <div class="studioMixPanel" data-mix-panel-basic ${mixPanel === "basic" ? "" : "hidden"}>
         <div class="studioSliders studioSliders--compact">
           ${sliderRow("voiceVol", "Voice", m.voiceVol, "voice")}
           ${sliderRow("musicVol", "Music", m.musicVol, "music")}
           ${sliderRow("vocalGain", "Vocal gain", m.vocalGain ?? 50, "voice")}
         </div>
-      </section>
+      </div>
 
-      <section class="studioChainSection">
-        <span class="studioMixLabel">Fine-tune</span>
+      <div class="studioMixPanel" data-mix-panel-advanced ${mixPanel === "advanced" ? "" : "hidden"}>
         <div class="studioSliders studioSliders--compact">
           ${sliderRow("fxVocalEnhance", "Vocal enhancer", m.fxVocalEnhance ?? 0, "voice")}
+          ${sliderRow("fxDeesser", "Smooth highs", m.fxDeesser, "deess")}
+          ${sliderRow("fxCompress", "Compressor", m.fxCompress, "compress")}
+          ${sliderRow("reverb", "Reverb", m.reverb, "reverb")}
           ${sliderRow("fxDenoise", "Noise gate", m.fxDenoise, "gate")}
         </div>
         <div class="studioMixField studioMixField--sync">
@@ -2037,18 +1808,24 @@ function renderPreviewMix(root, take) {
           </div>
           <input type="range" class="studioSyncSlider" min="-200" max="200" step="10" value="${Number(m.syncMs) || 0}" data-studio-sync aria-label="Voice timing offset" />
         </div>
-      </section>
+      </div>
 
-      ${studioProMasterEnabled() ? `
-      <section class="studioChainSection">
+      <section class="studioFinishSection">
+        <span class="studioMixLabel">Finish style</span>
+        <div class="studioSeg studioSeg--finish" data-studio-finish role="group" aria-label="Finish preset">
+          ${FINISH_IDS.map((id) =>
+            `<button type="button" class="studioSegBtn${m.finish === id ? " isActive" : ""}" data-finish="${id}">${esc(FINISH_LABELS[id] || id)}</button>`,
+          ).join("")}
+        </div>
+        ${studioProMasterEnabled() ? `
         <label class="studioProMasterToggle">
           <input type="checkbox" data-studio-pro-master ${m.proMaster ? "checked" : ""} aria-describedby="studioProMasterDesc" />
           <span class="studioProMasterCopy">
             <strong class="studioProMasterTitle">Pro Master ✨</strong>
             <span class="studioProMasterDesc" id="studioProMasterDesc">Free 30s preview · ${esc(PRO_MASTER.priceDisplay)} to save full master</span>
           </span>
-        </label>
-      </section>` : ""}
+        </label>` : ""}
+      </section>
 
       <div class="studioFooter studioFooter--finish">
         <button type="button" class="studioPrimary studioPrimary--continue" data-studio-save-vocal>Save to My Vocals</button>
@@ -2078,11 +1855,7 @@ function bindPreviewMix(root, take, aiRec) {
   bindHeader(root, () => renderHome(root));
   const m = current.mix || (current.mix = { ...DEFAULT_MIX });
   current._bindMixAiRec = aiRec;
-  const mixState = { lastGuideSec: 0, silent: true, aiRec, abMode: "processed" };
-  const rawPreviewParams = (takeId) => ({
-    ...mixParams(takeId),
-    reverb: 0, fxDenoise: 0, fxVocalEnhance: 0, fxCompress: 0, fxEq: 0, fxDeesser: 0, fxPitch: 0,
-  });
+  const mixState = { lastGuideSec: 0, silent: true, aiRec };
 
   const btn = root.querySelector("[data-studio-play]");
   const icoWrap = root.querySelector("[data-studio-play-ico]");
@@ -2105,9 +1878,8 @@ function bindPreviewMix(root, take, aiRec) {
       const fromSec = Math.max(0, fromGuideSec || 0);
       mixState.lastGuideSec = fromSec;
       const dur = contentDur();
-      const base = mixState.abMode === "raw" ? rawPreviewParams(take?.id) : mixParams(take?.id);
       await engine.playMix(
-        { ...base, fromSec },
+        { ...mixParams(take?.id), fromSec },
         {
           onTick: (g) => {
             mixState.lastGuideSec = g;
@@ -2189,20 +1961,6 @@ function bindPreviewMix(root, take, aiRec) {
     });
   }
 
-  root.querySelectorAll("[data-ab-mode]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const mode = btn.getAttribute("data-ab-mode");
-      if (mode === mixState.abMode) return;
-      bridge.haptic?.("light");
-      mixState.abMode = mode;
-      root.querySelectorAll("[data-ab-mode]").forEach((b) => b.classList.toggle("isActive", b.getAttribute("data-ab-mode") === mode));
-      if (engine?.isPlaying) {
-        mixState.lastGuideSec = engine.getMixGuidePosition?.() || mixState.lastGuideSec || 0;
-        void playFrom(mixState.lastGuideSec);
-      }
-    });
-  });
-
   root.querySelectorAll("[data-take-id]").forEach((tab) => {
     tab.addEventListener("click", () => {
       bridge.haptic?.("light");
@@ -2229,24 +1987,19 @@ function bindPreviewMix(root, take, aiRec) {
     void applyStyleTab(root, take, aiRec?.styleTab || "studio", { ...mixState, fromAi: true, aiRec });
   });
 
-  root.querySelectorAll("[data-mix-toggle]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const k = btn.getAttribute("data-mix-toggle");
-      if (!k) return;
-      const def = Number(btn.getAttribute("data-mix-toggle-default")) || 40;
-      const isOn = mixFxValue(m, k) > 0;
-      const next = isOn ? 0 : def;
-      m[k] = next;
-      m.styleTab = "custom";
-      updateStyleTabUi(root, "custom");
-      updateAiApplyUi(root, m, mixState.aiRec);
-      btn.classList.toggle("isOn", next > 0);
-      btn.setAttribute("aria-checked", String(next > 0));
+  root.querySelectorAll("[data-mix-panel]").forEach((tabBtn) => {
+    tabBtn.addEventListener("click", () => {
       bridge.haptic?.("light");
-      if (engine?.isPlaying) {
-        try { engine.clearTakeFxCache?.(); } catch {}
-        void restartMixPreview(root);
-      }
+      const panel = tabBtn.getAttribute("data-mix-panel");
+      if (!panel) return;
+      m.mixPanel = panel;
+      root.querySelectorAll(".studioMixTab").forEach((b) => {
+        const on = b.getAttribute("data-mix-panel") === panel;
+        b.classList.toggle("isActive", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      root.querySelector("[data-mix-panel-basic]")?.toggleAttribute("hidden", panel !== "basic");
+      root.querySelector("[data-mix-panel-advanced]")?.toggleAttribute("hidden", panel !== "advanced");
     });
   });
 
@@ -2260,7 +2013,7 @@ function bindPreviewMix(root, take, aiRec) {
       const out = root.querySelector(`[data-mix-val="${k}"]`);
       if (out) out.textContent = String(m[k]);
       if (engine?.isPlaying) {
-        const needsRestart = k === "fxDenoise" || k === "fxVocalEnhance" || k === "fxCompress" || k === "reverb" || k === "fxDeesser" || k === "fxPitch";
+        const needsRestart = k === "fxDenoise" || k === "fxVocalEnhance" || k === "fxCompress" || k === "reverb" || k === "fxDeesser";
         if (needsRestart) {
           try { engine.clearTakeFxCache?.(); } catch {}
           restartMixPreview(root);
@@ -2742,41 +2495,6 @@ function sliderRow(key, label, value, iconKey) {
     </label>`;
 }
 
-/** Signal-chain row — real effect, simple on/off (amount snaps to 0 or a sensible default). */
-function chainToggleRow(key, label, sub, iconKey, m, defaultOn) {
-  const on = mixFxValue(m, key) > 0;
-  return `
-    <div class="studioChainRow">
-      <span class="studioChainIco" aria-hidden="true">${studioIco(iconKey)}</span>
-      <span class="studioChainBody">
-        <span class="studioChainTitle">${esc(label)}</span>
-        <span class="studioChainSub">${esc(sub)}</span>
-      </span>
-      <button type="button" class="studioChainToggle${on ? " isOn" : ""}" data-mix-toggle="${key}" data-mix-toggle-default="${defaultOn}" role="switch" aria-checked="${on}" aria-label="${esc(label)}">
-        <span class="studioChainToggleKnob"></span>
-      </button>
-    </div>`;
-}
-
-/** Signal-chain row — graduated control (pitch correction isn't an on/off thing). */
-function chainSliderRow(key, label, sub, iconKey, m, loLabel, hiLabel, opts = {}) {
-  const val = mixFxValue(m, key);
-  const badge = opts.badge ? `<span class="studioChainBadge">${esc(opts.badge)}</span>` : "";
-  return `
-    <div class="studioChainRow studioChainRow--slider${opts.highlight ? " studioChainRow--highlight" : ""}">
-      <span class="studioChainIco" aria-hidden="true">${studioIco(iconKey)}</span>
-      <span class="studioChainBody">
-        <span class="studioChainTitleRow"><span class="studioChainTitle">${esc(label)}</span>${badge}</span>
-        <span class="studioChainSub">${esc(sub)}</span>
-      </span>
-    </div>
-    <div class="studioChainSliderRow${opts.highlight ? " studioChainSliderRow--highlight" : ""}">
-      <span class="studioChainSliderLbl">${esc(loLabel)}</span>
-      <input type="range" min="0" max="100" value="${val}" data-mix="${key}" aria-label="${esc(label)}" />
-      <span class="studioChainSliderLbl studioChainSliderLbl--hi">${esc(hiLabel)}</span>
-    </div>`;
-}
-
 function mixParams(takeId) {
   const m = current.mix || DEFAULT_MIX;
   const tid = takeId || engine?.activeTakeId || engine?.getActiveTake?.()?.id || "";
@@ -2794,7 +2512,6 @@ function mixParams(takeId) {
     fxCompress: mixFxValue(m, "fxCompress"),
     fxEq: mixFxValue(m, "fxEq"),
     fxDeesser: mixFxValue(m, "fxDeesser"),
-    fxPitch: mixFxValue(m, "fxPitch"),
     finish: FINISH_PRESETS[m.finish] ? m.finish : "balanced",
   };
 }
@@ -2901,7 +2618,7 @@ async function saveVocalFromPreview(root) {
       sourceTitle: srcTitle,
       cover,
     };
-    renderMasterReveal(root);
+    renderSaveDetails(root);
   } catch (e) {
     console.warn("[studio] finalize failed:", e);
     const raw = String(e?.message || "try again or turn it off.");
@@ -3273,19 +2990,6 @@ function waveBarsHtml(n) {
     s += `<span style="height:${h}%"></span>`;
   }
   return s;
-}
-
-/** Decorative mini waveform for a rail card — deterministic per id, not real audio data. */
-function miniWaveHtml(seedKey, n = 7) {
-  let seed = 0;
-  const s = String(seedKey || "");
-  for (let i = 0; i < s.length; i++) seed = (seed * 31 + s.charCodeAt(i)) >>> 0;
-  let out = "";
-  for (let i = 0; i < n; i++) {
-    const h = 22 + Math.round(Math.abs(Math.sin(seed * 0.013 + i * 0.9)) * 78);
-    out += `<i style="height:${h}%"></i>`;
-  }
-  return out;
 }
 
 function fmtTime(sec) {

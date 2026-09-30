@@ -11918,6 +11918,29 @@ body.playerLyricsOpen .playerLyricsChip{
   color:rgba(232,238,247,0.72);
 }
 .lyricsSingabilityNote[hidden]{ display:none !important; }
+.lyricsSingabilityRecs{
+  margin:0 0 10px;
+  padding:10px 12px;
+  border-radius:10px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.08);
+  font-size:12px;
+  line-height:1.45;
+}
+.lyricsSingabilityRecs[hidden]{ display:none !important; }
+.lyricsSingabilityRecs dt{
+  margin:8px 0 2px;
+  font-weight:600;
+  color:rgba(233,238,251,.85);
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+.lyricsSingabilityRecs dt:first-child{ margin-top:0; }
+.lyricsSingabilityRecs dd{
+  margin:0 0 4px;
+  color:rgba(233,238,251,.72);
+}
 .lyricsSingabilityActions{
   display:flex;
   flex-wrap:wrap;

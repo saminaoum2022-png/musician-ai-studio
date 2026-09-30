@@ -269,6 +269,19 @@ export function computeLocalSingability(text) {
   };
 }
 
+function normalizeRecommendations(raw) {
+  const rec = raw?.recommendations;
+  if (!rec || typeof rec !== "object") return null;
+  const pick = (key) => String(rec[key] || "").trim();
+  const lineLength = pick("lineLength");
+  const rhythm = pick("rhythm");
+  const bpm = pick("bpm");
+  const feel = pick("feel");
+  const notes = pick("notes");
+  if (!lineLength && !rhythm && !bpm && !feel && !notes) return null;
+  return { lineLength, rhythm, bpm, feel, notes };
+}
+
 export function normalizeSingabilityReport(raw, fallbackText = "") {
   const base = computeLocalSingability(fallbackText);
   if (!raw || typeof raw !== "object") return base;
@@ -286,12 +299,14 @@ export function normalizeSingabilityReport(raw, fallbackText = "") {
   const score = Number.isFinite(scoreRaw) ? Math.max(0, Math.min(100, Math.round(scoreRaw))) : base.score;
   const ready = typeof raw.ready === "boolean" ? raw.ready : score >= 75 && !warnings.some((w) => w.level === "high");
   const summary = String(raw.summary || "").trim() || base.summary;
+  const recommendations = normalizeRecommendations(raw);
   return {
     score,
     ready,
     summary,
     warnings: warnings.length ? warnings : base.warnings,
-    source: "api",
+    ...(recommendations ? { recommendations } : {}),
+    source: raw.source === "meter" ? "meter" : "api",
   };
 }
 

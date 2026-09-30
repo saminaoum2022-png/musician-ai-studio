@@ -886,6 +886,7 @@ const els = {
   lyricsSingabilitySummary: document.getElementById("lyricsSingabilitySummary"),
   lyricsSingabilityExpandHint: document.getElementById("lyricsSingabilityExpandHint"),
   lyricsSingabilityNote: document.getElementById("lyricsSingabilityNote"),
+  lyricsSingabilityRecs: document.getElementById("lyricsSingabilityRecs"),
   lyricsSingabilityDetails: document.getElementById("lyricsSingabilityDetails"),
   lyricsSingabilityList: document.getElementById("lyricsSingabilityList"),
   lyricsSingabilityActions: document.getElementById("lyricsSingabilityActions"),
@@ -7016,6 +7017,36 @@ function sanitizeSingabilityReport(report, lyricsText) {
   return { ...computeLocalSingability(lyricsText), source: "local" };
 }
 
+function renderSingabilityRecommendations(rec, lyricsText) {
+  const el = els.lyricsSingabilityRecs;
+  if (!el) return;
+  if (!rec || typeof rec !== "object") {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const ar = /[\u0600-\u06FF]/.test(String(lyricsText || ""));
+  const labels = ar
+    ? { lineLength: "طول السطر", rhythm: "إيقاع", bpm: "BPM", feel: "إحساس", notes: "ملاحظة" }
+    : { lineLength: "Line length", rhythm: "Rhythm / iqaa", bpm: "BPM", feel: "Feel", notes: "Notes" };
+  const rows = [
+    ["lineLength", rec.lineLength],
+    ["rhythm", rec.rhythm],
+    ["bpm", rec.bpm],
+    ["feel", rec.feel],
+    ["notes", rec.notes],
+  ].filter(([, v]) => String(v || "").trim());
+  if (!rows.length) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML = rows
+    .map(([k, v]) => `<dt>${escapeHtml(labels[k] || k)}</dt><dd>${escapeHtml(String(v))}</dd>`)
+    .join("");
+}
+
 function renderLyricsSingabilityPanel(report) {
   const panel = els.lyricsSingabilityPanel;
   if (!panel) return;
@@ -7061,6 +7092,7 @@ function renderLyricsSingabilityPanel(report) {
     els.lyricsSingabilityNote.hidden = !note;
     els.lyricsSingabilityNote.textContent = note;
   }
+  renderSingabilityRecommendations(clean.recommendations, text);
   if (els.lyricsSingabilityList) {
     els.lyricsSingabilityList.innerHTML = warnings.length
       ? warnings.slice(0, 8).map((w) => {
@@ -7179,6 +7211,7 @@ function renderSingabilityProTease() {
     els.lyricsSingabilityNote.hidden = true;
     els.lyricsSingabilityNote.textContent = "";
   }
+  renderSingabilityRecommendations(null, "");
   if (els.lyricsSingabilityList) {
     els.lyricsSingabilityList.innerHTML = `<li class="isLow">Unlock to check rhyme, وزن, and line balance.</li>`;
   }

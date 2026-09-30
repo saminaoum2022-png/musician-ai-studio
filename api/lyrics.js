@@ -9,6 +9,11 @@
 const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
 const { tryOpenAILyrics, openAiLyricsAllowedForRequest } = require("./_lib/openai-lyrics");
 const {
+  computeLyricsMeterProfile,
+  formatMeterProfileForPrompt,
+  localRecommendationsFromProfile,
+} = require("./_lib/lyrics-singability-meter");
+const {
   looksLikeArabizi,
   resolveScriptFormat,
   buildArabiziPromptLines,
@@ -330,6 +335,8 @@ module.exports = async function handler(req, res) {
           includeSingability,
           mode,
           geminiKey,
+          openaiKey,
+          lyricsProvider: usageProvider,
           style,
           dialect,
           dialectHint,
@@ -371,6 +378,8 @@ module.exports = async function handler(req, res) {
             includeSingability,
             mode,
             geminiKey,
+            openaiKey,
+            lyricsProvider: "gemini",
             style,
             dialect,
             dialectHint,
@@ -418,6 +427,8 @@ module.exports = async function handler(req, res) {
           includeSingability,
           mode,
           geminiKey,
+          openaiKey,
+          lyricsProvider: "gemini",
           style,
           dialect,
           dialectHint,
@@ -687,7 +698,20 @@ const FIX_SINGING_LINES = [
   "- Output lyrics only with section tags. No explanations.",
 ];
 
-function parseSingabilityReport(text) {
+function parseSingabilityRecommendations(raw) {
+  const rec = raw?.recommendations;
+  if (!rec || typeof rec !== "object") return null;
+  const pick = (key) => String(rec[key] || "").trim();
+  const lineLength = pick("lineLength");
+  const rhythm = pick("rhythm");
+  const bpm = pick("bpm");
+  const feel = pick("feel");
+  const notes = pick("notes");
+  if (!lineLength && !rhythm && !bpm && !feel && !notes) return null;
+  return { lineLength, rhythm, bpm, feel, notes };
+}
+
+function parseSingabilityReport(text, { fallbackRecommendations = null } = {}) {
   const raw = String(text || "").trim();
   if (!raw) return null;
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -711,13 +735,31 @@ function parseSingabilityReport(text) {
   const score = Number.isFinite(scoreRaw) ? Math.max(0, Math.min(100, Math.round(scoreRaw))) : null;
   const ready = typeof data.ready === "boolean" ? data.ready : null;
   const summary = String(data.summary || "").trim();
-  if (!summary && !warnings.length && score == null) return null;
+  const recommendations = parseSingabilityRecommendations(data) || fallbackRecommendations || null;
+  if (!summary && !warnings.length && score == null && !recommendations) return null;
   return {
     score,
     ready: ready ?? (score != null ? score >= 75 && !warnings.some((w) => w.level === "high") : null),
     summary: summary || (warnings.length ? "راجع ملاحظات الغناء قبل ما تولّد." : "الكلمات تبدو جاهزة للغناء."),
     warnings,
+    ...(recommendations ? { recommendations } : {}),
   };
+}
+
+function singabilityRecommendationsPromptLines(arabicAudit) {
+  const lang = arabicAudit
+    ? "Write every recommendations.* string in Arabic (friendly coach tone)."
+    : "Write recommendations.* in the same language as the lyrics.";
+  return [
+    "Also recommend production tempo that MATCHES these lyrics (use measured line stats below):",
+    "- lineLength: how many words / speakable beats per line fit THIS sheet; say what to keep even across verse vs chorus.",
+    "- rhythm: iqaa / feel that fits (e.g. 4/4 dabke, malfuf, khaleeji pop, reggaeton ar, slow ballad 6/8) — tied to line length.",
+    "- bpm: a concrete BPM range (e.g. 92–104) the user can paste into Create style.",
+    "- feel: dance / mid / slow — one short phrase.",
+    "- notes: optional extra (e.g. syncopation, half-time chorus).",
+    lang,
+    'Include "recommendations": {"lineLength":"...","rhythm":"...","bpm":"...","feel":"...","notes":"..."} in the JSON.',
+  ];
 }
 
 function canAttachSingability(mode, includeSingability) {
@@ -728,6 +770,8 @@ function canAttachSingability(mode, includeSingability) {
 async function attachSingabilityReport({
   lyrics,
   geminiKey,
+  openaiKey,
+  lyricsProvider = "gemini",
   style,
   dialect,
   dialectHint,
@@ -735,26 +779,73 @@ async function attachSingabilityReport({
   nonce,
 }) {
   const seed = String(lyrics || "").trim();
-  if (!seed || !geminiKey) return null;
+  if (!seed) return null;
+  const profile = computeLyricsMeterProfile(seed);
+  const meterBlock = formatMeterProfileForPrompt(profile);
+  const arabicAudit = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed });
+  const fallbackRecommendations = localRecommendationsFromProfile(profile, { arabic: arabicAudit });
+
+  const useOpenAi =
+    String(lyricsProvider || "").toLowerCase() === "openai"
+    && openAiLyricsAllowedForRequest("openai")
+    && String(openaiKey || "").trim();
+  const useGemini = String(geminiKey || "").trim();
+  if (!useOpenAi && !useGemini) {
+    if (!fallbackRecommendations) return null;
+    return {
+      score: null,
+      ready: null,
+      summary: arabicAudit ? "توصيات مؤقتة من طول الأسطر — جرّب Generate مرة ثانية للتحليل الكامل." : "Quick tips from line length — run a full check if needed.",
+      warnings: [],
+      recommendations: fallbackRecommendations,
+      source: "meter",
+    };
+  }
+
   try {
-    const prompt = buildPrompt({
-      seed,
-      style,
-      mode: "singability_check",
-      nonce: `${nonce || "sing"}-check`,
-      dialect,
-      dialectHint,
-      scriptFormat,
+    const prompt = [
+      buildPrompt({
+        seed,
+        style,
+        mode: "singability_check",
+        nonce: `${nonce || "sing"}-check`,
+        dialect,
+        dialectHint,
+        scriptFormat,
+      }),
+      "",
+      "Measured line stats (use for recommendations.lineLength and bpm/rhythm):",
+      meterBlock || "(no lines parsed)",
+    ].join("\n");
+    const llm = useOpenAi
+      ? await tryOpenAILyrics({ openaiKey, prompt, temperature: 0.25 })
+      : await tryGeminiLyrics({ geminiKey, prompt, temperature: 0.25 });
+    if (!llm?.ok) {
+      if (!fallbackRecommendations) return null;
+      return {
+        score: null,
+        ready: null,
+        summary: arabicAudit ? "توصيات من طول الأسطر — التحليل الكامل ما اشتغل." : "Line-length tips only — full audit unavailable.",
+        warnings: [],
+        recommendations: fallbackRecommendations,
+        source: "meter",
+      };
+    }
+    queueLogProviderUsage({
+      provider: useOpenAi ? "openai" : "gemini",
+      kind: "lyrics",
     });
-    const gem = await tryGeminiLyrics({
-      geminiKey,
-      prompt,
-      temperature: 0.25,
-    });
-    if (!gem?.ok) return null;
-    return parseSingabilityReport(gem.lyrics);
+    return parseSingabilityReport(llm.lyrics, { fallbackRecommendations });
   } catch {
-    return null;
+    if (!fallbackRecommendations) return null;
+    return {
+      score: null,
+      ready: null,
+      summary: "",
+      warnings: [],
+      recommendations: fallbackRecommendations,
+      source: "meter",
+    };
   }
 }
 
@@ -762,6 +853,8 @@ async function withOptionalSingability(payload, {
   includeSingability,
   mode,
   geminiKey,
+  openaiKey,
+  lyricsProvider,
   style,
   dialect,
   dialectHint,
@@ -772,6 +865,8 @@ async function withOptionalSingability(payload, {
   const singability = await attachSingabilityReport({
     lyrics: payload?.lyrics,
     geminiKey,
+    openaiKey,
+    lyricsProvider,
     style,
     dialect,
     dialectHint,
@@ -988,8 +1083,9 @@ function buildPrompt({
       "- Arabic / Levantine: note parallel couplets (موازي) — paired lines with matching structure and similar مقاطع.",
       "- Near-rhyme / assonance OK in colloquial Arabic.",
       "For Arabic lyrics, comment on colloquial singability — uneven مقاطع make the AI singer stumble.",
+      ...singabilityRecommendationsPromptLines(arabicAudit),
       "Return ONLY valid JSON (no markdown) with this shape:",
-      '{"score":0-100,"ready":true|false,"summary":"one sentence","warnings":[{"level":"high|medium|low","section":"Chorus","line":2,"message":"..."}]}',
+      '{"score":0-100,"ready":true|false,"summary":"one sentence","warnings":[{"level":"high|medium|low","section":"Chorus","line":2,"message":"..."}],"recommendations":{"lineLength":"...","rhythm":"...","bpm":"...","feel":"...","notes":"..."}}',
       ...(arabicAudit
         ? ['Example message (Arabic): "السطر 2 في الـ Chorus أطول من 1 — وحّد الوزن عشان الغناء يطلع أنظف."']
         : []),

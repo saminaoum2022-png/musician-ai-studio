@@ -1890,6 +1890,13 @@ function refreshMixSlidersUi(root, m) {
   root.querySelectorAll("[data-studio-finish] .studioSegBtn").forEach((btn) => {
     btn.classList.toggle("isActive", btn.getAttribute("data-finish") === m.finish);
   });
+  root.querySelectorAll("[data-mix-toggle]").forEach((btn) => {
+    const k = btn.getAttribute("data-mix-toggle");
+    if (!k) return;
+    const on = mixFxValue(m, k) > 0;
+    btn.classList.toggle("isOn", on);
+    btn.setAttribute("aria-checked", String(on));
+  });
 }
 
 function updateStyleTabUi(root, activeId) {
@@ -1951,7 +1958,6 @@ function renderPreviewMix(root, take) {
   const wave = takeWaveMeta(take);
   const dur = wave.contentDur || engine?.guideDuration || 0;
   const aiRec = buildAiMixRecommendation(take, current?.track);
-  const mixPanel = m.mixPanel || "basic";
   const takeNum = take ? (takes.findIndex((t) => t.id === take.id) + 1) || 1 : 1;
 
   root.innerHTML = `
@@ -1983,32 +1989,45 @@ function renderPreviewMix(root, take) {
 
       ${aiMixCardHtml(aiRec)}
 
+      <section class="studioChainSection">
+        <span class="studioMixLabel">Tone</span>
+        <div class="studioSeg studioSeg--finish" data-studio-finish role="group" aria-label="Finish preset">
+          ${FINISH_IDS.map((id) =>
+            `<button type="button" class="studioSegBtn${m.finish === id ? " isActive" : ""}" data-finish="${id}">${esc(FINISH_LABELS[id] || id)}</button>`,
+          ).join("")}
+        </div>
+      </section>
+
       <div class="studioPresetBlock">
         <span class="studioMixLabel">Style preset</span>
         ${stylePresetTabsHtml(m.styleTab)}
-        <p class="studioSyncHint studioPresetHint">Use <strong>Vocal enhancer</strong> in Advanced, or tap <strong>Apply AI Mix</strong>. Music stays as-is — we only polish your voice.</p>
+        <p class="studioSyncHint studioPresetHint">Tap a preset for a quick recipe, tap <strong>Apply AI Mix</strong>, or fine-tune the chain below.</p>
       </div>
 
-      <div class="studioMixTabs" role="tablist" aria-label="Mix controls">
-        <button type="button" class="studioMixTab${mixPanel === "basic" ? " isActive" : ""}" data-mix-panel="basic" role="tab" aria-selected="${mixPanel === "basic"}">Basic</button>
-        <button type="button" class="studioMixTab${mixPanel === "advanced" ? " isActive" : ""}" data-mix-panel="advanced" role="tab" aria-selected="${mixPanel === "advanced"}">Advanced</button>
-      </div>
+      <section class="studioChainSection">
+        <span class="studioMixLabel">Signal chain</span>
+        <div class="studioChainList">
+          ${chainSliderRow("fxPitch", "Pitch correction", "Snaps toward the note, keeps it musical", "note", m, "Natural", "Tight")}
+          ${chainToggleRow("fxCompress", "Compression", "Evens out loud and quiet moments", "compress", m, 40)}
+          ${chainToggleRow("fxEq", "EQ", "Warmth + presence, cuts the mud", "eq", m, 50)}
+          ${chainToggleRow("fxDeesser", "De-esser", "Tames harsh S's without thinning the vocal", "deess", m, 30)}
+          ${chainToggleRow("reverb", "Reverb", "A little room, not a cave", "reverb", m, 15)}
+        </div>
+      </section>
 
-      <div class="studioMixPanel" data-mix-panel-basic ${mixPanel === "basic" ? "" : "hidden"}>
+      <section class="studioChainSection">
+        <span class="studioMixLabel">Levels</span>
         <div class="studioSliders studioSliders--compact">
           ${sliderRow("voiceVol", "Voice", m.voiceVol, "voice")}
           ${sliderRow("musicVol", "Music", m.musicVol, "music")}
           ${sliderRow("vocalGain", "Vocal gain", m.vocalGain ?? 50, "voice")}
         </div>
-      </div>
+      </section>
 
-      <div class="studioMixPanel" data-mix-panel-advanced ${mixPanel === "advanced" ? "" : "hidden"}>
+      <section class="studioChainSection">
+        <span class="studioMixLabel">Fine-tune</span>
         <div class="studioSliders studioSliders--compact">
-          ${sliderRow("fxPitch", "Pitch correction", m.fxPitch ?? 0, "note")}
           ${sliderRow("fxVocalEnhance", "Vocal enhancer", m.fxVocalEnhance ?? 0, "voice")}
-          ${sliderRow("fxDeesser", "Smooth highs", m.fxDeesser, "deess")}
-          ${sliderRow("fxCompress", "Compressor", m.fxCompress, "compress")}
-          ${sliderRow("reverb", "Reverb", m.reverb, "reverb")}
           ${sliderRow("fxDenoise", "Noise gate", m.fxDenoise, "gate")}
         </div>
         <div class="studioMixField studioMixField--sync">
@@ -2018,24 +2037,18 @@ function renderPreviewMix(root, take) {
           </div>
           <input type="range" class="studioSyncSlider" min="-200" max="200" step="10" value="${Number(m.syncMs) || 0}" data-studio-sync aria-label="Voice timing offset" />
         </div>
-      </div>
+      </section>
 
-      <section class="studioFinishSection">
-        <span class="studioMixLabel">Finish style</span>
-        <div class="studioSeg studioSeg--finish" data-studio-finish role="group" aria-label="Finish preset">
-          ${FINISH_IDS.map((id) =>
-            `<button type="button" class="studioSegBtn${m.finish === id ? " isActive" : ""}" data-finish="${id}">${esc(FINISH_LABELS[id] || id)}</button>`,
-          ).join("")}
-        </div>
-        ${studioProMasterEnabled() ? `
+      ${studioProMasterEnabled() ? `
+      <section class="studioChainSection">
         <label class="studioProMasterToggle">
           <input type="checkbox" data-studio-pro-master ${m.proMaster ? "checked" : ""} aria-describedby="studioProMasterDesc" />
           <span class="studioProMasterCopy">
             <strong class="studioProMasterTitle">Pro Master ✨</strong>
             <span class="studioProMasterDesc" id="studioProMasterDesc">Free 30s preview · ${esc(PRO_MASTER.priceDisplay)} to save full master</span>
           </span>
-        </label>` : ""}
-      </section>
+        </label>
+      </section>` : ""}
 
       <div class="studioFooter studioFooter--finish">
         <button type="button" class="studioPrimary studioPrimary--continue" data-studio-save-vocal>Save to My Vocals</button>
@@ -2216,19 +2229,24 @@ function bindPreviewMix(root, take, aiRec) {
     void applyStyleTab(root, take, aiRec?.styleTab || "studio", { ...mixState, fromAi: true, aiRec });
   });
 
-  root.querySelectorAll("[data-mix-panel]").forEach((tabBtn) => {
-    tabBtn.addEventListener("click", () => {
+  root.querySelectorAll("[data-mix-toggle]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const k = btn.getAttribute("data-mix-toggle");
+      if (!k) return;
+      const def = Number(btn.getAttribute("data-mix-toggle-default")) || 40;
+      const isOn = mixFxValue(m, k) > 0;
+      const next = isOn ? 0 : def;
+      m[k] = next;
+      m.styleTab = "custom";
+      updateStyleTabUi(root, "custom");
+      updateAiApplyUi(root, m, mixState.aiRec);
+      btn.classList.toggle("isOn", next > 0);
+      btn.setAttribute("aria-checked", String(next > 0));
       bridge.haptic?.("light");
-      const panel = tabBtn.getAttribute("data-mix-panel");
-      if (!panel) return;
-      m.mixPanel = panel;
-      root.querySelectorAll(".studioMixTab").forEach((b) => {
-        const on = b.getAttribute("data-mix-panel") === panel;
-        b.classList.toggle("isActive", on);
-        b.setAttribute("aria-selected", on ? "true" : "false");
-      });
-      root.querySelector("[data-mix-panel-basic]")?.toggleAttribute("hidden", panel !== "basic");
-      root.querySelector("[data-mix-panel-advanced]")?.toggleAttribute("hidden", panel !== "advanced");
+      if (engine?.isPlaying) {
+        try { engine.clearTakeFxCache?.(); } catch {}
+        void restartMixPreview(root);
+      }
     });
   });
 
@@ -2722,6 +2740,40 @@ function sliderRow(key, label, value, iconKey) {
       <input type="range" min="0" max="100" value="${Number(value) || 0}" data-mix="${key}" aria-label="${esc(label)}" />
       <span class="studioSliderVal" data-mix-val="${key}">${Number(value) || 0}</span>
     </label>`;
+}
+
+/** Signal-chain row — real effect, simple on/off (amount snaps to 0 or a sensible default). */
+function chainToggleRow(key, label, sub, iconKey, m, defaultOn) {
+  const on = mixFxValue(m, key) > 0;
+  return `
+    <div class="studioChainRow">
+      <span class="studioChainIco" aria-hidden="true">${studioIco(iconKey)}</span>
+      <span class="studioChainBody">
+        <span class="studioChainTitle">${esc(label)}</span>
+        <span class="studioChainSub">${esc(sub)}</span>
+      </span>
+      <button type="button" class="studioChainToggle${on ? " isOn" : ""}" data-mix-toggle="${key}" data-mix-toggle-default="${defaultOn}" role="switch" aria-checked="${on}" aria-label="${esc(label)}">
+        <span class="studioChainToggleKnob"></span>
+      </button>
+    </div>`;
+}
+
+/** Signal-chain row — graduated control (pitch correction isn't an on/off thing). */
+function chainSliderRow(key, label, sub, iconKey, m, loLabel, hiLabel) {
+  const val = mixFxValue(m, key);
+  return `
+    <div class="studioChainRow studioChainRow--slider">
+      <span class="studioChainIco" aria-hidden="true">${studioIco(iconKey)}</span>
+      <span class="studioChainBody">
+        <span class="studioChainTitle">${esc(label)}</span>
+        <span class="studioChainSub">${esc(sub)}</span>
+      </span>
+    </div>
+    <div class="studioChainSliderRow">
+      <span class="studioChainSliderLbl">${esc(loLabel)}</span>
+      <input type="range" min="0" max="100" value="${val}" data-mix="${key}" aria-label="${esc(label)}" />
+      <span class="studioChainSliderLbl studioChainSliderLbl--hi">${esc(hiLabel)}</span>
+    </div>`;
 }
 
 function mixParams(takeId) {

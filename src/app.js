@@ -326,7 +326,6 @@ import {
   writeLocalGoldStyle,
 } from "./gold-style.js";
 import {
-  bindVerifiedBadgePreviewBar,
   nabadVerifiedBadgeSvgMarkup,
   paintStaticVerifiedBadgeNodes,
   paintVerifiedBadgeElement,
@@ -6440,7 +6439,6 @@ function applyRoute({ passGen } = {}) {
     }
     setProfileEditing(false);
     try { syncMobileTabbarProfileAvatar(); } catch {}
-    try { syncVerifiedBadgePreviewUi(); } catch {}
     if (profileHeavy) {
       markLibraryTabDot(false);
       if (authSession?.user?.id) {
@@ -62145,14 +62143,8 @@ function renderProfileAboutCard() { /* no-op — see renderProfileSignatureCard 
 /** True when this account should show the "Verified Nabad Creator" checkmark.
  *  Gated by Supabase `profiles.sound_certified` (server-owned) or the optional
  *  env UUID allowlist — not by username/handle. */
-/** Staging sim/device: always show verified + A/B/C/D bar on Profile (preview only, not production). */
-function verifiedBadgeStagingPreview() {
-  return isStagingNativeBuild() && Boolean(authSession?.user?.id);
-}
-
 function isNabadSoundCertified() {
   if (!authSession?.user?.id) return false;
-  if (verifiedBadgeStagingPreview()) return true;
   if (INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED) return true;
   if (profileSoundCertifiedTruthy(activeProfile?.soundCertified)) return true;
   try {
@@ -62272,18 +62264,6 @@ function renderProfileNabadCertBadge() {
     check.setAttribute("aria-hidden", show ? "false" : "true");
   }
   if (legacy) legacy.hidden = true;
-  try {
-    bindVerifiedBadgePreviewBar({ isStaging: isStagingNativeBuild() });
-  } catch {}
-}
-
-function syncVerifiedBadgePreviewUi() {
-  if (!isStagingNativeBuild()) return;
-  try {
-    paintStaticVerifiedBadgeNodes();
-    renderProfileNabadCertBadge();
-    bindVerifiedBadgePreviewBar({ isStaging: true });
-  } catch {}
 }
 
 

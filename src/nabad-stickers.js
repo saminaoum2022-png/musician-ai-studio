@@ -174,7 +174,7 @@ export function nabadStickerPickerCellHtml(s, { locked = false } = {}) {
   const lockCls = locked ? " nabadStickerPickerCell--locked" : "";
   const tierCls = s.tier === "gold" ? " nabadStickerPickerCell--gold" : "";
   const animBadge = s.anim ? '<span class="nabadStickerPickerBadge">Anim</span>' : "";
-  return `<button type="button" class="nabadStickerPickerCell${lockCls}${tierCls}" data-nabad-sticker-id="${s.id}" aria-label="${s.label}${locked ? " (locked)" : ""}"${locked ? " disabled" : ""}>${nabadStickerMarkup(s.id, { size: 40, animate: true })}${animBadge}</button>`;
+  return `<button type="button" class="nabadStickerPickerCell${lockCls}${tierCls}" data-nabad-sticker-id="${s.id}" aria-label="${s.label}${locked ? " (locked)" : ""}"${locked ? " disabled" : ""}>${nabadStickerMarkup(s.id, { size: 62, animate: true })}${animBadge}</button>`;
 }
 
 export function nabadStickerPickerGridHtml() {

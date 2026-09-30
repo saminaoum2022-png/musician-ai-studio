@@ -41417,15 +41417,16 @@ html[data-theme="light"] .messagesBubbleHeartCount{
 .nabadStickerPickerGrid{
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  max-height: min(52vh, 360px);
+  gap: 8px;
+  max-height: min(40vh, 280px);
   overflow-y: auto;
-  padding: 2px 2px 8px;
+  padding: 2px 2px 4px;
   -webkit-overflow-scrolling: touch;
 }
 .nabadStickerPickerCell{
   position: relative;
   aspect-ratio: 1;
+  min-height: 0;
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.1);
   background: rgba(255,255,255,0.05);
@@ -41439,6 +41440,12 @@ html[data-theme="light"] .messagesBubbleHeartCount{
 .nabadStickerPickerCell .nabadStickerGlyph,
 .nabadStickerPickerCell .nabadStickerWaveHost{
   flex: 0 0 auto;
+}
+.nabadStickerPickerCell .nabadStickerWave{
+  min-height: 22px;
+}
+.nabadStickerPickerCell .nabadStickerWave span{
+  height: 18px;
 }
 .nabadStickerPickerCell:active:not(:disabled){
   transform: scale(0.96);
@@ -42122,9 +42129,15 @@ body.coachComposerMode .messagesComposerSheetListDm{
   color: #23d5ab;
 }
 .messagesComposerSheetIcon--ourMusic{
-  background: rgba(236, 72, 153, 0.16);
-  color: #f9a8d4;
-  font-size: 17px;
+  background:
+    radial-gradient(120% 100% at 8% 0%, rgba(143, 116, 255, 0.32), transparent 58%),
+    radial-gradient(90% 100% at 100% 100%, rgba(46, 224, 192, 0.22), transparent 55%),
+    rgba(18, 14, 28, 0.72);
+  color: #e8dcff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+.messagesComposerSheetIcon--ourMusic svg{
+  display: block;
 }
 .messagesComposerSheetCopy{
   display: flex;
@@ -61761,8 +61774,11 @@ html[data-theme="light"] .messagesComposerSheetIcon--listen{
   color: #c2410c;
 }
 html[data-theme="light"] .messagesComposerSheetIcon--ourMusic{
-  background: rgba(219, 39, 119, 0.12);
-  color: #db2777;
+  background:
+    radial-gradient(120% 100% at 8% 0%, rgba(124, 92, 255, 0.18), transparent 58%),
+    radial-gradient(90% 100% at 100% 100%, rgba(13, 148, 136, 0.14), transparent 55%),
+    rgba(248, 246, 255, 0.95);
+  color: #6d4df5;
 }
 html[data-theme="light"] .messagesComposerSheetCopy strong{
   color: var(--text-primary);
@@ -70754,122 +70770,201 @@ body[data-route="discover"] .discoverFeedSection--featuredChallenge + .discoverM
 body[data-route="discover"] .discoverMomentSection{ margin-bottom: 0; }
 body[data-route="discover"] .discoverMomentSection + .discoverVibeSection{ margin-top: 22px; }
 
-/* ===== "Our Music Together": album-style sheet, opened from a DM's "⋯" chat options menu. ===== */
-.ourMusicSheet{ position: fixed; inset: 0; z-index: 500; }
+/* ===== Our Music Together — docked studio sheet (DM ⋯) ===== */
+.ourMusicSheet{
+  position: fixed; inset: 0; z-index: 12100;
+  --track-sheet-bottom-gap: max(8px, env(safe-area-inset-bottom, 0px));
+  align-items: flex-end;
+  padding: 0 10px var(--track-sheet-bottom-gap) !important;
+}
 .ourMusicSheet[hidden]{ display: none !important; }
-.omDim{ position: absolute; inset: 0; background: rgba(4, 4, 10, 0.72); }
-.omPanel{
-  position: absolute; inset: 0; display: flex; flex-direction: column;
-  background: #05060c; overflow-y: auto; -webkit-overflow-scrolling: touch;
+.ourMusicSheet .omSheetCard{
+  width: 100% !important;
+  max-width: 520px !important;
+  max-height: min(92dvh, 780px) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.omSheetGrab{
+  width: 40px; height: 5px; border-radius: 999px;
+  background: rgba(232,238,247,.22);
+  margin: 10px auto 4px;
+  flex: none;
+}
+.omScroll{
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 .omArt{
-  position: relative; height: 46vh; min-height: 300px; max-height: 420px; flex: none; overflow: hidden;
+  position: relative;
+  min-height: 210px;
+  max-height: 240px;
+  overflow: hidden;
   background: #0e0a1c;
   --om-h1: 255; --om-h2: 165;
+  flex: none;
 }
-.omBlob{ position: absolute; border-radius: 50%; filter: blur(52px); opacity: .85; }
-.omB1{ width: 60vw; height: 60vw; left: -14vw; top: -8vw; background: radial-gradient(circle, hsla(var(--om-h1), 90%, 68%, .85), transparent 65%); }
-.omB2{ width: 54vw; height: 54vw; right: -12vw; bottom: 6vw; background: radial-gradient(circle, hsla(var(--om-h2), 80%, 58%, .68), transparent 65%); }
-.omB3{ width: 36vw; height: 36vw; left: 38%; top: 32%; background: radial-gradient(circle, rgba(255,255,255,.16), transparent 70%); }
-/* Real Gemini-generated album cover, cross-fades over the gradient blobs once it loads;
-   blobs stay as the instant placeholder (and the permanent fallback if generation fails). */
+.omBlob{ position: absolute; border-radius: 50%; filter: blur(52px); opacity: .85; pointer-events: none; }
+.omB1{ width: 70%; height: 70%; left: -14%; top: -12%; background: radial-gradient(circle, hsla(var(--om-h1), 90%, 68%, .85), transparent 65%); }
+.omB2{ width: 65%; height: 65%; right: -12%; bottom: 0; background: radial-gradient(circle, hsla(var(--om-h2), 80%, 58%, .68), transparent 65%); }
+.omB3{ width: 40%; height: 40%; left: 38%; top: 28%; background: radial-gradient(circle, rgba(255,255,255,.16), transparent 70%); }
 .omArtImg{
-  position: absolute; inset: 0; background-size: cover; background-position: center;
-  opacity: 0; transition: opacity .5s ease;
+  position: absolute; inset: 0; background-size: cover; background-position: center top;
+  opacity: 0; transition: opacity .5s ease; z-index: 2;
 }
 .omArtImg--visible{ opacity: 1; }
+.omArt[data-om-hero="duo"] .omBlob{ opacity: .55; transition: opacity .45s ease; }
+.omArt[data-om-hero="duo"].omArt--coverLoaded .omBlob{ opacity: 0; }
+.omArt.omArt--coverLoaded .omHeroSplit,
+.omArt.omArt--coverLoaded .omHeroMosaic,
+.omArt.omArt--coverLoaded .omUnlockRibbon{ opacity: 0; pointer-events: none; }
+.omHeroSplit{
+  position: absolute; inset: 0; display: flex; z-index: 1;
+}
+.omHeroSplit[hidden]{ display: none !important; }
+.omSplitSide{ flex: 1; position: relative; overflow: hidden; }
+.omSplitSide--a{ background: linear-gradient(145deg, rgba(90,63,212,.45), rgba(18,14,28,.9)); }
+.omSplitSide--b{ background: linear-gradient(145deg, rgba(26,74,66,.45), rgba(13,28,32,.92)); }
+.omSplitDivider{
+  position: absolute; left: 50%; top: 8%; bottom: 8%; width: 2px; margin-left: -1px; z-index: 3;
+  background: linear-gradient(180deg, transparent, rgba(35,213,171,.85), rgba(124,92,255,.85), transparent);
+}
+.omSplitFace{
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+  width: 72px; height: 72px; border-radius: 50%;
+  background: rgba(255,255,255,.1) center/cover no-repeat;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.14);
+  display: grid; place-items: center;
+  font: 800 22px var(--font-body, inherit); color: rgba(255,255,255,.9);
+}
+.omHeroMosaic{
+  position: absolute; inset: 0; z-index: 1;
+}
+.omHeroMosaic[hidden]{ display: none !important; }
+.omMosaicGrid{
+  position: absolute; inset: 0;
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 3px;
+}
+.omMosaicTile{ background: #12151e center/cover no-repeat; }
+.omMosaicHandles{
+  position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%);
+  display: flex; gap: 10px; z-index: 2;
+}
+.omMosaicHandle{
+  width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(18,21,30,.88); border: 2px solid rgba(255,255,255,.22);
+  display: grid; place-items: center;
+  font: 800 14px var(--font-body, inherit); color: #fff;
+}
+.omUnlockRibbon{
+  position: absolute; left: 12px; right: 12px; bottom: 72px; z-index: 4;
+  margin: 0; padding: 8px 12px; border-radius: 14px; text-align: center;
+  font-size: 11px; font-weight: 650; line-height: 1.35;
+  color: rgba(255,255,255,.9);
+  background: rgba(0,0,0,.52); border: 1px solid rgba(255,255,255,.14);
+  backdrop-filter: blur(8px);
+}
+.omUnlockRibbon[hidden]{ display: none !important; }
+.omUnlockRibbon em{ font-style: normal; color: #23d5ab; font-weight: 800; }
 .omOverlay{
-  position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between;
-  background: linear-gradient(180deg, rgba(5,4,12,.2) 0%, transparent 32%, transparent 55%, rgba(5,4,12,.92) 100%);
+  position: absolute; inset: 0; z-index: 5; pointer-events: none;
+  display: flex; flex-direction: column; justify-content: space-between;
+  background: linear-gradient(180deg, rgba(5,4,12,.35) 0%, transparent 38%, rgba(5,4,12,.92) 100%);
 }
-.omTop{ display: flex; justify-content: flex-start; align-items: center; padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 0; }
-/* Fixed to the sheet, not the scrolling cover, so it's reachable no matter how far
-   down the album you've scrolled — see the markup comment above #omClose. */
-.omClose{
-  position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 14px);
-  right: 16px;
-  z-index: 10;
-  width: 34px; height: 34px; border-radius: 50%; border: 0; display: grid; place-items: center;
-  background: rgba(0,0,0,.5); color: #fff; font-size: 14px; -webkit-tap-highlight-color: transparent;
-  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+.omArtTop{
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 10px 12px 0; pointer-events: auto;
 }
+.omCloseInHero{ position: relative; top: auto; right: auto; flex: none; }
 .omTierBadge{
-  font: 800 10.5px/1 var(--font-body, inherit);
-  letter-spacing: .03em;
+  font: 800 10px/1 var(--font-body, inherit);
+  letter-spacing: .05em;
   color: rgba(255,255,255,.92);
-  background: rgba(236, 72, 153, 0.28);
-  border: 1px solid rgba(249, 168, 212, 0.55);
-  padding: 6px 11px;
-  border-radius: 20px;
-  backdrop-filter: blur(6px);
+  background: rgba(0,0,0,.42);
+  border: 1px solid rgba(255,255,255,.2);
+  padding: 6px 10px;
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+}
+.omTierBadge--gold{
+  border-color: rgba(226,193,120,.55);
+  color: #fde68a;
 }
 .omTierBadge[hidden]{ display: none !important; }
-.omBottom{ padding: 0 20px 20px; }
-.omKick{ font: 800 9.5px/1 var(--font-body, inherit); letter-spacing: .14em; color: rgba(255,255,255,.7); }
-.omTitle{ font-size: 28px; line-height: 1.12; font-weight: 800; color: #fff; margin-top: 6px; text-wrap: balance; }
-.omBy{ font: 600 12.5px var(--font-body, inherit); color: rgba(255,255,255,.78); margin-top: 8px; }
-.omBody{ flex: 1; padding: 18px 18px calc(env(safe-area-inset-bottom, 0px) + 28px); }
-.omStatus{ color: rgba(255,255,255,.6); font-size: 13px; text-align: center; padding: 30px 0; }
-.omSecLabel{ font: 800 10.5px var(--font-body, inherit); letter-spacing: .12em; color: rgba(255,255,255,.5); margin-top: 22px; }
-.omTlHead{ display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
-.omTlHead b{ font-size: 15px; font-weight: 800; color: #fff; }
-.omTlHead small{ color: rgba(255,255,255,.5); font-size: 11px; }
-.omTrk{ display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,.07); cursor: pointer; }
-.omTrk--noPlay{ cursor: default; opacity: .7; }
-.omTrkNo{ width: 14px; color: rgba(255,255,255,.5); font: 700 11px var(--font-body, inherit); }
-.omTrkArt{ width: 38px; height: 38px; border-radius: 8px; flex: none; background-size: cover; }
-.omTrkTxt{ flex: 1; font: 700 13px var(--font-body, inherit); color: #fff; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.omTrkCount{ color: rgba(255,255,255,.5); font-size: 11px; }
-.omEmptyTracks{ color: rgba(255,255,255,.55); font-size: 12.5px; padding: 10px 0; }
-.omMatchRow{ display: flex; align-items: center; gap: 14px; margin-top: 8px; }
-.omMatchRing{ position: relative; width: 64px; height: 64px; flex: none; display: grid; place-items: center; }
-.omMatchRing svg{ position: absolute; inset: 0; }
-.omMatchPct{ position: relative; font-size: 14px; font-weight: 800; color: #fff; }
-.omMatchTags{ display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
-.omTag{ font: 700 10.5px var(--font-body, inherit); background: rgba(255,255,255,.08); color: rgba(255,255,255,.85); border-radius: 999px; padding: 5px 10px; }
-.omTag--muted{ color: rgba(255,255,255,.5); }
-.omListenBtn{
-  width: 100%; margin-top: 22px; border: 0; border-radius: 999px; padding: 13px 0;
-  background: #fff; color: #0b0b13; font: 800 13.5px var(--font-body, inherit);
-  display: flex; align-items: center; justify-content: center; text-align: center;
+.omBottom{ padding: 0 16px 16px; }
+.omKick{ font: 800 9.5px/1 var(--font-body, inherit); letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.62); }
+.omTitle{ font-family: var(--dz-display, inherit); font-size: 24px; line-height: 1.12; font-weight: 800; color: #fff; margin-top: 6px; text-wrap: balance; letter-spacing: -0.02em; }
+.omBy{ font: 600 12.5px var(--font-body, inherit); color: rgba(255,255,255,.78); margin-top: 6px; }
+.omBody{ padding: 12px 14px calc(16px + env(safe-area-inset-bottom, 0px)); }
+.omStatus{ color: rgba(255,255,255,.6); font-size: 13px; text-align: center; padding: 24px 0; }
+.omChips{ display: flex; gap: 8px; margin-bottom: 12px; }
+.omChip{
+  flex: 1; text-align: center; padding: 10px 6px; border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04);
+}
+.omChip b{ display: block; font-size: 17px; font-weight: 800; color: #fff; line-height: 1; }
+.omChip span{ font: 700 9px var(--font-body, inherit); letter-spacing: .05em; text-transform: uppercase; color: rgba(255,255,255,.48); margin-top: 4px; display: block; }
+.omTlHead{ display: flex; justify-content: space-between; align-items: baseline; margin: 0 2px 8px; }
+.omTlHead b{ font-size: 14px; font-weight: 800; color: #fff; }
+.omTlHead small{ color: rgba(255,255,255,.48); font-size: 11px; }
+.omGroup{
+  border-radius: 20px; padding: 6px; margin-bottom: 12px;
+  border: 1px solid rgba(255,255,255,.085);
+  background: linear-gradient(145deg, rgba(255,255,255,.04), rgba(255,255,255,.012)), rgba(5,7,13,.5);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.045);
+}
+.omTrk{
+  display: flex; align-items: center; gap: 10px; padding: 11px 8px;
+  font-size: 14px; font-weight: 650; cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.omListenBtn:active{ transform: scale(.98); }
-html[data-theme="light"] .ourMusicSheet .omPanel{ background: #fff; }
-html[data-theme="light"] .omTrkTxt{ color: #0b0b13; }
-html[data-theme="light"] .omTag{ background: rgba(0,0,0,.06); color: #0b0b13; }
-
-/* Our Music sheet, round 2: fix the overlay overlap (it now nests inside .omArt so
-   inset:0 sizes to the art block, not the whole scrollable panel) + the pieces that
-   were missing from the first pass — the hero stats, the Your Song spotlight, and share. */
-.omHeroStats{ display: flex; align-items: center; justify-content: center; gap: 10px; padding: 4px 0 6px; }
-.omHeroStat{ display: flex; flex-direction: column; align-items: center; gap: 1px; }
-.omHeroStat b{ font-size: 22px; font-weight: 800; color: #fff; line-height: 1; }
-.omHeroStat span{ font: 700 9.5px var(--font-body, inherit); letter-spacing: .04em; text-transform: uppercase; color: rgba(255,255,255,.5); }
-.omHeroDot{ width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,.3); }
-.omSongSpot{ margin-top: 14px; }
-.omSpotCard{
-  position: relative; width: 100%; margin-top: 6px; border: 1px solid rgba(255,255,255,.12);
-  border-radius: 20px; padding: 18px; text-align: center; cursor: pointer;
-  background: linear-gradient(160deg, rgba(143,116,255,.14), rgba(46,224,192,.08));
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
+.omTrk + .omTrk{ border-top: 1px solid rgba(255,255,255,.07); }
+.omTrk:active{ background: rgba(124,92,255,.1); }
+.omTrk--noPlay{ cursor: default; opacity: .72; }
+.omTrk--noPlay:active{ background: transparent; }
+.omTrkNo{ width: 16px; color: rgba(255,255,255,.45); font: 700 11px var(--font-body, inherit); flex: none; }
+.omTrkArt{ width: 38px; height: 38px; border-radius: 10px; flex: none; background-size: cover; background-position: center; }
+.omTrkTxt{ flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; }
+.omTrkMeta{ display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,.48); margin-top: 1px; }
+.omTrkCount{ color: rgba(255,255,255,.45); font-size: 11px; flex: none; }
+.omEmptyTracks{ color: rgba(255,255,255,.55); font-size: 12.5px; padding: 12px 8px; text-align: center; }
+.omSecLabel{ font: 800 10px var(--font-body, inherit); letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.48); margin: 0 0 6px; }
+.omMatchBar{
+  height: 8px; border-radius: 999px; overflow: hidden;
+  background: rgba(255,255,255,.08); margin-bottom: 8px;
+}
+.omMatchBar span{
+  display: block; height: 100%;
+  background: linear-gradient(90deg, #8f74ff, #23d5ab);
+  border-radius: 999px;
+  transition: width .35s ease;
+}
+.omMatchTags{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.omTag{ font: 700 10.5px var(--font-body, inherit); background: rgba(255,255,255,.06); color: rgba(255,255,255,.85); border-radius: 999px; padding: 5px 10px; border: 1px solid rgba(255,255,255,.08); }
+.omTag--muted{ color: rgba(255,255,255,.48); }
+.omCta{
+  width: 100%; border: 0; border-radius: 999px; padding: 14px;
+  font: 800 14px var(--font-body, inherit); color: #06121a;
+  background: linear-gradient(90deg, #23d5ab, #5ef0d4 42%, #8f74ff);
   -webkit-tap-highlight-color: transparent;
 }
-.omSpotArt{ width: 72px; height: 72px; border-radius: 16px; background-size: cover; background-position: center; box-shadow: 0 12px 26px -8px rgba(46,224,192,.4); margin-bottom: 8px; }
-.omSpotTitle{ font-size: 17px; font-weight: 800; color: #fff; }
-.omSpotSub{ font-size: 11.5px; color: rgba(255,255,255,.55); }
-.omSpotCount{ font-size: 11px; color: rgba(255,255,255,.5); margin-top: 4px; }
-.omShareBtn{
-  width: 100%; margin-top: 10px; border-radius: 999px; padding: 12px 0;
-  background: transparent; border: 1.5px solid rgba(255,255,255,.24); color: #fff;
+.omCta:active{ transform: scale(.985); }
+.omGhost{
+  width: 100%; margin-top: 8px; border-radius: 999px; padding: 12px;
+  border: 1.5px solid rgba(255,255,255,.24); background: transparent; color: #fff;
   font: 800 13px var(--font-body, inherit);
-  display: flex; align-items: center; justify-content: center; text-align: center;
   -webkit-tap-highlight-color: transparent;
 }
-.omShareBtn:active{ transform: scale(.98); }
-html[data-theme="light"] .omHeroStat b{ color: #0b0b13; }
-html[data-theme="light"] .omSpotTitle{ color: #0b0b13; }
+.omGhost:active{ transform: scale(.985); }
+html[data-theme="light"] .omTrkTxt{ color: #0b0b13; }
+html[data-theme="light"] .omChip b{ color: #0b0b13; }
+html[data-theme="light"] .omTag{ background: rgba(0,0,0,.05); color: #0b0b13; }
 
 /* "Share the album" card — kept off-screen at a fixed 9:16 size and rasterized with
    html-to-image on tap; never shown to the user directly. Always dark (independent of
@@ -71482,3 +71577,170 @@ html[data-theme="light"] .aaGold{ background: rgba(0,0,0,.03); }
 }
 .aaTopperGlyph svg{ width: 21px; height: 21px; display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
 .aaTopperGlyph--none{ border-radius: 50%; border: 1.5px dashed rgba(255,255,255,.4); box-sizing: border-box; }
+
+/* ===== Player ⋯ docked sheet — same card, scrim, and grouped rows for DM + profile actions ===== */
+.messagesComposerSheet.messagesShareSheet,
+.userActionSheet{
+  --track-sheet-bottom-gap: max(8px, env(safe-area-inset-bottom, 0px));
+  align-items: flex-end;
+  padding: 0 10px var(--track-sheet-bottom-gap) !important;
+}
+.messagesComposerSheet .messagesShareSheetBackdrop,
+.userActionSheetScrim{
+  background:
+    radial-gradient(90% 70% at 50% 100%, rgba(124,92,255,0.025), transparent 64%),
+    rgba(3, 5, 10, 0.70) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(120%) !important;
+          backdrop-filter: blur(14px) saturate(120%) !important;
+}
+.messagesComposerSheet .messagesShareSheetCard,
+.messagesStickersSheet .messagesShareSheetCard,
+.ourMusicSheet .messagesShareSheetCard,
+.userActionSheetPanel{
+  width: 100% !important;
+  max-width: 520px !important;
+  margin: 0 !important;
+  border-radius: 24px 24px 16px 16px !important;
+  border: 1px solid rgba(255,255,255,0.115) !important;
+  border-bottom: 0 !important;
+  background:
+    radial-gradient(110% 72% at 8% 0%, rgba(124,92,255,0.045), transparent 58%),
+    linear-gradient(180deg, rgba(10,13,21,0.985), rgba(5,7,13,0.995)) !important;
+  box-shadow:
+    0 -16px 54px rgba(0, 0, 0, 0.46),
+    inset 0 1px 0 rgba(255,255,255,0.105),
+    inset 0 -1px 0 rgba(0,0,0,0.18),
+    0 0 0 1px rgba(124,92,255,0.025) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(140%) !important;
+          backdrop-filter: blur(28px) saturate(140%) !important;
+  padding: 10px 14px calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+  gap: 12px;
+}
+.messagesComposerSheet .messagesShareSheetHead{
+  margin-bottom: 2px;
+  padding-right: 2px;
+}
+.messagesComposerSheet .messagesShareSheetClose,
+.userActionSheetPanel .messagesShareSheetClose{
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.065), rgba(255,255,255,0.018)),
+    rgba(5,7,13,0.78) !important;
+  border: 1px solid rgba(255,255,255,0.11) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.065) !important;
+}
+.userActionSheetGrab{
+  width: 40px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(232,238,247,0.22);
+  align-self: center;
+  margin: 2px auto 4px;
+  flex: none;
+}
+.userActionSheetTitle{
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-align: center;
+  color: rgba(220,228,250,0.55);
+}
+.messagesComposerSheetList,
+.userActionSheetList{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 6px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.085);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012)),
+    rgba(5,7,13,0.50);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.045),
+    0 10px 28px rgba(0,0,0,0.14);
+}
+.messagesComposerSheetList .messagesComposerSheetRow{
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+          backdrop-filter: none !important;
+  box-shadow: none !important;
+  transform: none;
+}
+.messagesComposerSheetList .messagesComposerSheetRow + .messagesComposerSheetRow{
+  border-top: 1px solid rgba(255,255,255,0.07) !important;
+}
+.messagesComposerSheetList .messagesComposerSheetRow:active:not(:disabled){
+  transform: scale(0.995) !important;
+  background: rgba(124,92,255,0.1) !important;
+}
+.messagesComposerSheetList .messagesComposerSheetIcon{
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.userActionSheetList .userActionSheetRow{
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(232,238,247,0.92);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  padding: 13px 16px;
+  text-align: center;
+}
+.userActionSheetList .userActionSheetRow + .userActionSheetRow{
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+.userActionSheetList .userActionSheetRow--danger{
+  color: rgba(255,178,178,0.95);
+}
+.userActionSheetList .userActionSheetRow:active{
+  background: rgba(124,92,255,0.1);
+}
+.userActionSheetList .userActionSheetRow--danger:active{
+  background: rgba(255,80,80,0.1);
+}
+.userActionSheetDanger{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 6px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.085);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012)),
+    rgba(5,7,13,0.50);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.045),
+    0 10px 28px rgba(0,0,0,0.14);
+}
+.userActionSheetDanger .userActionSheetRow{
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  margin: 0;
+  font-weight: 700;
+  color: rgba(232,238,247,0.88);
+}
+.userActionSheetDanger .userActionSheetRow:active{
+  background: rgba(255,255,255,0.06);
+}
+.userActionSheetPanel{
+  display: flex;
+  flex-direction: column;
+}
+.userActionSheetRow + .userActionSheetRow{
+  margin-top: 0;
+}
+.messagesStickersSheetLead{
+  padding: 0 2px;
+}

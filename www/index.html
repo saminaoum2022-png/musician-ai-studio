@@ -233,7 +233,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260930-123019" />
+    <link rel="stylesheet" href="./styles.css?v=20261001-002457" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -378,25 +378,36 @@
     <div id="userActionSheet" class="userActionSheet" hidden aria-hidden="true">
       <button type="button" id="userActionSheetScrim" class="userActionSheetScrim" aria-label="Close"></button>
       <div class="userActionSheetPanel" role="dialog" aria-modal="true" aria-label="User actions">
+        <div class="userActionSheetGrab" aria-hidden="true"></div>
         <p id="userActionSheetTitle" class="userActionSheetTitle">@user</p>
-        <button type="button" class="userActionSheetRow" data-user-action="report">Report user</button>
-        <button type="button" class="userActionSheetRow userActionSheetRow--danger" data-user-action="block">Block user</button>
-        <button type="button" class="userActionSheetRow userActionSheetCancel" data-user-action="cancel">Cancel</button>
+        <div class="userActionSheetList" role="group" aria-label="User actions">
+          <button type="button" class="userActionSheetRow" data-user-action="report">Report user</button>
+          <button type="button" class="userActionSheetRow userActionSheetRow--danger" data-user-action="block">Block user</button>
+        </div>
+        <div class="userActionSheetDanger">
+          <button type="button" class="userActionSheetRow userActionSheetCancel" data-user-action="cancel">Cancel</button>
+        </div>
       </div>
     </div>
     <div id="coachActionSheet" class="userActionSheet" hidden aria-hidden="true">
       <button type="button" id="coachActionSheetScrim" class="userActionSheetScrim" aria-label="Close"></button>
       <div class="userActionSheetPanel" role="dialog" aria-modal="true" aria-label="Coach options">
+        <div class="userActionSheetGrab" aria-hidden="true"></div>
         <p class="userActionSheetTitle">NabadAi Coach</p>
-        <button type="button" class="userActionSheetRow userActionSheetCancel" data-coach-action="cancel">Cancel</button>
+        <div class="userActionSheetDanger">
+          <button type="button" class="userActionSheetRow userActionSheetCancel" data-coach-action="cancel">Cancel</button>
+        </div>
       </div>
     </div>
     <div id="profilePhotoActionSheet" class="userActionSheet" hidden aria-hidden="true">
       <button type="button" class="userActionSheetScrim" data-photo-sheet-dismiss="1" aria-label="Close"></button>
       <div class="userActionSheetPanel" role="dialog" aria-modal="true" aria-labelledby="profilePhotoActionSheetTitle">
+        <div class="userActionSheetGrab" aria-hidden="true"></div>
         <p id="profilePhotoActionSheetTitle" class="userActionSheetTitle">Photo</p>
-        <div id="profilePhotoActionSheetRows"></div>
-        <button type="button" class="userActionSheetRow userActionSheetCancel" data-photo-sheet-dismiss="1">Cancel</button>
+        <div id="profilePhotoActionSheetRows" class="userActionSheetList" role="group" aria-label="Photo options"></div>
+        <div class="userActionSheetDanger">
+          <button type="button" class="userActionSheetRow userActionSheetCancel" data-photo-sheet-dismiss="1">Cancel</button>
+        </div>
       </div>
     </div>
     <div id="profileEditBusy" class="profileEditBusy" hidden aria-live="polite" aria-busy="true">
@@ -5274,7 +5285,14 @@
             </span>
           </button>
           <button type="button" class="messagesComposerSheetRow" id="messagesThreadMoreOurMusic" data-messages-thread-more="our-music" role="menuitem">
-            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--ourMusic" aria-hidden="true">✦</span>
+            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--ourMusic" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+                <rect x="3.5" y="8" width="10.5" height="10.5" rx="2.25" fill="none" stroke="currentColor" stroke-width="1.75" opacity="0.5"/>
+                <rect x="8.5" y="4.5" width="10.5" height="10.5" rx="2.25" fill="rgba(143,116,255,0.14)" stroke="currentColor" stroke-width="1.85"/>
+                <circle cx="13.75" cy="9.75" r="1.65" fill="currentColor"/>
+                <path fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" d="M11.2 12.1h5.1M11.2 14.2h3.4" opacity="0.85"/>
+              </svg>
+            </span>
             <span class="messagesComposerSheetCopy">
               <strong>Our Music</strong>
               <span>Your album together</span>
@@ -5775,62 +5793,62 @@
         }));
       }
       // Dynamic import so the giant app module does not block the first dots.
-      import("./src/app.js?v=20260930-132733");
+      import("./src/app.js?v=20261001-002457");
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
   
-    <div id="ourMusicSheet" class="ourMusicSheet" hidden aria-hidden="true">
-      <div class="omDim" id="omDim"></div>
-      <!-- Pinned to the sheet itself, not the scrolling cover — stays reachable no matter
-           how far down the album you've scrolled. -->
-      <button type="button" id="omClose" class="omClose" aria-label="Close">✕</button>
-      <div class="omPanel">
-        <div class="omArt" id="omArt">
-          <div class="omBlob omB1"></div><div class="omBlob omB2"></div><div class="omBlob omB3"></div>
-          <div class="omArtImg" id="omArtImg" aria-hidden="true"></div>
-          <div class="omOverlay">
-            <div class="omTop">
-              <div class="omTierBadge" id="omTierBadge" hidden></div>
+    <div id="ourMusicSheet" class="ourMusicSheet messagesComposerSheet messagesShareSheet" hidden aria-hidden="true">
+      <div class="messagesShareSheetBackdrop" id="omDim"></div>
+      <section class="messagesShareSheetCard omSheetCard" role="dialog" aria-modal="true" aria-labelledby="omTitle">
+        <div class="omSheetGrab" aria-hidden="true"></div>
+        <div class="omScroll">
+          <div class="omArt" id="omArt" data-om-hero="mosaic">
+            <div class="omBlob omB1"></div><div class="omBlob omB2"></div><div class="omBlob omB3"></div>
+            <div class="omArtImg" id="omArtImg" aria-hidden="true"></div>
+            <div id="omHeroSplit" class="omHeroSplit" hidden>
+              <div class="omSplitSide omSplitSide--a"><span class="omSplitFace" id="omSplitFaceA"></span></div>
+              <div class="omSplitDivider" aria-hidden="true"></div>
+              <div class="omSplitSide omSplitSide--b"><span class="omSplitFace" id="omSplitFaceB"></span></div>
             </div>
-            <div class="omBottom">
-              <div class="omKick">AN ALBUM MADE FROM YOUR NABAD</div>
-              <div class="omTitle" id="omTitle">Your Album</div>
-              <div class="omBy" id="omBy"></div>
+            <div id="omHeroMosaic" class="omHeroMosaic" hidden>
+              <div class="omMosaicGrid" id="omMosaicGrid"></div>
+              <div class="omMosaicHandles" id="omMosaicHandles"></div>
+            </div>
+            <p id="omUnlockRibbon" class="omUnlockRibbon" hidden></p>
+            <div class="omOverlay">
+              <div class="omArtTop">
+                <div class="omTierBadge" id="omTierBadge" hidden></div>
+                <button type="button" id="omClose" class="messagesShareSheetClose omCloseInHero" aria-label="Close">×</button>
+              </div>
+              <div class="omBottom">
+                <div class="omKick" id="omKick">Listen together · album</div>
+                <div class="omTitle" id="omTitle">Your Album</div>
+                <div class="omBy" id="omBy"></div>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="omBody" id="omBody">
-          <div class="omStatus" id="omStatus">Loading your album…</div>
-          <div class="omContent" id="omContent" hidden>
-            <div class="omHeroStats">
-              <div class="omHeroStat"><b id="omDays">0</b><span>days in sync</span></div>
-              <div class="omHeroDot" aria-hidden="true"></div>
-              <div class="omHeroStat"><b id="omSessions">0</b><span>sessions</span></div>
-              <div class="omHeroDot" aria-hidden="true"></div>
-              <div class="omHeroStat"><b id="omStreak">0</b><span>week streak</span></div>
-            </div>
-            <div class="omSongSpot" id="omSongSpot" hidden>
-              <div class="omSecLabel">YOUR SONG</div>
-              <button type="button" class="omSpotCard" id="omSpotCard">
-                <span class="omSpotArt" id="omSpotArt"></span>
-                <span class="omSpotTitle" id="omSpotTitle"></span>
-                <span class="omSpotSub">The one you keep coming back to</span>
-                <span class="omSpotCount" id="omSpotCount"></span>
-              </button>
-            </div>
-            <div class="omTlHead"><b>The tracklist</b><small>Your most shared, in order</small></div>
-            <div class="omTracklist" id="omTracklist"></div>
-            <div class="omEmptyTracks" id="omEmptyTracks" hidden>No shared Listen Together sessions yet.</div>
-            <div class="omSecLabel">TASTE MATCH</div>
-            <div class="omMatchRow">
-              <div class="omMatchRing"><svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="6"/><circle id="omMatchArc" cx="32" cy="32" r="26" fill="none" stroke="url(#omMatchGrad)" stroke-width="6" stroke-linecap="round" transform="rotate(-90 32 32)"/><defs><linearGradient id="omMatchGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8f74ff"/><stop offset="100%" stop-color="#2ee0c0"/></linearGradient></defs></svg><span class="omMatchPct" id="omMatchPct">0%</span></div>
+          <div class="omBody" id="omBody">
+            <div class="omStatus" id="omStatus">Loading your album…</div>
+            <div class="omContent" id="omContent" hidden>
+              <div class="omChips">
+                <div class="omChip"><b id="omDays">0</b><span>days in sync</span></div>
+                <div class="omChip"><b id="omSessions">0</b><span>sessions</span></div>
+                <div class="omChip"><b id="omStreak">0</b><span>week streak</span></div>
+              </div>
+              <div class="omTlHead" id="omTlHead"><b>The tracklist</b><small>Most shared listens</small></div>
+              <div class="omGroup">
+                <div class="omTracklist" id="omTracklist"></div>
+                <div class="omEmptyTracks" id="omEmptyTracks" hidden>No shared Listen Together sessions yet.</div>
+              </div>
+              <p class="omSecLabel">Taste match</p>
+              <div class="omMatchBar" aria-hidden="true"><span id="omMatchBarFill" style="width:0%"></span></div>
               <div class="omMatchTags" id="omMatchTags"></div>
+              <button type="button" id="omListenTogether" class="omCta">Listen together again</button>
+              <button type="button" id="omShare" class="omGhost">Share album recap</button>
             </div>
-            <button type="button" id="omListenTogether" class="omListenBtn">Listen together</button>
-            <button type="button" id="omShare" class="omShareBtn">Share the album</button>
           </div>
         </div>
-      </div>
+      </section>
     </div>
 
     <!-- Offscreen template rasterized to a real PNG for "Share the album" (html-to-image). -->

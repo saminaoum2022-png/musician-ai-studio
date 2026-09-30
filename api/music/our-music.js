@@ -14,7 +14,7 @@
  */
 
 const { applyCors } = require("../_lib/cors");
-const { verifyUser, sendJson } = require("../_lib/credits-auth");
+const { verifyUser, sendJson, selectFromTable } = require("../_lib/credits-auth");
 const { computeOurMusicStats } = require("../_lib/our-music-stats");
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -22,6 +22,22 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function cleanUserId(v) {
   const s = String(v || "").trim().toLowerCase();
   return UUID_RE.test(s) ? s : "";
+}
+
+async function profileCoverSlice(userId) {
+  const r = await selectFromTable(
+    `profiles?user_id=eq.${encodeURIComponent(userId)}&select=user_id,username,avatar,artist_avatar&limit=1`,
+  );
+  const row = r.ok && Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+  const artistAvatar = String(row?.artist_avatar || "").trim();
+  const avatar = String(row?.avatar || "").trim();
+  return {
+    userId,
+    username: String(row?.username || "").trim(),
+    avatar,
+    artistAvatar,
+    hasArtistAvatar: Boolean(artistAvatar),
+  };
 }
 
 module.exports = async (req, res) => {
@@ -36,6 +52,20 @@ module.exports = async (req, res) => {
   if (!otherId) return sendJson(res, 400, { error: "Missing or invalid userId" });
   if (otherId === meId) return sendJson(res, 400, { error: "Can't build this with yourself" });
 
-  const stats = await computeOurMusicStats(meId, otherId);
-  return sendJson(res, 200, stats);
+  const [stats, meProfile, otherProfile] = await Promise.all([
+    computeOurMusicStats(meId, otherId),
+    profileCoverSlice(meId),
+    profileCoverSlice(otherId),
+  ]);
+
+  let coverHero = "mosaic";
+  if (meProfile.hasArtistAvatar && otherProfile.hasArtistAvatar) coverHero = "duo";
+  else if (meProfile.hasArtistAvatar || otherProfile.hasArtistAvatar) coverHero = "split";
+
+  return sendJson(res, 200, {
+    ...stats,
+    coverHero,
+    meProfile,
+    otherProfile,
+  });
 };

@@ -3,8 +3,9 @@ export function setProfileSegActive(segment) {
   const bar = document.querySelector(".profileSongsBlock .profileSegBar");
   if (!bar) return;
   const val = String(segment ?? "");
-  // Library = drafts (Songs) + Playlists. Studio is its own top tab (mic).
-  const inLibrary = val === "all" || val === "playlist";
+  // Library = drafts (Songs) only now — Playlists got promoted to its own top-level
+  // tab instead of a chip nested inside Library, so it no longer shares this highlight.
+  const inLibrary = val === "all";
   bar.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
     const on = String(btn.getAttribute("data-profile-songs-segment") || "") === val;
     btn.classList.toggle("is-active", on);

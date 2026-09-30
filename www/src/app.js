@@ -2604,6 +2604,7 @@ function getMiniPlayerAudio() {
   if (
     t === "discover_feed" ||
     t === "discover_playlist" ||
+    t === "user_playlist" ||
     t === "public_profile_lib" ||
     t === "library" ||
     t === "profile_hub" ||
@@ -5220,7 +5221,6 @@ const PROFILE_SONGS_SEGMENT_KEY = "mas:profileSongsSeg:v1";
 const USER_PUBLIC_SEGMENT_KEY = "nabad_user_public_seg:v1";
 let _profileSongsSegment = "all";
 let _profileSongsSegmentBound = false;
-let _profileLibLastSeg = "all";
 let _profileRepostsBound = false;
 let _userPublicSegment = "music";
 let _userPublicSegmentBound = false;
@@ -63127,7 +63127,6 @@ function syncProfileSongsSegmentUi() {
   const isActivities = _profileSongsSegment === "activities";
   const isMusic = _profileSongsSegment === "music";
   const isVocals = _profileSongsSegment === "vocals";
-  if (isAll || isPlaylist) _profileLibLastSeg = _profileSongsSegment;
   const musicPanel = document.getElementById("profileMusic");
   if (musicPanel) {
     musicPanel.hidden = !isMusic;
@@ -63190,9 +63189,9 @@ function bindProfileSongsSegmentOnce() {
   wireProfileActivitiesLoadMoreOnce();
   document.querySelectorAll("[data-profile-lib-tab]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const seg = (_profileLibLastSeg === "all" || _profileLibLastSeg === "playlist")
-        ? _profileLibLastSeg
-        : "all";
+      // Used to restore whichever of Songs/Playlists you'd last viewed inside Library —
+      // Playlists is its own top-level tab now, so Library always just means drafts.
+      const seg = "all";
       if (seg === _profileSongsSegment) return;
       _profileSongsSegment = seg;
       try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, seg); } catch {}

@@ -22,6 +22,7 @@
 
 import { encodeWav16 } from "../wav.js";
 import { ensureNativeRecordingSession, isNativeIosStudio } from "./native-mic-probe.js";
+import { applyNaturalPitchStabilization } from "../echo-pitch-stabilize.js";
 
 const LATENCY_STORAGE_KEY = "nabad.studio.latencyMs.v1";
 const PCM_CAPTURE_WORKLET_URL = new URL("./pcm-capture-processor.js", import.meta.url);
@@ -759,22 +760,30 @@ export class StudioEngine {
     return voiceOutputGain(params);
   }
 
-  /** Playback buffer — vocal enhancer and/or legacy noise gate blend. */
+  /** Playback buffer — pitch correction, then vocal enhancer and/or legacy noise gate blend. */
   _getTakePlaybackBuffer(take, params = {}) {
     if (!take?.buffer) return null;
+    const pitchAmt = fxAmount01(params.fxPitch);
+    const usePitch = pitchAmt > 0.001;
     const enhanceAmt = fxAmountAudible(params.fxVocalEnhance);
     const denoiseAmt = fxAmountAudible(params.fxDenoise);
     const useEnhance = enhanceAmt > 0.001;
     const useDenoise = !useEnhance && denoiseAmt > 0.001;
-    if (!useEnhance && !useDenoise) return take.buffer;
-    const stepped = useEnhance
+    if (!usePitch && !useEnhance && !useDenoise) return take.buffer;
+    const steppedPitch = usePitch ? Math.round(pitchAmt * 100) : 0;
+    const steppedFx = useEnhance
       ? Math.round(enhanceAmt * 100)
-      : Math.round(denoiseAmt * 100);
-    const cacheKey = `${take.id}_${take.buffer.length}_${useEnhance ? "ve" : "dn"}${stepped}`;
+      : useDenoise
+      ? Math.round(denoiseAmt * 100)
+      : 0;
+    const cacheKey = `${take.id}_${take.buffer.length}_p${steppedPitch}_${useEnhance ? "ve" : useDenoise ? "dn" : "raw"}${steppedFx}`;
     if (take._fxPlaybackBuf && take._fxCacheKey === cacheKey) return take._fxPlaybackBuf;
+    const base = usePitch ? pitchCorrectBuffer(this.ctx, take.buffer, pitchAmt) : take.buffer;
     const blended = useEnhance
-      ? blendVocalEnhanceBuffer(this.ctx, take.buffer, enhanceAmt)
-      : blendDenoiseBuffer(this.ctx, take.buffer, denoiseAmt);
+      ? blendVocalEnhanceBuffer(this.ctx, base, enhanceAmt)
+      : useDenoise
+      ? blendDenoiseBuffer(this.ctx, base, denoiseAmt)
+      : base;
     take._fxPlaybackBuf = blended;
     take._fxCacheKey = cacheKey;
     return blended;
@@ -1181,6 +1190,23 @@ function fxAmountAudible(v) {
   const linear = fxAmount01(v);
   if (linear <= 0) return 0;
   return clamp01(0.1 + Math.pow(linear, 0.68) * 0.9);
+}
+
+/** Pitch correction — reuses the same natural, non-robotic stabilizer that ships in Echo.
+ *  Kept inside its proven safe range (strength ≤0.15, ≤12 cents) so "Tight" still sounds
+ *  sung, not snapped — a deliberate choice, not a current limitation to raise later. */
+function pitchCorrectBuffer(ctx, buffer, amount) {
+  if (!buffer) return buffer;
+  const copy = cloneAudioBuffer(ctx, buffer);
+  if (!copy) return buffer;
+  try {
+    applyNaturalPitchStabilization(copy, {
+      humming: true,
+      strength: clamp01(amount) * 0.15,
+      maxCents: 12,
+    });
+  } catch {}
+  return copy;
 }
 
 function blendDenoiseBuffer(ctx, buffer, amount) {

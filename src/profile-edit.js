@@ -10,6 +10,7 @@ import {
   GOLD_TOPPERS,
   goldRingAccent,
   applyGoldToAvatarWrap,
+  applyGoldNameGradient,
   goldCanEdit,
   readLocalGoldStyle,
   saveOwnGoldStyle,
@@ -251,7 +252,14 @@ function goldStyleChanged(next) {
   _draft.goldStyle = sanitizeGoldStyle(next);
   _goldDirty = true;
   markDirty();
-  try { applyGoldToAvatarWrap(qs("#aaHeroAvatar"), _draft.goldStyle); } catch {}
+  try {
+    document.querySelectorAll("[data-aa-ring]").forEach((ring) => applyGoldToAvatarWrap(ring, _draft.goldStyle));
+  } catch {}
+  try {
+    ["profileDisplayNameText", "profileEditCoverName"].forEach((id) => {
+      applyGoldNameGradient(document.getElementById(id), _draft.goldStyle);
+    });
+  } catch {}
   try { applyArtistRingToEditPhoto(); } catch {}
 }
 
@@ -271,6 +279,7 @@ async function commitGoldStyleFromDraft() {
 function aaGoldBlockHtml(style) {
   const ring = style?.ring || "";
   const topper = style?.topper || "";
+  const nameGradient = style?.nameGradient || "";
   const chips = [{ id: "", label: "None", swatch: "" }, ...GOLD_RINGS].map((r) => `
       <button type="button" class="aaFrameOpt" role="radio" aria-checked="${r.id === ring ? "true" : "false"}" data-aa-frame="${r.id}">
         <span class="aaFrameDot${r.id ? "" : " aaFrameDot--none"}" ${r.swatch ? `style="background:${r.swatch}"` : ""}></span>
@@ -281,6 +290,13 @@ function aaGoldBlockHtml(style) {
         <span class="aaTopperGlyph${t.id ? "" : " aaTopperGlyph--none"}">${t.svg}</span>
         <span class="aaFrameLabel">${t.label}</span>
       </button>`).join("");
+  // Same catalog/ids as the ring — "Aurora ring, Gold name" is a real combo, and one
+  // id space keeps this picker structurally identical to Frame instead of a new system.
+  const nameChips = [{ id: "", label: "None", swatch: "" }, ...GOLD_RINGS].map((r) => `
+      <button type="button" class="aaFrameOpt" role="radio" aria-checked="${r.id === nameGradient ? "true" : "false"}" data-aa-name-gradient="${r.id}">
+        <span class="aaNameSwatch${r.id ? "" : " aaNameSwatch--none"}" ${r.swatch ? `style="background-image:${r.swatch}"` : ""}>Aa</span>
+        <span class="aaFrameLabel">${r.label}</span>
+      </button>`).join("");
   return `
     <section class="aaGold" id="aaGoldBlock" style="--aa-emblem:${goldRingAccent(ring)}" aria-label="Gold style">
       <div class="aaGoldHead"><span class="aaGoldTitle">Gold style</span><span class="aaGoldTag">GOLD</span></div>
@@ -288,6 +304,8 @@ function aaGoldBlockHtml(style) {
       <div class="aaFrameRow" id="aaFrameRow" role="radiogroup" aria-label="Avatar frame">${chips}</div>
       <div class="aaGoldLabel aaGoldLabel--gap">Emblem</div>
       <div class="aaFrameRow" id="aaTopperRow" role="radiogroup" aria-label="Avatar emblem">${toppers}</div>
+      <div class="aaGoldLabel aaGoldLabel--gap">Name colour</div>
+      <div class="aaFrameRow" id="aaNameGradientRow" role="radiogroup" aria-label="Display name colour">${nameChips}</div>
     </section>`;
 }
 
@@ -1169,6 +1187,64 @@ async function persistArtistAvatarNow() {
   }
 }
 
+/** Merged hero-preview + options-grid carousel: swipe (or tap a peeking neighbor)
+ *  to make a generated option active. Only touches classes/dots on scroll-settle —
+ *  never a full re-render mid-gesture, or the rail would rebuild under your thumb
+ *  and cancel its own scroll-snap animation. */
+function wireArtistAvatarCarousel(body, gallery, activeIndex) {
+  const rail = qs("#aaCarousel", body);
+  if (!rail || !gallery.length) return;
+  const items = Array.from(rail.querySelectorAll(".aaCarouselItem"));
+  const dots = Array.from(qs("#aaCarouselDots", body)?.querySelectorAll(".aaDot") || []);
+  let current = activeIndex;
+
+  const setActiveVisual = (i) => {
+    items.forEach((el, idx) => el.classList.toggle("isActive", idx === i));
+    dots.forEach((el, idx) => el.classList.toggle("isActive", idx === i));
+  };
+
+  const scrollToIndex = (i, behavior) => {
+    const target = items[i];
+    if (!target) return;
+    rail.scrollTo({ left: target.offsetLeft - (rail.clientWidth - target.clientWidth) / 2, behavior });
+  };
+  // Land on today's active avatar with no animation on first paint.
+  requestAnimationFrame(() => scrollToIndex(activeIndex, "auto"));
+
+  const nearestIndex = () => {
+    const railCenter = rail.scrollLeft + rail.clientWidth / 2;
+    let best = 0;
+    let bestDist = Infinity;
+    items.forEach((el, idx) => {
+      const c = el.offsetLeft + el.clientWidth / 2;
+      const d = Math.abs(c - railCenter);
+      if (d < bestDist) { bestDist = d; best = idx; }
+    });
+    return best;
+  };
+
+  let settleTimer = 0;
+  rail.addEventListener("scroll", () => {
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      const i = nearestIndex();
+      if (i === current) return;
+      current = i;
+      setActiveVisual(i);
+      try { _deps?.haptic?.("light"); } catch {}
+      switchActiveArtistAvatar(gallery[i]);
+      try { renderProfileEditPage(); } catch {}
+    }, 130);
+  }, { passive: true });
+
+  items.forEach((el, i) => {
+    el.addEventListener("click", () => {
+      if (i === current) return;
+      scrollToIndex(i, "smooth");
+    });
+  });
+}
+
 /** Switch which generated portrait is "active" (shows on the profile flip) — free,
  *  no regeneration. If the previous active one was also standing in as the profile
  *  picture, the new one takes over that role too, so the two stay in sync. */
@@ -1293,21 +1369,31 @@ function renderArtistAvatarStep() {
   if (_aaStep === "manage") {
     const gallery = aaCapGallery(_draft.artistAvatarGallery);
     const isProfilePic = Boolean(_draft.artistAvatar) && _draft.avatar === _draft.artistAvatar;
-    const thumbs = gallery.map((src, i) => `
-      <button type="button" class="aaOption${src === _draft.artistAvatar ? " isChosen" : ""}" style="background-image:url('${src}')" data-aa-switch="${i}" aria-label="Avatar option ${i + 1}"></button>
-    `).join("");
     const active = String(_draft.artistAvatar || gallery[gallery.length - 1] || "").trim();
+    let activeIndex = gallery.indexOf(active);
+    if (activeIndex < 0) activeIndex = Math.max(0, gallery.length - 1);
     const showGold = goldCanEdit();
     const style = _draft.goldStyle || { ring: "", topper: "" };
+    // Hero preview and the "pick one" grid used to be two separate things — a static
+    // photo up top, then tap a small thumbnail below to change it. Merged into one
+    // swipeable rail instead: every generated option shown full-size, live inside the
+    // real Gold ring, so trying one on IS looking at it, not judging a tiny square.
+    const items = gallery.map((src, i) => `
+      <div class="aaCarouselItem${i === activeIndex ? " isActive" : ""}" data-aa-switch="${i}">
+        <div class="aaCarouselRing" data-aa-ring="1">
+          <div class="aaCarouselPhoto" style="background-image:url('${src}')"></div>
+        </div>
+      </div>
+    `).join("");
+    const dots = gallery.map((_, i) => `<span class="aaDot${i === activeIndex ? " isActive" : ""}"></span>`).join("");
     body.innerHTML = `
-      <div class="aaHero">
-        <div class="aaHeroAvatar" id="aaHeroAvatar" style="background-image:url('${active}')"></div>
+      <div class="aaCarouselWrap">
+        <div class="aaCarousel" id="aaCarousel">${items}</div>
+        <div class="aaCarouselDots" id="aaCarouselDots">${dots}</div>
         <div class="aaHeroCaption">Your Artist Avatar</div>
+        ${gallery.length > 1 ? `<div class="aaCarouselHint">← swipe to try your other options →</div>` : ""}
       </div>
       ${showGold ? aaGoldBlockHtml(style) : ""}
-      <div class="aaStepKick aaStepKick--section">YOUR AVATARS</div>
-      <p class="aaStepBody aaStepBody--tight">Tap one to make it active. Switching between ones you've made is free.</p>
-      <div class="aaOptionsGrid" id="aaGalleryGrid">${thumbs}</div>
       <label class="aaConsentRow" for="aaUseAsProfileCheck">
         <input type="checkbox" id="aaUseAsProfileCheck" ${isProfilePic ? "checked" : ""} />
         <span>Use as my profile photo too</span>
@@ -1316,9 +1402,12 @@ function renderArtistAvatarStep() {
       <button type="button" id="aaAdjustFrameBtn" class="aaSecondaryBtn">Adjust framing</button>
       <button type="button" id="aaResetAvatarBtn" class="aaDangerBtn">Reset Artist Avatar</button>
     `;
-    try { applyGoldToAvatarWrap(qs("#aaHeroAvatar", body), _draft.goldStyle || null); } catch {}
+    try {
+      body.querySelectorAll("[data-aa-ring]").forEach((ring) => applyGoldToAvatarWrap(ring, _draft.goldStyle || null));
+    } catch {}
+    wireArtistAvatarCarousel(body, gallery, activeIndex);
     if (showGold) {
-      let cur = { ring: style.ring || "", topper: style.topper || "" };
+      let cur = { ring: style.ring || "", topper: style.topper || "", nameGradient: style.nameGradient || "" };
       qs("#aaFrameRow", body)?.addEventListener("click", (e) => {
         const btn = e.target?.closest?.("[data-aa-frame]");
         if (!btn) return;
@@ -1340,16 +1429,17 @@ function renderArtistAvatarStep() {
         });
         goldStyleChanged(cur);
       });
-    }
-    body.querySelectorAll("[data-aa-switch]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const i = Number(btn.getAttribute("data-aa-switch"));
-        switchActiveArtistAvatar(gallery[i]);
+      qs("#aaNameGradientRow", body)?.addEventListener("click", (e) => {
+        const btn = e.target?.closest?.("[data-aa-name-gradient]");
+        if (!btn) return;
         try { _deps?.haptic?.("light"); } catch {}
-        renderProfileEditPage();
-        renderArtistAvatarStep();
+        cur = { ...cur, nameGradient: String(btn.getAttribute("data-aa-name-gradient") || "") };
+        body.querySelectorAll("[data-aa-name-gradient]").forEach((b) => {
+          b.setAttribute("aria-checked", b === btn ? "true" : "false");
+        });
+        goldStyleChanged(cur);
       });
-    });
+    }
     qs("#aaUseAsProfileCheck", body)?.addEventListener("change", (e) => {
       setArtistAvatarAsProfilePic(Boolean(e.target.checked));
       renderProfileEditPage();

@@ -317,6 +317,7 @@ import {
 import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 import {
   applyGoldToAvatarWrap,
+  applyGoldNameGradient,
   configureGoldStyle,
   fetchGoldStyles,
   goldUiEnabled,
@@ -61990,6 +61991,7 @@ function renderProfileIdentityLine() {
     stack?.classList.remove("profileAuraNameStack--hasDisplayName");
   }
   renderProfileNabadCertBadge();
+  try { applyGoldNameGradient(displayTextEl, ownGoldStyle()); } catch {}
   requestAnimationFrame(() => { try { syncArtistAvatarBadgePosition(); } catch {} });
 }
 

@@ -142,8 +142,41 @@ export function sanitizeGoldStyle(raw) {
   const ring = RING_IDS.has(String(v.ring || "")) ? String(v.ring) : "";
   // `crown: true` is the original (pre-emblem) format — still read, never written.
   const topper = TOPPER_BY_ID.has(String(v.topper || "")) ? String(v.topper) : v.crown === true ? "crown" : "";
-  if (!ring && !topper) return null;
-  return { ring, topper };
+  // Shares the ring catalog/ids rather than a second palette — "Aurora ring,
+  // Gold name" is a real combination someone might want, and one id space
+  // keeps the two pickers visually and structurally the same component.
+  const nameGradient = RING_IDS.has(String(v.nameGradient || "")) ? String(v.nameGradient) : "";
+  if (!ring && !topper && !nameGradient) return null;
+  return { ring, topper, nameGradient };
+}
+
+/** The CSS gradient for a display-name text fill — same swatch as that id's ring. */
+export function goldNameGradientCss(id) {
+  const hit = GOLD_RINGS.find((r) => r.id === String(id || ""));
+  return hit ? hit.swatch : "";
+}
+
+/** Paint (or clear) a Gold gradient fill on a display-name text element. Safe to
+ *  call repeatedly and on elements that never had it — mirrors applyGoldToAvatarWrap. */
+export function applyGoldNameGradient(el, style) {
+  if (!el) return;
+  const s = goldUiEnabled() ? sanitizeGoldStyle(style) : null;
+  const css = s?.nameGradient ? goldNameGradientCss(s.nameGradient) : "";
+  if (css) {
+    el.style.backgroundImage = css;
+    el.style.webkitBackgroundClip = "text";
+    el.style.backgroundClip = "text";
+    el.style.color = "transparent";
+    el.style.webkitTextFillColor = "transparent";
+    el.classList.add("hasGoldName");
+  } else {
+    el.style.backgroundImage = "";
+    el.style.webkitBackgroundClip = "";
+    el.style.backgroundClip = "";
+    el.style.color = "";
+    el.style.webkitTextFillColor = "";
+    el.classList.remove("hasGoldName");
+  }
 }
 
 /* ── Local (per device, per account) ───────────────────────────────────────── */

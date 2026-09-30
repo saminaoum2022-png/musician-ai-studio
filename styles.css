@@ -71026,6 +71026,35 @@ body #discoveryFollowingList .followAct--friendsFeed .followActAvatar.isLive.has
 .aaStepKick--section{ margin-top: 6px; }
 .aaStepBody--tight{ margin-bottom: 12px; }
 
+/* Merged hero + "pick one" grid: every generated option shown full-size, swipeable,
+ * live inside the real Gold ring — replaces a static hero photo above a separate
+ * tap-to-switch thumbnail grid below it. */
+.aaCarouselWrap{ padding: 30px 0 6px; }
+.aaCarousel{
+  display: flex; gap: 18px; overflow-x: auto; scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  padding-inline: calc(50% - 76px);
+}
+.aaCarousel::-webkit-scrollbar{ display: none; }
+.aaCarouselItem{
+  flex: 0 0 auto; width: 152px; scroll-snap-align: center;
+  display: flex; align-items: center; justify-content: center;
+  opacity: .45; transform: scale(.88);
+  transition: opacity 220ms ease, transform 220ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.aaCarouselItem.isActive{ opacity: 1; transform: scale(1); }
+.aaCarouselRing{ position: relative; width: 136px; height: 136px; border-radius: 50%; flex: none; }
+.aaCarouselRing .goldRingLayer{ --gold-gap: 4px; --gold-w: 4px; }
+.aaCarouselRing .goldTopper{ width: 46px; }
+.aaCarouselPhoto{ position: absolute; inset: 0; border-radius: 50%; background: rgba(255,255,255,.06) center / cover no-repeat; }
+.aaCarouselDots{ display: flex; justify-content: center; gap: 6px; margin-top: 14px; }
+.aaDot{ width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.25); transition: width 200ms ease, background 200ms ease; }
+.aaDot.isActive{ width: 16px; border-radius: 3px; background: #f2c14e; }
+.aaCarouselHint{ text-align: center; font: 700 11px/1 var(--font-body, inherit); color: rgba(255,255,255,.4); margin-top: 10px; }
+html[data-theme="light"] .aaDot{ background: rgba(0,0,0,.16); }
+html[data-theme="light"] .aaCarouselHint{ color: rgba(11,11,19,.42); }
+
 .aaGold{
   margin: 0 0 22px;
   padding: 16px 14px 14px;
@@ -71060,6 +71089,14 @@ body #discoveryFollowingList .followAct--friendsFeed .followActAvatar.isLive.has
 .aaFrameDot{ width: 30px; height: 30px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(0,0,0,.18); }
 .aaFrameDot--none{ background: transparent; box-shadow: none; border: 1.5px dashed rgba(255,255,255,.4); }
 .aaFrameLabel{ font: 700 10.5px/1 var(--font-body, inherit); color: rgba(255,255,255,.75); white-space: nowrap; }
+/* Name-colour swatch: the actual text-gradient effect on "Aa", not just a dot —
+   the picker for a text fill should show the text, same reasoning as a font picker. */
+.aaNameSwatch{
+  width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.08) center / cover no-repeat; -webkit-background-clip: text; background-clip: text;
+  color: transparent; -webkit-text-fill-color: transparent; font: 800 12px/1 var(--font-body, inherit);
+}
+.aaNameSwatch--none{ background: none; color: rgba(255,255,255,.5); -webkit-text-fill-color: rgba(255,255,255,.5); border: 1.5px dashed rgba(255,255,255,.4); box-sizing: border-box; }
 .aaCrownRow{
   display: flex; align-items: center; justify-content: space-between;
   padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08);

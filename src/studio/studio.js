@@ -29,7 +29,6 @@ import {
   saveProjectTakeBlob,
   loadProjectTakeBlob,
 } from "./store.js";
-import { isNativeIosStudio, runNativeMicProbe, fetchNativeSessionInfo } from "./native-mic-probe.js";
 
 let engine = null;
 let bridge = {};
@@ -1531,27 +1530,15 @@ function bindRoomCheck(root) {
     proceed();
   });
 
-  const withTimeout = (p, ms) =>
-    Promise.race([p, new Promise((res) => setTimeout(() => res(null), ms))]);
-
   void (async () => {
-    let noiseLabel = null;
-    let noiseGood = true;
-    let sampleRateLabel = null;
-    try {
-      if (isNativeIosStudio()) {
-        const [probe, info] = await Promise.all([
-          withTimeout(runNativeMicProbe(1.0).catch(() => null), 1800),
-          withTimeout(fetchNativeSessionInfo().catch(() => null), 1200),
-        ]);
-        if (probe && Number.isFinite(probe.rmsDb)) {
-          if (probe.rmsDb < -50) { noiseLabel = "Low"; noiseGood = true; }
-          else if (probe.rmsDb < -35) { noiseLabel = "Moderate"; noiseGood = true; }
-          else { noiseLabel = "High"; noiseGood = false; }
-        }
-        if (info?.sampleRate) sampleRateLabel = `${(info.sampleRate / 1000).toFixed(1)}k`;
-      }
-    } catch {}
+    // Deliberately NOT calling the native mic probe (AVAudioEngine) here: on a real
+    // device it can leave the audio session in a state that blocks the WKWebView
+    // getUserMedia call recording actually uses right after, causing a hang where
+    // the app looks frozen and never records. The ceremony (rings + countdown) is
+    // the real value here, so we keep that and skip the risky native measurement.
+    const noiseLabel = null;
+    const noiseGood = true;
+    const sampleRateLabel = null;
     if (cancelled) return;
 
     const headline = root.querySelector("[data-room-headline]");

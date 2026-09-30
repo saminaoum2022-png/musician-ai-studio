@@ -1182,14 +1182,23 @@ function buildPrompt({
   ].join("\n");
 }
 
-const { OPENAI_RHYME_CREATIVE_LINES } = require("./_lib/openai-lyrics-prompt-archive");
+const { OPENAI_RHYME_SCHEME_LINES } = require("./_lib/openai-lyrics-prompt-archive");
 
 function openAiRhymeLinesForSeed(seed) {
   const s = String(seed || "");
   const extra = /موزون|موزونة|قافية|qafiy/i.test(s)
-    ? ["If the idea asks for موزونة/قافية: couplet-level rhyme (two lines), not four identical أوزان on every verse line."]
+    ? ["User asked for موزونة/قافية: keep speakable line length (وزن) and clear end-rhyme; still follow chorus = AABB, ABAB, or AAAA only."]
     : [];
-  return [...OPENAI_RHYME_CREATIVE_LINES, ...extra];
+  return [...OPENAI_RHYME_SCHEME_LINES, ...extra];
+}
+
+function openAiStructuredContextLines(dialect, dialectHint, arabicAddress) {
+  const dialectLine = [dialect, dialectHint].filter(Boolean).join(" · ");
+  const addressLine = openAiMinimalAddressLine(arabicAddress, dialectHint);
+  return [
+    dialectLine ? `Dialect: ${dialectLine}` : "",
+    addressLine && !/Arabic address:/i.test(dialectLine) ? addressLine : "",
+  ].filter(Boolean);
 }
 
 function openAiMinimalDialectLine(dialect) {
@@ -1280,7 +1289,7 @@ function buildOpenAISlimPromptStructured({
   const forLyria = lyricsTarget === "lyria";
   const flags = dialectFlags(dialect, dialectHint);
   const useArabizi = scriptFormat === "arabizi" || (scriptFormat !== "arabic" && looksLikeArabizi(seed));
-  const dialectLine = [dialect, dialectHint].filter(Boolean).join(" · ");
+  const contextLines = openAiStructuredContextLines(dialect, dialectHint, arabicAddress);
 
   const structureBlock = forLyria
     ? [
@@ -1309,7 +1318,7 @@ function buildOpenAISlimPromptStructured({
       ...structureBlock,
       ...openAiRhymeLinesForSeed(seed),
       dialectVoice,
-      dialectLine ? `Dialect: ${dialectLine}` : "",
+      ...contextLines,
       style ? `Style/mood: ${style}` : "",
       sourceTitle ? `Original: ${sourceTitle}` : "",
       "",
@@ -1324,8 +1333,9 @@ function buildOpenAISlimPromptStructured({
     return [
       "Short ~28s clip lyrics only.",
       "[Verse] optional 2 lines · [Chorus] 2–4 lines, clean ending. Max 8 lines.",
+      ...openAiRhymeLinesForSeed(seed),
       dialectVoice,
-      dialectLine ? `Dialect: ${dialectLine}` : "",
+      ...contextLines,
       style ? `Style/mood: ${style}` : "",
       "",
       seed || "",
@@ -1336,8 +1346,9 @@ function buildOpenAISlimPromptStructured({
     return [
       "Short challenge draft — not a full album song.",
       "[Verse 1] max 4 · optional [Pre-Chorus] 2 · [Chorus] max 4. Max 12 lines.",
+      ...openAiRhymeLinesForSeed(seed),
       dialectVoice,
-      dialectLine ? `Dialect: ${dialectLine}` : "",
+      ...contextLines,
       style ? `Style/mood: ${style}` : "",
       "",
       seed || "",
@@ -1350,7 +1361,7 @@ function buildOpenAISlimPromptStructured({
       ...structureBlock,
       ...openAiRhymeLinesForSeed(seed),
       dialectVoice,
-      dialectLine ? `Dialect: ${dialectLine}` : "",
+      ...contextLines,
       style ? `Style/mood: ${style}` : "",
       "",
       seed || "",
@@ -1361,7 +1372,7 @@ function buildOpenAISlimPromptStructured({
     return [
       "Continue these lyrics in the same voice — do not rewrite existing lines.",
       dialectVoice,
-      dialectLine ? `Dialect: ${dialectLine}` : "",
+      ...contextLines,
       style ? `Style/mood: ${style}` : "",
       "",
       seed || "",
@@ -1375,21 +1386,20 @@ function buildOpenAISlimPromptStructured({
     ...openAiRhymeLinesForSeed(seed),
     useArabizi ? "Write in Arabizi (Latin letters, spoken sounds)." : "",
     dialectVoice,
-    dialectLine ? `Dialect: ${dialectLine}` : "",
+    ...contextLines,
     style ? `Style/mood: ${style}` : "",
     seed ? `Idea:\n${seed}` : "Invent a coherent theme.",
     `Ref: ${nonce}`,
   ].filter(Boolean).join("\n");
 }
 
-/** OpenAI user prompt — minimal by default; Gemini path unchanged (buildPrompt). */
+/** OpenAI user prompt — slim structured default; OPENAI_LYRICS_PROMPT=minimal for bare test. */
 function buildOpenAISlimPrompt(opts) {
-  const mode = String(process.env.OPENAI_LYRICS_PROMPT || "minimal").trim().toLowerCase();
-  if (mode === "slim-v1" || mode === "structured") {
-    return buildOpenAISlimPromptStructured(opts);
+  const mode = String(process.env.OPENAI_LYRICS_PROMPT || "slim").trim().toLowerCase();
+  if (mode === "minimal") {
+    const minimal = buildOpenAIMinimalUserPrompt(opts);
+    if (minimal != null) return minimal;
   }
-  const minimal = buildOpenAIMinimalUserPrompt(opts);
-  if (minimal != null) return minimal;
   return buildOpenAISlimPromptStructured(opts);
 }
 

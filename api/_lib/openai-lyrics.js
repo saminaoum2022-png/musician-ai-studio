@@ -12,13 +12,13 @@ const { OPENAI_SLIM_V1_SYSTEM } = require("./openai-lyrics-prompt-archive");
 
 const LYRICS_SYSTEM_LEGACY = OPENAI_SLIM_V1_SYSTEM;
 
-/** minimal (default): no system message. slim-v1: legacy expert-songwriter line. Override with OPENAI_LYRICS_SYSTEM. */
+/** slim (default): expert-songwriter system. minimal: none unless OPENAI_LYRICS_SYSTEM set. */
 function resolveOpenAiLyricsSystem() {
   const custom = process.env.OPENAI_LYRICS_SYSTEM;
   if (custom != null && String(custom).trim() !== "") return String(custom).trim();
-  const mode = String(process.env.OPENAI_LYRICS_PROMPT || "minimal").trim().toLowerCase();
-  if (mode === "slim-v1" || mode === "structured") return LYRICS_SYSTEM_LEGACY;
-  return "";
+  const mode = String(process.env.OPENAI_LYRICS_PROMPT || "slim").trim().toLowerCase();
+  if (mode === "minimal") return "";
+  return LYRICS_SYSTEM_LEGACY;
 }
 
 function openAiChatMessages(prompt) {

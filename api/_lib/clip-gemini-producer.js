@@ -93,26 +93,26 @@ OUTPUT SCHEMA:
 - section: English tag in brackets, e.g. [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Final Chorus], [Outro].
 - lines: if idea_brief is set, WRITE original lyric lines for that section (do not sing the brief or instructions). Else use the user's lyric lines for that section ONLY — preserve Arabic/English/mixed exactly. Do NOT translate or rewrite. Max ~8 lines per section, max 200 chars per line.
 - duration_seconds: integer 3–120 per chunk. Intro/outro shorter; chorus often longer.
-- positive_styles: 6–10 English tags per chunk — genre, BPM (REQUIRED same number every chunk, e.g. "108 BPM"), key, instrumentation, vocal character, energy for THIS section. First chunk sets overall genre/tone.
-- negative_styles: 2–6 English tags to avoid unwanted sounds in THIS section (e.g. chorus: ["drawn-out syllables", "a cappella"]; instrumental intro: ["vocals", "lyrics"]).
-- Section dynamics: sparse intro → fuller verses → peak chorus → contrasting bridge → resolved outro.
-- Lyric density vs duration: duration_seconds must fit the lyric line count at the stated BPM (~4–6 beats per line). Prefer shorter sections with tight lines over long sections that force stretched syllables. Split long lyric lines into two shorter lines instead of one long line.
+- positive_styles: 6–10 English tags per chunk — genre, BPM (REQUIRED same number every chunk, e.g. "108 BPM"), key, instrumentation, vocal character, energy for THIS section. First chunk sets overall genre/tone; INTRO must differ by genre (pad swell, riff, drop-in, vocal cold-open — not the same pickup every song).
+- negative_styles: 2–6 English tags to avoid unwanted sounds in THIS section (e.g. chorus: ["a cappella", "mumbled lyrics"]; instrumental intro: ["vocals", "lyrics"]).
+- Section dynamics: varied intro → fuller verses → peak chorus → contrasting bridge → resolved outro.
+- Lyric density vs duration: duration_seconds must fit the lyric line count at the stated BPM (~5–8 beats per line). Allow room for expressive phrasing; split overcrowded lines instead of cramming.
 - If instrumental is true: lines may be empty; use {instrumental} direction in section text via empty lines + styles that exclude vocals; every chunk negative_styles must include "vocals" and "lyrics".
 
 === VOCAL PERFORMANCE (critical — every vocal chunk) ===
-- Honor vocal_gender from input: "f" → bright clear female pop vocal; "m" → warm male TENOR pop vocal (NOT deep bass, NOT baritone).
+- Honor vocal_gender from input: "f" → expressive female vocal with clear tone; "m" → warm male TENOR pop vocal (NOT deep bass, NOT baritone).
 - Merge vocal_lyria_hint into positive_styles when present.
-- EVERY vocal chunk positive_styles MUST include the exact BPM tag (e.g. "108 BPM") plus: "on-pitch accurate vocals", "tempo-locked to the beat", "concise syllables no melisma", "conversational pop vocal", "rhythmic tight phrasing", "clear diction".
-- Verse / pre-chorus: "conversational on-beat delivery" — sing like pop radio, not ballad or opera.
-- Chorus / hook: "hook on the beat", "sing-along clarity" — energy yes, but NO melisma, NO drawn-out syllables, NO stadium belt unless user asked.
-- EVERY vocal chunk negative_styles MUST include: "off-key vocals", "drawn-out syllables", "melismatic singing", "slow legato vocal delivery", "oversinging", "rubato against the beat", "theatrical vocal performance", "slow vocal tempo", "operatic delivery".
-- Arabic lyrics are fine — still use English tags for all styles. Keep Arabic lines short per line so they fit the beat.
+- EVERY vocal chunk positive_styles MUST include the exact BPM tag (e.g. "108 BPM") plus: "on-pitch accurate vocals", "expressive vocal performance", "natural lyrical phrasing", "clear diction".
+- Verse / pre-chorus: emotional storytelling, breath and dynamics, melody-led singing — still on groove.
+- Chorus / hook: "powerful chorus lift", "sing-along hook", "full-voice energy" — allow melisma/vibrato when genre fits (R&B, Arabic, ballad).
+- EVERY vocal chunk negative_styles MUST include only: "off-key vocals", "pitchy singing", "mumbled lyrics", "spoken word".
+- Arabic lyrics are fine — still use English tags for all styles. Lines can breathe; honor dialect ornamentation when dialect_hint suggests it.
 
 === VOCAL REFERENCE (when has_vocal_reference is true) ===
-- User uploaded a hum/voice clip — timbre, pitch contour, and rhythmic feel should align with that reference.
-- Still output full composition_chunks (4–8 sections); the server attaches the reference to each vocal section.
-- Prefer shorter sections and shorter lines so lyrics fit the reference melody without stretching syllables.
-- Every vocal chunk positive_styles should include "match reference melody and rhythm".
+- User uploaded a hum/voice clip — match singer timbre and melodic shape; intro section should NOT mimic the reference pickup verbatim.
+- Still output full composition_chunks (4–8 sections); the server attaches the reference to vocal sections (intro often without reference).
+- Give enough duration per section for natural phrasing on the reference melody.
+- First vocal section after intro: "match reference singer timbre and melodic shape". Later sections: section-specific energy tags, not duplicate intro pickup language.
 
 === structured_lyrics ===
 - Concatenation of all sections for display: section tag on its own line, then lines. Must match composition_chunks content.

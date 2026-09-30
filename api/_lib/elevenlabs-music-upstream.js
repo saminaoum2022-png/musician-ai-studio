@@ -11,33 +11,19 @@ const {
   mergeNabadVocalIntoStylePrompt,
 } = require("./nabad-vocal-identity");
 
+/** Light quality pad — avoid homogenizing tempo / “radio template” on every chunk. */
 const ELEVEN_POSITIVE_STYLE_PAD = [
   "professional studio production",
   "on-pitch accurate vocals",
-  "tempo-locked vocal delivery",
-  "concise syllable phrasing",
   "clear diction",
-  "steady rhythm",
   "polished arrangement",
-  "radio-ready",
+  "dynamic mix",
 ];
 
-/** Shared vocal negatives — avoid stretched, theatrical, off-key delivery. */
-const ELEVEN_VOCAL_NEGATIVE_CORE = [
+/** Always-on vocal negatives (pitch/clarity only — do not block expressive singing). */
+const ELEVEN_VOCAL_NEGATIVE_ALWAYS = [
   "off-key vocals",
   "pitchy singing",
-  "drawn-out syllables",
-  "melismatic singing",
-  "slow legato vocal delivery",
-  "oversinging",
-  "dramatic vibrato",
-  "rubato against the beat",
-  "theatrical vocal performance",
-  "elongated vowels",
-  "slow vocal tempo",
-  "operatic delivery",
-  "sentimental ballad drag",
-  "overly deep low pitch",
   "mumbled lyrics",
   "spoken word",
 ];
@@ -64,7 +50,7 @@ function capVocalChunkDurationByLyrics({ lineCount, durationMs, bpm, instrumenta
   if (instrumental || !lineCount || lineCount < 1) return durationMs;
   const tempo = Number(bpm) >= 60 && Number(bpm) <= 220 ? Number(bpm) : 108;
   const beatMs = 60000 / tempo;
-  const maxMs = Math.round(lineCount * beatMs * 5.5);
+  const maxMs = Math.round(lineCount * beatMs * 7.5);
   return Math.max(5000, Math.min(Number(durationMs) || maxMs, maxMs));
 }
 
@@ -130,7 +116,8 @@ function resolveElevenFinetuneId(explicit, { allowEnvDefault = true } = {}) {
   if (!allowEnvDefault) return null;
   const env = String(process.env.ELEVENLABS_FINETUNE_ID || "").trim();
   if (env && !LEGACY_ELEVEN_MUSIC_FINETUNE_IDS.has(env)) return env;
-  return DEFAULT_ELEVEN_MUSIC_FINETUNE_ID || null;
+  // No silent default finetune — keeps output closer to base Eleven diversity. Set ELEVENLABS_FINETUNE_ID on Vercel to re-enable Nabad finetune.
+  return null;
 }
 
 /** Confirm the server API key can see this finetune (same ElevenLabs account). */
@@ -203,11 +190,7 @@ function splitElevenNegativeStyleTags(negativeTags, { instrumental = false } = {
     .slice(0, 20);
   const defaults = instrumental
     ? ["vocals", "lyrics", "spoken word", "singing"]
-    : [
-        "harsh clipping",
-        "random tempo changes",
-        ...ELEVEN_VOCAL_NEGATIVE_CORE.slice(0, 10),
-      ];
+    : ["harsh clipping", "random tempo changes", ...ELEVEN_VOCAL_NEGATIVE_ALWAYS];
   const merged = [...fromUser];
   for (const d of defaults) {
     if (merged.length >= 16) break;
@@ -244,20 +227,18 @@ function resolveElevenVocalPositiveTags({
     });
     tags.push(...(nabad.tags || []));
     tags.push(
-      "on-pitch accurate vocals",
-      "tempo-locked to the beat",
-      "conversational pop vocal",
-      "rhythmic tight vocal phrasing",
+      "expressive vocal performance",
+      "natural lyrical phrasing",
+      "emotional delivery",
       "clear diction",
       "close-mic studio vocal",
     );
   } else {
     tags.push(
       "on-pitch accurate vocals",
-      "tempo-locked to the beat",
-      "concise syllables no melisma",
-      "conversational pop vocal",
-      "rhythmic tight vocal phrasing",
+      "expressive vocal performance",
+      "natural lyrical phrasing",
+      "dynamic melody-led singing",
       "natural mid-range pitch",
       "clear diction",
       "close-mic studio vocal",
@@ -277,18 +258,46 @@ function resolveElevenVocalPositiveTags({
   return [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
 }
 
+function isIntroPlanChunkText(sectionText = "") {
+  const firstLine = String(sectionText || "")
+    .trim()
+    .split(/\r?\n/)[0]
+    .trim();
+  if (/^\[intro\]/i.test(firstLine)) return true;
+  return /^\[intro\]/i.test(String(sectionText || "").trim());
+}
+
+function resolveChunkContextAdherence(sectionText = "") {
+  const t = String(sectionText || "").toLowerCase();
+  if (isIntroPlanChunkText(sectionText)) return "low";
+  if (/outro/.test(t)) return "medium";
+  if (/bridge/.test(t)) return "medium";
+  if (/chorus|hook|drop|final chorus/.test(t)) return "high";
+  return "medium";
+}
+
 function sectionElevenVocalBoost(sectionText = "") {
   const t = String(sectionText || "").toLowerCase();
   if (/chorus|hook|drop|final chorus/.test(t)) {
-    return ["hook vocals on the beat", "sing-along clarity", "controlled energy not shouting"];
+    return ["powerful chorus lift", "sing-along hook", "full-voice energy", "layered vocal texture"];
+  }
+  if (/pre-chorus/.test(t)) {
+    return ["building vocal tension", "rising energy into chorus"];
   }
   if (/bridge/.test(t)) {
-    return ["contrasting vocal color on beat", "tight phrasing"];
+    return ["contrasting vocal color", "storytelling phrasing", "dynamic melody line"];
   }
-  if (/intro|outro/.test(t)) {
-    return ["smooth vocal entrance on tempo", "polished vocal tone"];
+  if (/\[intro\]|^intro/.test(t)) {
+    return [
+      "distinct genre-appropriate intro",
+      "fresh opening not a generic count-in",
+      "vocals enter with intention when present",
+    ];
   }
-  return ["conversational on-beat verse delivery", "natural phrasing locked to rhythm"];
+  if (/outro/.test(t)) {
+    return ["reflective outro delivery", "natural resolve or fade"];
+  }
+  return ["expressive verse delivery", "natural breath and phrasing", "melody-led singing"];
 }
 
 /** Apply singer-gender + Nabad FX tags to every chunk (ElevenLabs path only). */
@@ -327,11 +336,17 @@ function applyElevenVocalStylesToPlan(
       ...(c.positive_styles || []),
     ]).slice(0, 50);
     const negative_styles = [...(c.negative_styles || [])];
-    for (const n of ELEVEN_VOCAL_NEGATIVE_CORE) {
+    for (const n of ELEVEN_VOCAL_NEGATIVE_ALWAYS) {
       if (negative_styles.length >= 50) break;
       if (!negative_styles.some((t) => t.toLowerCase() === n.toLowerCase())) negative_styles.push(n);
     }
-    return { ...c, positive_styles, negative_styles: negative_styles.slice(0, 50) };
+    const context_adherence = resolveChunkContextAdherence(c.text);
+    return {
+      ...c,
+      positive_styles,
+      negative_styles: negative_styles.slice(0, 50),
+      context_adherence,
+    };
   });
   return { chunks };
 }
@@ -1173,8 +1188,8 @@ function buildElevenPlanCreatePrompt({
     const g = String(vocalGender || "").trim().toLowerCase();
     const bpmHint = extractBpmFromText(style);
     const tempoLine = bpmHint
-      ? `Tempo: ${bpmHint} BPM — vocals stay locked to this tempo; concise syllables on the beat.`
-      : "Vocals stay locked to the track tempo — concise syllables on the beat.";
+      ? `Tempo: ${bpmHint} BPM — hold steady tempo; allow expressive phrasing, dynamics, and natural rubato within the groove.`
+      : "Hold steady tempo; allow expressive phrasing, dynamics, and natural delivery on the beat.";
     if (useNabadVocalIdentity) {
       const nabad = buildNabadVocalElevenTags({
         gender: vocalGender,
@@ -1186,11 +1201,11 @@ function buildElevenPlanCreatePrompt({
       if (nabad.styleLine) bits.push(`Vocal identity: ${nabad.styleLine}`);
     } else if (g === "f" || g === "female") {
       bits.push(
-        "Vocalist: female — bright clear tone, conversational on-beat pop delivery, on-pitch mid-range.",
+        "Vocalist: female — expressive singing, clear tone, emotional phrasing, on-pitch mid-range.",
       );
     } else if (g === "m" || g === "male") {
       bits.push(
-        "Vocalist: male — warm conversational pop delivery on the beat, on-pitch mid-range tenor.",
+        "Vocalist: male — expressive singing, warm tone, emotional phrasing, on-pitch mid-range tenor.",
       );
     }
     bits.push(tempoLine);
@@ -1198,7 +1213,7 @@ function buildElevenPlanCreatePrompt({
       bits.push(`Theme from user lyrics (preserve language, do not name artists): ${lyricPreview}`);
     }
     bits.push(
-      "Full vocal song with intro, verses, pre-chorus, chorus, bridge, and outro. User lyrics will be injected per section.",
+      "Shape sections to fit the production brief and lyrics — vary intro style and section lengths by genre (avoid the same template every time). User lyrics will be injected per section.",
     );
   }
   bits.push("Professional studio production. Use English for all style descriptors.");
@@ -1332,7 +1347,7 @@ function buildCompositionPlanFromProducerChunks({
       duration_ms,
       positive_styles: ensureMinPositiveStyles(positive_styles).slice(0, 50),
       negative_styles: negative_styles.slice(0, 50),
-      context_adherence: "high",
+      context_adherence: resolveChunkContextAdherence(text),
     });
   }
   if (chunks.length < 2) return null;
@@ -1501,6 +1516,15 @@ function sectionReferenceConditionStrength(sectionText = "", baseStrength = "hig
  * Phase D: attach hum/vocal reference (conditioning_ref) to every vocal chunk in a multi-section plan.
  * @see https://elevenlabs.io/docs/api-reference/music/compose-detailed
  */
+function referenceConditioningRange(refEndMs, { vocalIndex = 0 } = {}) {
+  const end = Math.max(3000, Math.round(Number(refEndMs) || 30000));
+  if (vocalIndex <= 0) {
+    return { start_ms: 0, end_ms: end };
+  }
+  const start = Math.min(Math.max(0, Math.floor(end * 0.3)), Math.max(0, end - 4000));
+  return { start_ms: start, end_ms: end };
+}
+
 function applyElevenReferenceToCompositionPlan(
   plan,
   {
@@ -1517,50 +1541,65 @@ function applyElevenReferenceToCompositionPlan(
     3000,
     Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)),
   );
-  const conditioningRef = {
-    song_id: songId,
-    range: { start_ms: 0, end_ms: refEnd },
-  };
   const baseStrength = ["low", "medium", "high", "xhigh"].includes(String(conditionStrength))
     ? String(conditionStrength)
     : "high";
-  // Instrumental hum-to-track: every chunk follows the melody reference.
+  // Instrumental hum-to-track: intro free; later sections follow the hum.
   if (instrumental) {
     const chunks = plan.chunks.map((c, idx) => {
+      const isIntro = idx === 0 || isIntroPlanChunkText(c.text);
       const positive_styles = ensureMinPositiveStyles([
-        "follow hum reference melody pitch and rhythm",
-        "solo instrumental matching the hummed tune",
+        ...(isIntro
+          ? ["distinct intro arrangement", "genre-appropriate opening"]
+          : ["follow hum reference melody pitch and rhythm", "solo instrumental matching the hummed tune"]),
         ...(c.positive_styles || []),
       ]).slice(0, 50);
+      if (isIntro) {
+        return { ...c, positive_styles };
+      }
+      const range = referenceConditioningRange(refEnd, { vocalIndex: idx });
       return {
         ...c,
         positive_styles,
-        conditioning_ref: conditioningRef,
-        condition_strength: idx === 0
-          ? (baseStrength === "low" ? "medium" : baseStrength === "medium" ? "high" : "xhigh")
-          : baseStrength,
+        conditioning_ref: { song_id: songId, range },
+        condition_strength: baseStrength,
       };
     });
     return { chunks };
   }
-  let firstVocalSeen = false;
+  let vocalIndex = 0;
   const chunks = plan.chunks.map((c) => {
-    if (!isElevenVocalPlanChunk(c.text, { instrumental })) return c;
-    let strength = sectionReferenceConditionStrength(c.text, baseStrength);
-    if (!firstVocalSeen) {
-      firstVocalSeen = true;
-      strength =
-        baseStrength === "low" ? "medium" : baseStrength === "medium" ? "high" : "xhigh";
+    if (isIntroPlanChunkText(c.text)) {
+      const positive_styles = ensureMinPositiveStyles([
+        "distinct genre-appropriate intro",
+        "do not copy reference intro pickup verbatim",
+        ...(c.positive_styles || []),
+      ]).slice(0, 50);
+      const { conditioning_ref: _drop, condition_strength: _drop2, ...rest } = c;
+      return { ...rest, positive_styles };
     }
+    if (!isElevenVocalPlanChunk(c.text, { instrumental })) return c;
+    const idx = vocalIndex;
+    vocalIndex += 1;
+    let strength = sectionReferenceConditionStrength(c.text, baseStrength);
+    if (idx === 0) {
+      strength =
+        baseStrength === "low" ? "medium" : baseStrength === "medium" ? "high" : "high";
+    } else if (idx > 0) {
+      strength =
+        baseStrength === "xhigh" ? "high" : baseStrength === "high" ? "medium" : baseStrength;
+    }
+    const range = referenceConditioningRange(refEnd, { vocalIndex: idx });
     const positive_styles = ensureMinPositiveStyles([
-      "match reference vocal timbre melody and rhythm",
-      "follow hum reference pitch and phrasing",
+      idx === 0
+        ? "match reference singer timbre and melodic shape"
+        : "match reference vocal timbre; fresh phrasing for this section",
       ...(c.positive_styles || []),
     ]).slice(0, 50);
     return {
       ...c,
       positive_styles,
-      conditioning_ref: conditioningRef,
+      conditioning_ref: { song_id: songId, range },
       condition_strength: strength,
     };
   });
@@ -1606,7 +1645,7 @@ function buildElevenReferenceCompositionPlan({
   const lyricText = String(lyrics || "").trim();
   let text = "";
   if (instrumental) {
-    text = "[Intro]\n{instrumental — follow reference melody, no vocals}";
+    text = "[Intro]\n{instrumental — original opening suited to the style brief, no vocals}";
   } else if (lyricText) {
     text = lyricText.includes("[") ? lyricText : `[Verse]\n${lyricText}`;
   } else {
@@ -1705,17 +1744,17 @@ function buildElevenMusicPrompt({
       const g = String(vocalGender || "").trim().toLowerCase();
       if (g === "f" || g === "female") {
         bits.push(
-          "Vocal performance: female — on-pitch, conversational on-beat pop delivery, concise syllables.",
+          "Vocal performance: female — on-pitch, expressive phrasing, emotional delivery.",
         );
       } else if (g === "m" || g === "male") {
         bits.push(
-          "Vocal performance: male — on-pitch, conversational on-beat pop delivery, concise syllables.",
+          "Vocal performance: male — on-pitch, expressive phrasing, emotional delivery.",
         );
       }
     }
     if (bpmHint) {
       bits.push(
-        `Sing strictly at ${bpmHint} BPM — lock vocals to the beat; keep syllables concise and on rhythm.`,
+        `Sing at ${bpmHint} BPM — steady groove with natural expressive phrasing and dynamics.`,
       );
     }
     if (lyricText) {

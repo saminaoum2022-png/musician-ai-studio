@@ -256,7 +256,7 @@ function goldStyleChanged(next) {
     document.querySelectorAll("[data-aa-ring]").forEach((ring) => applyGoldToAvatarWrap(ring, _draft.goldStyle));
   } catch {}
   try {
-    ["profileDisplayNameText", "profileEditCoverName"].forEach((id) => {
+    ["profileDisplayNameText", "profileEditCoverName", "aaNamePreview"].forEach((id) => {
       applyGoldNameGradient(document.getElementById(id), _draft.goldStyle);
     });
   } catch {}
@@ -297,6 +297,7 @@ function aaGoldBlockHtml(style) {
         <span class="aaNameSwatch${r.id ? "" : " aaNameSwatch--none"}" ${r.swatch ? `style="background-image:${r.swatch}"` : ""}>Aa</span>
         <span class="aaFrameLabel">${r.label}</span>
       </button>`).join("");
+  const previewName = normalizeDisplayName(_draft?.displayName) || normalizeUsername(_draft?.username) || "Your Name";
   return `
     <section class="aaGold" id="aaGoldBlock" style="--aa-emblem:${goldRingAccent(ring)}" aria-label="Gold style">
       <div class="aaGoldHead"><span class="aaGoldTitle">Gold style</span><span class="aaGoldTag">GOLD</span></div>
@@ -305,6 +306,7 @@ function aaGoldBlockHtml(style) {
       <div class="aaGoldLabel aaGoldLabel--gap">Emblem</div>
       <div class="aaFrameRow" id="aaTopperRow" role="radiogroup" aria-label="Avatar emblem">${toppers}</div>
       <div class="aaGoldLabel aaGoldLabel--gap">Name colour</div>
+      <div class="aaNamePreview" id="aaNamePreview">${escapeHtml(previewName)}</div>
       <div class="aaFrameRow" id="aaNameGradientRow" role="radiogroup" aria-label="Display name colour">${nameChips}</div>
     </section>`;
 }
@@ -747,16 +749,13 @@ async function frameAndPublishArtistAvatar(src) {
 }
 
 /** Tap the nested Artist ring — create, or Adjust / Manage when one exists. */
+/** Tapping the Artist Avatar ring goes straight into the Artist Avatar sheet — no
+ *  "Adjust framing / Manage Artist Avatar" picker in between. Both of those already
+ *  live as buttons inside that sheet's "manage" screen, so the extra menu was just a
+ *  detour to the exact same place. The photo-action-sheet pattern stays reserved for
+ *  the actual profile photo tap (openProfilePhotoFlow). */
 function openArtistRingFlow() {
-  const src = String(_draft?.artistAvatar || "").trim();
-  if (!src) {
-    openArtistAvatarEditor();
-    return;
-  }
-  openPhotoActionSheet("Artist Avatar", [
-    { id: "adjust", label: "Adjust framing", run: () => void adjustArtistAvatarFraming() },
-    { id: "manage", label: "Manage Artist Avatar", run: () => openArtistAvatarEditor() },
-  ]);
+  openArtistAvatarEditor();
 }
 
 function usernamePreview() {
@@ -830,6 +829,8 @@ function closeProfileEditSheet() {
   _activeSheet = "";
   const body = qs("#profileEditSheetBody");
   if (body) body.innerHTML = "";
+  const spacer = qs("#profileEditSheetHeadSpacer");
+  if (spacer) spacer.innerHTML = "";
 }
 
 function openProfileEditSheet(kind, title) {
@@ -841,6 +842,10 @@ function openProfileEditSheet(kind, title) {
   _activeSheet = kind;
   if (titleEl) titleEl.textContent = title;
   body.innerHTML = "";
+  // Header action icons (Artist Avatar's use-as-pfp/adjust/reset) are per-sheet —
+  // never let a previous sheet's icons linger into this one.
+  const spacer = qs("#profileEditSheetHeadSpacer");
+  if (spacer) spacer.innerHTML = "";
   sheet.hidden = false;
   requestAnimationFrame(() => sheet.classList.add("isOpen"));
   document.body.classList.add("profileEditSheetOpen");
@@ -1191,6 +1196,48 @@ async function persistArtistAvatarNow() {
  *  to make a generated option active. Only touches classes/dots on scroll-settle —
  *  never a full re-render mid-gesture, or the rail would rebuild under your thumb
  *  and cancel its own scroll-snap animation. */
+/** "Use as profile photo", "Adjust framing", and "Reset" used to be a checkbox and two
+ *  full-width buttons stacked under the Gold style card — a lot of vertical space for
+ *  three actions someone reaches for occasionally, not every visit. Moved into three
+ *  small icon buttons in the sheet's own header instead, next to the title. Rebuilt on
+ *  every "manage" render so the profile-photo toggle's active state stays in sync. */
+function renderArtistAvatarHeaderActions() {
+  const spacer = qs("#profileEditSheetHeadSpacer");
+  if (!spacer) return;
+  const isProfilePic = Boolean(_draft.artistAvatar) && _draft.avatar === _draft.artistAvatar;
+  spacer.innerHTML = `
+    <button type="button" id="aaHdrProfilePic" class="aaHeaderIconBtn${isProfilePic ? " isActive" : ""}" aria-pressed="${isProfilePic ? "true" : "false"}" aria-label="Use as my profile photo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </button>
+    <button type="button" id="aaHdrAdjust" class="aaHeaderIconBtn" aria-label="Adjust framing">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/></svg>
+    </button>
+    <button type="button" id="aaHdrReset" class="aaHeaderIconBtn aaHeaderIconBtn--danger" aria-label="Reset Artist Avatar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+    </button>
+  `;
+  qs("#aaHdrProfilePic", spacer)?.addEventListener("click", () => {
+    try { _deps?.haptic?.("light"); } catch {}
+    const turningOn = !(Boolean(_draft.artistAvatar) && _draft.avatar === _draft.artistAvatar);
+    setArtistAvatarAsProfilePic(turningOn);
+    renderProfileEditPage();
+    renderArtistAvatarHeaderActions();
+    try {
+      _deps?.showToast?.(turningOn ? "Using as your profile photo" : "Restored your real photo", { durationMs: 1800 });
+    } catch {}
+  });
+  qs("#aaHdrAdjust", spacer)?.addEventListener("click", () => {
+    try { _deps?.haptic?.("light"); } catch {}
+    void adjustArtistAvatarFraming().then((ok) => {
+      if (ok) renderArtistAvatarStep();
+    });
+  });
+  qs("#aaHdrReset", spacer)?.addEventListener("click", () => {
+    try { _deps?.haptic?.("light"); } catch {}
+    void resetArtistAvatarCompletely();
+  });
+}
+
 function wireArtistAvatarCarousel(body, gallery, activeIndex) {
   const rail = qs("#aaCarousel", body);
   if (!rail || !gallery.length) return;
@@ -1365,6 +1412,10 @@ function aaThumbGridHtml() {
 function renderArtistAvatarStep() {
   const body = qs("#profileEditSheetBody");
   if (!body) return;
+  // Header icon actions only make sense once there's an avatar to act on — cleared by
+  // default, and only the "manage" branch below repopulates them.
+  const headerSpacer = qs("#profileEditSheetHeadSpacer");
+  if (headerSpacer && _aaStep !== "manage") headerSpacer.innerHTML = "";
 
   if (_aaStep === "manage") {
     const gallery = aaCapGallery(_draft.artistAvatarGallery);
@@ -1394,17 +1445,13 @@ function renderArtistAvatarStep() {
         ${gallery.length > 1 ? `<div class="aaCarouselHint">← swipe to try your other options →</div>` : ""}
       </div>
       ${showGold ? aaGoldBlockHtml(style) : ""}
-      <label class="aaConsentRow" for="aaUseAsProfileCheck">
-        <input type="checkbox" id="aaUseAsProfileCheck" ${isProfilePic ? "checked" : ""} />
-        <span>Use as my profile photo too</span>
-      </label>
       <button type="button" id="aaGenerateMoreBtn" class="aaPrimaryBtn">Generate new photos · ${AA_COST} credits</button>
-      <button type="button" id="aaAdjustFrameBtn" class="aaSecondaryBtn">Adjust framing</button>
-      <button type="button" id="aaResetAvatarBtn" class="aaDangerBtn">Reset Artist Avatar</button>
     `;
     try {
       body.querySelectorAll("[data-aa-ring]").forEach((ring) => applyGoldToAvatarWrap(ring, _draft.goldStyle || null));
+      applyGoldNameGradient(qs("#aaNamePreview", body), _draft.goldStyle || null);
     } catch {}
+    renderArtistAvatarHeaderActions();
     wireArtistAvatarCarousel(body, gallery, activeIndex);
     if (showGold) {
       let cur = { ring: style.ring || "", topper: style.topper || "", nameGradient: style.nameGradient || "" };
@@ -1440,24 +1487,11 @@ function renderArtistAvatarStep() {
         goldStyleChanged(cur);
       });
     }
-    qs("#aaUseAsProfileCheck", body)?.addEventListener("change", (e) => {
-      setArtistAvatarAsProfilePic(Boolean(e.target.checked));
-      renderProfileEditPage();
-      renderArtistAvatarStep();
-    });
-    qs("#aaAdjustFrameBtn", body)?.addEventListener("click", () => {
-      void adjustArtistAvatarFraming().then((ok) => {
-        if (ok) renderArtistAvatarStep();
-      });
-    });
     qs("#aaGenerateMoreBtn", body)?.addEventListener("click", () => {
       _aaStep = "intro";
       _aaPhotos = [];
       _aaConsent = false;
       renderArtistAvatarStep();
-    });
-    qs("#aaResetAvatarBtn", body)?.addEventListener("click", () => {
-      void resetArtistAvatarCompletely();
     });
     return;
   }

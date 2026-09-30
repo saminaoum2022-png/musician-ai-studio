@@ -58941,7 +58941,7 @@ html.nabadSheetScrollLock body{
 }
 .profileEditSheetHead{
   display: grid;
-  grid-template-columns: 44px 1fr 44px;
+  grid-template-columns: 44px 1fr minmax(44px, auto);
   align-items: center;
   padding: 8px 10px 4px;
   flex: 0 0 auto;
@@ -58963,7 +58963,24 @@ html.nabadSheetScrollLock body{
 }
 .profileEditSheetHeadSpacer{
   grid-column: 3;
+  grid-row: 1;
+  display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  position: relative; z-index: 1;
 }
+/* Artist Avatar's "use as profile photo / adjust framing / reset" — used to be a
+   checkbox plus two full-width buttons stacked under the Gold card. Occasional
+   actions someone reaches for now and then, not every visit, so they moved here
+   instead of eating that much vertical space every time the sheet opens. */
+.aaHeaderIconBtn{
+  width: 30px; height: 30px; border-radius: 50%; border: 0; display: grid; place-items: center;
+  background: rgba(255,255,255,.08); color: rgba(255,255,255,.75);
+  -webkit-tap-highlight-color: transparent;
+}
+.aaHeaderIconBtn svg{ width: 16px; height: 16px; display: block; }
+.aaHeaderIconBtn:active{ transform: scale(.9); }
+.aaHeaderIconBtn.isActive{ background: linear-gradient(135deg, #8f74ff, #22C5A9); color: #fff; }
+.aaHeaderIconBtn--danger{ color: rgba(255,110,110,.85); }
+html[data-theme="light"] .aaHeaderIconBtn{ background: rgba(0,0,0,.06); color: rgba(11,11,19,.65); }
 .profileEditSheetBody{
   flex: 1 1 auto;
   min-height: 0;
@@ -69299,6 +69316,15 @@ body[data-route="profile"] .profileAuraAvatarFallback{
 body[data-route="profile"] .profileAura{ padding-top: 350px !important; }
 body[data-route="profile"] .profilePlayFab{ top: 322px !important; bottom: auto !important; }
 body[data-route="profile"] .profileDisplayNameText{ text-shadow: 0 2px 22px rgba(0, 0, 0, 0.75), 0 0 2px rgba(0, 0, 0, 0.4); }
+/* A Gold gradient fill uses background-clip:text — and WebKit has a real quirk where
+   `text-shadow` on a background-clip:text element can composite ON TOP of / through the
+   clipped gradient instead of behind it, which is why the shadow kept "dominating" no
+   matter how small it got. `filter: drop-shadow()` is computed from the element's actual
+   rendered pixels (the gradient-filled glyphs) and is guaranteed to paint behind them. */
+body[data-route="profile"] .profileDisplayNameText.hasGoldName{
+  text-shadow: none;
+  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.4));
+}
 body[data-route="profile"] .profileHandleText{ color: rgba(255, 255, 255, 0.78) !important; }
 body[data-route="profile"] .profileHeroBioText{
   display: -webkit-box;
@@ -70555,13 +70581,13 @@ body[data-route="discover"] .discoverMomentSection + .discoverVibeSection{ margi
 .omTierBadge[hidden]{ display: none !important; }
 .omBottom{ padding: 0 20px 20px; }
 .omKick{ font: 800 9.5px/1 var(--font-body, inherit); letter-spacing: .14em; color: rgba(255,255,255,.7); }
-.omTitle{ font: 800 28px/1.12 var(--font-display, inherit); color: #fff; margin-top: 6px; text-wrap: balance; }
+.omTitle{ font-size: 28px; line-height: 1.12; font-weight: 800; color: #fff; margin-top: 6px; text-wrap: balance; }
 .omBy{ font: 600 12.5px var(--font-body, inherit); color: rgba(255,255,255,.78); margin-top: 8px; }
 .omBody{ flex: 1; padding: 18px 18px calc(env(safe-area-inset-bottom, 0px) + 28px); }
 .omStatus{ color: rgba(255,255,255,.6); font-size: 13px; text-align: center; padding: 30px 0; }
 .omSecLabel{ font: 800 10.5px var(--font-body, inherit); letter-spacing: .12em; color: rgba(255,255,255,.5); margin-top: 22px; }
 .omTlHead{ display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
-.omTlHead b{ font: 800 15px var(--font-display, inherit); color: #fff; }
+.omTlHead b{ font-size: 15px; font-weight: 800; color: #fff; }
 .omTlHead small{ color: rgba(255,255,255,.5); font-size: 11px; }
 .omTrk{ display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,.07); cursor: pointer; }
 .omTrk--noPlay{ cursor: default; opacity: .7; }
@@ -70573,7 +70599,7 @@ body[data-route="discover"] .discoverMomentSection + .discoverVibeSection{ margi
 .omMatchRow{ display: flex; align-items: center; gap: 14px; margin-top: 8px; }
 .omMatchRing{ position: relative; width: 64px; height: 64px; flex: none; display: grid; place-items: center; }
 .omMatchRing svg{ position: absolute; inset: 0; }
-.omMatchPct{ position: relative; font: 800 14px var(--font-display, inherit); color: #fff; }
+.omMatchPct{ position: relative; font-size: 14px; font-weight: 800; color: #fff; }
 .omMatchTags{ display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
 .omTag{ font: 700 10.5px var(--font-body, inherit); background: rgba(255,255,255,.08); color: rgba(255,255,255,.85); border-radius: 999px; padding: 5px 10px; }
 .omTag--muted{ color: rgba(255,255,255,.5); }
@@ -70593,7 +70619,7 @@ html[data-theme="light"] .omTag{ background: rgba(0,0,0,.06); color: #0b0b13; }
    were missing from the first pass — the hero stats, the Your Song spotlight, and share. */
 .omHeroStats{ display: flex; align-items: center; justify-content: center; gap: 10px; padding: 4px 0 6px; }
 .omHeroStat{ display: flex; flex-direction: column; align-items: center; gap: 1px; }
-.omHeroStat b{ font: 800 22px var(--font-display, inherit); color: #fff; line-height: 1; }
+.omHeroStat b{ font-size: 22px; font-weight: 800; color: #fff; line-height: 1; }
 .omHeroStat span{ font: 700 9.5px var(--font-body, inherit); letter-spacing: .04em; text-transform: uppercase; color: rgba(255,255,255,.5); }
 .omHeroDot{ width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,.3); }
 .omSongSpot{ margin-top: 14px; }
@@ -70605,7 +70631,7 @@ html[data-theme="light"] .omTag{ background: rgba(0,0,0,.06); color: #0b0b13; }
   -webkit-tap-highlight-color: transparent;
 }
 .omSpotArt{ width: 72px; height: 72px; border-radius: 16px; background-size: cover; background-position: center; box-shadow: 0 12px 26px -8px rgba(46,224,192,.4); margin-bottom: 8px; }
-.omSpotTitle{ font: 800 17px var(--font-display, inherit); color: #fff; }
+.omSpotTitle{ font-size: 17px; font-weight: 800; color: #fff; }
 .omSpotSub{ font-size: 11.5px; color: rgba(255,255,255,.55); }
 .omSpotCount{ font-size: 11px; color: rgba(255,255,255,.5); margin-top: 4px; }
 .omShareBtn{
@@ -70636,16 +70662,16 @@ html[data-theme="light"] .omSpotTitle{ color: #0b0b13; }
   font: 800 11px/1 var(--font-body, inherit); letter-spacing: .14em; color: rgba(255,255,255,.75);
 }
 .omShareCardBottom{ position: absolute; left: 26px; right: 26px; bottom: 30px; }
-.omShareCardTitle{ font: 800 32px/1.14 var(--font-display, inherit); color: #fff; text-wrap: balance; }
+.omShareCardTitle{ font-size: 32px; line-height: 1.14; font-weight: 800; color: #fff; text-wrap: balance; }
 .omShareCardBy{ font: 600 14px var(--font-body, inherit); color: rgba(255,255,255,.8); margin-top: 8px; }
 .omShareCardStats{ display: flex; align-items: center; gap: 10px; margin-top: 20px; }
 .omShareCardStat{ display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
-.omShareCardStat b{ font: 800 22px var(--font-display, inherit); color: #fff; line-height: 1; }
+.omShareCardStat b{ font-size: 22px; font-weight: 800; color: #fff; line-height: 1; }
 .omShareCardStat span{ font: 700 9.5px var(--font-body, inherit); letter-spacing: .04em; text-transform: uppercase; color: rgba(255,255,255,.55); }
 .omShareCardDot{ width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,.3); }
 .omShareCardTags{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
 .omShareCardTags .omTag{ font: 700 10.5px var(--font-body, inherit); background: rgba(255,255,255,.1); color: rgba(255,255,255,.9); border-radius: 999px; padding: 5px 10px; }
-.omShareCardMark{ font: 800 12px var(--font-display, inherit); color: rgba(255,255,255,.55); letter-spacing: .06em; margin-top: 22px; }
+.omShareCardMark{ font-size: 12px; font-weight: 800; color: rgba(255,255,255,.55); letter-spacing: .06em; margin-top: 22px; }
 
 /* ===== Artist Avatar flip on the profile hero photo: true 3D card flip
    (rotateY) between the normal photo and the Artist Avatar. Badge peeks
@@ -70841,7 +70867,7 @@ html[data-theme="light"] body[data-route="profile"] .profileAboutSection .profil
   font: 800 10.5px/1 var(--font-body, inherit); letter-spacing: .14em; text-transform: uppercase;
   color: rgba(143,116,255,.9); margin-bottom: 10px;
 }
-.aaStepTitle{ font: 800 22px/1.25 var(--font-display, inherit); color: #fff; margin: 0 0 12px; }
+.aaStepTitle{ font-size: 22px; line-height: 1.25; font-weight: 800; color: #fff; margin: 0 0 12px; }
 .aaStepBody{ font: 500 13.5px/1.5 var(--font-body, inherit); color: rgba(255,255,255,.65); margin: 0 0 18px; }
 .aaConsentRow{
   display: flex; align-items: center; gap: 10px; padding: 12px 14px; margin-bottom: 16px;
@@ -71029,17 +71055,24 @@ body #discoveryFollowingList .followAct--friendsFeed .followActAvatar.isLive.has
 /* Merged hero + "pick one" grid: every generated option shown full-size, swipeable,
  * live inside the real Gold ring — replaces a static hero photo above a separate
  * tap-to-switch thumbnail grid below it. */
-.aaCarouselWrap{ padding: 30px 0 6px; }
+.aaCarouselWrap{ padding: 4px 0 6px; }
 .aaCarousel{
-  display: flex; gap: 18px; overflow-x: auto; scroll-snap-type: x mandatory;
+  display: flex; align-items: flex-end; gap: 18px; overflow-x: auto; scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  /* Explicit height, not just "generous" — trimmed down to the ring (136px) plus the
+     crown emblem's actual ~40-50px overhang (`.goldTopper`'s translate(-50%,-66%)) plus
+     a small buffer, no more. Setting overflow-x without overflow-y makes WebKit force
+     overflow-y to auto too, which clips anything taller than this box, so it still needs
+     to fully contain the topper — it just doesn't need to be taller than that on top of it
+     (the earlier 216px left ~30px of dead empty space above the topper on every open). */
+  height: 188px; padding-bottom: 6px;
   padding-inline: calc(50% - 76px);
 }
 .aaCarousel::-webkit-scrollbar{ display: none; }
 .aaCarouselItem{
-  flex: 0 0 auto; width: 152px; scroll-snap-align: center;
-  display: flex; align-items: center; justify-content: center;
-  opacity: .45; transform: scale(.88);
+  flex: 0 0 auto; width: 152px; height: 188px; scroll-snap-align: center; scroll-snap-stop: always;
+  display: flex; align-items: flex-end; justify-content: center;
+  opacity: .45; transform: scale(.88); transform-origin: bottom center;
   transition: opacity 220ms ease, transform 220ms ease;
   -webkit-tap-highlight-color: transparent;
 }
@@ -71056,45 +71089,45 @@ html[data-theme="light"] .aaDot{ background: rgba(0,0,0,.16); }
 html[data-theme="light"] .aaCarouselHint{ color: rgba(11,11,19,.42); }
 
 .aaGold{
-  margin: 0 0 22px;
-  padding: 16px 14px 14px;
-  border-radius: 20px;
+  margin: 0 0 14px;
+  padding: 12px 12px 10px;
+  border-radius: 18px;
   background:
     radial-gradient(120% 140% at 0% 0%, rgba(255, 210, 90, .10), transparent 60%),
     rgba(255,255,255,.04);
   border: 1px solid rgba(255, 210, 90, .22);
 }
-.aaGoldHead{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.aaGoldTitle{ font: 800 15px/1 var(--font-display, inherit); color: #fff; }
+.aaGoldHead{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.aaGoldTitle{ font-size: 14px; line-height: 1; font-weight: 800; color: #fff; }
 .aaGoldTag{
-  font: 800 9.5px/1 var(--font-body, inherit); letter-spacing: .16em;
-  padding: 5px 8px; border-radius: 999px; color: #2a1c00;
+  font: 800 9px/1 var(--font-body, inherit); letter-spacing: .16em;
+  padding: 4px 7px; border-radius: 999px; color: #2a1c00;
   background: linear-gradient(135deg, #ffe27a, #d99a1c);
 }
-.aaGoldLabel{ font: 700 11.5px/1 var(--font-body, inherit); color: rgba(255,255,255,.55); margin-bottom: 10px; letter-spacing: .04em; }
+.aaGoldLabel{ font: 700 10.5px/1 var(--font-body, inherit); color: rgba(255,255,255,.55); margin-bottom: 5px; letter-spacing: .04em; }
 .aaGoldLabel--inline{ margin: 0; font-size: 14px; color: rgba(255,255,255,.9); letter-spacing: 0; }
 .aaFrameRow{
-  display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 12px; margin: 0 -2px;
+  display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 4px; margin: 0 -2px;
   scrollbar-width: none; -webkit-overflow-scrolling: touch;
 }
 .aaFrameRow::-webkit-scrollbar{ display: none; }
 .aaFrameOpt{
-  flex: 0 0 auto; width: 62px; display: flex; flex-direction: column; align-items: center; gap: 7px;
-  padding: 9px 0 8px; border-radius: 14px;
+  flex: 0 0 auto; width: 52px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 6px 0 5px; border-radius: 12px;
   background: rgba(255,255,255,.04); border: 1.5px solid transparent; color: inherit;
   -webkit-tap-highlight-color: transparent;
 }
 .aaFrameOpt[aria-checked="true"]{ border-color: #f2c14e; background: rgba(242,193,78,.10); }
 .aaFrameOpt:active{ transform: scale(.96); }
-.aaFrameDot{ width: 30px; height: 30px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(0,0,0,.18); }
+.aaFrameDot{ width: 24px; height: 24px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(0,0,0,.18); }
 .aaFrameDot--none{ background: transparent; box-shadow: none; border: 1.5px dashed rgba(255,255,255,.4); }
-.aaFrameLabel{ font: 700 10.5px/1 var(--font-body, inherit); color: rgba(255,255,255,.75); white-space: nowrap; }
+.aaFrameLabel{ font: 700 9.5px/1 var(--font-body, inherit); color: rgba(255,255,255,.75); white-space: nowrap; }
 /* Name-colour swatch: the actual text-gradient effect on "Aa", not just a dot —
    the picker for a text fill should show the text, same reasoning as a font picker. */
 .aaNameSwatch{
-  width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
   background: rgba(255,255,255,.08) center / cover no-repeat; -webkit-background-clip: text; background-clip: text;
-  color: transparent; -webkit-text-fill-color: transparent; font: 800 12px/1 var(--font-body, inherit);
+  color: transparent; -webkit-text-fill-color: transparent; font: 800 11px/1 var(--font-body, inherit);
 }
 .aaNameSwatch--none{ background: none; color: rgba(255,255,255,.5); -webkit-text-fill-color: rgba(255,255,255,.5); border: 1.5px dashed rgba(255,255,255,.4); box-sizing: border-box; }
 .aaCrownRow{
@@ -71174,12 +71207,19 @@ html[data-theme="light"] .aaGold{ background: rgba(0,0,0,.03); }
   min-width: 0;
 }
 .profileEditCoverName{
-  font: 800 24px/1.1 var(--font-display, inherit);
-  letter-spacing: -0.02em;
+  /* Matches .profileDisplayNameText exactly (weight/size/spacing) — this used to be its
+     own independently-picked 800/24px/-0.02em, which never matched the real public name
+     even once the shorthand bug above was fixed; the point of a "preview" is that it's
+     the same style as the real thing, not just also-bold. */
+  font-size: 22px; line-height: 1.15; font-weight: 700;
+  letter-spacing: -0.03em;
   color: #fff;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   text-shadow: 0 2px 14px rgba(0,0,0,.5);
 }
+/* Same fix as .profileDisplayNameText — a gradient fill needs a much lighter shadow
+   or the dark blur muddies the color into a shaded, near-black look. */
+.profileEditCoverName.hasGoldName{ text-shadow: none; filter: drop-shadow(0 3px 2px rgba(0,0,0,.4)); }
 .profileEditCoverHandle{
   font: 600 14px/1.2 var(--font-body, inherit);
   color: rgba(255,255,255,.72);
@@ -71196,10 +71236,23 @@ html[data-theme="light"] .aaGold{ background: rgba(0,0,0,.03); }
 }
 .profileEditPage .profileEditPhotoHint{ margin: 4px 0 0; text-align: center; }
 
-.aaGoldLabel--gap{ margin-top: 4px; }
+.aaGoldLabel--gap{ margin-top: 2px; }
+.aaNamePreview{
+  /* Match .profileDisplayNameText's real longhand properties exactly, rather than
+     `font: … var(--font-display, inherit)` — --font-display is never actually defined
+     anywhere, and using its fallback `inherit` as one token inside the `font` SHORTHAND
+     is invalid CSS (a global keyword can't be a sub-value of a shorthand): the whole
+     declaration silently drops to the inherited font, weight and size included, which
+     read as "the normal font" instead of the bold display name it was meant to preview.
+     Kept at the real 22px/700 size on purpose — the point of a preview is showing it at
+     the size it'll actually appear at, so only its margin shrinks here, not the text. */
+  font-size: 22px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.15;
+  color: #fff; margin-bottom: 6px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .aaTopperGlyph{
-  width: 30px; height: 30px; display: grid; place-items: center;
+  width: 24px; height: 24px; display: grid; place-items: center;
   color: var(--aa-emblem, #ffd45a);
 }
-.aaTopperGlyph svg{ width: 26px; height: 26px; display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
+.aaTopperGlyph svg{ width: 21px; height: 21px; display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
 .aaTopperGlyph--none{ border-radius: 50%; border: 1.5px dashed rgba(255,255,255,.4); box-sizing: border-box; }

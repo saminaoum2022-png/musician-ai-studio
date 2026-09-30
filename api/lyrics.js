@@ -878,8 +878,16 @@ async function withOptionalSingability(payload, {
 }
 
 /** Google Lyria caps near ~3 minutes — long lyric sheets make the model rush or lose the groove. */
+const LYRIA_SHORT_LINE_RULES = [
+  "LYRIA SINGING (critical): Each sung line must be ONLY 3–5 words (roughly 4–10 speakable syllables / مقاطع).",
+  "Never pack a full sentence into one line — split into two short lines instead.",
+  "Short punchy lines improve pitch and timing; long lines make Lyria rush, slur, or skip words.",
+  "When writing Arabic or English, count syllables per line — every line should be hum-able in one breath.",
+];
+
 const LYRIA_COMPACT_LYRICS_RULES = [
   "Target: full song for Google Lyria (~180 seconds / 3 minutes maximum). Every sung line must fit in that time.",
+  ...LYRIA_SHORT_LINE_RULES,
   "Use ONLY this compact structure:",
   "[Verse 1] — 4 lines max",
   "[Chorus] — 3–4 lines max (one sticky hook — repeat the SAME chorus lines in the second chorus)",
@@ -887,7 +895,7 @@ const LYRIA_COMPACT_LYRICS_RULES = [
   "[Chorus] — same hook lines as the first chorus",
   "Optional [Bridge] — 2 lines max ONLY if the story needs one turn (otherwise skip)",
   "Do NOT include [Intro], [Pre-Chorus], [Outro], [Final Chorus], Verse 3+, or multiple bridges.",
-  "Total sung lines: 18 maximum. Keep lines short and conversational.",
+  "Total sung lines: 18 maximum.",
 ];
 
 const REMIX_REPLY_GUARDRAILS = [
@@ -1023,6 +1031,7 @@ function buildPrompt({
   if (mode === "enhance") {
     return [
       "Polish existing lyrics for AI song generation — do NOT rewrite from scratch.",
+      ...(forLyria ? LYRIA_SHORT_LINE_RULES : []),
       "Keep the same language, dialect, story, and emotional meaning.",
       "Preserve colloquial/dialect words — do NOT upgrade to formal MSA or change the accent flavor.",
       "Keep the same section tags and overall structure; only lightly adjust wording, line breaks, or endings for flow.",
@@ -1041,6 +1050,7 @@ function buildPrompt({
   }
   if (mode === "fix_singing") {
     return [
+      ...(forLyria ? LYRIA_SHORT_LINE_RULES : []),
       ...FIX_SINGING_LINES,
       ...punctuationLines,
       ...(useArabizi ? scriptLines : []),
@@ -1179,6 +1189,7 @@ function buildPrompt({
     return [
       "Continue the user's lyrics in the same mood, theme, and language.",
       "Do not rewrite existing lines.",
+      ...(forLyria ? LYRIA_SHORT_LINE_RULES : []),
       "Output lyrics only.",
       ...punctuationLines,
       ...(useArabizi ? scriptLines : []),
@@ -1390,6 +1401,7 @@ function buildOpenAISlimPromptStructured({
   const structureBlock = forLyria
     ? [
       "Song shape (~3 min / Lyria): [Verse 1] max 4 lines · [Chorus] 3–4 hook lines · [Verse 2] max 4 · [Chorus] same hook · optional [Bridge] 2 lines. Max 18 sung lines. English section tags only.",
+      ...LYRIA_SHORT_LINE_RULES,
     ]
     : [
       "Full song: [Verse 1], [Chorus], [Verse 2], [Chorus], [Bridge], [Final Chorus] — singable pop structure.",
@@ -1478,7 +1490,9 @@ function buildOpenAISlimPromptStructured({
   return [
     "Write singable song lyrics from the idea below. Output lyrics + English section tags only — no notes, BPM, or explanations.",
     ...structureBlock,
-    "Keep lines a similar speakable length (وزن) — singable, not poetry-drill.",
+    forLyria
+      ? "Every sung line: 3–5 words only — split long thoughts across lines."
+      : "Keep lines a similar speakable length (وزن) — singable, not poetry-drill.",
     ...openAiRhymeLinesForSeed(seed),
     useArabizi ? "Write in Arabizi (Latin letters, spoken sounds)." : "",
     dialectVoice,

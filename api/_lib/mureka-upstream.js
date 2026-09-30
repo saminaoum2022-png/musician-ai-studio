@@ -14,6 +14,34 @@ const DEFAULT_BASE = "https://api.mureka.ai";
 const DEFAULT_MODEL = "auto";
 const POLL_INTERVAL_MS = 2500;
 const POLL_TIMEOUT_MS = 8 * 60 * 1000;
+/** Mureka API rejects lyrics longer than ~1020 characters. */
+const MUREKA_LYRICS_MAX_CHARS = 1010;
+
+/**
+ * Fit lyrics into Mureka's character cap (whole string including [Verse] tags).
+ * Prefer dropping lines from the bottom over mid-line chop.
+ */
+function prepareMurekaLyrics(raw, maxChars = MUREKA_LYRICS_MAX_CHARS) {
+  const max = Math.max(200, Math.min(1020, Number(maxChars) || MUREKA_LYRICS_MAX_CHARS));
+  let s = String(raw || "").trim();
+  if (!s) return { lyrics: "", truncated: false, charCount: 0 };
+  if (s.length <= max) return { lyrics: s, truncated: false, charCount: s.length };
+
+  const lines = s.split(/\r?\n/);
+  const kept = [];
+  for (const line of lines) {
+    const next = kept.length ? `${kept.join("\n")}\n${line}` : line;
+    if (next.length > max) break;
+    kept.push(line);
+  }
+  if (kept.join("\n").length >= 80) {
+    const lyrics = kept.join("\n").trim();
+    return { lyrics, truncated: true, charCount: lyrics.length, droppedFrom: s.length };
+  }
+
+  const lyrics = s.slice(0, max).trim();
+  return { lyrics, truncated: true, charCount: lyrics.length, droppedFrom: s.length };
+}
 
 function murekaGenerateEnabled() {
   const v = String(process.env.MUREKA_GENERATE_ENABLED || "").trim().toLowerCase();
@@ -114,8 +142,12 @@ async function murekaGenerateSong({
   melodyId = "",
   stream = false,
 } = {}) {
+  const prepared = prepareMurekaLyrics(lyrics);
+  if (!prepared.lyrics) {
+    return { ok: false, error: "Mureka lyrics-to-song needs lyrics.", code: "mureka_lyrics_required" };
+  }
   const body = {
-    lyrics: String(lyrics || "").trim(),
+    lyrics: prepared.lyrics,
     model: resolveMurekaModel(model),
     n: Math.max(1, Math.min(3, Number(n) || 1)),
     stream: Boolean(stream),
@@ -130,10 +162,6 @@ async function murekaGenerateSong({
   if (rid) body.reference_id = rid;
   const mid = String(melodyId || "").trim();
   if (mid) body.melody_id = mid;
-
-  if (!body.lyrics) {
-    return { ok: false, error: "Mureka lyrics-to-song needs lyrics.", code: "mureka_lyrics_required" };
-  }
 
   const res = await murekaFetch("/v1/song/generate", { apiKey, method: "POST", body });
   if (!res.ok) {
@@ -259,10 +287,15 @@ function murekaUserMessage(err) {
   if (/lyrics/i.test(raw) && /required|empty/i.test(raw)) {
     return "Mureka needs lyrics — add lyrics and try again.";
   }
+  if (/character|1020|exceed|too long/i.test(raw)) {
+    return "Lyrics were too long for Mureka (max ~1020 characters) — use shorter lines or fewer sections.";
+  }
   return raw.slice(0, 280);
 }
 
 module.exports = {
+  MUREKA_LYRICS_MAX_CHARS,
+  prepareMurekaLyrics,
   murekaGenerateEnabled,
   murekaApiBase,
   resolveMurekaModel,

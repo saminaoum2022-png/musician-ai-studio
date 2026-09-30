@@ -153,6 +153,7 @@ OUTPUT SCHEMA:
 - Structure tags MUST be plain English section labels ONLY — NO timestamps inside tags.
 - NEVER put timing, BPM, dialect notes, style directions, or "Create a song…" inside structured_lyrics — Lyria will sing them.
 - NO commas, semicolons, colons, or bullets inside lyric lines — Lyria reads them like tashkeel; use line breaks only.
+- Each sung line: ONLY 3–5 words (about 4–10 speakable syllables). Split longer thoughts into extra lines — never one long sentence per line.
 - One hum-able chorus hook. Honor target_length_seconds — less lyric text is better than cramming.
 - End on a complete phrase — never mid-word or mid-sentence.
 - If instrumental is true, return "".

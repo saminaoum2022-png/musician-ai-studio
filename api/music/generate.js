@@ -77,6 +77,8 @@ const {
   resolveMurekaModel,
   resolveMurekaVocalId,
   mapMurekaGender,
+  prepareMurekaLyrics,
+  MUREKA_LYRICS_MAX_CHARS,
 } = require("../_lib/mureka-upstream");
 const {
   saveMusicProviderTaskStatus,
@@ -1809,7 +1811,7 @@ async function runMurekaGenerationJob({
     let producerResult = { ok: false, used: false, fallback: true };
 
     if (geminiApiKey) {
-      producerResult = await enrichSongWithGeminiProducer({
+      producerResult = await enrichLyriaSongWithGeminiProducer({
         apiKey: geminiApiKey,
         enabled: resolveGeminiProducerEnabled(body, isAdmin),
         input: buildSongProducerInput(body, "mureka"),
@@ -1835,9 +1837,18 @@ async function runMurekaGenerationJob({
       adminToggles: nabadVocalToggles,
     });
 
+    const murekaLyricsPrep = prepareMurekaLyrics(effectiveLyrics);
+    if (murekaLyricsPrep.truncated) {
+      console.warn(
+        "[music/generate] mureka lyrics truncated",
+        taskId,
+        `${murekaLyricsPrep.droppedFrom || effectiveLyrics.length} → ${murekaLyricsPrep.charCount}`,
+      );
+    }
+
     const started = await murekaGenerateSong({
       apiKey,
-      lyrics: effectiveLyrics,
+      lyrics: murekaLyricsPrep.lyrics,
       prompt: effectiveStyle,
       model,
       n: 1,
@@ -1895,7 +1906,9 @@ async function runMurekaGenerationJob({
         `upstream: ${started.upstreamTaskId}`,
         waited.model || started.model ? `model: ${waited.model || started.model}` : "",
         vocalId ? `vocal_id: ${vocalId}` : "",
-        producerResult.ok ? "geminiProducer: on" : "geminiProducer: off",
+        producerResult.ok ? "geminiProducer: on (lyria compact)" : "geminiProducer: off",
+        `mureka_lyrics_chars: ${murekaLyricsPrep.charCount}/${MUREKA_LYRICS_MAX_CHARS}${murekaLyricsPrep.truncated ? " truncated" : ""}`,
+        `mureka_prompt_chars: ${Math.min(2000, String(effectiveStyle || "").trim().length)}`,
         nabadVocalToggles ? "nabadVocalChain: on" : "",
       ].filter(Boolean).join("\n"),
     });

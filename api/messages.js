@@ -14,6 +14,7 @@ const {
 const { queuePrivacySafePush, sendPrivacySafePush } = require("./_lib/onesignal-push");
 const { uploadObject } = require("./_lib/supabase-storage");
 const { parseBase64DataUrl, voiceDropBodyProblem } = require("./_lib/dm-voice");
+const { formatDmPushPreview } = require("./_lib/dm-message-preview");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -1422,7 +1423,9 @@ async function handlePost(req, res, user) {
         type: "dm_message",
         entityId: pushThreadId,
         actorDisplayName: senderProfile?.username || "Someone",
-        metadata: { preview: String(text || sent.message?.body || "").trim() },
+        metadata: {
+          preview: formatDmPushPreview(String(text || sent.message?.body || "")),
+        },
       }).catch(() => null);
       if (pushed?.ok) await markMessagesDelivered([msgId], { threadId: pushThreadId });
     })());

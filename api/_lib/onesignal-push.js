@@ -58,10 +58,14 @@ function cleanDisplayName(v) {
 }
 
 function cleanDmPreview(v) {
-  return String(v || "")
+  let s = String(v || "")
+    .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 140);
+    .trim();
+  if (s.startsWith("{") && s.includes('"nabad_dm"')) {
+    return "New message";
+  }
+  return s.slice(0, 140);
 }
 
 function composePushCopy({ type, actorDisplayName, metadata }) {

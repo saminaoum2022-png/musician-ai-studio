@@ -3623,7 +3623,7 @@
               </div>
             </div>
             <p id="profileSongsKeepHint" class="profileSongsKeepHint" hidden>
-              Drafts aren’t permanent — publish or download to keep playing
+              Drafts aren’t permanent — publish or download to keep them
             </p>
             <div id="libraryList" class="libraryList profileHubSharedList"></div>
             <div id="profileVocalsList" class="studioVocalsList" hidden aria-live="polite"></div>
@@ -5319,6 +5319,15 @@
               <span id="messagesComposerListenSub">Start a song together</span>
             </span>
           </button>
+          <button type="button" class="messagesComposerSheetRow" id="messagesComposerStickersRow" data-messages-composer-action="stickers" role="menuitem" hidden>
+            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--sticker" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path fill="#23d5ab" d="M9 7v18l14-10z"/><path fill="#7c5cff" d="M14 4v12.5a3.5 3.5 0 1 1-2-3.2V6h8V4H14z" opacity=".85"/></svg>
+            </span>
+            <span class="messagesComposerSheetCopy">
+              <strong>Sticker</strong>
+              <span>Studio Pulse pack</span>
+            </span>
+          </button>
         </div>
         <div id="messagesComposerSheetListCoach" class="messagesComposerSheetList" role="menu" aria-label="Coach actions" hidden>
           <button type="button" class="messagesComposerSheetRow" data-messages-composer-action="coach-start-plan" role="menuitem">
@@ -5349,6 +5358,18 @@
             </span>
           </button>
         </div>
+      </section>
+    </div>
+
+    <div id="messagesStickersSheet" class="messagesComposerSheet messagesShareSheet messagesStickersSheet" hidden aria-hidden="true">
+      <div class="messagesShareSheetBackdrop" id="messagesStickersSheetBackdrop"></div>
+      <section class="messagesComposerSheetCard messagesShareSheetCard messagesStickersSheetCard" role="dialog" aria-modal="true" aria-labelledby="messagesStickersSheetTitle">
+        <header class="messagesShareSheetHead">
+          <h2 id="messagesStickersSheetTitle" class="messagesShareSheetTitle">Studio Pulse</h2>
+          <button type="button" class="messagesShareSheetClose" id="messagesStickersSheetClose" aria-label="Close">×</button>
+        </header>
+        <p class="messagesStickersSheetLead">Pack 1 · tap to send</p>
+        <div id="messagesStickersGrid" class="nabadStickerPickerGrid" role="list"></div>
       </section>
     </div>
 

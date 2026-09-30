@@ -331,6 +331,16 @@ import {
   paintVerifiedBadgeElement,
   verifiedBadgeUsesBrandGradient,
 } from "./verified-badge.js";
+import {
+  buildNabadStickerDmBody,
+  canSendNabadSticker,
+  configureNabadStickers,
+  nabadStickerBubbleInnerHtml,
+  nabadStickerLabel,
+  nabadStickerPickerGridHtml,
+  parseNabadStickerDmBody,
+  stickersUiEnabled,
+} from "./nabad-stickers.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
@@ -38751,6 +38761,11 @@ async function renderProfileReposts() {
 }
 
 /* ── Public profile › Music (Anghami-style artist page: Trending now · Releases · Fans also like · About) ── */
+function upmTrendingRowTitleHtml(title) {
+  const t = escapeHtml(String(title || "Untitled"));
+  return `<span class="upmTitleLine"><span class="upmTitleMarquee"><span class="upmTitleMarqueeTrack" dir="auto"><span class="upmTitleMarqueeChunk">${t}</span><span class="upmTitleMarqueeChunk" aria-hidden="true">${t}</span></span></span></span>`;
+}
+
 function userPublicMusicRowAttrs(t, profMap, byLine) {
   const pa = followingActivityPlayAttrs(t, profMap, byLine, { useThumb: true });
   return {
@@ -38792,7 +38807,7 @@ function paintUserPublicMusic(cache) {
       <div class="upmRow" role="listitem">
         <button type="button" class="upmRowPlay" ${attrs} aria-label="Play ${escapeHtml(String(t.title || "song"))}">
           <span class="upmArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />${UPM_OVERLAY_HTML}</span>
-          <span class="upmMeta"><strong dir="auto">${escapeHtml(String(t.title || "Untitled"))}</strong>${hasCounts ? `<small>${plays ? `${escapeHtml(formatStatCount(plays))} plays` : "New"}</small>` : ""}</span>
+          <span class="upmMeta">${upmTrendingRowTitleHtml(t.title)}${hasCounts ? `<small>${plays ? `${escapeHtml(formatStatCount(plays))} plays` : "New"}</small>` : ""}</span>
         </button>
         ${discoverSheetMenuBtnHtml(t, cache.profMap, { className: "upmMenu" })}
       </div>`;
@@ -42888,8 +42903,14 @@ function parseDmMessageBody(raw) {
           legacyVoiceMix: /^drop remix\b/i.test(title),
         };
       }
+      if (data?.nabad_dm === "sticker") {
+        const sticker = parseNabadStickerDmBody(body);
+        if (sticker) return sticker;
+      }
     } catch {}
   }
+  const stickerToken = parseNabadStickerDmBody(body);
+  if (stickerToken) return stickerToken;
   return { type: "text", text: body };
 }
 
@@ -42902,6 +42923,7 @@ function formatDmInboxPreview(raw) {
   }
   if (parsed.type === "voice_mix") return formatDmVoiceMixInboxPreview(parsed);
   if (parsed.type === "voice") return formatDmVoiceInboxPreview(parsed);
+  if (parsed.type === "sticker") return `Sticker · ${nabadStickerLabel(parsed.stickerId)}`;
   return String(raw || "").trim();
 }
 
@@ -43537,6 +43559,57 @@ function closeMessagesComposerSheet() {
   sheet.hidden = true;
   sheet.setAttribute("aria-hidden", "true");
   document.body.classList.remove("messagesComposerSheetOpen");
+}
+
+function closeMessagesStickersSheet() {
+  const sheet = document.getElementById("messagesStickersSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("messagesStickersSheetOpen");
+}
+
+function openMessagesStickersSheet() {
+  if (!stickersUiEnabled()) return;
+  closeMessagesComposerSheet();
+  closeMessagesThreadMoreSheet();
+  const sheet = document.getElementById("messagesStickersSheet");
+  const grid = document.getElementById("messagesStickersGrid");
+  if (!sheet || !grid) return;
+  grid.innerHTML = nabadStickerPickerGridHtml();
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("messagesStickersSheetOpen");
+}
+
+async function sendDmStickerMessage(stickerId) {
+  const id = String(stickerId || "").trim();
+  if (!canSendNabadSticker(id)) {
+    try { showToast("This sticker needs Nabad Gold.", { durationMs: 2600 }); } catch {}
+    return;
+  }
+  const threadId = String(_conversationId || "").trim();
+  const body = buildNabadStickerDmBody(id);
+  if (!threadId || !body) return;
+  closeMessagesStickersSheet();
+  const clientMessageId = newClientMessageId();
+  const viewerId = String(authSession?.user?.id || "");
+  const optimistic = {
+    id: `pending:${clientMessageId}`,
+    client_message_id: clientMessageId,
+    sender_id: viewerId,
+    body,
+    created_at: new Date().toISOString(),
+    sendStatus: "sending",
+  };
+  addOptimisticThreadMessage(optimistic);
+  patchInboxFromOutgoingMessage({
+    threadId,
+    body,
+    createdAt: optimistic.created_at,
+  });
+  feedbackMessagesComposerSend();
+  void sendThreadMessageInBackground({ clientMessageId, threadId, body });
 }
 
 function openMessagesComposerSheet() {
@@ -44700,6 +44773,17 @@ function messagesBubbleHtml(msg, viewerId, opts) {
       <div class="messagesBubbleWrap messagesBubbleWrap--voice${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${deliveredToPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
         <div class="messagesBubble messagesBubble--voice">
           ${messagesVoiceDropBubbleHtml(voiceParsed, { mine, msgId: msg?.id, mixHtml })}
+          ${metaHtml}
+        </div>
+        ${heartHtml}
+      </div>`;
+  }
+  if (parsed.type === "sticker") {
+    const stickerHtml = nabadStickerBubbleInnerHtml(parsed.stickerId);
+    return `
+      <div class="messagesBubbleWrap messagesBubbleWrap--sticker${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${deliveredToPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
+        <div class="messagesBubble messagesBubble--sticker">
+          ${stickerHtml}
           ${metaHtml}
         </div>
         ${heartHtml}
@@ -47497,6 +47581,7 @@ function syncMessagesComposerForThread() {
   input.placeholder = coach ? "Ask NabadAi Coach…" : "Write a message…";
   syncCoachComposerSheet();
   syncChatListenComposerRow();
+  syncMessagesStickersComposerRow();
 }
 
 function syncChatListenComposerRow() {
@@ -47514,6 +47599,14 @@ function syncChatListenComposerRow() {
   if (playing) sub.textContent = handle ? `Invite @${handle} to this song` : "Invite them to this song";
   else if (theyPlaying) sub.textContent = handle ? `Join what @${handle} is playing` : "Join what they're playing";
   else sub.textContent = handle ? `Pick a song with @${handle}` : "Pick a song to start together";
+}
+
+function syncMessagesStickersComposerRow() {
+  const row = document.getElementById("messagesComposerStickersRow");
+  if (!row) return;
+  const show = stickersUiEnabled() && !isCoachThreadId(_conversationId);
+  row.hidden = !show;
+  row.setAttribute("aria-hidden", show ? "false" : "true");
 }
 
 function syncCoachComposerSheet() {
@@ -47535,6 +47628,7 @@ function syncCoachComposerSheet() {
   if (attachBtn) {
     attachBtn.setAttribute("aria-label", coach ? "Coach actions" : "More send options");
   }
+  syncMessagesStickersComposerRow();
   if (!coach) return;
 
   const flow = loadCoachSignupFlow();
@@ -48751,6 +48845,17 @@ function bindMessagesPageOnce() {
         closeMessagesComposerSheet();
         void openLiveListenInviteFromChat({ prefer: "self" });
       }
+      if (action === "stickers" && !composerAction.disabled) {
+        try { haptic("light"); } catch {}
+        openMessagesStickersSheet();
+      }
+      return;
+    }
+    const stickerPick = e.target.closest("[data-nabad-sticker-id]");
+    if (stickerPick && !stickerPick.disabled) {
+      e.preventDefault();
+      const sid = String(stickerPick.getAttribute("data-nabad-sticker-id") || "").trim();
+      if (sid) void sendDmStickerMessage(sid);
       return;
     }
     const sharePick = e.target.closest("[data-messages-share-id]");
@@ -48909,6 +49014,8 @@ function bindMessagesPageOnce() {
     document.getElementById("messagesShareSheetBackdrop")?.addEventListener("click", closeMessagesShareSheet);
     document.getElementById("messagesComposerSheetClose")?.addEventListener("click", closeMessagesComposerSheet);
     document.getElementById("messagesComposerSheetBackdrop")?.addEventListener("click", closeMessagesComposerSheet);
+    document.getElementById("messagesStickersSheetClose")?.addEventListener("click", closeMessagesStickersSheet);
+    document.getElementById("messagesStickersSheetBackdrop")?.addEventListener("click", closeMessagesStickersSheet);
     document.getElementById("messagesThreadMoreSheetClose")?.addEventListener("click", closeMessagesThreadMoreSheet);
     document.getElementById("messagesThreadMoreSheetBackdrop")?.addEventListener("click", closeMessagesThreadMoreSheet);
     const shareSearchInput = document.getElementById("messagesShareSearchInput");
@@ -55691,6 +55798,12 @@ function syncMusicPanelsPlaying() {
       host.classList.toggle("isPlaying", playing);
       host.classList.toggle("isLoading", loading && !playing);
       host.classList.toggle("isActive", (active || loading));
+      if (host.matches(".upmRow")) {
+        const mq = host.querySelector(".upmTitleMarquee");
+        const chunk = host.querySelector(".upmTitleMarqueeChunk");
+        const overflow = Boolean(mq && chunk && chunk.scrollWidth > mq.clientWidth + 2);
+        host.classList.toggle("upmTitleMarquee--run", playing && overflow);
+      }
       if (btn) {
         const t = decodeDiscoverDataAttr(btn, "data-user-lib-title") || "song";
         btn.setAttribute("aria-label", `${playing ? "Pause" : loading ? "Loading" : "Play"} ${t}`);
@@ -63053,7 +63166,7 @@ function paintProfileMusicNow() {
       <div class="upmRow" role="listitem">
         <button type="button" class="upmRowPlay" ${attrs} aria-label="Play ${escapeHtml(String(t.title || "song"))}">
           <span class="upmArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />${UPM_OVERLAY_HTML}</span>
-          <span class="upmMeta"><strong dir="auto">${escapeHtml(String(t.title || "Untitled"))}</strong>${hasCounts ? `<small>${plays ? `${escapeHtml(formatStatCount(plays))} plays` : "New"}</small>` : ""}</span>
+          <span class="upmMeta">${upmTrendingRowTitleHtml(t.title)}${hasCounts ? `<small>${plays ? `${escapeHtml(formatStatCount(plays))} plays` : "New"}</small>` : ""}</span>
         </button>
         ${discoverSheetMenuBtnHtml(t, profMap, { className: "upmMenu" })}
       </div>`;
@@ -83808,6 +83921,13 @@ try {
   });
   syncNabadVibeCreateTab();
 } catch (e) { console.warn("[nabad-vibe] init", e); }
+
+try {
+  configureNabadStickers({
+    isAdmin: () => Boolean(creditsState.isAdmin),
+    isGold: () => false,
+  });
+} catch (e) { console.warn("[nabad-stickers] init", e); }
 
 try {
   configureGoldStyle({

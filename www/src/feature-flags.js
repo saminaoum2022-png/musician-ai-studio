@@ -26,6 +26,12 @@ export const NABAD_SONG_EDIT_PUBLIC_SHIPPED = false;
 export const NABAD_GOLD_PUBLIC_SHIPPED = false;
 
 /**
+ * When true: Nabad Stickers (Pack 1 Studio Pulse in DMs) are live for users.
+ * Keep false until explicit launch — staging bake uses nabadGoldUi + admin.
+ */
+export const NABAD_STICKERS_PUBLIC_SHIPPED = false;
+
+/**
  * When true: Live Listen (host-owned one-song session) is live for users.
  * Launched publicly — keep true. Staging bake is no longer required to see it.
  */

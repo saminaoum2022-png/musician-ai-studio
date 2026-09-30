@@ -28520,12 +28520,17 @@ html[data-theme="light"] .soundsStudioTempoValue{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   margin: 0;
-  color: var(--brand-violet-hover);
-  filter: none;
+  /* Creator verified — rich gold (amber/bronze, not yellow) */
+  color: #c9a04a;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35)) drop-shadow(0 0 8px rgba(166, 124, 46, 0.2));
   overflow: visible;
+}
+.profileNabadCertCheck--brand{
+  color: transparent;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 10px rgba(124, 92, 255, 0.18));
 }
 .profileNabadCertCheck[hidden]{
   display: none !important;
@@ -28540,6 +28545,52 @@ html[data-theme="light"] .soundsStudioTempoValue{
   height: 14px;
   flex: 0 0 auto;
 }
+
+/* Staging admin: toggle verified badge A/B on Profile (preview only) */
+.verifiedBadgePreviewBar{
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--tab-bar-safe, 72px) + 12px);
+  transform: translateX(-50%);
+  z-index: 99999;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: min(96vw, 380px);
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(201, 160, 74, 0.35);
+  background: rgba(12, 10, 8, 0.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+.verifiedBadgePreviewBar[hidden]{ display: none !important; }
+.verifiedBadgePreviewBarLbl{
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  padding-right: 4px;
+}
+.verifiedBadgePreviewBarBtn{
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+.verifiedBadgePreviewBarBtn.is-on{
+  border-color: rgba(201, 160, 74, 0.55);
+  background: rgba(201, 160, 74, 0.16);
+  color: #e8cc7a;
+}
+
 .profileAuraNameStack > .profileHandleSubline,
 .profileAuraNameCenterWrap > .profileHandleSubline{
   display: inline-flex;

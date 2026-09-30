@@ -325,6 +325,13 @@ import {
   readLocalGoldStyle,
   writeLocalGoldStyle,
 } from "./gold-style.js";
+import {
+  bindVerifiedBadgePreviewBar,
+  nabadVerifiedBadgeSvgMarkup,
+  paintStaticVerifiedBadgeNodes,
+  paintVerifiedBadgeElement,
+  verifiedBadgeUsesBrandGradient,
+} from "./verified-badge.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
@@ -6433,6 +6440,7 @@ function applyRoute({ passGen } = {}) {
     }
     setProfileEditing(false);
     try { syncMobileTabbarProfileAvatar(); } catch {}
+    try { syncVerifiedBadgePreviewUi(); } catch {}
     if (profileHeavy) {
       markLibraryTabDot(false);
       if (authSession?.user?.id) {
@@ -13389,14 +13397,13 @@ function discoverTrackDurationSec(track) {
   return 0;
 }
 
-const USERNAME_VERIFIED_BADGE_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 1.5 14.6 4l3.5-.4.7 3.5 3 1.9-1.6 3.2 1.6 3.2-3 1.9-.7 3.5L14.6 20 12 22.5 9.4 20l-3.5.4-.7-3.5-3-1.9 1.6-3.2L2.2 8.6l3-1.9.7-3.5L9.4 4 12 1.5Z"/><path fill="#0a0c12" d="m10.6 14.6-2.3-2.3 1.3-1.3 1 1 3.4-3.4 1.3 1.3-4.7 4.7Z"/></svg>`;
-
-/** Inline verified checkmark beside `@username` in feeds, comments, and Discover. */
+/** Inline verified mark beside `@username` in feeds, comments, and Discover. */
 function usernameVerifiedBadgeHtml(prof, opts = {}) {
   if (!isPublicProfileVerifiedForDisplay(prof)) return "";
-  const cls = String(opts.className || "profileNabadCertCheck profileNabadCertCheck--inline").trim();
+  let cls = String(opts.className || "profileNabadCertCheck profileNabadCertCheck--inline").trim();
+  if (verifiedBadgeUsesBrandGradient()) cls += " profileNabadCertCheck--brand";
   const label = String(opts.label || "Verified Nabad Creator").trim();
-  return `<span class="${escapeHtml(cls)}" role="img" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${USERNAME_VERIFIED_BADGE_SVG}</span>`;
+  return `<span class="${escapeHtml(cls)}" role="img" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${nabadVerifiedBadgeSvgMarkup()}</span>`;
 }
 
 /** `@handle` label with optional verified badge — use inside links or meta rows. */
@@ -62138,8 +62145,14 @@ function renderProfileAboutCard() { /* no-op — see renderProfileSignatureCard 
 /** True when this account should show the "Verified Nabad Creator" checkmark.
  *  Gated by Supabase `profiles.sound_certified` (server-owned) or the optional
  *  env UUID allowlist — not by username/handle. */
+/** Staging sim/device: always show verified + A/B/C/D bar on Profile (preview only, not production). */
+function verifiedBadgeStagingPreview() {
+  return isStagingNativeBuild() && Boolean(authSession?.user?.id);
+}
+
 function isNabadSoundCertified() {
   if (!authSession?.user?.id) return false;
+  if (verifiedBadgeStagingPreview()) return true;
   if (INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED) return true;
   if (profileSoundCertifiedTruthy(activeProfile?.soundCertified)) return true;
   try {
@@ -62170,6 +62183,7 @@ function profileVerifiedBadgeAnchor(friendlyDisplayName) {
 function syncUserPublicVerifiedBadge(prof) {
   const el = els.userPublicVerified;
   if (!el) return;
+  paintVerifiedBadgeElement(el);
   const show = isPublicProfileVerifiedForDisplay(prof);
   el.hidden = !show;
   el.setAttribute("aria-hidden", show ? "false" : "true");
@@ -62252,11 +62266,24 @@ function renderProfileNabadCertBadge() {
   const friendly = normalizeDisplayName(activeProfile?.displayName);
   const anchor = profileVerifiedBadgeAnchor(friendly);
   if (check) {
+    paintStaticVerifiedBadgeNodes();
     if (show && anchor && check.parentElement !== anchor) anchor.appendChild(check);
     check.hidden = !show;
     check.setAttribute("aria-hidden", show ? "false" : "true");
   }
   if (legacy) legacy.hidden = true;
+  try {
+    bindVerifiedBadgePreviewBar({ isStaging: isStagingNativeBuild() });
+  } catch {}
+}
+
+function syncVerifiedBadgePreviewUi() {
+  if (!isStagingNativeBuild()) return;
+  try {
+    paintStaticVerifiedBadgeNodes();
+    renderProfileNabadCertBadge();
+    bindVerifiedBadgePreviewBar({ isStaging: true });
+  } catch {}
 }
 
 

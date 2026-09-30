@@ -1991,9 +1991,9 @@ function renderPreviewMix(root, take) {
 
       <section class="studioChainSection">
         <span class="studioMixLabel">Tone</span>
-        <div class="studioSeg studioSeg--finish" data-studio-finish role="group" aria-label="Finish preset">
+        <div class="studioToneChips studioSeg--finish" data-studio-finish role="group" aria-label="Finish preset">
           ${FINISH_IDS.map((id) =>
-            `<button type="button" class="studioSegBtn${m.finish === id ? " isActive" : ""}" data-finish="${id}">${esc(FINISH_LABELS[id] || id)}</button>`,
+            `<button type="button" class="studioSegBtn studioToneChip${m.finish === id ? " isActive" : ""}" data-finish="${id}">${esc(FINISH_LABELS[id] || id)}</button>`,
           ).join("")}
         </div>
       </section>
@@ -2007,7 +2007,7 @@ function renderPreviewMix(root, take) {
       <section class="studioChainSection">
         <span class="studioMixLabel">Signal chain</span>
         <div class="studioChainList">
-          ${chainSliderRow("fxPitch", "Pitch correction", "Snaps toward the note, keeps it musical", "note", m, "Natural", "Tight")}
+          ${chainSliderRow("fxPitch", "Pitch correction", "Snaps toward the note, keeps it musical", "note", m, "Natural", "Tight", { highlight: true, badge: "NEW" })}
           ${chainToggleRow("fxCompress", "Compression", "Evens out loud and quiet moments", "compress", m, 40)}
           ${chainToggleRow("fxEq", "EQ", "Warmth + presence, cuts the mud", "eq", m, 50)}
           ${chainToggleRow("fxDeesser", "De-esser", "Tames harsh S's without thinning the vocal", "deess", m, 30)}
@@ -2759,17 +2759,18 @@ function chainToggleRow(key, label, sub, iconKey, m, defaultOn) {
 }
 
 /** Signal-chain row — graduated control (pitch correction isn't an on/off thing). */
-function chainSliderRow(key, label, sub, iconKey, m, loLabel, hiLabel) {
+function chainSliderRow(key, label, sub, iconKey, m, loLabel, hiLabel, opts = {}) {
   const val = mixFxValue(m, key);
+  const badge = opts.badge ? `<span class="studioChainBadge">${esc(opts.badge)}</span>` : "";
   return `
-    <div class="studioChainRow studioChainRow--slider">
+    <div class="studioChainRow studioChainRow--slider${opts.highlight ? " studioChainRow--highlight" : ""}">
       <span class="studioChainIco" aria-hidden="true">${studioIco(iconKey)}</span>
       <span class="studioChainBody">
-        <span class="studioChainTitle">${esc(label)}</span>
+        <span class="studioChainTitleRow"><span class="studioChainTitle">${esc(label)}</span>${badge}</span>
         <span class="studioChainSub">${esc(sub)}</span>
       </span>
     </div>
-    <div class="studioChainSliderRow">
+    <div class="studioChainSliderRow${opts.highlight ? " studioChainSliderRow--highlight" : ""}">
       <span class="studioChainSliderLbl">${esc(loLabel)}</span>
       <input type="range" min="0" max="100" value="${val}" data-mix="${key}" aria-label="${esc(label)}" />
       <span class="studioChainSliderLbl studioChainSliderLbl--hi">${esc(hiLabel)}</span>

@@ -49311,7 +49311,8 @@ function renderUserPublicFollowButton() {
   if (followRow) followRow.hidden = !canShow;
   if (msgBtn) msgBtn.hidden = !(canShow && MESSAGES_FEATURE_ENABLED);
   if (relationEl) {
-    const label = canShow ? userPublicRelationLabel(currentUserPublicSocialStats) : "";
+    let label = canShow ? userPublicRelationLabel(currentUserPublicSocialStats) : "";
+    if (label === FAN_COPY.statusMutual) label = "";
     relationEl.textContent = label;
     relationEl.hidden = !label;
   }

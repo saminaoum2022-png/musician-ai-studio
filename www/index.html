@@ -233,7 +233,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20261001-002457" />
+    <link rel="stylesheet" href="./styles.css?v=20261001-004518" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -5284,18 +5284,13 @@
               <span>Open their page</span>
             </span>
           </button>
-          <button type="button" class="messagesComposerSheetRow" id="messagesThreadMoreOurMusic" data-messages-thread-more="our-music" role="menuitem">
-            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--ourMusic" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
-                <rect x="3.5" y="8" width="10.5" height="10.5" rx="2.25" fill="none" stroke="currentColor" stroke-width="1.75" opacity="0.5"/>
-                <rect x="8.5" y="4.5" width="10.5" height="10.5" rx="2.25" fill="rgba(143,116,255,0.14)" stroke="currentColor" stroke-width="1.85"/>
-                <circle cx="13.75" cy="9.75" r="1.65" fill="currentColor"/>
-                <path fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" d="M11.2 12.1h5.1M11.2 14.2h3.4" opacity="0.85"/>
-              </svg>
+          <button type="button" class="messagesComposerSheetRow" id="messagesThreadMoreDelete" data-messages-thread-more="delete" role="menuitem" hidden>
+            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--planList" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M3 6h18"/><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M8 6V4h8v2"/><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M6 6l1 14h10l1-14"/></svg>
             </span>
             <span class="messagesComposerSheetCopy">
-              <strong>Our Music</strong>
-              <span>Your album together</span>
+              <strong>Delete chat</strong>
+              <span>Remove from your inbox</span>
             </span>
           </button>
           <button type="button" class="messagesComposerSheetRow" id="messagesThreadMoreClear" data-messages-thread-more="clear" role="menuitem" hidden>
@@ -5304,7 +5299,25 @@
             </span>
             <span class="messagesComposerSheetCopy">
               <strong>Clear chat</strong>
-              <span>Start Coach over</span>
+              <span>Remove messages on this device</span>
+            </span>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div id="messagesInboxThreadActionSheet" class="messagesComposerSheet messagesShareSheet" hidden aria-hidden="true">
+      <div class="messagesShareSheetBackdrop" id="messagesInboxThreadActionBackdrop"></div>
+      <section class="messagesComposerSheetCard messagesShareSheetCard" role="dialog" aria-modal="true" aria-labelledby="messagesInboxThreadActionTitle">
+        <header class="messagesShareSheetHead">
+          <h2 id="messagesInboxThreadActionTitle" class="messagesShareSheetTitle">Chat</h2>
+          <button type="button" class="messagesShareSheetClose" id="messagesInboxThreadActionClose" aria-label="Close">×</button>
+        </header>
+        <div class="messagesComposerSheetList" role="menu" aria-label="Chat actions">
+          <button type="button" class="messagesComposerSheetRow messagesComposerSheetRow--danger" id="messagesInboxThreadDeleteBtn" role="menuitem">
+            <span class="messagesComposerSheetCopy">
+              <strong>Delete chat</strong>
+              <span>Remove from your inbox</span>
             </span>
           </button>
         </div>
@@ -5793,82 +5806,9 @@
         }));
       }
       // Dynamic import so the giant app module does not block the first dots.
-      import("./src/app.js?v=20261001-002457");
+      import("./src/app.js?v=20261001-004518");
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
   
-    <div id="ourMusicSheet" class="ourMusicSheet messagesComposerSheet messagesShareSheet" hidden aria-hidden="true">
-      <div class="messagesShareSheetBackdrop" id="omDim"></div>
-      <section class="messagesShareSheetCard omSheetCard" role="dialog" aria-modal="true" aria-labelledby="omTitle">
-        <div class="omSheetGrab" aria-hidden="true"></div>
-        <div class="omScroll">
-          <div class="omArt" id="omArt" data-om-hero="mosaic">
-            <div class="omBlob omB1"></div><div class="omBlob omB2"></div><div class="omBlob omB3"></div>
-            <div class="omArtImg" id="omArtImg" aria-hidden="true"></div>
-            <div id="omHeroSplit" class="omHeroSplit" hidden>
-              <div class="omSplitSide omSplitSide--a"><span class="omSplitFace" id="omSplitFaceA"></span></div>
-              <div class="omSplitDivider" aria-hidden="true"></div>
-              <div class="omSplitSide omSplitSide--b"><span class="omSplitFace" id="omSplitFaceB"></span></div>
-            </div>
-            <div id="omHeroMosaic" class="omHeroMosaic" hidden>
-              <div class="omMosaicGrid" id="omMosaicGrid"></div>
-              <div class="omMosaicHandles" id="omMosaicHandles"></div>
-            </div>
-            <p id="omUnlockRibbon" class="omUnlockRibbon" hidden></p>
-            <div class="omOverlay">
-              <div class="omArtTop">
-                <div class="omTierBadge" id="omTierBadge" hidden></div>
-                <button type="button" id="omClose" class="messagesShareSheetClose omCloseInHero" aria-label="Close">×</button>
-              </div>
-              <div class="omBottom">
-                <div class="omKick" id="omKick">Listen together · album</div>
-                <div class="omTitle" id="omTitle">Your Album</div>
-                <div class="omBy" id="omBy"></div>
-              </div>
-            </div>
-          </div>
-          <div class="omBody" id="omBody">
-            <div class="omStatus" id="omStatus">Loading your album…</div>
-            <div class="omContent" id="omContent" hidden>
-              <div class="omChips">
-                <div class="omChip"><b id="omDays">0</b><span>days in sync</span></div>
-                <div class="omChip"><b id="omSessions">0</b><span>sessions</span></div>
-                <div class="omChip"><b id="omStreak">0</b><span>week streak</span></div>
-              </div>
-              <div class="omTlHead" id="omTlHead"><b>The tracklist</b><small>Most shared listens</small></div>
-              <div class="omGroup">
-                <div class="omTracklist" id="omTracklist"></div>
-                <div class="omEmptyTracks" id="omEmptyTracks" hidden>No shared Listen Together sessions yet.</div>
-              </div>
-              <p class="omSecLabel">Taste match</p>
-              <div class="omMatchBar" aria-hidden="true"><span id="omMatchBarFill" style="width:0%"></span></div>
-              <div class="omMatchTags" id="omMatchTags"></div>
-              <button type="button" id="omListenTogether" class="omCta">Listen together again</button>
-              <button type="button" id="omShare" class="omGhost">Share album recap</button>
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <!-- Offscreen template rasterized to a real PNG for "Share the album" (html-to-image). -->
-    <div id="omShareCard" class="omShareCard" aria-hidden="true">
-      <div class="omShareCardBg" id="omShareCardBg"></div>
-      <div class="omShareCardOverlay"></div>
-      <div class="omShareCardKick">AN ALBUM MADE FROM YOUR NABAD</div>
-      <div class="omShareCardBottom">
-        <div class="omShareCardTitle" id="omShareCardTitle">Your Album</div>
-        <div class="omShareCardBy" id="omShareCardBy"></div>
-        <div class="omShareCardStats">
-          <div class="omShareCardStat"><b id="omShareCardDays">0</b><span>days in sync</span></div>
-          <div class="omShareCardDot"></div>
-          <div class="omShareCardStat"><b id="omShareCardSessions">0</b><span>sessions</span></div>
-          <div class="omShareCardDot"></div>
-          <div class="omShareCardStat"><b id="omShareCardStreak">0</b><span>week streak</span></div>
-        </div>
-        <div class="omShareCardTags" id="omShareCardTags"></div>
-        <div class="omShareCardMark">NabadAi</div>
-      </div>
-    </div>
   </body>
 </html>

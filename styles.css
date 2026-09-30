@@ -42091,6 +42091,13 @@ body.coachComposerMode .messagesComposerSheetListDm{
   opacity: 0.52;
   cursor: default;
 }
+.messagesComposerSheetRow--danger{
+  border-color: rgba(255,107,107,0.22);
+  background: rgba(255,80,80,0.08);
+}
+.messagesComposerSheetRow--danger strong{
+  color: #ff8a8a;
+}
 .messagesComposerSheetIcon{
   flex: 0 0 auto;
   width: 44px;

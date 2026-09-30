@@ -344,7 +344,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20261001-002457";
+const APP_BUILD = "20261001-004518";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -38906,493 +38906,9 @@ function wireUserPublicHeaderActionsOnce() {
   });
 }
 
-/* ── "Our Music Together" — a friends-only summary of shared Listen Together
-   history, presented as a small generated "album" instead of a stats list.
-   Built as a plain overlay sheet (not a router route) to keep this additive
-   and low-risk on top of the existing route logic. ── */
-const OUR_MUSIC_ALBUM_TITLES = {
-  "arabic pop": ["Late Night, Same Song", "Habibi, on Repeat", "Two Phones, One Playlist"],
-  "romantic": ["Slow Dance, No Music Video", "Say It in a Song Instead", "The Playlist We Don't Explain"],
-  "piano": ["Keys Between Us", "Soft Hours"],
-  "sad": ["We Cried to the Same Track", "Rainy Day Duet"],
-  "dabke": ["Same Beat, Different Room", "Dabke at 1AM"],
-  "default": ["An Album Only We Have", "Vol. 1: Us", "The Playlist That Started It"],
-};
-function ourMusicAlbumTitle(sharedTags, seed) {
-  const key = String(sharedTags?.[0] || "").trim().toLowerCase();
-  const bank = OUR_MUSIC_ALBUM_TITLES[key] || OUR_MUSIC_ALBUM_TITLES.default;
-  const idx = Math.abs(hashStringToInt(seed)) % bank.length;
-  return bank[idx];
-}
-function hashStringToInt(s) {
-  const str = String(s || "");
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
-  return h;
-}
-/** Deterministic, free (no AI call) cover for v1 — two hues picked from a fixed hash of the pair, so
- *  the same two people always get the same look. Swapping this for a real generated cover (the same
- *  Visual Director pipeline used for song covers) is a deliberate follow-up, not done here. */
-function paintOurMusicArt(el, pairKey) {
-  if (!el) return;
-  const h1 = ((hashStringToInt(pairKey) % 360) + 360) % 360;
-  const h2 = (h1 + 130 + (Math.abs(hashStringToInt(pairKey + "b")) % 60)) % 360;
-  el.style.setProperty("--om-h1", h1);
-  el.style.setProperty("--om-h2", h2);
-}
 
-const OUR_MUSIC_COVER_CACHE_PREFIX = "nabad_om_cover:v3:";
-/** The cover's visual "tier" grows the longer a pair stays in sync — mirrors the
- *  thresholds in api/_lib/our-music-stats.js (server is the real source of truth;
- *  this copy is only used client-side to know when to bust the localStorage cache
- *  and re-fetch a richer cover). */
-const OUR_MUSIC_TIERS = [
-  { id: "spark", minDays: 0, label: "Spark" },
-  { id: "glow", minDays: 7, label: "Glow" },
-  { id: "constellation", minDays: 30, label: "Constellation" },
-  { id: "aurora", minDays: 90, label: "Aurora" },
-];
-function ourMusicTierForDays(daysInSync) {
-  const d = Math.max(0, Number(daysInSync) || 0);
-  let cur = OUR_MUSIC_TIERS[0];
-  for (const t of OUR_MUSIC_TIERS) if (d >= t.minDays) cur = t;
-  return cur;
-}
-function ourMusicNextTier(daysInSync) {
-  const d = Math.max(0, Number(daysInSync) || 0);
-  return OUR_MUSIC_TIERS.find((t) => t.minDays > d) || null;
-}
-/** Small "Glow · 3 days to Constellation" pill over the art, so the tier system
- *  (the payoff for staying in sync) is actually visible, not just a hidden prompt tweak. */
-function syncOurMusicTierBadge(daysInSync) {
-  const el = document.getElementById("omTierBadge");
-  if (!el) return;
-  const tier = ourMusicTierForDays(daysInSync);
-  const days = Math.max(0, Number(daysInSync) || 0);
-  el.textContent = `${tier.label} · ${days}d`;
-  el.classList.toggle("omTierBadge--gold", tier.id === "constellation" || tier.id === "aurora");
-  el.hidden = false;
-}
-function ourMusicInitial(username) {
-  const u = String(username || "").trim().replace(/^@/, "");
-  return u ? u.charAt(0).toUpperCase() : "?";
-}
-function setOurMusicSplitFace(el, profile = {}) {
-  if (!el) return;
-  const img = String(profile.artistAvatar || profile.avatar || "").trim();
-  el.textContent = "";
-  if (img && (img.startsWith("data:") || /^https?:\/\//i.test(img))) {
-    try { el.style.backgroundImage = `url("${img.replace(/"/g, "%22")}")`; } catch { el.style.backgroundImage = ""; }
-    el.style.backgroundSize = "cover";
-    el.style.backgroundPosition = "center";
-  } else {
-    el.style.backgroundImage = "";
-    el.textContent = ourMusicInitial(profile.username);
-  }
-}
-function resetOurMusicHeroLayers() {
-  const art = document.getElementById("omArt");
-  const split = document.getElementById("omHeroSplit");
-  const mosaic = document.getElementById("omHeroMosaic");
-  const ribbon = document.getElementById("omUnlockRibbon");
-  if (art) art.setAttribute("data-om-hero", "mosaic");
-  if (split) split.hidden = true;
-  if (mosaic) mosaic.hidden = true;
-  if (ribbon) ribbon.hidden = true;
-}
-function paintOurMusicMosaic(tracklist, meUser, otherUser) {
-  const grid = document.getElementById("omMosaicGrid");
-  const handles = document.getElementById("omMosaicHandles");
-  if (!grid) return;
-  const tiles = Array.isArray(tracklist) ? tracklist.slice(0, 4) : [];
-  grid.innerHTML = "";
-  for (let i = 0; i < 4; i++) {
-    const t = tiles[i];
-    const div = document.createElement("div");
-    div.className = "omMosaicTile";
-    const cover = String(t?.cover || "").trim();
-    if (cover) {
-      try { div.style.backgroundImage = `url("${cover.replace(/"/g, "%22")}")`; } catch {}
-    } else {
-      const h = ((hashStringToInt(String(i) + String(t?.title || "om")) % 360) + 360) % 360;
-      div.style.background = `linear-gradient(145deg, hsl(${h} 55% 38%), hsl(${(h + 40) % 360} 45% 18%))`;
-    }
-    grid.appendChild(div);
-  }
-  if (handles) {
-    handles.innerHTML = `<span class="omMosaicHandle">${escapeHtml(ourMusicInitial(meUser))}</span><span class="omMosaicHandle">${escapeHtml(ourMusicInitial(otherUser))}</span>`;
-  }
-}
-function applyOurMusicHeroMode(data, partner = {}) {
-  const art = document.getElementById("omArt");
-  if (!art || !data) return;
-  const mode = String(data.coverHero || "mosaic").trim();
-  art.setAttribute("data-om-hero", mode);
-  const kick = document.getElementById("omKick");
-  const split = document.getElementById("omHeroSplit");
-  const mosaic = document.getElementById("omHeroMosaic");
-  const ribbon = document.getElementById("omUnlockRibbon");
-  const me = data.meProfile || {};
-  const other = data.otherProfile || {};
-  const targetId = String(partner.targetUserId || other.userId || "").trim().toLowerCase();
-  const myId = String(authSession?.user?.id || "").trim().toLowerCase();
-  const meIsA = [myId, targetId].sort()[0] === myId;
-  const otherFace = {
-    ...other,
-    avatar: String(partner.avatar || other.avatar || "").trim() || other.avatar,
-    username: other.username || partner.handle || "",
-  };
-  const meFace = { ...me, username: me.username || "" };
+/* Our Music Together UI removed — re-enable from git history when ready. */
 
-  if (mode === "duo") {
-    if (split) split.hidden = true;
-    if (mosaic) mosaic.hidden = true;
-    if (ribbon) ribbon.hidden = true;
-    if (kick) kick.textContent = "Duo cover";
-  } else if (mode === "split") {
-    if (split) split.hidden = false;
-    if (mosaic) mosaic.hidden = true;
-    setOurMusicSplitFace(document.getElementById("omSplitFaceA"), meIsA ? meFace : otherFace);
-    setOurMusicSplitFace(document.getElementById("omSplitFaceB"), meIsA ? otherFace : meFace);
-    if (ribbon) {
-      ribbon.hidden = false;
-      ribbon.innerHTML = "Both need an <em>Artist Avatar</em> for the AI duo cover";
-    }
-    if (kick) kick.textContent = "Listen together · album";
-  } else {
-    if (split) split.hidden = true;
-    if (mosaic) mosaic.hidden = false;
-    paintOurMusicMosaic(data.tracklist, me.username, otherFace.username);
-    if (ribbon) ribbon.hidden = true;
-    if (kick) kick.textContent = "From your sessions";
-  }
-}
-let _ourMusicLastData = null;
-let _ourMusicPartner = null;
-/** Duo-story "Our Music Together" cover (v3): Gemini only when BOTH friends have
- *  an Artist Avatar. Cached per pair + (shared tags + tier). On skip/failure the
- *  gradient blobs from paintOurMusicArt() stay as the cover — no abstract regen. */
-let _ourMusicCoverGen = 0;
-function clearOurMusicCoverImg(imgEl) {
-  if (!imgEl) return;
-  try { imgEl.style.backgroundImage = ""; } catch {}
-  try { imgEl.classList.remove("omArtImg--visible"); } catch {}
-  try { document.getElementById("omArt")?.classList.remove("omArt--coverLoaded"); } catch {}
-}
-async function loadOurMusicGeneratedCover(imgEl, pairKey, otherId, data) {
-  if (!imgEl || !otherId) return;
-  if (String(data?.coverHero || "") !== "duo") return;
-  const gen = ++_ourMusicCoverGen;
-  // Always wipe the previous friend's cover before painting this pair — the sheet
-  // is a single DOM node reused across conversations.
-  clearOurMusicCoverImg(imgEl);
-  const sharedTags = Array.isArray(data?.sharedTags) ? data.sharedTags : [];
-  const tagsKey = sharedTags.slice().sort().join(",");
-  const tierId = ourMusicTierForDays(data?.daysInSync).id;
-  syncOurMusicTierBadge(data?.daysInSync);
-  const cacheKey = `${OUR_MUSIC_COVER_CACHE_PREFIX}${pairKey}`;
-  const sig = `duo|${tagsKey}|${tierId}`;
-  try {
-    const cachedRaw = localStorage.getItem(cacheKey);
-    if (cachedRaw) {
-      const cached = JSON.parse(cachedRaw);
-      if (cached?.dataUrl && cached?.sig === sig) {
-        if (gen !== _ourMusicCoverGen) return;
-        imgEl.style.backgroundImage = `url('${cached.dataUrl}')`;
-        imgEl.classList.add("omArtImg--visible");
-        document.getElementById("omArt")?.classList.add("omArt--coverLoaded");
-        return;
-      }
-    }
-  } catch {}
-
-  try {
-    const token = getSupabaseAuthToken();
-    const r = await fetch(
-      apiUrl(`/api/music/our-music-cover?userId=${encodeURIComponent(otherId)}`),
-      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
-    );
-    if (gen !== _ourMusicCoverGen) return;
-    if (!r.ok) return;
-    const resp = await r.json().catch(() => null);
-    if (gen !== _ourMusicCoverGen) return;
-    // skipped: need_both_avatars — keep gradient, do not cache a failure
-    if (!resp?.ok || !resp?.dataUrl) return;
-    imgEl.style.backgroundImage = `url('${resp.dataUrl}')`;
-    imgEl.classList.add("omArtImg--visible");
-    document.getElementById("omArt")?.classList.add("omArt--coverLoaded");
-    try {
-      localStorage.setItem(cacheKey, JSON.stringify({ dataUrl: resp.dataUrl, sig, ts: Date.now() }));
-    } catch {}
-  } catch (e) {
-    console.warn("[our-music] cover skipped", e?.message || e);
-  }
-}
-
-function ourMusicCachedCoverDataUrl(pairKey) {
-  try {
-    const raw = localStorage.getItem(`${OUR_MUSIC_COVER_CACHE_PREFIX}${pairKey}`);
-    if (!raw) return "";
-    const parsed = JSON.parse(raw);
-    return String(parsed?.dataUrl || "");
-  } catch {
-    return "";
-  }
-}
-
-/** Rasterize the offscreen #omShareCard template (cover/gradient + stats) into a real PNG. */
-async function buildOurMusicShareCardDataUrl({ title, by, pairKey, data }) {
-  const card = document.getElementById("omShareCard");
-  if (!card) return "";
-
-  const bg = document.getElementById("omShareCardBg");
-  const coverDataUrl = ourMusicCachedCoverDataUrl(pairKey);
-  if (bg) {
-    if (coverDataUrl) {
-      bg.style.backgroundImage = `url('${coverDataUrl}')`;
-    } else {
-      const h1 = ((hashStringToInt(pairKey) % 360) + 360) % 360;
-      const h2 = (h1 + 130 + (Math.abs(hashStringToInt(pairKey + "b")) % 60)) % 360;
-      bg.style.backgroundImage = "none";
-      bg.style.background = `radial-gradient(circle at 25% 20%, hsl(${h1} 85% 55%), transparent 60%),` +
-        `radial-gradient(circle at 80% 70%, hsl(${h2} 75% 50%), transparent 60%), #0e0a1c`;
-    }
-  }
-  const titleEl = document.getElementById("omShareCardTitle");
-  if (titleEl) titleEl.textContent = title || "Your Album";
-  const byEl = document.getElementById("omShareCardBy");
-  if (byEl) byEl.textContent = by || "us";
-  const daysEl = document.getElementById("omShareCardDays");
-  if (daysEl) daysEl.textContent = String(Math.max(0, Number(data?.daysInSync) || 0));
-  const sessEl = document.getElementById("omShareCardSessions");
-  if (sessEl) sessEl.textContent = String(Math.max(0, Number(data?.sessionCount) || 0));
-  const streakEl = document.getElementById("omShareCardStreak");
-  if (streakEl) streakEl.textContent = String(Math.max(0, Number(data?.streakWeeks) || 0));
-  const tagsEl = document.getElementById("omShareCardTags");
-  if (tagsEl) {
-    const tags = (Array.isArray(data?.sharedTags) ? data.sharedTags : []).slice(0, 3);
-    tagsEl.innerHTML = tags.map((t) => `<span class="omTag">${escapeHtml(t)}</span>`).join("");
-  }
-
-  const mod = await import(/* webpackIgnore: true */ "https://esm.sh/html-to-image@1.11.11");
-  const toPng = mod?.toPng;
-  if (typeof toPng !== "function") throw new Error("toPng unavailable");
-  return await toPng(card, { pixelRatio: 3, cacheBust: true, backgroundColor: "#0e0a1c" });
-}
-
-/** "Share the album" — a real rendered card (cover + stats). Native iOS goes through
- *  the Capacitor Share plugin (write to disk, then present the system share sheet) —
- *  the same proven path the video/song share flows already use; raw navigator.share
- *  with a File does not reliably work inside this app's WKWebView shell. Falls back
- *  to plain text if the card can't be built or nothing above works. */
-async function shareOurMusicAlbum({ title, by, pairKey, data }) {
-  const text = `${title} — ${by}, ${Math.max(0, Number(data?.daysInSync) || 0)} days in sync on NabadAi 🎵`;
-  let dataUrl = "";
-  try {
-    dataUrl = await buildOurMusicShareCardDataUrl({ title, by, pairKey, data });
-  } catch (e) {
-    console.warn("[our-music] share card build failed", e?.message || e);
-  }
-
-  if (dataUrl) {
-    try {
-      const blob = await dataUrlToBlob(dataUrl);
-      if (isCapacitorNativeAuth()) {
-        const { filePath } = await writeBlobToNativeCache(blob, "our-music-together.png");
-        await presentNativeIosShareSheetForFile(filePath);
-        return;
-      }
-      const file = new File([blob], "our-music-together.png", { type: "image/png" });
-      if (navigator.share && (typeof navigator.canShare !== "function" || navigator.canShare({ files: [file] }))) {
-        await navigator.share({ files: [file], title, text });
-        return;
-      }
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = "our-music-together.png";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      showToast?.("Saved — ready to share.", { durationMs: 2400 });
-      return;
-    } catch (e) {
-      if (shareSheetCanceledError(e)) return;
-      console.warn("[our-music] image share failed, falling back to text", e?.message || e);
-    }
-  }
-
-  try {
-    if (navigator.share) {
-      await navigator.share({ title, text });
-    } else {
-      await navigator.clipboard?.writeText(text);
-      showToast?.("Copied to share", { durationMs: 2200 });
-    }
-  } catch {}
-}
-let _ourMusicSheetBound = false;
-function bindOurMusicSheetOnce() {
-  if (_ourMusicSheetBound) return;
-  _ourMusicSheetBound = true;
-  const sheet = document.getElementById("ourMusicSheet");
-  document.getElementById("omDim")?.addEventListener("click", closeOurMusicSheet);
-  document.getElementById("omClose")?.addEventListener("click", closeOurMusicSheet);
-  sheet?.addEventListener("click", (e) => {
-    const row = e.target?.closest?.("[data-om-play]");
-    if (!row) return;
-    const url = decodeURIComponent(row.getAttribute("data-om-play") || "");
-    const title = decodeURIComponent(row.getAttribute("data-om-title") || "Song");
-    const art = decodeURIComponent(row.getAttribute("data-om-art") || "");
-    if (!url) return;
-    haptic("light");
-    void playLibraryUrlOnPlayer(url, title, art, { openPlayer: false });
-  });
-}
-function closeOurMusicSheet() {
-  const sheet = document.getElementById("ourMusicSheet");
-  if (!sheet) return;
-  sheet.hidden = true;
-  sheet.setAttribute("aria-hidden", "true");
-  // Invalidate any in-flight cover fetch + clear so the next open never flashes the last pair.
-  _ourMusicCoverGen += 1;
-  clearOurMusicCoverImg(document.getElementById("omArtImg"));
-  resetOurMusicHeroLayers();
-  _ourMusicLastData = null;
-  _ourMusicPartner = null;
-}
-async function openOurMusicSheet(targetUserId, partner = {}) {
-  bindOurMusicSheetOnce();
-  const sheet = document.getElementById("ourMusicSheet");
-  if (!sheet) return;
-  sheet.hidden = false;
-  sheet.setAttribute("aria-hidden", "false");
-  _ourMusicPartner = {
-    targetUserId: String(targetUserId || "").trim(),
-    handle: String(partner.handle || "").trim(),
-    avatar: String(partner.avatar || "").trim(),
-  };
-  const statusEl = document.getElementById("omStatus");
-  const contentEl = document.getElementById("omContent");
-  if (statusEl) { statusEl.hidden = false; statusEl.textContent = "Loading your album…"; }
-  if (contentEl) contentEl.hidden = true;
-  resetOurMusicHeroLayers();
-  const myId = String(authSession?.user?.id || "").trim();
-  const pairKey = [myId, targetUserId].sort().join(":");
-  paintOurMusicArt(document.getElementById("omArt"), pairKey);
-  // Wipe any previous friend's cover immediately (don't wait for the fetch).
-  clearOurMusicCoverImg(document.getElementById("omArtImg"));
-  const handle = String(partner.handle || "").replace(/^@/, "");
-  const byEl = document.getElementById("omBy");
-  if (byEl) byEl.textContent = handle ? `@you & @${handle}` : "You & your friend";
-  const titleEl = document.getElementById("omTitle");
-  if (titleEl) titleEl.textContent = "Your Album";
-  const tierBadge = document.getElementById("omTierBadge");
-  if (tierBadge) tierBadge.hidden = true;
-
-  let data = null;
-  try {
-    const token = getSupabaseAuthToken();
-    const r = await fetch(apiUrl(`/api/music/our-music?userId=${encodeURIComponent(targetUserId)}`), {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (r.ok) data = await r.json().catch(() => null);
-  } catch {}
-
-  if (!data) {
-    if (statusEl) statusEl.textContent = "Couldn't load your album — check your connection and try again.";
-    return;
-  }
-
-  _ourMusicLastData = data;
-  applyOurMusicHeroMode(data, _ourMusicPartner);
-  syncOurMusicTierBadge(data.daysInSync);
-  if (data.coverHero === "duo") {
-    void loadOurMusicGeneratedCover(document.getElementById("omArtImg"), pairKey, targetUserId, data);
-  }
-
-  if (titleEl) titleEl.textContent = ourMusicAlbumTitle(data.sharedTags, pairKey);
-  if (statusEl) statusEl.hidden = true;
-  if (contentEl) contentEl.hidden = false;
-
-  const daysEl = document.getElementById("omDays");
-  if (daysEl) daysEl.textContent = String(Math.max(0, Number(data.daysInSync) || 0));
-  const sessEl = document.getElementById("omSessions");
-  if (sessEl) sessEl.textContent = String(Math.max(0, Number(data.sessionCount) || 0));
-  const streakEl = document.getElementById("omStreak");
-  if (streakEl) streakEl.textContent = String(Math.max(0, Number(data.streakWeeks) || 0));
-
-  const trkAttrs = (t) => {
-    const url = String(t?.url || "").trim();
-    return url
-      ? `data-om-play="${encodeURIComponent(url)}" data-om-title="${encodeURIComponent(t.title || "Song")}" data-om-art="${encodeURIComponent(t.cover || "")}"`
-      : "";
-  };
-  const trkArtCss = (t) => {
-    const cover = String(t?.cover || "").trim();
-    return cover ? `url("${cover.replace(/"/g, "%22")}") center/cover` : "linear-gradient(135deg,#402030,#a04a6a)";
-  };
-
-  const allTracks = Array.isArray(data.tracklist) ? data.tracklist : [];
-
-  const tracklistEl = document.getElementById("omTracklist");
-  const emptyEl = document.getElementById("omEmptyTracks");
-  const tlHead = document.getElementById("omTlHead");
-  if (tracklistEl) {
-    tracklistEl.innerHTML = allTracks.map((t, i) => {
-      const sub = i === 0 && t.count
-        ? `<small class="omTrkMeta">Most replayed · ${t.count}×</small>`
-        : (t.count ? `<small class="omTrkMeta">${t.count}× together</small>` : "");
-      return `
-      <div class="omTrk${t.url ? "" : " omTrk--noPlay"}" ${trkAttrs(t)}>
-        <span class="omTrkNo">${i + 1}</span>
-        <span class="omTrkArt" style="background:${trkArtCss(t)}"></span>
-        <span class="omTrkTxt">${escapeHtml(t.title || "Song")}${sub}</span>
-      </div>`;
-    }).join("");
-    tracklistEl.hidden = !allTracks.length;
-  }
-  if (tlHead) tlHead.hidden = !allTracks.length;
-  if (emptyEl) emptyEl.hidden = Boolean(allTracks.length);
-
-  const pct = Math.max(0, Math.min(100, Number(data.matchPct) || 0));
-  const barFill = document.getElementById("omMatchBarFill");
-  if (barFill) barFill.style.width = `${pct}%`;
-  const tagsEl = document.getElementById("omMatchTags");
-  if (tagsEl) {
-    const tags = Array.isArray(data.sharedTags) ? data.sharedTags : [];
-    const bits = tags.slice(0, 4).map((t) => `<span class="omTag">${escapeHtml(t)}</span>`);
-    if (pct > 0) bits.push(`<span class="omTag">${pct}% match</span>`);
-    tagsEl.innerHTML = bits.length
-      ? bits.join("")
-      : `<span class="omTag omTag--muted">Not enough shared plays yet</span>`;
-  }
-
-  const listenBtn = document.getElementById("omListenTogether");
-  if (listenBtn) {
-    listenBtn.onclick = () => {
-      haptic("light");
-      closeOurMusicSheet();
-      const top = allTracks[0];
-      const track = top?.url
-        ? { url: top.url, title: top.title || "Song", artUrl: top.cover || "", songId: String(top.songId || "") }
-        : null;
-      void openLiveListenInviteFromChat(track ? { track } : {});
-    };
-  }
-
-  const shareBtn = document.getElementById("omShare");
-  if (shareBtn) {
-    shareBtn.onclick = () => {
-      haptic("light");
-      void shareOurMusicAlbum({
-        title: String(titleEl?.textContent || "Our Album").trim(),
-        by: String(byEl?.textContent || "us").trim(),
-        pairKey,
-        data,
-      });
-    };
-  }
-}
 
 function syncUserPublicSegmentUi() {
   const isMusic = _userPublicSegment === "music";
@@ -39986,6 +39502,96 @@ let _messagesThreadLeaving = false;
 let _messagesThreadNeedsInitialScroll = false;
 const MESSAGES_NAV_PREF_KEY = "mas:messagesNavPrefetch:v1";
 const MESSAGES_INBOX_CACHE_KEY = "mas:messagesInboxCache:v1";
+const MESSAGES_HIDDEN_THREADS_KEY = "mas:dmHiddenThreads:v1";
+
+function readHiddenThreadAtMap() {
+  try {
+    const raw = localStorage.getItem(MESSAGES_HIDDEN_THREADS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberHiddenThreadAt(threadId, hiddenAt = new Date().toISOString()) {
+  const tid = String(threadId || "").trim();
+  if (!tid) return;
+  const map = readHiddenThreadAtMap();
+  map[tid] = String(hiddenAt || new Date().toISOString());
+  try {
+    localStorage.setItem(MESSAGES_HIDDEN_THREADS_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+function isThreadHiddenFromInbox(thread) {
+  const tid = String(thread?.threadId || "").trim();
+  if (!tid) return false;
+  const hid = readHiddenThreadAtMap()[tid];
+  if (!hid) return false;
+  const lastMs = new Date(thread?.lastMessageAt || 0).getTime();
+  const hidMs = new Date(hid).getTime();
+  return Number.isFinite(lastMs) && Number.isFinite(hidMs) && lastMs <= hidMs;
+}
+
+let _inboxActionThreadId = "";
+
+function closeMessagesInboxThreadActionSheet() {
+  const sheet = document.getElementById("messagesInboxThreadActionSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("messagesInboxThreadActionOpen");
+  _inboxActionThreadId = "";
+}
+
+function openMessagesInboxThreadActionSheet(threadId) {
+  const tid = String(threadId || "").trim();
+  if (!tid || isCoachThreadId(tid)) return;
+  _inboxActionThreadId = tid;
+  const sheet = document.getElementById("messagesInboxThreadActionSheet");
+  if (!sheet) return;
+  const thread = (_messagesInboxState.threads || []).find((t) => String(t?.threadId || "") === tid);
+  const handle = String(thread?.partnerUsername || "").replace(/^@/, "").trim();
+  const title = document.getElementById("messagesInboxThreadActionTitle");
+  if (title) title.textContent = handle ? `@${handle}` : "Chat";
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("messagesInboxThreadActionOpen");
+}
+
+async function hideDmThreadFromInbox(threadId) {
+  const tid = String(threadId || "").trim();
+  if (!tid || isCoachThreadId(tid)) return false;
+  const now = new Date().toISOString();
+  let hiddenAt = now;
+  try {
+    const data = await messagesApi("/api/messages", {
+      method: "POST",
+      timeoutMs: 12000,
+      body: JSON.stringify({ action: "hide_thread", threadId: tid }),
+    });
+    if (data?.hiddenAt) hiddenAt = String(data.hiddenAt);
+  } catch {
+    /* local hide still works if dm_thread_hides SQL not applied yet */
+  }
+  rememberHiddenThreadAt(tid, hiddenAt);
+  _messagesInboxState.threads = (_messagesInboxState.threads || []).filter(
+    (t) => String(t?.threadId || "") !== tid,
+  );
+  try { saveMessagesInboxToStorage(); } catch {}
+  if (String(_conversationId || "") === tid) {
+    leaveMessagesThreadRoute(() => {
+      try { location.hash = "#/messages"; } catch {}
+    });
+    _conversationId = "";
+    _messagesList = [];
+  }
+  try { renderMessagesInbox(); } catch {}
+  void refreshMessagesUnreadBadge({ force: true });
+  try { showToast("Chat deleted", { durationMs: 2200 }); } catch {}
+  return true;
+}
 const MESSAGES_THREAD_CACHE_STORAGE_KEY = "mas:messagesThreadCache:v1";
 const MESSAGES_INBOX_CACHE_TTL_MS = 30 * 60 * 1000;
 const MESSAGES_THREAD_CACHE_MAX_THREADS = 12;
@@ -44275,7 +43881,9 @@ function renderMessagesInbox() {
   const requests = Array.isArray(_messagesInboxState.requests) ? _messagesInboxState.requests : [];
   const sentRequests = Array.isArray(_messagesInboxState.sentRequests) ? _messagesInboxState.sentRequests : [];
   const visibleRequests = requests.filter((req) => inboxMatchesQuery(req?.fromUsername, req?.body, "request"));
-  const visibleThreads = threads.filter((t) => inboxMatchesQuery(t?.partnerUsername, t?.lastMessage));
+  const visibleThreads = threads
+    .filter((t) => !isThreadHiddenFromInbox(t))
+    .filter((t) => inboxMatchesQuery(t?.partnerUsername, t?.lastMessage));
   const visibleSent = sentRequests.filter((req) => inboxMatchesQuery(req?.toUsername, req?.body, "waiting"));
   const showCoach = inboxMatchesQuery("nabadai coach", "coach", "nabad");
   const coachRow = showCoach ? coachInboxRowHtml() : "";
@@ -45666,15 +45274,15 @@ function syncCoachThreadClearBtn(show = isCoachThreadId(_conversationId)) {
 function syncMessagesThreadMoreSheet(coach = isCoachThreadId(_conversationId) || _chatHeaderUser?.userId === COACH_SENDER_ID) {
   const isCoach = Boolean(coach);
   const profileRow = document.getElementById("messagesThreadMoreProfile");
-  const ourMusicRow = document.getElementById("messagesThreadMoreOurMusic");
+  const deleteRow = document.getElementById("messagesThreadMoreDelete");
   const clearRow = document.getElementById("messagesThreadMoreClear");
   if (profileRow) {
     profileRow.hidden = isCoach;
     profileRow.setAttribute("aria-hidden", isCoach ? "true" : "false");
   }
-  if (ourMusicRow) {
-    ourMusicRow.hidden = isCoach;
-    ourMusicRow.setAttribute("aria-hidden", isCoach ? "true" : "false");
+  if (deleteRow) {
+    deleteRow.hidden = isCoach;
+    deleteRow.setAttribute("aria-hidden", isCoach ? "true" : "false");
   }
   if (clearRow) {
     clearRow.hidden = !isCoach;
@@ -45720,7 +45328,7 @@ function resetCoachChat() {
   }
   try { renderMessagesInbox(); } catch {}
   void refreshMessagesUnreadBadge({ force: true });
-  try { showToast("Coach chat cleared", { icon: "✨", durationMs: 2400 }); } catch {}
+  try { showToast("Chat cleared", { icon: "✨", durationMs: 2400 }); } catch {}
   return true;
 }
 let _coachActionSheetOpen = false;
@@ -48705,6 +48313,23 @@ function bindMessagesPageOnce() {
     if (!threadRow || e.target.closest("[data-messages-request-accept],[data-messages-request-decline]")) return;
     const tid = String(threadRow.getAttribute("data-messages-thread") || "").trim();
     if (tid && !isCoachThreadId(tid)) void prefetchThreadMessagesQuiet(tid);
+    if (
+      threadRow.classList.contains("messagesRow")
+      && !threadRow.classList.contains("messagesRow--coach")
+      && threadRow.closest("#messagesPage")
+    ) {
+      window.clearTimeout(_inboxRowLongPressTimer);
+      _inboxRowLongPressId = tid;
+      _inboxLongPressX = e.clientX;
+      _inboxLongPressY = e.clientY;
+      _inboxRowLongPressTimer = window.setTimeout(() => {
+        _inboxRowLongPressTimer = 0;
+        if (_inboxRowLongPressId !== tid) return;
+        _inboxLongPressConsumed = true;
+        try { haptic("medium"); } catch {}
+        openMessagesInboxThreadActionSheet(tid);
+      }, 520);
+    }
   }, { passive: true });
 
   const LIST_PRESS_SLOP_PX = 10;
@@ -48712,6 +48337,11 @@ function bindMessagesPageOnce() {
   let _listPressRow = null;
   let _listPressX = 0;
   let _listPressY = 0;
+  let _inboxRowLongPressTimer = 0;
+  let _inboxRowLongPressId = "";
+  let _inboxLongPressConsumed = false;
+  let _inboxLongPressX = 0;
+  let _inboxLongPressY = 0;
   const clearListRowPress = () => {
     document.querySelectorAll(".messagesRow.is-pressing, .activityRow.is-pressing").forEach((el) => {
       el.classList.remove("is-pressing");
@@ -48736,6 +48366,15 @@ function bindMessagesPageOnce() {
     row.classList.add("is-pressing");
   }, { passive: true, capture: true });
   document.addEventListener("pointermove", (e) => {
+    if (_inboxRowLongPressTimer) {
+      const dx = e.clientX - _inboxLongPressX;
+      const dy = e.clientY - _inboxLongPressY;
+      if ((dx * dx + dy * dy) >= LIST_PRESS_SLOP_PX * LIST_PRESS_SLOP_PX) {
+        window.clearTimeout(_inboxRowLongPressTimer);
+        _inboxRowLongPressTimer = 0;
+        _inboxRowLongPressId = "";
+      }
+    }
     if (!_listPressRow) return;
     const dx = e.clientX - _listPressX;
     const dy = e.clientY - _listPressY;
@@ -48743,6 +48382,9 @@ function bindMessagesPageOnce() {
     clearListRowPress();
   }, { passive: true, capture: true });
   document.addEventListener("pointerup", () => {
+    window.clearTimeout(_inboxRowLongPressTimer);
+    _inboxRowLongPressTimer = 0;
+    _inboxRowLongPressId = "";
     const row = _listPressRow;
     _listPressRow = null;
     if (!row) return;
@@ -48835,6 +48477,10 @@ function bindMessagesPageOnce() {
     const threadRow = e.target.closest("[data-messages-thread]");
     if (threadRow && !e.target.closest("[data-messages-request-accept],[data-messages-request-decline]")) {
       e.preventDefault();
+      if (_inboxLongPressConsumed) {
+        _inboxLongPressConsumed = false;
+        return;
+      }
       const tid = threadRow.getAttribute("data-messages-thread");
       if (tid) {
         try { haptic("light"); } catch {}
@@ -48903,12 +48549,11 @@ function bindMessagesPageOnce() {
         openChatPartnerProfile();
         return;
       }
-      if (action === "our-music") {
-        const u = _chatHeaderUser;
-        const targetId = String(u?.userId || "").trim();
-        if (!targetId || targetId === COACH_SENDER_ID) return;
-        try { haptic("light"); } catch {}
-        void openOurMusicSheet(targetId, { handle: u?.username || "", avatar: u?.avatarUrl || "" });
+      if (action === "delete") {
+        const tid = String(_conversationId || "").trim();
+        if (!tid || isCoachThreadId(tid)) return;
+        try { haptic("medium"); } catch {}
+        void hideDmThreadFromInbox(tid);
         return;
       }
       if (action === "clear") {
@@ -49120,6 +48765,15 @@ function bindMessagesPageOnce() {
     document.getElementById("messagesStickersSheetBackdrop")?.addEventListener("click", closeMessagesStickersSheet);
     document.getElementById("messagesThreadMoreSheetClose")?.addEventListener("click", closeMessagesThreadMoreSheet);
     document.getElementById("messagesThreadMoreSheetBackdrop")?.addEventListener("click", closeMessagesThreadMoreSheet);
+    document.getElementById("messagesInboxThreadActionClose")?.addEventListener("click", closeMessagesInboxThreadActionSheet);
+    document.getElementById("messagesInboxThreadActionBackdrop")?.addEventListener("click", closeMessagesInboxThreadActionSheet);
+    document.getElementById("messagesInboxThreadDeleteBtn")?.addEventListener("click", () => {
+      const tid = String(_inboxActionThreadId || "").trim();
+      closeMessagesInboxThreadActionSheet();
+      if (!tid) return;
+      try { haptic("medium"); } catch {}
+      void hideDmThreadFromInbox(tid);
+    });
     const shareSearchInput = document.getElementById("messagesShareSearchInput");
     if (shareSearchInput && !shareSearchInput.dataset.boundMessagesShareSearch) {
       shareSearchInput.dataset.boundMessagesShareSearch = "1";

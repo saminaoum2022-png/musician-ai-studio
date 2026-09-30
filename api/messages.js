@@ -182,6 +182,31 @@ async function profilesByUserIds(userIds) {
   return map;
 }
 
+async function hiddenAtByThreadForUser(userId) {
+  const uid = cleanUserId(userId);
+  if (!uid) return new Map();
+  const r = await svcFetch(
+    `dm_thread_hides?select=thread_id,hidden_at&user_id=eq.${encodeURIComponent(uid)}&limit=200`,
+  );
+  if (!r.ok) return null;
+  const map = new Map();
+  for (const row of Array.isArray(r.data) ? r.data : []) {
+    map.set(String(row.thread_id || ""), row.hidden_at);
+  }
+  return map;
+}
+
+function filterInboxThreadsForHides(threads, hideMap) {
+  if (!hideMap || !hideMap.size) return threads;
+  return (Array.isArray(threads) ? threads : []).filter((t) => {
+    const hid = hideMap.get(String(t?.threadId || ""));
+    if (!hid) return true;
+    const lastMs = new Date(t?.lastMessageAt || 0).getTime();
+    const hidMs = new Date(hid).getTime();
+    return Number.isFinite(lastMs) && Number.isFinite(hidMs) && lastMs > hidMs;
+  });
+}
+
 async function readsForUserThreads(userId, threadIds) {
   const uid = cleanUserId(userId);
   const map = new Map();
@@ -1039,10 +1064,12 @@ async function handleGet(req, res, user) {
       ...pendingRaw.map((r) => r.from_user_id),
       ...sentRaw.map((r) => r.to_user_id),
     ];
-    const [threads, requestProfiles] = await Promise.all([
+    const [threads, requestProfiles, hideMap] = await Promise.all([
       enrichInboxThreads(threadRows, user.userId),
       profilesByUserIds(requestUserIds),
+      hiddenAtByThreadForUser(user.userId),
     ]);
+    const visibleThreads = filterInboxThreadsForHides(threads, hideMap);
     const requests = mapMessageRequests(pendingRaw, requestProfiles, {
       fromField: "from_user_id",
       mapRow: (req, prof) => ({
@@ -1066,7 +1093,13 @@ async function handleGet(req, res, user) {
       }),
     });
 
-    return sendJson(res, 200, { ok: true, threads, requests, sentRequests });
+    return sendJson(res, 200, {
+      ok: true,
+      threads: visibleThreads,
+      requests,
+      sentRequests,
+      threadHidesAvailable: hideMap !== null,
+    });
   }
 
   return sendJson(res, 400, { ok: false, error: "Unknown messages query" });
@@ -1173,6 +1206,34 @@ async function handlePost(req, res, user) {
     });
     if (!r.ok) return sendJson(res, 500, { ok: false, error: "Presence prefs update failed" });
     return sendJson(res, 200, { ok: true });
+  }
+
+  if (action === "hide_thread") {
+    const threadId = String(body?.threadId || "").trim();
+    if (!threadId) return sendJson(res, 400, { ok: false, error: "Missing threadId" });
+    const tr = await svcFetch(
+      `dm_threads?select=id,user_a,user_b&or=(and(id.eq.${encodeURIComponent(threadId)},user_a.eq.${encodeURIComponent(user.userId)}),and(id.eq.${encodeURIComponent(threadId)},user_b.eq.${encodeURIComponent(user.userId)}))&limit=1`,
+    );
+    const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
+    if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
+    const now = new Date().toISOString();
+    const ins = await svcFetch("dm_thread_hides", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify({
+        user_id: user.userId,
+        thread_id: threadId,
+        hidden_at: now,
+      }),
+    });
+    if (!ins.ok) {
+      const missingTable = /dm_thread_hides|relation.*does not exist/i.test(String(ins.text || ""));
+      return sendJson(res, missingTable ? 503 : 500, {
+        ok: false,
+        error: missingTable ? "thread_hides_not_migrated" : "hide_thread_failed",
+      });
+    }
+    return sendJson(res, 200, { ok: true, hiddenAt: now });
   }
 
   if (action === "mark_thread_delivered") {

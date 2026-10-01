@@ -7,6 +7,17 @@
  * so the Coach is structurally unable to reveal such information.
  *
  * Keep this guide accurate and concise. When app features change, update here.
+ *
+ * HARD CONSTRAINT FOR ANY FUTURE TOOL/FUNCTION (Coach V2 — live user context,
+ * get_credit_balance(), get_song_details(), etc.): every tool MUST be scoped
+ * to the caller by server-verified identity only (the JWT already checked in
+ * verifyUser(), api/coach.js) — NEVER by a user id, handle, or email read from
+ * the chat message or any model-supplied argument. A tool signature must not
+ * accept "which user" as a parameter at all. The system-prompt rule below
+ * ("never look up or speculate about other users") is a UX instruction, not a
+ * security boundary — a prompt can be argued around. The only real boundary is
+ * a tool function that is structurally incapable of returning another user's
+ * data because it was never given a way to ask for it.
  */
 
 const COACH_APP_GUIDE = `
@@ -247,7 +258,62 @@ ACCOUNT HELP (what the Coach can and cannot do):
 - Credit balance and Pro status: if LIVE WALLET is in the live updates, use those numbers. Do not say you cannot see their balance when that block is present.
 `.trim();
 
-const COACH_SYSTEM_PROMPT = `
+/**
+ * Coach V2, Phase 1 — COACH_APP_GUIDE split into topic-tagged chunks, so a
+ * future retrieval step (Phase 2) can send only the 2-4 relevant chunks per
+ * question instead of this whole ~16KB guide every time.
+ *
+ * This phase changes NOTHING about what the model receives: COACH_APP_GUIDE
+ * above stays the single source of truth and is untouched; the chunks are
+ * derived from it programmatically (split on the blank line before each
+ * ALL-CAPS section header) rather than retyped, specifically so there's no
+ * way for the chunked version to drift from the real guide. The build is
+ * verified at module-load time (see the throw below) to reproduce
+ * COACH_APP_GUIDE byte-for-byte when rejoined — if that ever stops being
+ * true (e.g. the guide's formatting changes in a way the splitter can't
+ * follow), this fails loudly at require() time instead of silently serving
+ * stale or incomplete knowledge.
+ */
+function tagForCoachChunk(text) {
+  const headerLine = String(text || "").split("\n")[0] || "";
+  const slug = headerLine
+    .split(/[—:(]/)[0]
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-+|-+$)/g, "");
+  return slug || "section";
+}
+
+function buildCoachKnowledgeChunks(guideText) {
+  const sections = String(guideText || "").split(/\n\n(?=[A-Z])/);
+  const seen = new Map();
+  return sections.map((text) => {
+    let tag = tagForCoachChunk(text);
+    const n = seen.get(tag) || 0;
+    seen.set(tag, n + 1);
+    if (n > 0) tag = `${tag}-${n + 1}`;
+    return { tag, text };
+  });
+}
+
+const COACH_KNOWLEDGE_CHUNKS = buildCoachKnowledgeChunks(COACH_APP_GUIDE);
+
+const _coachChunksRejoined = COACH_KNOWLEDGE_CHUNKS.map((c) => c.text).join("\n\n");
+if (_coachChunksRejoined !== COACH_APP_GUIDE) {
+  throw new Error(
+    "[coach-knowledge] COACH_KNOWLEDGE_CHUNKS does not reconstruct COACH_APP_GUIDE byte-for-byte — " +
+    "the chunk splitter and the real guide have drifted. Fix buildCoachKnowledgeChunks() before deploying.",
+  );
+}
+
+/**
+ * Builds the full system prompt (rules + an app-guide text). Parameterized so
+ * Phase 2 retrieval can pass a SELECTED subset of COACH_KNOWLEDGE_CHUNKS
+ * instead of the whole guide — see selectRelevantCoachChunks() below. The
+ * rules text itself never changes based on this argument.
+ */
+function buildCoachSystemPromptFor(appGuideText) {
+  return `
 You are "NabadAi Coach", a friendly in-app guide for the NabadAi music-creation app.
 Your ONLY job is to help users understand how to use NabadAi, using the app guide below.
 
@@ -267,7 +333,140 @@ STRICT RULES:
 11. ALWAYS RESPOND: every user message deserves a helpful reply. If the question is vague, ask one short clarifying question while still offering your best guidance. Never leave the user with silence or a non-answer.
 
 APP GUIDE (your only source of product knowledge):
-${COACH_APP_GUIDE}
+${appGuideText}
 `.trim();
+}
 
-module.exports = { COACH_APP_GUIDE, COACH_SYSTEM_PROMPT };
+const COACH_SYSTEM_PROMPT = buildCoachSystemPromptFor(COACH_APP_GUIDE);
+
+/**
+ * Coach V2, Phase 2 — pick only the relevant chunks for this question instead
+ * of injecting the whole guide. Deliberately simple keyword overlap, not
+ * embeddings: cheap, synchronous, no extra API call or latency, and easy to
+ * reason about / debug by reading the score. Good enough to replace "send all
+ * 27 chunks" — revisit only if real usage shows it picking badly.
+ *
+ * Matches English and Arabic tokens (the app and its users are bilingual).
+ */
+// Deliberately generous — with only ~27 chunks, document-frequency stats are
+// noisy, so a generic filler word that just happens to be rare in this small
+// corpus (e.g. "much", "another") can out-rank a genuinely meaningful rare
+// word (e.g. "remix") unless it's filtered before scoring, not just down-
+// weighted by IDF. When in doubt, add the word here rather than relying on
+// IDF alone to sort it out.
+const COACH_CHUNK_STOPWORDS = new Set([
+  "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "to", "of", "and", "or",
+  "in", "on", "for", "at", "by", "as", "if", "so", "than", "then", "too", "very", "just", "also",
+  "how", "what", "why", "when", "where", "who", "which", "whose",
+  "do", "does", "did", "done", "doing",
+  "i", "im", "my", "mine", "me", "you", "your", "yours", "u", "it", "its", "they", "them", "their",
+  "he", "him", "his", "she", "her", "we", "us", "our",
+  "this", "that", "these", "those", "there", "here",
+  "with", "without", "about", "into", "onto", "over", "under", "out", "up", "down", "off",
+  "not", "no", "yes", "nor", "neither", "either",
+  "can", "cant", "could", "couldnt", "would", "wouldnt", "should", "shouldnt", "will", "wont",
+  "shall", "may", "might", "must", "have", "has", "had", "having",
+  "am", "is", "isnt", "arent", "wasnt", "werent",
+  "much", "many", "more", "most", "another", "other", "others", "some", "any", "all", "each",
+  "every", "few", "lot", "lots", "still", "even", "ever", "never", "always", "again",
+  "get", "got", "getting", "make", "made", "making", "use", "using", "used",
+  "please", "thanks", "thank", "hi", "hey", "hello", "ok", "okay",
+  "want", "wanted", "need", "needed", "like", "know", "think", "see", "tell", "help",
+  "one", "two", "first", "new", "now", "today", "really", "actually", "basically",
+]);
+
+function tokenizeCoachText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .match(/[a-z0-9]+|[؀-ۿ]+/g) || [];
+}
+
+/**
+ * TF-IDF, not raw word overlap. Raw overlap was tried first and failed in
+ * practice: "how much does a remix cost?" missed the chunk that answers it,
+ * because common words shared by nearly every chunk ("song", "does", "much")
+ * outweighed the one distinctive word ("remix") that actually says where the
+ * answer lives. IDF fixes this directly: a word that appears in most chunks
+ * (near-zero signal) counts for almost nothing; a word that appears in only
+ * one or two chunks (real signal) counts for a lot.
+ */
+const COACH_CHUNK_IDF = buildCoachChunkIdf(COACH_KNOWLEDGE_CHUNKS);
+
+function buildCoachChunkIdf(chunks) {
+  const docFreq = new Map();
+  for (const chunk of chunks) {
+    const uniqueTokens = new Set(tokenizeCoachText(chunk.text));
+    for (const t of uniqueTokens) docFreq.set(t, (docFreq.get(t) || 0) + 1);
+  }
+  const n = chunks.length;
+  const idf = new Map();
+  for (const [token, df] of docFreq) idf.set(token, Math.log((n + 1) / (df + 1)) + 1);
+  return idf;
+}
+
+function scoreCoachChunk(chunk, queryTokenCounts) {
+  const chunkTermFreq = new Map();
+  for (const t of tokenizeCoachText(chunk.text)) chunkTermFreq.set(t, (chunkTermFreq.get(t) || 0) + 1);
+  let score = 0;
+  for (const [t, queryWeight] of queryTokenCounts) {
+    const tf = chunkTermFreq.get(t);
+    if (!tf) continue;
+    const idf = COACH_CHUNK_IDF.get(t) || 1;
+    score += queryWeight * tf * idf;
+  }
+  return score;
+}
+
+/** Always-safe fallback when the query is too short/generic to score well
+ *  (a bare "hi", or no keyword overlap with anything) — covers the most
+ *  common entry-level questions rather than guessing or sending everything. */
+const COACH_DEFAULT_CHUNK_TAGS = ["nabadai", "main-areas", "credits", "account-help"];
+
+/**
+ * @param {string} message - the user's current message
+ * @param {{ historyText?: string, maxChunks?: number, minScore?: number }} [opts]
+ * @returns {{ tag: string, text: string }[]} the selected chunks, in their
+ *   original guide order (not score order — keeps related topics coherent).
+ */
+function selectRelevantCoachChunks(message, opts = {}) {
+  const { historyText = "", maxChunks = 5, minScore = 1.5 } = opts;
+  // Recent history counts, but the current message matters most.
+  const queryTokens = [
+    ...tokenizeCoachText(historyText),
+    ...tokenizeCoachText(message),
+    ...tokenizeCoachText(message), // weight the current message 2x
+  ].filter((t) => t.length >= 2 && !COACH_CHUNK_STOPWORDS.has(t));
+
+  const fallback = () => COACH_KNOWLEDGE_CHUNKS.filter((c) => COACH_DEFAULT_CHUNK_TAGS.includes(c.tag));
+  if (!queryTokens.length) return fallback();
+
+  const queryTokenCounts = new Map();
+  for (const t of queryTokens) queryTokenCounts.set(t, (queryTokenCounts.get(t) || 0) + 1);
+
+  const scored = COACH_KNOWLEDGE_CHUNKS.map((chunk) => ({ chunk, score: scoreCoachChunk(chunk, queryTokenCounts) }));
+  const top = scored
+    .filter((s) => s.score >= minScore)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxChunks)
+    .map((s) => s.chunk);
+
+  if (!top.length) return fallback();
+
+  // Restore original guide order so related sections still read coherently.
+  const order = new Map(COACH_KNOWLEDGE_CHUNKS.map((c, i) => [c.tag, i]));
+  return top.sort((a, b) => order.get(a.tag) - order.get(b.tag));
+}
+
+/** Convenience: selected chunks' text, ready to drop into buildCoachSystemPromptFor(). */
+function buildSelectedCoachGuideText(message, opts) {
+  return selectRelevantCoachChunks(message, opts).map((c) => c.text).join("\n\n");
+}
+
+module.exports = {
+  COACH_APP_GUIDE,
+  COACH_SYSTEM_PROMPT,
+  COACH_KNOWLEDGE_CHUNKS,
+  buildCoachSystemPromptFor,
+  selectRelevantCoachChunks,
+  buildSelectedCoachGuideText,
+};

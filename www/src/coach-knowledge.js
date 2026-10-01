@@ -14,8 +14,13 @@ import {
 } from "./pro-plan-config.js";
 
 const SOUND_CREDIT_COST = 2.5;
-const REMIX_CREDIT_COST = 12;
-const MASHUP_CREDIT_COST = 12;
+// Remix and Mashup both charge the same as a full song (src/app.js:25623 —
+// `const remixCost = FULL_SONG_CREDIT_COST`). These used to be a separate,
+// independently-hardcoded "12" here, which had drifted from the real price
+// (15) and was actively contradicting the backend guide's correct number
+// inside the same prompt. Reuse the one real constant instead of a second one.
+const REMIX_CREDIT_COST = FULL_SONG_CREDIT_COST;
+const MASHUP_CREDIT_COST = FULL_SONG_CREDIT_COST;
 const PERSONA_CREDIT_COST = 5;
 const INSTRUMENTAL_CREDIT_COST = 2;
 const STUDIO_SEPARATE_VOCALS_COST = 2;

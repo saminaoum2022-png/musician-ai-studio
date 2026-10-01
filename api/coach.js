@@ -15,9 +15,20 @@
  */
 
 const { verifyUser, sendJson, setCors, readJsonBody } = require("./_lib/credits-auth");
-const { COACH_SYSTEM_PROMPT } = require("./_lib/coach-knowledge");
+const {
+  COACH_SYSTEM_PROMPT,
+  buildCoachSystemPromptFor,
+  buildSelectedCoachGuideText,
+} = require("./_lib/coach-knowledge");
 const { fetchProSubscriptionForUser } = require("./_lib/pro-subscription");
 const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
+
+// Coach V2 Phase 2 — normally off by default (flip COACH_CHUNK_RETRIEVAL=1 in
+// the environment to enable without a code change). TEMP: defaulted ON here
+// so it can be tested live on staging without Vercel dashboard/CLI access.
+// REVERT before this is trusted as the permanent path — set back to
+// `process.env.COACH_CHUNK_RETRIEVAL === "1"` once testing is done.
+const COACH_CHUNK_RETRIEVAL_ENABLED = process.env.COACH_CHUNK_RETRIEVAL !== "0";
 
 const MAX_MESSAGE_CHARS = 2500;
 const MAX_HISTORY_TURNS = 12;
@@ -94,10 +105,16 @@ function cleanContextAppendix(v) {
   return redactSensitive(String(v || "").trim().slice(0, MAX_CONTEXT_APPENDIX_CHARS)).trim();
 }
 
-function buildCoachSystemPrompt(contextAppendix) {
+function buildCoachSystemPrompt(contextAppendix, { message = "", history = [] } = {}) {
   const extra = String(contextAppendix || "").trim();
-  if (!extra) return COACH_SYSTEM_PROMPT;
-  return `${COACH_SYSTEM_PROMPT}
+  let base = COACH_SYSTEM_PROMPT;
+  if (COACH_CHUNK_RETRIEVAL_ENABLED) {
+    const historyText = history.map((h) => h.text).join(" ").slice(-1500);
+    const selectedGuideText = buildSelectedCoachGuideText(message, { historyText });
+    base = buildCoachSystemPromptFor(selectedGuideText || "");
+  }
+  if (!extra) return base;
+  return `${base}
 
 LIVE PRODUCT UPDATES (prefer over older guide text if they conflict — do not paste verbatim):
 If these updates include LIVE WALLET, that is this user's real credit balance. Answer balance questions from it. Do not say you cannot see their balance.
@@ -230,7 +247,7 @@ module.exports = async function handler(req, res) {
   if (!message) return sendJson(res, 400, { ok: false, error: "Message required" });
   const history = normalizeHistory(body?.history);
   const contextAppendix = cleanContextAppendix(body?.contextAppendix);
-  const systemPrompt = buildCoachSystemPrompt(contextAppendix);
+  const systemPrompt = buildCoachSystemPrompt(contextAppendix, { message, history });
 
   const result = await askGemini({ geminiKey, history, message, systemPrompt });
   if (!result.ok) {

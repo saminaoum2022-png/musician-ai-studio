@@ -16,19 +16,11 @@
 
 const { verifyUser, sendJson, setCors, readJsonBody } = require("./_lib/credits-auth");
 const {
-  COACH_SYSTEM_PROMPT,
   buildCoachSystemPromptFor,
   buildSelectedCoachGuideText,
 } = require("./_lib/coach-knowledge");
 const { fetchProSubscriptionForUser } = require("./_lib/pro-subscription");
 const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
-
-// Coach V2 Phase 2 — normally off by default (flip COACH_CHUNK_RETRIEVAL=1 in
-// the environment to enable without a code change). TEMP: defaulted ON here
-// so it can be tested live on staging without Vercel dashboard/CLI access.
-// REVERT before this is trusted as the permanent path — set back to
-// `process.env.COACH_CHUNK_RETRIEVAL === "1"` once testing is done.
-const COACH_CHUNK_RETRIEVAL_ENABLED = process.env.COACH_CHUNK_RETRIEVAL !== "0";
 
 const MAX_MESSAGE_CHARS = 2500;
 const MAX_HISTORY_TURNS = 12;
@@ -107,12 +99,9 @@ function cleanContextAppendix(v) {
 
 function buildCoachSystemPrompt(contextAppendix, { message = "", history = [] } = {}) {
   const extra = String(contextAppendix || "").trim();
-  let base = COACH_SYSTEM_PROMPT;
-  if (COACH_CHUNK_RETRIEVAL_ENABLED) {
-    const historyText = history.map((h) => h.text).join(" ").slice(-1500);
-    const selectedGuideText = buildSelectedCoachGuideText(message, { historyText });
-    base = buildCoachSystemPromptFor(selectedGuideText || "");
-  }
+  const historyText = history.map((h) => h.text).join(" ").slice(-1500);
+  const selectedGuideText = buildSelectedCoachGuideText(message, { historyText });
+  const base = buildCoachSystemPromptFor(selectedGuideText || "");
   if (!extra) return base;
   return `${base}
 

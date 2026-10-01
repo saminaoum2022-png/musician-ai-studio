@@ -46161,6 +46161,134 @@ function applyCoachProjectParsedAnswer(flow, parsed, echoLabel = "") {
   }
   handleCoachSignupCta(`${parsed.kind}:${parsed.value}`, echoLabel || "");
 }
+
+/** Song plan Phase 1 — AI-assisted slot filling. Maps one extracted field
+ *  (server-validated against the same closed option lists the chips use) onto
+ *  the exact same transition functions a chip tap or regex match would use —
+ *  this never invents new flow logic, it only feeds the existing state
+ *  machine. See src/app.js "COACH_SONG_PLAN_STEP_FIELD" for the step order. */
+const COACH_SONG_PLAN_STEP_FIELD = Object.freeze({
+  path: "path",
+  topic: "topic",
+  occasion: "occasionId",
+  language: "language",
+  dialect: "dialect",
+  dedicated: "dedicatedTo",
+  name: "recipientName",
+  song_title: "songTitle",
+});
+function applySongPlanAiField(flow, field, extracted) {
+  const value = extracted?.[field];
+  if (field === "path") return applyCoachProjectParsedAnswer(flow, { kind: "path", value });
+  if (field === "topic") return applyCoachProjectParsedAnswer(flow, { kind: "topic", value, label: extracted?.customTopicLabel || "" });
+  if (field === "occasionId") return applyCoachProjectParsedAnswer(flow, { kind: "occasion", value });
+  if (field === "language") return applyCoachProjectParsedAnswer(flow, { kind: "lang", value });
+  if (field === "dialect") return applyCoachProjectParsedAnswer(flow, { kind: "dialect", value });
+  if (field === "dedicatedTo") return applyCoachProjectParsedAnswer(flow, { kind: "dedicated", value });
+  if (field === "songTitle") return applyCoachProjectParsedAnswer(flow, { kind: "songtitle", value: "yes", label: value });
+  if (field === "recipientName") {
+    flow.recipientName = String(value || "").trim().slice(0, 40);
+    flow.nameSkipped = false;
+    saveCoachSignupFlow(flow);
+    coachSignupAfterRecipientName(flow);
+    return;
+  }
+}
+/** Walks the flow forward through every step the AI extraction already
+ *  answered, in whatever order the real state machine visits them — stops
+ *  the moment the current step isn't covered, leaving that step's real
+ *  question as the one the user still sees. Returns how many steps advanced. */
+function applySongPlanExtractionToFlow(extracted) {
+  let applied = 0;
+  for (let i = 0; i < 8; i += 1) {
+    const flow = loadCoachSignupFlow();
+    if (!flow || !COACH_PROJECT_INTAKE_STEPS.has(flow.step)) break;
+    const field = COACH_SONG_PLAN_STEP_FIELD[flow.step];
+    if (!field) break;
+    const value = extracted?.[field];
+    if (value === undefined || value === null || value === "") break;
+    applySongPlanAiField(flow, field, extracted);
+    applied += 1;
+  }
+  return applied;
+}
+/**
+ * Called when the current step's own regex parser couldn't understand a
+ * free-text answer. Sends the message to a real language-understanding pass
+ * (server-side, closed option lists only) so a combined answer like "a love
+ * song in Arabic for my mom named Lina" fills every field it covers instead
+ * of only the one the current step was narrowly listening for. Returns false
+ * (no AI progress) so the caller can fall back to the normal side-help reply.
+ */
+async function tryAiAssistedSongPlanStep(text, input, flow) {
+  const raw = String(text || "").trim();
+  if (raw.length < 2) return false;
+  _coachReplyInFlight = true;
+  _messagesList = [
+    ...(Array.isArray(_messagesList) ? _messagesList : []),
+    { id: COACH_TYPING_ID, sender_id: COACH_SENDER_ID, body: "", created_at: new Date().toISOString(), coachTyping: true },
+  ];
+  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  let extracted = null;
+  let ack = "";
+  try {
+    const known = {
+      path: flow.path, topic: flow.topic, occasionId: flow.occasionId,
+      language: flow.language, dialect: flow.dialect,
+      dedicatedTo: flow.dedicatedTo, recipientName: flow.recipientName, songTitle: flow.songTitle,
+    };
+    const data = await messagesApi("/api/coach-song-plan-extract", {
+      method: "POST",
+      timeoutMs: 20000,
+      body: JSON.stringify({
+        message: raw,
+        step: flow.step,
+        known,
+        occasionOptions: CHALLENGE_OCCASIONS.map((o) => ({ id: o.id, label: o.label })),
+      }),
+    });
+    if (data?.ok && data.extracted && Object.keys(data.extracted).length) {
+      extracted = data.extracted;
+      ack = String(data.ack || "").trim();
+    }
+  } catch {}
+  _coachReplyInFlight = false;
+  _messagesList = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => m.id !== COACH_TYPING_ID);
+  const neededField = COACH_SONG_PLAN_STEP_FIELD[flow.step];
+  if (!extracted || !neededField || !extracted[neededField]) {
+    renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+    return false;
+  }
+
+  if (input) {
+    input.value = "";
+    syncMessagesComposerInputHeight(input);
+  }
+  appendCoachSignupUserEcho(raw.length > 200 ? `${raw.slice(0, 200)}…` : raw);
+  const lenBefore = loadCoachChat().length;
+  applySongPlanExtractionToFlow(extracted);
+  const chatAfter = loadCoachChat();
+  const newOnes = chatAfter.slice(lenBefore);
+  if (ack || newOnes.length > 1) {
+    const merged = [
+      ...chatAfter.slice(0, lenBefore),
+      ...(ack ? [{
+        id: `coach:ai-ack:${Date.now()}`,
+        sender_id: COACH_SENDER_ID,
+        body: ack,
+        coachCtas: [],
+        created_at: new Date().toISOString(),
+        sendStatus: "sent",
+      }] : []),
+      ...(newOnes.length ? [newOnes[newOnes.length - 1]] : []),
+    ];
+    saveCoachChat(merged);
+    if (isCoachThreadId(_conversationId)) _messagesList = merged.map((m) => ({ ...m }));
+    renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  }
+  try { input?.focus({ preventScroll: true }); } catch {}
+  return true;
+}
 async function sendCoachLyricsCollaboration(text, input, flow) {
   const prior = Array.isArray(_messagesList) ? _messagesList.filter((m) => !m.coachTyping) : [];
   const history = coachHistoryForApi(prior);
@@ -46266,7 +46394,9 @@ async function sendCoachSideHelpDuringProject(text, input, flow) {
       projectFlow: flow,
       latestCoachCtas: latestCtas,
       wallet: coachWalletSnapshot(),
-      contextAppendixExtra: `Pending step field: ${pendingHint}. Answer using plan state and chips you offered. Brief side answer, then nudge them to continue the plan unless they are co-writing lyrics.`,
+      contextAppendixExtra: flow.step === "lyrics_collab" || flow.step === "lyrics_paste"
+        ? `Pending step field: ${pendingHint}. Answer using plan state and chips you offered.`
+        : `Pending step field: ${pendingHint}. Answer using plan state and chips you offered. Keep it brief. End with ONE short natural sentence nudging them back to that pending field — vary the wording, don't sound scripted, and don't repeat "tap Song plan" verbatim every time.`,
     });
     const data = await messagesApi("/api/coach", {
       method: "POST",
@@ -46279,13 +46409,10 @@ async function sendCoachSideHelpDuringProject(text, input, flow) {
   }
   _coachReplyInFlight = false;
   const base = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => m.id !== COACH_TYPING_ID);
-  const suffix = flow.step === "lyrics_collab" || flow.step === "lyrics_paste"
-    ? ""
-    : `\n\n_When you're ready, answer **${pendingHint}** with the chips or tap **Song plan**._`;
   _messagesList = [...base, {
     id: `coach:a:${Date.now()}`,
     sender_id: COACH_SENDER_ID,
-    body: `${replyText}${suffix}`,
+    body: replyText,
     created_at: new Date().toISOString(),
     sendStatus: "sent",
   }];
@@ -47518,6 +47645,24 @@ async function sendCoachMessage(text, input) {
       return;
     }
     const parsed = tryParseCoachProjectStepAnswer(flow.step, text, flow);
+    // A short chip-equivalent reply ("Arabic", "yes") is unambiguous — apply
+    // it instantly, no AI round-trip. A longer, sentence-like message can
+    // match the current step's regex on just one incidental word (e.g. "love"
+    // inside "a love song in Arabic for my mom named Lina") while silently
+    // dropping everything else it says — for those, prefer the AI extraction
+    // pass so a combined answer fills every field it actually covers, and
+    // only fall back to the regex's single-field match if AI finds nothing.
+    const isShortChipLikeAnswer = String(text || "").trim().length <= 24
+      && String(text || "").trim().split(/\s+/).filter(Boolean).length <= 3;
+    if (parsed && isShortChipLikeAnswer) {
+      if (input) {
+        input.value = "";
+        syncMessagesComposerInputHeight(input);
+      }
+      applyCoachProjectParsedAnswer(flow, parsed, text);
+      return;
+    }
+    if (await tryAiAssistedSongPlanStep(text, input, flow)) return;
     if (parsed) {
       if (input) {
         input.value = "";

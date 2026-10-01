@@ -2295,8 +2295,17 @@ function ensureHubAudio() {
   // automatically.
   a.preload = "metadata";
   // Aura header ring breathes whenever any audio is playing.
-  a.addEventListener("play", () => { try { setProfileAuraAudioState(true); } catch {} });
-  a.addEventListener("pause", () => { try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {} });
+  a.addEventListener("play", () => {
+    try { setProfileAuraAudioState(true); } catch {}
+    try { renderHubNowPlaying(); syncLockScreenNowPlaying({ force: true }); } catch {}
+  });
+  a.addEventListener("pause", () => {
+    try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {}
+    try { renderHubNowPlaying(); syncLockScreenNowPlaying({ force: true }); } catch {}
+  });
+  a.addEventListener("playing", () => {
+    try { renderHubNowPlaying(); } catch {}
+  });
   a.addEventListener("ended", () => {
     // Stale-event guard: the previous src's ended can fire AFTER a new
     // startHubPlayback has already taken over the element. Without this,
@@ -2614,21 +2623,44 @@ function syncHubNowPlayPauseUi(audible) {
   if (tg) tg.setAttribute("aria-label", playing ? "Pause" : "Play");
 }
 
-/** Audio element backing the bottom mini player (Discover uses `playerEl`). */
+/** Audio element backing the bottom mini player. `hubAudio` is a separate
+ *  Audio() instance that only ever backs the Discover/Hub feed's scroll
+ *  autoplay (miniSource.type === "hub") — everything else, including
+ *  "generateResult", actually plays through `ensurePlayer()` (playerEl) in
+ *  playInline(). This used to default to hubAudio for any type NOT on an
+ *  allowlist, so a newly-generated song (playing via playerEl) had its
+ *  mini-strip visibility/progress computed from hubAudio's unrelated,
+ *  stale state instead — the real cause of the strip flickering open/closed
+ *  on its own after generating a song. Only "hub" should ever use hubAudio. */
 function getMiniPlayerAudio() {
-  const t = miniSource?.type;
-  if (
-    t === "discover_feed" ||
-    t === "discover_playlist" ||
-    t === "user_playlist" ||
-    t === "public_profile_lib" ||
-    t === "library" ||
-    t === "profile_hub" ||
-    t === "studio_vocal"
-  ) {
-    return ensurePlayer();
-  }
-  return hubAudio || ensurePlayer();
+  if (miniSource?.type === "hub") return hubAudio || ensurePlayer();
+  return ensurePlayer();
+}
+
+/** Audio element that actually drives mini-strip play/pause UI (may differ briefly from
+ *  `getMiniPlayerAudio()` when one element is still settling after a handoff). */
+function audioForMiniStripUi() {
+  if (miniSource?.type === "hub") return hubAudio || ensurePlayer();
+  const player = ensurePlayer();
+  const hub = hubAudio;
+  const playerLive = Boolean(player && !player.paused && !player.ended);
+  const hubLive = Boolean(hub && !hub.paused && !hub.ended);
+  if (playerLive) return player;
+  if (hubLive) return hub;
+  return player;
+}
+
+function miniStripAudioHasSource(audio) {
+  return Boolean(
+    audio && (String(audio.src || "").trim() || String(audio.currentSrc || "").trim()),
+  );
+}
+
+function miniStripIsPlaying(audio, { hasMeta } = {}) {
+  if (!audio || !hasMeta) return false;
+  if (!miniStripAudioHasSource(audio)) return false;
+  if (audio.paused || audio.ended) return false;
+  return true;
 }
 
 const HUB_STRIP_PAUSED_MS = 10 * 60 * 1000;
@@ -2647,21 +2679,18 @@ function renderHubNowPlaying() {
   const hideOnPlayer = route === "player";
   const hideOnGenerate = route === "generate" && miniSource?.type === "generateResult";
 
-  const audio = getMiniPlayerAudio();
+  const audio = audioForMiniStripUi();
   const hasMeta = Boolean(hubNowMeta && String(hubNowMeta.title || "").trim());
-  const hubSrc = Boolean(
-    audio && (String(audio.src || "").trim() || String(audio.currentSrc || "").trim()),
-  );
+  const hubSrc = miniStripAudioHasSource(audio);
   let dur = 0;
   try {
     dur = audio ? getAudioDuration(audio) : 0;
   } catch {}
   const cur = audio && Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
-  const audible = Boolean(
-    audio && !audio.paused && !audio.ended && hasMeta && hubSrc && (dur > 0 || cur > 0),
-  );
-
   const discoverMiniLoading = isDiscoverStyleMiniSource() && hasMeta;
+  const stripPlaying = miniStripIsPlaying(audio, { hasMeta });
+  const audible = stripPlaying;
+
   // Paused mid-song keeps the strip (so you can resume); it goes when the song ends,
   // when it is closed, or after HUB_STRIP_PAUSED_MS of being paused.
   const pausedKeep = Boolean(
@@ -2678,9 +2707,19 @@ function renderHubNowPlaying() {
     !hideOnPlaylist &&
     !hideOnPlayer &&
     !hideOnGenerate;
-  const miniShowsPause = audible || (discoverMiniLoading && hasMeta && !pausedKeep);
+  const miniShowsPause = stripPlaying;
 
   document.body.classList.toggle("hasMiniStrip", Boolean(showMini));
+  try {
+    const stripGlass = document.getElementById("hubNowStripGlass");
+    if (stripGlass) {
+      const floatGlass = Boolean(
+        showMini && document.body.classList.contains("tabbarCollapsed"),
+      );
+      stripGlass.classList.toggle("isVisible", floatGlass);
+      if (!floatGlass) stripGlass.classList.remove("isDockSettling");
+    }
+  } catch {}
   if (audible || !hasMeta) hubStripUserPaused = false;
   if (audible || !pausedKeep) {
     hubStripPausedExpired = false;
@@ -2718,9 +2757,14 @@ function renderHubNowPlaying() {
   els.hubNowPlaying.style.display = "";
   const syncMiniClasses = () => {
     if (!els.hubNowPlaying) return;
+    const wasPlaying = els.hubNowPlaying.classList.contains("isPlaying");
     els.hubNowPlaying.classList.add("isVisible");
-    if (miniShowsPause) els.hubNowPlaying.classList.add("isPlaying");
-    else els.hubNowPlaying.classList.remove("isPlaying");
+    if (miniShowsPause) {
+      els.hubNowPlaying.classList.add("isPlaying");
+      if (!wasPlaying) restartMiniStripBarAnimation();
+    } else {
+      els.hubNowPlaying.classList.remove("isPlaying");
+    }
   };
   if (wasVisible) {
     syncMiniClasses();
@@ -2758,6 +2802,20 @@ function renderHubNowPlaying() {
   } catch {}
 
   syncHubNowPlayPauseUi(Boolean(miniShowsPause));
+  try {
+    const miniPending = Boolean(
+      _playbackPending && (
+        (miniSource?.type === "library" && playbackPendingMatchesLibrary(miniSource.id))
+        || (miniSource?.type === "studio_vocal" && playbackPendingMatchesStudioVocal(miniSource.id))
+        || (miniSource?.type === "profile_hub" && playbackPendingMatchesProfileHub(miniSource.postId))
+        || (_playbackPending.type === "url" && playbackPendingMatchesUrl(currentPlayerTrackRef?.url))
+      ),
+    );
+    els.hubNowPlaying.classList.toggle(
+      "isBuffering",
+      Boolean(miniPending || (stripPlaying && isPlayerBuffering())),
+    );
+  } catch {}
   syncLockScreenNowPlaying();
   try { syncGlobalFeedHookMarkers(); } catch {}
 }
@@ -2770,6 +2828,14 @@ function syncHubNowProgressRing(cur, dur) {
   const ratio = valid ? Math.max(0, Math.min(1, time / dur)) : 0;
   fill.style.strokeDasharray = "100";
   fill.style.strokeDashoffset = valid ? String((100 * (1 - ratio)).toFixed(3)) : "100";
+}
+
+function restartMiniStripBarAnimation() {
+  const bars = document.querySelector(".hubNowPlaying .hubNowToggleBars");
+  if (!bars) return;
+  bars.classList.remove("nbBars--play");
+  void bars.offsetWidth;
+  bars.classList.add("nbBars--play");
 }
 
 let hubNowPlayingScrollRaf = 0;
@@ -4962,10 +5028,49 @@ function wireFloatingTabDock() {
   );
 
   document.addEventListener("scroll", onScroll, { passive: true, capture: true });
+
+  /** Snap the dock to match a scroll offset without sliding the mini strip
+   *  between the tab capsule and the floating pill. */
+  function settleTabbarDockForOffset(y) {
+    const n = Math.max(0, Number(y) || 0);
+    lastY = n;
+    tabbarDockIgnoreScrollUntil = Date.now() + 480;
+    const strip = document.getElementById("hubNowPlaying");
+    const stripGlass = document.getElementById("hubNowStripGlass");
+    if (strip) strip.classList.add("isDockSettling");
+    if (stripGlass?.classList.contains("isVisible")) stripGlass.classList.add("isDockSettling");
+    if (tabbarDockBlocked()) setTabbarCollapsed(false);
+    else setTabbarCollapsed(n >= 28);
+    try { renderHubNowPlaying(); } catch {}
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        strip?.classList.remove("isDockSettling");
+        stripGlass?.classList.remove("isDockSettling");
+      });
+    });
+  }
+  window.__nabadSettleTabbarDock = settleTabbarDockForOffset;
+
   window.addEventListener("hashchange", () => {
-    lastY = 0;
     tabbarDockExpandConsumed = false;
-    setTabbarCollapsed(false);
+    // Route restore scrolls on the next frame. Settle after that so returning
+    // from the full player doesn't expand the bar and then collapse it,
+    // which is what made the mini strip slide between two layouts.
+    requestAnimationFrame(() => {
+      const y = window.scrollY || document.documentElement.scrollTop || 0;
+      settleTabbarDockForOffset(y);
+      // Minimizing from the full player can restore the previous route's
+      // scroll position across more than one frame (images/layout still
+      // settling), so the single rAF above sometimes reads a stale `y` and
+      // picks the wrong dock state for a moment before correcting itself —
+      // that correction is the mini player "glitching" right after minimize.
+      // Re-check shortly after with the now-final scroll position; this is a
+      // no-op if the first settle already had it right.
+      window.setTimeout(() => {
+        const y2 = window.scrollY || document.documentElement.scrollTop || 0;
+        if (Math.abs(y2 - y) > 4) settleTabbarDockForOffset(y2);
+      }, 180);
+    });
   });
   syncTabbarDockTarget();
 }
@@ -5696,7 +5801,11 @@ function navDirectionFor(wanted) {
   }
   const idx = _navStack.lastIndexOf(w);
   if (idx >= 0 && idx < _navStack.length - 1) {
+    const leaving = _navStack[_navStack.length - 1];
     _navStack = _navStack.slice(0, idx + 1);
+    // Minimizing full-screen now playing — the feed underneath should stay put,
+    // not play a lateral "back" slide (felt like Discover panning L→R).
+    if (leaving === "player" || leaving === "pro") return "none";
     return "back";
   }
   if (NAV_TAB_ROOTS.has(w)) {
@@ -6191,10 +6300,14 @@ function applyRoute({ passGen } = {}) {
   if (routeApplyStale(gate)) return;
   if (prevRoute !== wanted) invalidateInFlightRouteFeedWork(prevRoute, wanted);
   const navDir = navDirectionFor(wanted);
-  _scrollRestoreOk = navDir === "back";
+  const dismissingPresentedScreen =
+    (prevRoute === "player" || prevRoute === "pro") && wanted !== prevRoute;
+  _scrollRestoreOk = navDir === "back" || dismissingPresentedScreen;
   const skipEnterAnim =
     _skipGenerateRouteEnter ||
     navDir === "tab" ||
+    navDir === "none" ||
+    dismissingPresentedScreen ||
     isTabSwitch ||
     (prevRoute === "challenges" && wanted === "generate" && Boolean(getCreateFlow()));
   syncRoutePanelVisibility(wanted);
@@ -32170,6 +32283,7 @@ function restoreRouteScroll(route) {
   if (!Number.isFinite(y) || y <= 0) return;
   requestAnimationFrame(() => {
     try { window.scrollTo(0, y); } catch {}
+    try { window.__nabadSettleTabbarDock?.(y); } catch {}
   });
 }
 
@@ -32855,15 +32969,18 @@ function profileSoundCertifiedTruthy(v) {
   return v === true || v === "t" || v === "true" || v === 1;
 }
 
-/** Server-owned flag — cloud true must never be clobbered by local `false`. */
+/** Server-owned flag — cloud true must never be clobbered by local `false`, and
+ *  stale local `true` must not show a badge when Supabase says `false`. */
 function resolveMergedSoundCertified(cloud, localFilled, active = activeProfile) {
-  if (profileSoundCertifiedTruthy(cloud?.soundCertified)) return true;
-  if (profileSoundCertifiedTruthy(localFilled?.soundCertified)) return true;
-  if (profileSoundCertifiedTruthy(active?.soundCertified)) return true;
   const uid = String(active?.id || authSession?.user?.id || "").trim();
+  if (profileSoundCertifiedTruthy(cloud?.soundCertified)) return true;
   try {
     if (uid && _nabadCertifiedUserIds?.has(uid)) return true;
   } catch {}
+  const cloudLoaded = Boolean(cloud && (cloud.user_id || cloud.id || cloud.username));
+  if (cloudLoaded) return false;
+  if (profileSoundCertifiedTruthy(localFilled?.soundCertified)) return true;
+  if (profileSoundCertifiedTruthy(active?.soundCertified)) return true;
   return false;
 }
 
@@ -53361,22 +53478,13 @@ async function playLibraryListRowById(id, opts) {
   try {
     stopVocalsPlayback();
   } catch {}
-  if (
-    t.taskId &&
-    !isArchivedSongStorageUrl(t.url) &&
-    isLikelySunoOriginCdnUrl(t.url)
-  ) {
-    try {
-      const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
-      const freshUrl = String(refreshed?.url || "").trim();
-      if (freshUrl && !isLikelySunoOriginCdnUrl(freshUrl)) {
-        patchLibraryRowWithRefreshedUrl(id, freshUrl, freshUrl, t);
-        t = loadLibrary().find((x) => x.id === id) || { ...t, url: freshUrl };
-      }
-    } catch {}
-  }
   const playSource = libraryPlaybackUrl(t);
   const openPlayer = openPlayerUnlessFeedOrDesk(opts);
+  if (openPlayer && !isDeskWebLayout()) {
+    try {
+      if (!/^#\/player\b/i.test(String(location.hash || ""))) location.hash = "#/player";
+    } catch {}
+  }
   if (!isArchivedSongStorageUrl(t.url)) queueArchiveLibraryTrack(t);
   // Never block tap-to-play on Suno refresh — iOS rejects play() once the
   // gesture goes stale. Refresh in the background and retry only if stuck.
@@ -54202,6 +54310,7 @@ function wireTrackOptionsSheetOnce() {
 function setPlaybackPending(pending) {
   _playbackPending = pending && typeof pending === "object" ? { ...pending } : null;
   try { syncPlayerToggleUI(); } catch {}
+  try { renderHubNowPlaying(); } catch {}
 }
 
 function clearPlaybackPending() {
@@ -66747,7 +66856,7 @@ function getLibraryRowPlaybackUiForTrack(trackId) {
   if (!a) return { active: true, audible: false, loading: false };
   const dur = getPlayerDuration();
   const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
-  const audible = !a.paused && !a.ended && (dur > 0 || cur > 0);
+  const audible = !a.paused && !a.ended && Boolean(String(a.src || a.currentSrc || "").trim());
   return { active: true, audible, loading: false };
 }
 
@@ -66764,7 +66873,7 @@ function getProfileHubRowPlaybackUi(postId) {
   if (!a) return { active: true, audible: false, loading: false };
   const dur = getPlayerDuration();
   const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
-  const audible = !a.paused && !a.ended && (dur > 0 || cur > 0);
+  const audible = !a.paused && !a.ended && Boolean(String(a.src || a.currentSrc || "").trim());
   return { active: true, audible, loading: false };
 }
 
@@ -68804,6 +68913,11 @@ function ensurePlayer() {
     syncLockScreenNowPlaying({ force: true });
     try { presenceTick(); } catch {}
     try { onLiveListenPlayerEvent("play"); } catch {}
+    try { restartMiniStripBarAnimation(); } catch {}
+  });
+  playerEl.addEventListener("playing", () => {
+    try { renderHubNowPlaying(); } catch {}
+    try { restartMiniStripBarAnimation(); } catch {}
   });
   playerEl.addEventListener("pause", () => {
     syncPlayerUI();
@@ -72233,6 +72347,11 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
     Boolean(currentPlayerTrackRef?.fromSharedLink) ||
     Boolean(parseSharedTrackIdFromLocation());
   const reelOpen = Boolean(opts.reelSwap || opts.discoverReel || miniSource?.discoverReel);
+  if (!shareListen && !isDeskWebLayout()) {
+    try {
+      if (!/^#\/player\b/i.test(String(location.hash || ""))) location.hash = "#/player";
+    } catch {}
+  }
   if (!reelOpen) {
     unmarkDiscoverReelPlayerShell();
     clearDiscoverReelOpeningLock();
@@ -72265,11 +72384,6 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
       releaseDiscoverReelFullBleedLayout();
       clearDiscoverReelOpeningLock();
     }, 520);
-  }
-  if (!shareListen && !isDeskWebLayout()) {
-    try {
-      if (!/^#\/player\b/i.test(String(location.hash || ""))) location.hash = "#/player";
-    } catch {}
   }
   const a = ensurePlayer();
   const playUrl = normalizeAudioUrlForPlayback(url);
@@ -72308,20 +72422,49 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
     void startPlayback();
     return;
   }
-  await primeAudioDurationHint(playUrl);
-  await waitForAudioCanPlay(a, 12000);
   try { a.muted = false; } catch {}
+  void primeAudioDurationHint(playUrl);
+  try { syncPlayerUI(); renderHubNowPlaying(); } catch {}
+  const pendingHook =
+    shouldApplyFeedHook(miniSource) &&
+    miniSource?.applyFeedHook !== false &&
+    feedHookStartFromContext(miniSource) > 0;
+  if (pendingHook) {
+    try { a.volume = 0; } catch {}
+  } else {
+    try { if (a.volume <= 0.01) a.volume = 1; } catch {}
+  }
+  void hubAudioPlayWithRetry(a).then(async (ok) => {
+    if (!ok) {
+      clearPlaybackPending();
+      try { syncPlayerUI(); renderHubNowPlaying(); } catch {}
+      return;
+    }
+    try {
+      await applyFeedHookAfterPlayStart(a, miniSource);
+      if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
+      if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
+      try { syncPlayerUI(); renderHubNowPlaying(); } catch {}
+    } catch {}
+  });
   try {
-    const ok = await hubAudioPlayWithRetry(a);
-    if (!ok) throw new Error("play_failed");
+    const canPlay = await waitForAudioCanPlay(a, 12000);
+    if (!canPlay) throw new Error("preview_load_failed");
+    if (a.paused && !a.ended) {
+      const ok = await hubAudioPlayWithRetry(a);
+      if (!ok) throw new Error("play_failed");
+    }
     await applyFeedHookAfterPlayStart(a, miniSource);
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
+    try { syncPlayerUI(); renderHubNowPlaying(); } catch {}
   } catch (e) {
+    clearPlaybackPending();
     setStatus(`In-app playback failed (${e?.name || "error"}). Tap Open Direct.`);
     try {
       showToast(audioLoadFailureMessage(a), { icon: "♪", durationMs: 4200 });
     } catch {}
+    try { syncPlayerUI(); renderHubNowPlaying(); } catch {}
   }
 }
 
@@ -80331,11 +80474,8 @@ window.addEventListener("scroll", () => {
   const route = document.body.getAttribute("data-route") || "";
   // Hub reel scrolls inside `#hubList` — `window` does not move. All Hub
   // scroll-driven updates are on `hubList` (see `wireHubReelObserver`).
-  if (route === "hub") {
-    if (hubAudio) scheduleRenderHubNowPlaying();
-    return;
-  }
-  if (hubAudio) scheduleRenderHubNowPlaying();
+  if (document.body.classList.contains("hasMiniStrip")) scheduleRenderHubNowPlaying();
+  else if (route === "hub" && hubAudio) scheduleRenderHubNowPlaying();
 }, { passive: true });
 window.addEventListener("resize", () => {
   if ((document.body.getAttribute("data-route") || "") === "hub") {

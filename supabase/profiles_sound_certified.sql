@@ -14,5 +14,35 @@ comment on column public.profiles.sound_certified is
 -- Example for founder — run once in Supabase SQL Editor:
 -- update public.profiles
 -- set sound_certified = true
--- where user_id = 'YOUR-UUID-HERE'
---    or email ilike '%samynaoum%';
+-- where user_id = 'YOUR-UUID-HERE';
+
+-- Audit (who wrongly has the badge):
+-- select user_id, username, email, sound_certified from public.profiles where sound_certified = true;
+
+-- Reset everyone, then grant only real creators:
+-- update public.profiles set sound_certified = false where sound_certified is distinct from false;
+
+-- Block self-service verified (users PATCHing their own row cannot flip this flag):
+create or replace function public.profiles_guard_sound_certified()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is not null and auth.uid() = new.user_id then
+    if tg_op = 'INSERT' then
+      new.sound_certified := false;
+    elsif new.sound_certified is distinct from old.sound_certified then
+      new.sound_certified := old.sound_certified;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_guard_sound_certified on public.profiles;
+create trigger profiles_guard_sound_certified
+  before insert or update on public.profiles
+  for each row
+  execute function public.profiles_guard_sound_certified();

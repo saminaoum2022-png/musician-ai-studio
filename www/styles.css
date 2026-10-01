@@ -22640,14 +22640,8 @@ input::placeholder, textarea::placeholder{
     pointer-events: auto;
   }
   /* Instagram glass pill — page shows through, faint white rim on top and bottom. */
-  .mobileTabbar::after{
-    content: "";
-    position: absolute;
-    left: calc(var(--tab-pad-x) + (var(--tab-col) - var(--tab-pill-size)) / 2 - var(--tab-tray-end));
-    right: calc(var(--tab-pad-x) + (var(--tab-col) - var(--tab-pill-size)) / 2 - var(--tab-tray-end));
-    top: calc(var(--tab-pad-y) + (var(--tab-pill-size) - var(--tab-tray-size)) / 2);
-    height: var(--tab-tray-size);
-    border-radius: 999px;
+  .mobileTabbar::after,
+  .hubNowStripGlass{
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 42%, rgba(255, 255, 255, 0.04)),
       color-mix(in srgb, var(--bg) 64%, transparent);
@@ -22661,6 +22655,15 @@ input::placeholder, textarea::placeholder{
       0 0 0 0.5px rgba(255, 255, 255, 0.12),
       0 10px 28px rgba(0, 0, 0, 0.22);
     pointer-events: none;
+  }
+  .mobileTabbar::after{
+    content: "";
+    position: absolute;
+    left: calc(var(--tab-pad-x) + (var(--tab-col) - var(--tab-pill-size)) / 2 - var(--tab-tray-end));
+    right: calc(var(--tab-pad-x) + (var(--tab-col) - var(--tab-pill-size)) / 2 - var(--tab-tray-end));
+    top: calc(var(--tab-pad-y) + (var(--tab-pill-size) - var(--tab-tray-size)) / 2);
+    height: var(--tab-tray-size);
+    border-radius: 999px;
     z-index: 0;
     transform: scale(1);
     transform-origin: 50% 50%;
@@ -23202,7 +23205,8 @@ input::placeholder, textarea::placeholder{
       0 0 0 1px rgba(15, 23, 40, 0.10),
       0 6px 14px rgba(15, 23, 40, 0.10);
   }
-  html[data-theme="light"] .mobileTabbar::after{
+  html[data-theme="light"] .mobileTabbar::after,
+  html[data-theme="light"] .hubNowStripGlass{
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 48%, rgba(255, 255, 255, 0.22)),
       color-mix(in srgb, var(--bg) 42%, transparent);
@@ -69488,7 +69492,9 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicMessage{ --ic: url("d
 }
 .upmBio{
   margin: 0;
-  font: 500 16.5px/1.55 var(--font-body, inherit);
+  font-weight: 500;
+  font-size: 16.5px;
+  line-height: 1.55;
   letter-spacing: -0.012em;
   color: rgba(255,255,255,.92);
 }
@@ -69503,7 +69509,9 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicMessage{ --ic: url("d
   background: none;
   text-align: left;
   cursor: pointer;
-  font: 500 16px/1.45 var(--font-body, inherit);
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.45;
   color: rgba(255,255,255,.42);
   -webkit-tap-highlight-color: transparent;
 }
@@ -69515,7 +69523,9 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicMessage{ --ic: url("d
 .upmSoundLabel{
   display: block;
   margin: 0 0 10px;
-  font: 700 11px/1 var(--font-body, inherit);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1;
   letter-spacing: .16em;
   text-transform: uppercase;
   color: rgba(255,255,255,.36);
@@ -70733,22 +70743,51 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay:active{ backgrou
   }
   .hubNowPlaying.isVisible{ transform: translate3d(0, var(--strip-dy, 0px), 0); opacity: 1; }
   .hubNowPlaying.isSwiping{ transition: none !important; }
+  /* Position snaps; fade still runs. Used when the dock settles after minimize. */
+  .hubNowPlaying.isDockSettling{
+    transition: opacity 240ms ease, transform 280ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+  }
   /* divider between the strip and the tab icons */
   .hubNowPlaying::after{
     content: ""; position: absolute; left: 16px; right: 16px; bottom: 0; height: 1px;
     background: rgba(255,255,255,.10); transition: opacity 240ms ease; pointer-events: none;
   }
-  /* own glass, only visible once the bar has collapsed */
-  .hubNowPlaying::before{
-    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 0;
-    opacity: 0; transition: opacity 260ms ease;
+  /* Attached to the tab capsule: glass comes from .mobileTabbar::after (extended).
+     Floating pill: #hubNowStripGlass uses the same .hubNowStripGlass stack as ::after. */
+  .hubNowPlaying::before{ content: none; display: none; }
+  .hubNowStripGlass{
+    --strip-m: max(10px, env(safe-area-inset-bottom, 0px));
+    --strip-cs: calc((100vw - 36px) / 5);
+    display: none;
+    position: fixed;
+    z-index: 94;
+    left: calc(18px + (var(--strip-cs) - 46px) / 2 - 26px);
+    right: calc(100vw - (18px + 4 * var(--strip-cs) + (var(--strip-cs) - 52px) / 2) + 8px);
+    bottom: calc(13px + var(--strip-m));
+    height: 52px;
+    border-radius: 999px;
+    opacity: 0;
+    transform: translate3d(0, 4px, 0);
+    transition: opacity 240ms ease, transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  body.tabbarCollapsed .hubNowStripGlass.isVisible{
+    display: block;
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  /* Same background math as .mobileTabbar::after (color-mix at 64%) but WKWebView
+   * has a known habit of not compositing backdrop-filter reliably on a toggled,
+   * position:fixed div the way it does on the tab bar's own pseudo-element — so
+   * in practice the floating pill reads visibly more transparent than the bar
+   * even though the authored values are identical. Raise the flat tint here so
+   * the pill still looks as solid as the bar even when the blur doesn't render. */
+  .hubNowStripGlass{
     background:
-      linear-gradient(180deg, rgba(255,255,255,.06), transparent 42%, rgba(255,255,255,.04)),
-      color-mix(in srgb, var(--bg) 64%, transparent);
-    -webkit-backdrop-filter: blur(44px) saturate(1.45); backdrop-filter: blur(44px) saturate(1.45);
-    box-shadow:
-      inset 0 0.5px 0 rgba(255,255,255,.30), inset 0 -0.5px 0 rgba(255,255,255,.18),
-      0 0 0 0.5px rgba(255,255,255,.12), 0 10px 28px rgba(0,0,0,.22);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 42%, rgba(255, 255, 255, 0.04)),
+      color-mix(in srgb, var(--bg) 92%, transparent);
+  }
+  body.tabbarCollapsed .hubNowStripGlass.isDockSettling{
+    transition: none;
   }
   .hubNowPlaying > *{ position: relative; z-index: 1; }
 
@@ -70758,8 +70797,9 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay:active{ backgrou
     bottom: calc(13px + var(--strip-m));
     height: 52px;
     border-radius: 999px;
+    background: transparent;
+    box-shadow: none;
   }
-  body.tabbarCollapsed .hubNowPlaying::before{ opacity: 1; background: linear-gradient(180deg, rgba(255,255,255,.06), transparent 42%, rgba(255,255,255,.04)), color-mix(in srgb, var(--bg) 88%, transparent); }
   body.tabbarCollapsed .hubNowPlaying::after{ opacity: 0; }
 
   /* record */
@@ -70773,25 +70813,83 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay:active{ backgrou
     position: static; width: auto; height: auto; margin: 0; padding: 0; clip: auto; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; display: block; unicode-bidi: plaintext; text-align: left;
   }
-  .hubNowPlaying .hubNowTitle{ font: 700 13.5px/1.2 var(--font-body, inherit); color: #fff; }
-  .hubNowPlaying .hubNowSubtitle{ font: 500 11px/1.2 var(--font-body, inherit); color: rgba(255,255,255,.62); }
+  /* Matches .playerTitle's weight/tracking (800, tight negative letter-spacing)
+   * so the mini strip's title reads as the same brand of title as the full
+   * player screen, instead of looser default-weight text.
+   * NOTE: was previously the shorthand `font: 700 13.5px/1.2 var(--font-body,
+   * inherit)` — --font-body is never defined anywhere, so that var() always
+   * resolved to the literal keyword `inherit`, and `inherit` is only valid as
+   * a property's ONE AND ONLY value, never mixed into a `font:` shorthand's
+   * value list. That made the whole shorthand invalid, which per spec falls
+   * back to the inherited value — so no weight set here was ever actually
+   * applied, regardless of what it said. Longhand properties avoid the trap. */
+  .hubNowPlaying .hubNowTitle{ font-weight: 800; font-size: 13.5px; line-height: 1.2; letter-spacing: -0.15px; color: #fff; }
+  .hubNowPlaying .hubNowSubtitle{ font-weight: 500; font-size: 11px; line-height: 1.2; color: rgba(255,255,255,.62); }
   .hubNowPlaying .hubNowSubtitle:empty{ display: none; }
 
   /* play / pause: two bars while playing, white play disc while paused */
   .hubNowToggle{
     -webkit-appearance: none; appearance: none; flex: none; position: relative;
     width: 36px; height: 36px; padding: 0; margin: 0; border-radius: 50%;
-    display: grid; place-items: center; cursor: pointer; color: #fff;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    place-items: center;
+    cursor: pointer; color: #fff;
     background: transparent; border: 1.5px solid rgba(255,255,255,.7);
     -webkit-tap-highlight-color: transparent; touch-action: manipulation;
     transition: background 180ms ease, color 180ms ease, border-color 180ms ease, transform 120ms ease;
   }
   .hubNowToggle:active{ transform: scale(.94); }
-  .hubNowToggle .hubNowToggleBars{ --nb-purple: #8f74ff; --nb-teal: #22c5a9; display: none; }
-  .hubNowToggle .hubNowTogglePlay{ width: 15px; height: 15px; margin-left: 2px; display: block; }
-  .hubNowPlaying.isPlaying .hubNowToggle .hubNowToggleBars{ display: inline-flex; }
-  .hubNowPlaying.isPlaying .hubNowToggle .hubNowTogglePlay{ display: none; }
-  .hubNowPlaying:not(.isPlaying) .hubNowToggle{ background: #fff; color: #0b0b13; border-color: #fff; }
+  /* Keep bars in the tree (opacity, not display:none) so iOS does not freeze the animation. */
+  .hubNowToggle .hubNowToggleBars,
+  .hubNowToggle .hubNowTogglePlay{
+    grid-area: 1 / 1;
+    place-self: center;
+  }
+  .hubNowToggle .hubNowToggleBars{
+    --nb-purple: #8f74ff; --nb-teal: #22c5a9;
+    display: inline-flex;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .hubNowToggle .hubNowTogglePlay{
+    width: 15px; height: 15px;
+    display: block;
+    transform: translateX(1px);
+    transition: opacity 160ms ease, visibility 160ms ease;
+  }
+  .hubNowPlaying.isPlaying .hubNowToggle .hubNowToggleBars{
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+  .hubNowPlaying.isPlaying .hubNowToggle .hubNowTogglePlay{
+    opacity: 0;
+    visibility: hidden;
+    position: absolute;
+    pointer-events: none;
+  }
+  .hubNowPlaying.isBuffering .hubNowToggle .hubNowToggleBars{
+    opacity: 1;
+    visibility: visible;
+    pointer-events: none;
+  }
+  .hubNowPlaying.isBuffering .hubNowToggle .hubNowToggleBars i:first-child{ animation: nbBar1 1.3s ease-in-out infinite; }
+  .hubNowPlaying.isBuffering .hubNowToggle .hubNowToggleBars i:last-child{ animation: nbBar2 1.3s ease-in-out infinite; }
+  .hubNowPlaying.isBuffering .hubNowToggle .hubNowTogglePlay{
+    opacity: 0;
+    visibility: hidden;
+    position: absolute;
+    pointer-events: none;
+  }
+  .hubNowPlaying.isBuffering .hubNowToggle{
+    background: transparent;
+    color: #fff;
+    border-color: rgba(255,255,255,.7);
+  }
+  .hubNowPlaying:not(.isPlaying):not(.isBuffering) .hubNowToggle{ background: #fff; color: #0b0b13; border-color: #fff; }
 
   /* Create: the dock no longer needs room for a floating vinyl */
   html.is-native-shell body[data-route="generate"]:has(.hubNowPlaying.isVisible:not(.isPlaced)) #createGenerateDock{ padding-right: 16px; }
@@ -71196,7 +71294,7 @@ body[data-route="profile"] .aaFlipFace--back .aaBackImg{
 }
 body[data-route="profile"] .aaBackKick{
   position: absolute; right: 62px; top: 306px;
-  font: 800 10.5px/1 var(--font-body, inherit); letter-spacing: .14em; color: rgba(255,255,255,.9);
+  font-weight: 800; font-size: 10.5px; line-height: 1; letter-spacing: .14em; color: rgba(255,255,255,.9);
   background: rgba(0,0,0,.4); border-radius: 999px; padding: 7px 12px; z-index: 3;
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
@@ -71301,8 +71399,8 @@ body[data-route="profile"] .profileArtistAvatarPromoIcon{
   object-fit: cover; display: block; background: #0b0b14;
 }
 body[data-route="profile"] .profileArtistAvatarPromoBody{ flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-body[data-route="profile"] .profileArtistAvatarPromoTitle{ font: 800 13.5px/1.2 var(--font-body, inherit); color: #fff; }
-body[data-route="profile"] .profileArtistAvatarPromoSub{ font: 500 11.5px/1.3 var(--font-body, inherit); color: rgba(255,255,255,.6); }
+body[data-route="profile"] .profileArtistAvatarPromoTitle{ font-weight: 800; font-size: 13.5px; line-height: 1.2; color: #fff; }
+body[data-route="profile"] .profileArtistAvatarPromoSub{ font-weight: 500; font-size: 11.5px; line-height: 1.3; color: rgba(255,255,255,.6); }
 body[data-route="profile"] .profileArtistAvatarPromoChevron{ flex: none; width: 16px; height: 16px; color: rgba(255,255,255,.5); }
 
 /* Bio's new home — its own labeled section instead of crowding the cover
@@ -71681,7 +71779,9 @@ html[data-theme="light"] .aaGold{ background: rgba(0,0,0,.03); }
    or the dark blur muddies the color into a shaded, near-black look. */
 .profileEditCoverName.hasGoldName{ text-shadow: none; filter: drop-shadow(0 3px 2px rgba(0,0,0,.4)); }
 .profileEditCoverHandle{
-  font: 600 14px/1.2 var(--font-body, inherit);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.2;
   color: rgba(255,255,255,.72);
   text-shadow: 0 1px 8px rgba(0,0,0,.5);
 }

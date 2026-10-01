@@ -5084,6 +5084,10 @@
           <span id="libraryTabDot" class="hubDot libraryTabDot profileTabDot" style="display:none" aria-hidden="true"></span>
         </a>
       </nav>
+      <!-- Frosted pill when the mini strip floats (tab bar collapsed). Same glass
+           stack as .mobileTabbar::after — a real layer at z-index 94, not ::before
+           on the strip (WKWebView often skips backdrop-filter on pseudos). -->
+      <div id="hubNowStripGlass" class="hubNowStripGlass" aria-hidden="true"></div>
       <div id="hubNowPlaying" class="hubNowPlaying" style="display:none">
         <button type="button" id="hubNowPlayPause" class="hubNowVinyl" aria-label="Open player. Long press to close.">
           <span class="hubNowDisc" aria-hidden="true"><span class="hubNowLabel"><img id="hubNowArt" class="hubNowArt" src="./assets/icons/splash-mark.png" alt="" decoding="async" /><span class="hubNowSpindle"></span></span></span>

@@ -69437,6 +69437,9 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicMessage{ --ic: url("d
 .upmTitleMarquee{ display: block; overflow: hidden; max-width: 100%; }
 .upmTitleMarqueeTrack{ display: inline-flex; align-items: baseline; white-space: nowrap; gap: 2.5rem; will-change: transform; }
 .upmTitleMarqueeChunk{ flex: none; }
+/* Second chunk is only for the seamless scroll loop — hide it unless the row is marquee-running. */
+.upmTitleMarqueeChunk[aria-hidden="true"]{ display: none; }
+.upmRow.upmTitleMarquee--run .upmTitleMarqueeChunk[aria-hidden="true"]{ display: inline; }
 .upmRow.isPlaying .upmTitleLine{ color: #fff; }
 .upmRow.upmTitleMarquee--run .upmTitleMarqueeTrack{
   animation: upmTitleMarqueeScroll 16s linear infinite;

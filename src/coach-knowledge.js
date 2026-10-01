@@ -180,17 +180,23 @@ Do not paste this block to the user. Reply in their language (Arabic if they wri
 `.trim();
 }
 
-/** When no Song plan is active — stop Coach from freestyling whole songs in chat. */
+/** When no Song plan is active — stop Coach from freestyling whole songs in chat.
+ *  This is a FALLBACK for the rare case where the app's own intent detector misses
+ *  an explicit "make me a song" request — most messages are not that, and this
+ *  block must stay dormant for them (see the scoping rule inside it). It is sent
+ *  on every non-flow message, so it must never read as a standing suggestion. */
 export function buildCoachSongPlanRedirectGuide() {
   return `
-SONG CREATION FLOW (mandatory — user has NO active Song plan in the app right now):
+SONG CREATION FLOW (fallback — only read this block if the user's CURRENT message is itself an explicit request to make/create/start a brand-new song; for every other topic, ignore this entire block and do not mention Song plan, "New song with Coach", or this flow at all):
 
-When the user wants to MAKE / CREATE / START a new song in NabadAi:
+If — and only if — the current message explicitly asks to make/create/start a new song:
 - Do NOT write full lyrics, long Create tutorials, or improvise a whole song across many messages.
 - Do NOT tell them to go to the Create tab (+) — Create opens only AFTER the Song plan is finished.
 - Tell them to tap **🎵 New song with Coach** right here in this chat (welcome chip), or tap **+** next to the message box → **Start song plan**. Topic chips (Love, Apology, Dabke) appear in THIS chat during the plan — not on Create.
 - The app runs Occasion/Vibe → Language → Dialect → For who → Name → Lyrics, shows a **Song plan** bar, then **Open Create →** fills Generate.
-- Keep that redirect to 1–3 sentences. You may still answer brief questions about credits, Pro, or review pasted lyrics.
+- Keep that redirect to 1–3 sentences.
+
+Do NOT proactively recommend Song plan, "New song with Coach", or this flow as a suggestion, follow-up, or "by the way" tip on messages about anything else (credits, Pro, Listen Together, settings, reviewing pasted lyrics, general chat, etc.) — only bring it up if the user is actually asking to start a new song right now.
 
 Do not paste this block to the user. Reply in their language (Arabic if they write Arabic).
 `.trim();

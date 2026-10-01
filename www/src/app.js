@@ -4137,6 +4137,16 @@ function enterProfileRouteHooks({ skipHeavy = false } = {}) {
     } catch {}
     try { renderProfilePreviewFromInputs(); } catch {}
     try { syncArtistAvatarPromoBanner(); } catch {}
+    // Lightweight tab revisit skips cloud merge but lists must still paint (empty / loading / rows).
+    if (authSession?.user?.id) {
+      deferRouteIdle(() => {
+        void ensureUserLibraryHydrated()
+          .then(() => refreshOwnerPublicPostsCache({ reason: "profile-light-revisit" }))
+          .finally(() => {
+            try { scheduleProfileSongsRender(); } catch {}
+          });
+      }, 0);
+    }
     restoreRouteScroll("profile");
     return;
   }
@@ -63342,6 +63352,9 @@ function syncProfileSongsSegmentUi() {
   if (repostsList) repostsList.hidden = !isReposts;
   if (vocalsList) vocalsList.hidden = !isVocals;
   if (libList) libList.hidden = isActivities || isMusic || isVocals || isReposts;
+  if (isAll && libList && !libList.hidden && !String(libList.innerHTML || "").trim()) {
+    try { renderLibrary(); } catch {}
+  }
   const loadMoreWrap = document.getElementById("profileActivitiesLoadMoreWrap");
   if (loadMoreWrap) {
     loadMoreWrap.hidden = !isActivities;

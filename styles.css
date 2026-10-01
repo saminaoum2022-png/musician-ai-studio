@@ -23827,8 +23827,8 @@ input::placeholder, textarea::placeholder{
 .coachFab{
   display: none;
   position: relative;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   padding: 0;
   align-items: center;
   justify-content: center;
@@ -23855,21 +23855,27 @@ input::placeholder, textarea::placeholder{
 .coachFab:active{ transform: scale(0.94); }
 .coachFabIco{
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 100%;
   overflow: visible;
   transform-origin: 50% 50%;
-  /* Subtle, slow "breathing" so the orb feels alive once it has settled.
-     Lives on the inner wrapper so it never fights the entrance transform on
-     the button. Delayed to start after the bloom finishes. */
-  animation: coachOrbBreathe 4200ms ease-in-out 420ms infinite;
 }
+/* Sized down from the button's full box (not edge-to-edge) so the mark reads
+ * as a small, convenient accent rather than a dominant icon. */
 .coachFab .coachFabIco svg{
-  width: 100%;
-  height: 100%;
+  width: 92%;
+  height: 92%;
   filter: drop-shadow(0 3px 8px rgba(91, 60, 255, 0.28));
-  animation: coachOrbGlow 4200ms ease-in-out 420ms infinite;
 }
+.coachFab .coachWaveBar{
+  animation: coachWaveIdle 1.1s cubic-bezier(.45,0,.55,1) infinite;
+}
+.coachFab .coachWaveBar:nth-of-type(2){ animation-duration: 1.35s; animation-delay: -1.1s; }
+.coachFab .coachWaveBar:nth-of-type(3){ animation-duration: 1.05s; animation-delay: -0.4s; }
+.coachFab .coachWaveBar:nth-of-type(4){ animation-duration: 1.2s;  animation-delay: -0.8s; }
+.coachFab .coachWaveBar:nth-of-type(5){ animation-duration: 0.95s; animation-delay: -0.15s; }
 @keyframes coachOrbBloom{
   0%   { opacity: 0; transform: scale(0.55) rotate(-18deg); }
   55%  { opacity: 1; }
@@ -39832,6 +39838,58 @@ body[data-route="messages"]{
   display: block;
   filter: drop-shadow(0 3px 8px rgba(91,60,255,0.30));
 }
+/* Coach waveform mark — static resting pose everywhere by default (matches
+ * the old orb's per-message avatars: no animation on every bubble in a long
+ * chat, or it reads as noise). Specific single-instance contexts below opt
+ * into a continuous idle "breathing" loop plus reactive states. */
+.coachWaveBar{ transform-box: fill-box; transform-origin: center; }
+.coachWaveRing{ opacity: 0; }
+@keyframes coachWaveIdle{ 0%, 100% { transform: scaleY(0.62); } 50% { transform: scaleY(0.88); } }
+@keyframes coachWaveThink{ 0%, 100% { transform: scaleY(0.4); } 50% { transform: scaleY(1); } }
+@keyframes coachWavePop{ 0% { transform: scaleY(1); } 32% { transform: scaleY(1.55); } 60% { transform: scaleY(0.82); } 100% { transform: scaleY(1); } }
+@keyframes coachWaveRipple{ 0% { transform: scaleY(1); } 40% { transform: scaleY(1.3); } 100% { transform: scaleY(1); } }
+@keyframes coachWaveRippleRing{ 0% { opacity: 0.5; transform: scale(0.3); } 100% { opacity: 0; transform: scale(2.1); } }
+/* Always-alive contexts: the thread header avatar and the Song plan bar icon
+ * — single, prominent instances (not one per chat bubble). */
+.messagesThreadAvatarImg.coachWave .coachWaveBar,
+.coachSongPlanBarOrb.coachWave .coachWaveBar{
+  animation: coachWaveIdle 1.1s cubic-bezier(.45,0,.55,1) infinite;
+}
+.messagesThreadAvatarImg.coachWave .coachWaveBar:nth-of-type(2){ animation-duration: 1.35s; animation-delay: -1.1s; }
+.messagesThreadAvatarImg.coachWave .coachWaveBar:nth-of-type(3){ animation-duration: 1.05s; animation-delay: -0.4s; }
+.messagesThreadAvatarImg.coachWave .coachWaveBar:nth-of-type(4){ animation-duration: 1.2s;  animation-delay: -0.8s; }
+.messagesThreadAvatarImg.coachWave .coachWaveBar:nth-of-type(5){ animation-duration: 0.95s; animation-delay: -0.15s; }
+.coachSongPlanBarOrb.coachWave .coachWaveBar:nth-of-type(2){ animation-duration: 1.35s; animation-delay: -1.1s; }
+.coachSongPlanBarOrb.coachWave .coachWaveBar:nth-of-type(3){ animation-duration: 1.05s; animation-delay: -0.4s; }
+.coachSongPlanBarOrb.coachWave .coachWaveBar:nth-of-type(4){ animation-duration: 1.2s;  animation-delay: -0.8s; }
+.coachSongPlanBarOrb.coachWave .coachWaveBar:nth-of-type(5){ animation-duration: 0.95s; animation-delay: -0.15s; }
+/* Thinking — a clear left-to-right traveling peak while Coach is replying. */
+.coachWave.isThinking .coachWaveBar{ animation-name: coachWaveThink; animation-duration: 1.1s; }
+.coachWave.isThinking .coachWaveBar:nth-of-type(1){ animation-delay: 0s; }
+.coachWave.isThinking .coachWaveBar:nth-of-type(2){ animation-delay: 0.11s; }
+.coachWave.isThinking .coachWaveBar:nth-of-type(3){ animation-delay: 0.22s; }
+.coachWave.isThinking .coachWaveBar:nth-of-type(4){ animation-delay: 0.33s; }
+.coachWave.isThinking .coachWaveBar:nth-of-type(5){ animation-delay: 0.44s; }
+/* "Got it" — one-shot unison pop when Coach understands something. */
+.coachWave.isPopping .coachWaveBar{ animation: coachWavePop 0.55s cubic-bezier(.34,1.56,.64,1) 1 both; }
+/* Tap reaction — quiet ripple + bump, no meaning attached, pure delight. */
+.coachWave.isTapping{ cursor: pointer; }
+.coachWave.isTapping .coachWaveBar{ animation: coachWaveRipple 0.5s cubic-bezier(.34,1.56,.64,1) 1 both; }
+.coachWave.isTapping .coachWaveBar:nth-of-type(2),
+.coachWave.isTapping .coachWaveBar:nth-of-type(4){ animation-delay: 0.02s; }
+.coachWave.isTapping .coachWaveBar:nth-of-type(3){ animation-delay: 0.04s; }
+.coachWave.isTapping .coachWaveRing{ animation: coachWaveRippleRing 0.6s ease-out 1 both; }
+#messagesThreadAvatar .coachWave{ cursor: pointer; }
+@media (prefers-reduced-motion: reduce){
+  .coachWaveBar,
+  .messagesThreadAvatarImg.coachWave .coachWaveBar,
+  .coachSongPlanBarOrb.coachWave .coachWaveBar,
+  .coachWave.isThinking .coachWaveBar,
+  .coachWave.isPopping .coachWaveBar,
+  .coachWave.isTapping .coachWaveBar,
+  .coachWave.isTapping .coachWaveRing,
+  .coachFab .coachWaveBar{ animation: none; }
+}
 .coachBadge{
   display: inline-block;
   margin-left: 6px;
@@ -39876,31 +39934,48 @@ body[data-route="messages"]{
 }
 .coachSignupCta{
   appearance: none;
-  border: 1px solid rgba(124, 92, 255, 0.42);
-  background: rgba(124, 92, 255, 0.14);
+  border: 1px solid transparent;
+  background:
+    linear-gradient(rgba(25, 21, 42, 0.9), rgba(25, 21, 42, 0.9)) padding-box,
+    linear-gradient(135deg, rgba(124, 92, 255, 0.85), rgba(35, 213, 171, 0.7)) border-box;
   color: rgba(245, 247, 255, 0.96);
   border-radius: 999px;
-  padding: 8px 13px;
+  padding: 8px 14px;
   font-size: 12.5px;
   font-weight: 650;
   line-height: 1.2;
   cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
 }
 .coachSignupCta:active{
-  transform: scale(0.98);
-  background: rgba(124, 92, 255, 0.24);
+  transform: scale(0.97);
+  box-shadow: 0 0 0 1px rgba(124, 92, 255, 0.35), 0 6px 16px rgba(91, 60, 255, 0.24);
 }
 .messagesBubble--coachSignup{
   max-width: min(92vw, 360px);
 }
 html[data-theme="light"] .coachSignupCta{
-  border-color: rgba(91, 60, 255, 0.28);
-  background: rgba(91, 60, 255, 0.08);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.97), rgba(255, 255, 255, 0.97)) padding-box,
+    linear-gradient(135deg, rgba(91, 60, 255, 0.6), rgba(18, 184, 150, 0.55)) border-box;
   color: rgba(18, 22, 34, 0.92);
 }
-/* Coach song plan — progress bar + re-ask sheet (mirrors signup intake) */
+/* Coach song plan — progress bar + re-ask sheet (mirrors signup intake)
+ * The thread header (.messagesThreadHead) is `position: fixed`, so it takes
+ * no space in flow — without its own fixed position+offset, this bar would
+ * sit at the very top of the page underneath the header, inside the
+ * header's own translucent fade zone (built to blend with the status bar),
+ * which is exactly why the old flat/dark bar quietly bled through there
+ * unnoticed while this card's bright gradient border made it obvious. Pin it
+ * right below the measured header height instead, and feed its own height
+ * into --coach-plan-bar-h (see updateMessagesThreadHeadReserve) so
+ * .messagesThreadMount still starts below it, not underneath it. */
 .coachSongPlanBar{
-  flex: 0 0 auto;
+  position: fixed;
+  top: var(--messages-thread-head-h, 64px);
+  left: 0;
+  right: 0;
+  z-index: 9;
   padding: 0 max(12px, env(safe-area-inset-left, 0px)) 8px max(12px, env(safe-area-inset-right, 0px));
   box-sizing: border-box;
 }
@@ -39910,28 +39985,56 @@ html[data-theme="light"] .coachSignupCta{
   gap: 10px;
   width: 100%;
   margin: 0;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(124, 92, 255, 0.35);
-  background: rgba(124, 92, 255, 0.1);
+  padding: 9px 14px;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, rgba(22, 18, 40, 0.92), rgba(13, 12, 24, 0.94)) padding-box,
+    linear-gradient(135deg, #7c5cff, #23d5ab) border-box;
   color: rgba(245, 247, 255, 0.96);
   cursor: pointer;
   text-align: left;
   -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 20px rgba(45, 23, 110, 0.22);
+  transition: transform 150ms ease;
 }
 .coachSongPlanBarBtn:active{ transform: scale(0.99); }
-.coachSongPlanBarIco{ flex: 0 0 auto; font-size: 16px; line-height: 1; }
+.coachSongPlanBarOrb.coachAvatar{
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+}
 .coachSongPlanBarCopy{
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+}
+.coachSongPlanBarTop{
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .coachSongPlanBarTitle{
   font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.01em;
+}
+.coachSongPlanBarDots{
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.coachSongPlanBarDots .coachSongPlanDot{
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(223, 231, 251, 0.22);
+  flex: 0 0 auto;
+}
+.coachSongPlanBarDots .coachSongPlanDot.isDone{
+  background: linear-gradient(135deg, #7c5cff, #23d5ab);
 }
 .coachSongPlanBarSub{
   font-size: 11px;
@@ -39946,6 +40049,19 @@ html[data-theme="light"] .coachSignupCta{
   font-size: 18px;
   font-weight: 700;
   opacity: 0.55;
+}
+html[data-theme="light"] .coachSongPlanBarBtn{
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 248, 255, 0.98)) padding-box,
+    linear-gradient(135deg, #7c5cff, #23d5ab) border-box;
+  color: rgba(18, 22, 34, 0.92);
+  box-shadow: 0 6px 18px rgba(91, 60, 255, 0.14);
+}
+html[data-theme="light"] .coachSongPlanBarDots .coachSongPlanDot{
+  background: rgba(18, 22, 34, 0.14);
+}
+html[data-theme="light"] .coachSongPlanBarSub{
+  color: rgba(18, 22, 34, 0.55);
 }
 .coachSongPlanSheet{
   position: fixed;
@@ -40036,8 +40152,24 @@ html[data-theme="light"] .coachSignupCta{
   background: rgba(255, 255, 255, 0.03);
 }
 .coachSongPlanRow.isPending{
-  border-color: rgba(124, 92, 255, 0.42);
-  background: rgba(124, 92, 255, 0.08);
+  border: 1px solid transparent;
+  background:
+    linear-gradient(rgba(124, 92, 255, 0.1), rgba(124, 92, 255, 0.1)) padding-box,
+    linear-gradient(135deg, rgba(124, 92, 255, 0.85), rgba(35, 213, 171, 0.7)) border-box;
+}
+.coachSongPlanRowIco{
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+.coachSongPlanRow.isPending .coachSongPlanRowIco{
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.35), rgba(35, 213, 171, 0.3));
 }
 .coachSongPlanRowLabel{
   flex: 0 0 auto;
@@ -41118,7 +41250,7 @@ html[data-theme="light"] .liveListenChip{
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 4px 8px 8px;
-  padding-top: calc(var(--messages-thread-head-h, 64px) + 4px);
+  padding-top: calc(var(--messages-thread-head-h, 64px) + var(--coach-plan-bar-h, 0px) + 4px);
   -webkit-overflow-scrolling: touch;
   scroll-padding-bottom: calc(var(--messages-composer-h, 72px) + 8px);
   padding-bottom: calc(var(--messages-composer-h, 72px) + 8px);

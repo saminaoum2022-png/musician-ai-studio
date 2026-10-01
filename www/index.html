@@ -1973,9 +1973,12 @@
           </header>
           <div id="coachSongPlanBar" class="coachSongPlanBar" hidden aria-hidden="true">
             <button type="button" class="coachSongPlanBarBtn" id="coachSongPlanOpenBtn" aria-haspopup="dialog" aria-controls="coachSongPlanSheet">
-              <span class="coachSongPlanBarIco" aria-hidden="true">🎵</span>
+              <span class="coachSongPlanBarOrb coachAvatar coachWave" aria-hidden="true"><svg viewBox="0 0 100 60" aria-hidden="true" class="coachWaveSvg"><defs><linearGradient id="coachWaveGBar" x1="6" y1="6" x2="94" y2="54" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#36e7c0"/><stop offset="1" stop-color="#6a23da"/></linearGradient></defs><rect class="coachWaveBar" x="14" y="18" width="9" height="24" rx="4.5" fill="url(#coachWaveGBar)"/><rect class="coachWaveBar" x="31" y="12" width="9" height="36" rx="4.5" fill="url(#coachWaveGBar)"/><rect class="coachWaveBar" x="48" y="4" width="9" height="52" rx="4.5" fill="url(#coachWaveGBar)"/><rect class="coachWaveBar" x="65" y="12" width="9" height="36" rx="4.5" fill="url(#coachWaveGBar)"/><rect class="coachWaveBar" x="82" y="18" width="9" height="24" rx="4.5" fill="url(#coachWaveGBar)"/></svg></span>
               <span class="coachSongPlanBarCopy">
-                <span class="coachSongPlanBarTitle" id="coachSongPlanBarTitle">Song plan</span>
+                <span class="coachSongPlanBarTop">
+                  <span class="coachSongPlanBarTitle" id="coachSongPlanBarTitle">Song plan</span>
+                  <span class="coachSongPlanBarDots" id="coachSongPlanBarDots" aria-hidden="true"></span>
+                </span>
                 <span class="coachSongPlanBarSub" id="coachSongPlanBarSub">Tap to review or re-ask</span>
               </span>
               <span class="coachSongPlanBarChev" aria-hidden="true">›</span>
@@ -5109,36 +5112,19 @@
     <div id="coachFabParking" class="coachFabParking" hidden aria-hidden="true">
     <button id="coachFab" class="coachFab" type="button" aria-label="Ask NabadAi Coach">
       <span class="coachFabPill" aria-hidden="true">Need help? 🎵</span>
-      <span class="coachFabIco" aria-hidden="true">
-        <svg viewBox="0 0 100 100" overflow="visible" aria-hidden="true">
+      <span class="coachFabIco coachWave" aria-hidden="true">
+        <svg viewBox="0 0 100 60" aria-hidden="true" class="coachWaveSvg">
           <defs>
-            <linearGradient id="coachOrbFabG" x1="28" y1="22" x2="72" y2="82" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#5ef0d4"/>
-              <stop offset=".45" stop-color="#3f73f0"/>
+            <linearGradient id="coachWaveGFab" x1="6" y1="6" x2="94" y2="54" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#36e7c0"/>
               <stop offset="1" stop-color="#6a23da"/>
             </linearGradient>
-            <radialGradient id="coachOrbFabHi" cx=".34" cy=".28" r=".62">
-              <stop offset="0" stop-color="#ffffff" stop-opacity=".72"/>
-              <stop offset=".42" stop-color="#ffffff" stop-opacity=".12"/>
-              <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-            </radialGradient>
-            <radialGradient id="coachOrbFabShade" cx=".64" cy=".74" r=".58">
-              <stop offset="0" stop-color="#12082e" stop-opacity=".34"/>
-              <stop offset="1" stop-color="#12082e" stop-opacity="0"/>
-            </radialGradient>
-            <filter id="coachOrbFabDrop" x="-30%" y="-30%" width="160%" height="160%">
-              <feDropShadow dx="0" dy="2.5" stdDeviation="2.2" flood-color="#4f46e5" flood-opacity=".34"/>
-            </filter>
           </defs>
-          <g class="coachOrbArcRing">
-            <path class="coachOrbArc" d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#36e7c0" stroke-width="3.2" stroke-linecap="round"/>
-            <path class="coachOrbArc coachOrbArc--b" d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#36e7c0" stroke-width="3.2" stroke-linecap="round"/>
-          </g>
-          <g filter="url(#coachOrbFabDrop)">
-            <circle cx="50" cy="50" r="27.5" fill="url(#coachOrbFabG)"/>
-            <circle cx="50" cy="50" r="27.5" fill="url(#coachOrbFabHi)"/>
-            <circle cx="50" cy="50" r="27.5" fill="url(#coachOrbFabShade)"/>
-          </g>
+          <rect class="coachWaveBar" x="14" y="18" width="9" height="24" rx="4.5" fill="url(#coachWaveGFab)"/>
+          <rect class="coachWaveBar" x="31" y="12" width="9" height="36" rx="4.5" fill="url(#coachWaveGFab)"/>
+          <rect class="coachWaveBar" x="48" y="4" width="9" height="52" rx="4.5" fill="url(#coachWaveGFab)"/>
+          <rect class="coachWaveBar" x="65" y="12" width="9" height="36" rx="4.5" fill="url(#coachWaveGFab)"/>
+          <rect class="coachWaveBar" x="82" y="18" width="9" height="24" rx="4.5" fill="url(#coachWaveGFab)"/>
         </svg>
       </span>
     </button>

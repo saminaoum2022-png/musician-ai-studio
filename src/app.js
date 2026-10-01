@@ -39887,12 +39887,18 @@ function updateMessagesComposerReserve() {
 
 function updateMessagesThreadHeadReserve() {
   const head = document.querySelector(".messagesThreadHead");
-  if (!head) return;
-  const h = Math.ceil(head.getBoundingClientRect().height);
-  if (h <= 0) return;
-  try {
-    document.documentElement.style.setProperty("--messages-thread-head-h", `${h}px`);
-  } catch {}
+  if (head) {
+    const h = Math.ceil(head.getBoundingClientRect().height);
+    if (h > 0) {
+      try { document.documentElement.style.setProperty("--messages-thread-head-h", `${h}px`); } catch {}
+    }
+  }
+  // The Song plan bar floats fixed right below the header (see .coachSongPlanBar
+  // in styles.css) — .messagesThreadMount needs its real height added to its own
+  // top padding, or thread content would start underneath it instead of below it.
+  const bar = document.getElementById("coachSongPlanBar");
+  const barH = bar && !bar.hidden ? Math.ceil(bar.getBoundingClientRect().height) : 0;
+  try { document.documentElement.style.setProperty("--coach-plan-bar-h", `${barH}px`); } catch {}
 }
 
 const MESSAGES_THREAD_HEAD_COLLAPSE_THRESH = 16;
@@ -45233,10 +45239,15 @@ const COACH_CHAT_MAX = 60;
 const COACH_MESSAGE_MAX = 2000;
 const DM_MESSAGE_MAX = 500;
 const COACH_TYPING_ID = "coach:typing";
-// Nabad Coach mark — a glassy gradient orb inside a dual ring (teal orbit arcs
-// over a navy ring), designed to complement the "n" logo. Rendered as SVG so it
-// stays crisp, transparent (no white box), and recolorable at any size.
-const COACH_ORB_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="coachOrbG" x1="26" y1="24" x2="74" y2="80" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#36e7c0"/><stop offset=".42" stop-color="#3f73f0"/><stop offset="1" stop-color="#6a23da"/></linearGradient><radialGradient id="coachOrbHi" cx=".36" cy=".30" r=".75"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"/><stop offset=".45" stop-color="#ffffff" stop-opacity="0"/></radialGradient></defs><circle class="coachOrbOuterRing" cx="50" cy="50" r="45" fill="none" stroke="#16264f" stroke-width="2.3"/><path class="coachOrbArc" d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/><path class="coachOrbArc coachOrbArc--b" d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/><circle cx="50" cy="50" r="27.5" fill="url(#coachOrbG)"/><circle cx="50" cy="50" r="27.5" fill="url(#coachOrbHi)"/></svg>`;
+// Nabad Coach mark — "Nabad" means pulse/heartbeat, which is also a waveform,
+// so the mark is 5 gradient bars (teal -> violet, one sweep across all of
+// them) instead of a generic AI orb. Transparent background by design — it
+// drops straight onto whatever's behind it. Static by default (matches the
+// old orb's per-message avatars); specific contexts (thread header avatar,
+// Song plan bar) layer on the live states below via the .coachWave* classes:
+// idle breathing always, "isThinking" while Coach is replying, one-shot
+// "isPopping" when Coach understands something, "isTapping" on tap.
+const COACH_WAVE_SVG = `<svg viewBox="0 0 100 60" aria-hidden="true" class="coachWaveSvg"><defs><linearGradient id="coachWaveG" x1="6" y1="6" x2="94" y2="54" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#36e7c0"/><stop offset="1" stop-color="#6a23da"/></linearGradient></defs><circle class="coachWaveRing" cx="50" cy="30" r="22" fill="none" stroke="#8fe4c9" stroke-width="2"/><rect class="coachWaveBar" x="14" y="18" width="9" height="24" rx="4.5" fill="url(#coachWaveG)"/><rect class="coachWaveBar" x="31" y="12" width="9" height="36" rx="4.5" fill="url(#coachWaveG)"/><rect class="coachWaveBar" x="48" y="4" width="9" height="52" rx="4.5" fill="url(#coachWaveG)"/><rect class="coachWaveBar" x="65" y="12" width="9" height="36" rx="4.5" fill="url(#coachWaveG)"/><rect class="coachWaveBar" x="82" y="18" width="9" height="24" rx="4.5" fill="url(#coachWaveG)"/></svg>`;
 let _coachReplyInFlight = false;
 
 function isCoachThreadId(tid) {
@@ -45311,6 +45322,7 @@ function resetCoachChat() {
     return false;
   }
   _coachReplyInFlight = false;
+  setCoachThreadThinking(false);
   closeCoachSongPlanSheet();
   saveCoachSignupFlow(null);
   try { localStorage.removeItem(coachChatStorageKey()); } catch {}
@@ -45627,17 +45639,32 @@ function coachProjectProgressLabel(flow) {
   const done = rows.filter((r) => r.done).length;
   return `Song plan · ${done}/${rows.length}`;
 }
+const COACH_SONG_PLAN_ROW_ICONS = Object.freeze({
+  path: "🧭", occasion: "🎁", topic: "💜", language: "🌐", dialect: "🗣️",
+  dedicated: "💌", name: "✍️", song_title: "🏷️", lyrics: "📜",
+  artwork: "🎨", format: "🎚️",
+});
+function coachSongPlanRowIcon(id) {
+  return COACH_SONG_PLAN_ROW_ICONS[String(id || "").trim()] || "🎵";
+}
+function coachSongPlanProgressDotsHtml(flow) {
+  const rows = coachProjectPlanRows(flow).filter((r) => r.id !== "format");
+  return rows.map((r) => `<span class="coachSongPlanDot${r.done ? " isDone" : ""}"></span>`).join("");
+}
 function syncCoachSongPlanBar() {
   const bar = document.getElementById("coachSongPlanBar");
-  const titleEl = document.getElementById("coachSongPlanBarTitle");
   const subEl = document.getElementById("coachSongPlanBarSub");
+  const dotsEl = document.getElementById("coachSongPlanBarDots");
   if (!bar) return;
   const show = isCoachThreadId(_conversationId) && coachSignupFlowActive();
   bar.hidden = !show;
   bar.setAttribute("aria-hidden", show ? "false" : "true");
-  if (!show) return;
+  if (!show) {
+    try { updateMessagesThreadHeadReserve(); } catch {}
+    return;
+  }
   const flow = loadCoachSignupFlow();
-  if (titleEl) titleEl.textContent = coachProjectProgressLabel(flow);
+  if (dotsEl) dotsEl.innerHTML = coachSongPlanProgressDotsHtml(flow);
   if (subEl) {
     const pending = String(flow?.step || "").trim();
     const pendingLabels = {
@@ -45661,6 +45688,9 @@ function syncCoachSongPlanBar() {
   }
   renderCoachSongPlanList();
   try { syncCoachComposerSheet(); } catch {}
+  // Measure after layout so --coach-plan-bar-h reflects this bar's real
+  // rendered height (it can wrap to two lines on narrow screens).
+  requestAnimationFrame(() => { try { updateMessagesThreadHeadReserve(); } catch {} });
 }
 function renderCoachSongPlanList() {
   const list = document.getElementById("coachSongPlanList");
@@ -45677,6 +45707,7 @@ function renderCoachSongPlanList() {
       || (pendingStep === "name_input" && row.id === "name")
       || (pendingStep === "song_title_input" && row.id === "song_title");
     return `<li class="coachSongPlanRow${isPending ? " isPending" : ""}">
+      <span class="coachSongPlanRowIco" aria-hidden="true">${coachSongPlanRowIcon(row.id)}</span>
       <span class="coachSongPlanRowLabel">${escapeHtml(row.label)}</span>
       <span class="coachSongPlanRowValue${empty ? " isEmpty" : ""}">${escapeHtml(row.value)}</span>
       <button type="button" class="coachSongPlanReask" data-coach-reask-step="${escapeHtml(row.id)}">Re-ask</button>
@@ -46050,6 +46081,7 @@ function approveCoachLyricsDraft(flow, lyricsOverride = "") {
   flow.lyricsMode = "have";
   flow.lyricsCollabActive = false;
   saveCoachSignupFlow(flow);
+  pulseCoachThreadAvatar("pop");
   appendCoachSignupCoachMessage("Saved your lyrics to the **Song plan** ✨", []);
   showCoachProjectSummary(flow);
 }
@@ -46062,6 +46094,7 @@ function saveCoachLyricsFromPaste(flow, text) {
   flow.lyricsMode = "have";
   flow.lyricsCollabActive = false;
   saveCoachSignupFlow(flow);
+  pulseCoachThreadAvatar("pop");
   appendCoachSignupCoachMessage("Got it — saved your lyrics to the **Song plan** ✨", []);
   showCoachProjectSummary(flow);
 }
@@ -46224,6 +46257,7 @@ async function tryAiAssistedSongPlanStep(text, input, flow) {
   const raw = String(text || "").trim();
   if (raw.length < 2) return false;
   _coachReplyInFlight = true;
+  setCoachThreadThinking(true);
   _messagesList = [
     ...(Array.isArray(_messagesList) ? _messagesList : []),
     { id: COACH_TYPING_ID, sender_id: COACH_SENDER_ID, body: "", created_at: new Date().toISOString(), coachTyping: true },
@@ -46253,6 +46287,7 @@ async function tryAiAssistedSongPlanStep(text, input, flow) {
     }
   } catch {}
   _coachReplyInFlight = false;
+  setCoachThreadThinking(false);
   _messagesList = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => m.id !== COACH_TYPING_ID);
   const neededField = COACH_SONG_PLAN_STEP_FIELD[flow.step];
   if (!extracted || !neededField || !extracted[neededField]) {
@@ -46265,6 +46300,7 @@ async function tryAiAssistedSongPlanStep(text, input, flow) {
     syncMessagesComposerInputHeight(input);
   }
   appendCoachSignupUserEcho(raw.length > 200 ? `${raw.slice(0, 200)}…` : raw);
+  pulseCoachThreadAvatar("pop");
   const lenBefore = loadCoachChat().length;
   applySongPlanExtractionToFlow(extracted);
   const chatAfter = loadCoachChat();
@@ -46308,6 +46344,7 @@ async function sendCoachLyricsCollaboration(text, input, flow) {
   saveCoachChat(_messagesList);
   renderMessagesMount({ scrollToBottom: true, forceScroll: true });
   _coachReplyInFlight = true;
+  setCoachThreadThinking(true);
   _messagesList = [
     ..._messagesList,
     { id: COACH_TYPING_ID, sender_id: COACH_SENDER_ID, body: "", created_at: new Date().toISOString(), coachTyping: true },
@@ -46334,6 +46371,7 @@ async function sendCoachLyricsCollaboration(text, input, flow) {
     replyText = "I'm here — tell me the mood or a line to start from, and I'll draft lyrics.";
   }
   _coachReplyInFlight = false;
+  setCoachThreadThinking(false);
   const { draft, display } = formatCoachLyricsCollabDisplay(replyText);
   if (draft) {
     flow.lyricsDraft = draft.slice(0, COACH_MESSAGE_MAX);
@@ -46379,6 +46417,7 @@ async function sendCoachSideHelpDuringProject(text, input, flow) {
   saveCoachChat(_messagesList);
   renderMessagesMount({ scrollToBottom: true, forceScroll: true });
   _coachReplyInFlight = true;
+  setCoachThreadThinking(true);
   _messagesList = [
     ..._messagesList,
     { id: COACH_TYPING_ID, sender_id: COACH_SENDER_ID, body: "", created_at: new Date().toISOString(), coachTyping: true },
@@ -46408,6 +46447,7 @@ async function sendCoachSideHelpDuringProject(text, input, flow) {
     replyText = "I'm here — use the chips above or tap **Song plan** when you're ready to continue.";
   }
   _coachReplyInFlight = false;
+  setCoachThreadThinking(false);
   const base = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => m.id !== COACH_TYPING_ID);
   _messagesList = [...base, {
     id: `coach:a:${Date.now()}`,
@@ -46957,6 +46997,7 @@ async function replyCoachFromWallet(userText, input) {
   saveCoachChat(_messagesList);
   renderMessagesMount({ scrollToBottom: true, forceScroll: true });
   _coachReplyInFlight = true;
+  setCoachThreadThinking(true);
   _messagesList = [
     ..._messagesList,
     { id: COACH_TYPING_ID, sender_id: COACH_SENDER_ID, body: "", created_at: new Date().toISOString(), coachTyping: true },
@@ -46979,6 +47020,7 @@ async function replyCoachFromWallet(userText, input) {
     },
   ];
   _coachReplyInFlight = false;
+  setCoachThreadThinking(false);
   saveCoachChat(_messagesList);
   renderMessagesMount({ scrollToBottom: true, forceScroll: true });
 }
@@ -47398,8 +47440,29 @@ function coachHeaderUser() {
   return { userId: COACH_SENDER_ID, username: "NabadAi Coach", displayName: "NabadAi Coach", avatarUrl: "" };
 }
 function coachAvatarHtml(cls = "messagesRowAvatar") {
-  return `<span class="${cls} coachAvatar" aria-hidden="true">${COACH_ORB_SVG}</span>`;
+  return `<span class="${cls} coachAvatar coachWave" aria-hidden="true">${COACH_WAVE_SVG}</span>`;
 }
+/** Toggle the thread header avatar's "thinking" wave while a reply is in
+ *  flight. A no-op outside the Coach thread (no .coachWave there to find). */
+function setCoachThreadThinking(on) {
+  const wave = document.querySelector("#messagesThreadAvatar .coachWave");
+  if (wave) wave.classList.toggle("isThinking", Boolean(on));
+}
+/** One-shot avatar reaction — "pop" fires when Coach understands something
+ *  (song plan fields extracted, lyrics approved); "tap" fires on touch. Force
+ *  a reflow between remove/add so back-to-back triggers always replay. */
+function pulseCoachThreadAvatar(kind) {
+  const wave = document.querySelector("#messagesThreadAvatar .coachWave");
+  if (!wave) return;
+  const cls = kind === "tap" ? "isTapping" : "isPopping";
+  wave.classList.remove(cls);
+  void wave.offsetWidth;
+  wave.classList.add(cls);
+  window.setTimeout(() => wave.classList.remove(cls), 650);
+}
+document.addEventListener("click", (e) => {
+  if (e.target?.closest?.("#messagesThreadAvatar .coachWave")) pulseCoachThreadAvatar("tap");
+});
 function coachHistoryForApi(messages) {
   return (Array.isArray(messages) ? messages : [])
     .filter((m) => m && !m.coachTyping && m.id !== "coach:welcome" && m.id !== COACH_SIGNUP_MSG_ID && String(m.body || "").trim())
@@ -47741,6 +47804,7 @@ async function sendCoachMessage(text, input) {
   try { input?.focus({ preventScroll: true }); } catch {}
 
   _coachReplyInFlight = true;
+  setCoachThreadThinking(true);
   _messagesList = [
     ..._messagesList,
     { id: COACH_TYPING_ID, sender_id: COACH_SENDER_ID, body: "", created_at: new Date().toISOString(), coachTyping: true },
@@ -47779,6 +47843,7 @@ async function sendCoachMessage(text, input) {
       : String(e?.message || "I'm having trouble right now. Please try again in a moment.");
   } finally {
     _coachReplyInFlight = false;
+    setCoachThreadThinking(false);
     const base = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => m.id !== COACH_TYPING_ID);
     const botMsg = {
       id: `coach:a:${Date.now()}`,

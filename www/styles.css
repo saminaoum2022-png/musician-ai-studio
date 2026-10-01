@@ -55320,6 +55320,18 @@ body[data-route="user"] #userPublicRepostsList{
     margin-inline: auto;
   }
 
+  /* Fixed overlays (profile edit sheets, etc.) align with main column, not full viewport. */
+  html.is-web-shell{
+    --nb-desk-overlay-left: max(
+      0px,
+      calc((100vw - min(100vw, 1200px)) / 2 + var(--nb-shell-pad-x, 26px) + var(--nb-sidebar, 248px) + var(--nb-shell-gap, 34px))
+    );
+    --nb-desk-overlay-right: max(
+      0px,
+      calc((100vw - min(100vw, 1200px)) / 2 + var(--nb-shell-pad-x, 26px))
+    );
+  }
+
   /* Keep Discover shell metrics on every main tab (Create zero-padding reset is mobile-only). */
   html.is-web-shell body[data-route="discover"] > .app,
   html.is-web-shell body[data-route="player"] > .app,
@@ -55328,6 +55340,7 @@ body[data-route="user"] #userPublicRepostsList{
   html.is-web-shell body[data-route="generate"] > .app,
   html.is-web-shell body[data-route="activity"] > .app,
   html.is-web-shell body[data-route="profile"] > .app,
+  html.is-web-shell body[data-route="profile-edit"] > .app,
   html.is-web-shell body[data-route="user"] > .app,
   html.is-web-shell body[data-route="settings"] > .app,
   html.is-web-shell body[data-route="sounds"] > .app,
@@ -55632,6 +55645,7 @@ body[data-route="user"] #userPublicRepostsList{
   html.is-web-shell body[data-route="generate"] > .app,
   html.is-web-shell body[data-route="activity"] > .app,
   html.is-web-shell body[data-route="profile"] > .app,
+  html.is-web-shell body[data-route="profile-edit"] > .app,
   html.is-web-shell body[data-route="user"] > .app,
   html.is-web-shell body[data-route="settings"] > .app,
   html.is-web-shell body[data-route="sounds"] > .app,
@@ -55639,6 +55653,16 @@ body[data-route="user"] #userPublicRepostsList{
   html.is-web-shell body.discoverReelInShell[data-route="player"] > .app{
     max-width: var(--nb-shell-max) !important;
     grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr) var(--nb-rail, 320px) !important;
+  }
+  html.is-web-shell{
+    --nb-desk-overlay-left: max(
+      0px,
+      calc((100vw - min(100vw, 1380px)) / 2 + var(--nb-shell-pad-x, 26px) + var(--nb-sidebar, 248px) + var(--nb-shell-gap, 34px))
+    );
+    --nb-desk-overlay-right: max(
+      0px,
+      calc((100vw - min(100vw, 1380px)) / 2 + var(--nb-shell-pad-x, 26px) + var(--nb-rail, 320px) + var(--nb-shell-gap, 34px))
+    );
   }
   aside.deskRail{
     grid-column: 3;
@@ -71798,6 +71822,41 @@ html[data-theme="light"] .aaGold{ background: rgba(0,0,0,.03); }
   html.is-web-shell .profileEditPage .profileEditArtistRing{
     right: 20px !important;
     bottom: 50px !important;
+  }
+
+  /* Profile edit sub-sheets (display name, username, genres, persona, artist avatar, social). */
+  html.is-web-shell .profileEditSheet{
+    left: var(--nb-desk-overlay-left);
+    right: var(--nb-desk-overlay-right);
+    align-items: center;
+  }
+  html.is-web-shell .profileEditSheetCard{
+    width: 100%;
+    max-width: 720px;
+    margin-inline: auto;
+    border-radius: 22px;
+    margin-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    max-height: calc(100dvh - 20px);
+  }
+  html.is-web-shell #profilePhotoActionSheet.userActionSheet{
+    left: var(--nb-desk-overlay-left);
+    right: var(--nb-desk-overlay-right);
+  }
+  html.is-web-shell #profilePhotoActionSheet .userActionSheetPanel{
+    max-width: min(460px, 720px);
+  }
+  html.is-web-shell body[data-route="profile-edit"] .profileEditBusy{
+    left: var(--nb-desk-overlay-left);
+    right: var(--nb-desk-overlay-right);
+  }
+  html.is-web-shell .pfRoot{
+    left: var(--nb-desk-overlay-left);
+    right: var(--nb-desk-overlay-right);
+  }
+  html.is-web-shell .pfTop,
+  html.is-web-shell .pfHint{
+    width: 100%;
+    max-width: 720px;
   }
 }
 .profileEditPage .profileEditAvatarShell{

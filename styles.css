@@ -55220,13 +55220,36 @@ html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .fol
   text-shadow: none;
 }
 
-/* Feed covers: full viewport width (wins over generic xstyle width:100% reset). */
-:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap,
-:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--friendsDock,
-:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--friendsDock,
-:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult,
-:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult,
-:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult{
+/* Feed covers: full viewport width on phone / native (desktop web overrides in shell block). */
+@media (max-width: 1023px){
+  :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap,
+  :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--friendsDock,
+  :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--friendsDock,
+  :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult,
+  :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult,
+  :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult{
+    position: relative;
+    left: 50%;
+    right: 50%;
+    width: 100vw;
+    max-width: 100vw;
+    margin-left: -50vw;
+    margin-right: -50vw;
+  }
+  :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--friendsDock .followActMedia,
+  :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap .followActMedia,
+  :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+  :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult .followActMedia,
+  :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult .followActMedia{
+    border-radius: 0;
+  }
+}
+html.is-native-shell :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap,
+html.is-native-shell :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--friendsDock,
+html.is-native-shell :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--friendsDock,
+html.is-native-shell :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult,
+html.is-native-shell :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult,
+html.is-native-shell :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult{
   position: relative;
   left: 50%;
   right: 50%;
@@ -55234,13 +55257,6 @@ html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .fol
   max-width: 100vw;
   margin-left: -50vw;
   margin-right: -50vw;
-}
-:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--friendsDock .followActMedia,
-:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap .followActMedia,
-:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
-:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult .followActMedia,
-:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult .followActMedia{
-  border-radius: 0;
 }
 
 body[data-route="profile"] .profileSongsBlock,
@@ -55341,6 +55357,7 @@ body[data-route="user"] #userPublicRepostsList{
   html.is-web-shell body[data-route="activity"] > .app,
   html.is-web-shell body[data-route="profile"] > .app,
   html.is-web-shell body[data-route="profile-edit"] > .app,
+  html.is-web-shell body[data-route="messages"] > .app,
   html.is-web-shell body[data-route="user"] > .app,
   html.is-web-shell body[data-route="settings"] > .app,
   html.is-web-shell body[data-route="sounds"] > .app,
@@ -55453,6 +55470,8 @@ body[data-route="user"] #userPublicRepostsList{
   /* Comfortable reading width for single-column pages, centered in the wide
      content column. Discover stays full-width to host the card grid. */
   .friendsPage,
+  .connectFriendsPane,
+  #messagesPage.messagesPage,
   .profileSection,
   .activityPage,
   .settingsPage{
@@ -55614,6 +55633,26 @@ body[data-route="user"] #userPublicRepostsList{
     max-width: 100%;
   }
 
+  /* Friends v3 edge cards (Connect / following feed) — column width, not 100vw. */
+  html.is-web-shell :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--edge .feedEdge{
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  html.is-web-shell :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedEdgeStage{
+    border-radius: var(--feed-cover-radius, 14px);
+    max-height: min(520px, 58vh);
+  }
+  html.is-web-shell :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActTop,
+  html.is-web-shell :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActActionsBar,
+  html.is-web-shell :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActReleaseCaption{
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
   /* --- Discover as a multi-column grid --- */
   /* `:not([hidden])` so the "View Full Top 10" collapse still works — an
      author display:grid would otherwise override the UA [hidden] rule. */
@@ -55646,6 +55685,7 @@ body[data-route="user"] #userPublicRepostsList{
   html.is-web-shell body[data-route="activity"] > .app,
   html.is-web-shell body[data-route="profile"] > .app,
   html.is-web-shell body[data-route="profile-edit"] > .app,
+  html.is-web-shell body[data-route="messages"] > .app,
   html.is-web-shell body[data-route="user"] > .app,
   html.is-web-shell body[data-route="settings"] > .app,
   html.is-web-shell body[data-route="sounds"] > .app,
@@ -70154,7 +70194,8 @@ body #discoverOccasionsSongs .discoverTemplatesChip{ scroll-snap-align: none; }
 body[data-route="discover"] #discoverOccasionsPanel .discoverOccasionStartCta{ display: flex; align-items: center; justify-content: center; text-align: center; }
 
 /* ===== Friends v3: edge-to-edge covers, sleeve ⇄ record, hairline line ===== */
-.followAct--edge .feedEdge{ position: relative; width: 100vw; margin: 10px calc(50% - 50vw) 0; }
+html:not(.is-web-shell) .followAct--edge .feedEdge{ position: relative; width: 100vw; margin: 10px calc(50% - 50vw) 0; }
+html.is-web-shell .followAct--edge .feedEdge{ position: relative; width: 100%; max-width: 100%; margin: 10px 0 0; }
 .feedEdgeStage{ position: relative; aspect-ratio: 4 / 5; overflow: hidden; background: #0b0c12; isolation: isolate; }
 /* the sleeve (cover). Fills the stage; when the record is out it steps aside, tilted */
 .feedEdgeSleeve{
@@ -70331,9 +70372,9 @@ body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profile
 .followActCaptionHandle{ font-weight: 800; color: #fff; }
 body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle .followActReleaseCaption .followActCaptionText{ color: #fff; }
 /* header, action row and note each span the viewport (same trick as the cover) so the page gutter never offsets them from the 16pt edge */
-body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActTop,
-body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActActionsBar,
-body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActReleaseCaption{
+html:not(.is-web-shell) body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActTop,
+html:not(.is-web-shell) body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActActionsBar,
+html:not(.is-web-shell) body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActReleaseCaption{
   width: 100vw !important; max-width: 100vw !important; margin-left: calc(50% - 50vw) !important; margin-right: calc(50% - 50vw) !important; box-sizing: border-box !important;
 }
 

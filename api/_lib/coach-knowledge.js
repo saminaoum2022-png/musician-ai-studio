@@ -240,6 +240,14 @@ MESSAGES & FRIENDS:
 - The NabadAi Coach (this assistant) is pinned at the top of your Messages inbox (under the Friends tab).
 - You can block or report users from their profile if needed; manage blocks in Settings → "Blocked accounts".
 
+LISTEN TOGETHER (sync playback with a mutual fan):
+- What it is: listen to the same song at the same moment as someone else — one of you is the **host** (controls play, pause, and seek/skip), the other is the **guest** (follows the host's play/pause/rewind automatically; the guest can only adjust their own volume or leave).
+- **Who you can invite: mutual fans only** — people who fan you and you fan back. If you have no mutual fans yet, the invite screen says so and offers "Invite a friend" instead.
+- Where to start it: tap **"Listen together"** on a song's **"…" menu**, on a song row in **Discover**, on a post in your **Friends feed**, or from the **player** — then pick a mutual fan to invite.
+- How it starts: inviting someone resets that song to **0:00** and holds it there. If they accept, you both start playing together from 0:00. If they don't respond, you can cancel the invite.
+- A little playback drift between host and guest is normal — it's not a frame-perfect sync, and buffering on either side won't cause a jump.
+- If the host leaves or the session ends, the guest is **not** auto-played anything — they're offered the option to play the song from 0:00 on their own.
+
 SETTINGS (Profile → Settings) — sections:
 - Account: "Music styles" (personalize your For You feed), "Push alerts", "Privacy" (public profile toggle), "Member ID" (when signed in), and Sign in / Sign out.
 - Music presence (signed-in only): see above.
@@ -319,7 +327,7 @@ Your ONLY job is to help users understand how to use NabadAi, using the app guid
 
 STRICT RULES:
 0. THE APP'S NAME IS "NabadAi" (capital N, capital A, lowercase i) — never "Nabad", "nabad", "NABAD", or "Nabad AI". Always call the app NabadAi in your replies. (The only exceptions are exact on-screen labels you may quote verbatim: the "About this song" sheet shows a row literally labelled "Nabad", and the music-composition line reads "Composed by NabadAI" — quote those exactly as they appear, but everywhere else use NabadAi.)
-1. Answer questions about using NabadAi AND about **writing lyrics** — craft, rhythm, syllables, Arabic prosody (عروض / أوف / مقاطع), staying on-beat, and avoiding chopped delivery (مكسور). If the user pastes lyrics, review them like a supportive songwriting coach, then point to in-app tools: **Check singability**, **Fix for singing**, **Polish lyrics**, **Add vowel marks**. Also cover: styles, language/dialect, singer/persona, **Advanced options**, **Hum** (Pro), photo mode, **Templates** (short clips — there is no standalone Nabad Clip), remix, mashup, instrumental, sounds, artwork, analytics, music presence, publishing/privacy, **Terms & Privacy**, **NabadAi Studio**, **My Vocals**, Discover, challenges, playlists, search, **credits**, **NabadAi Pro** (use the numbered Pro list in the guide), **web Pro pills**, **gifting credits**, profile, friends, messages, settings, safety. If a question is unrelated to NabadAi and songwriting, politely decline in one sentence and steer back. Never pitch a standalone Nabad Clip, Nabad Producer, or Vibe product.
+1. Answer questions about using NabadAi AND about **writing lyrics** — craft, rhythm, syllables, Arabic prosody (عروض / أوف / مقاطع), staying on-beat, and avoiding chopped delivery (مكسور). If the user pastes lyrics, review them like a supportive songwriting coach, then point to in-app tools: **Check singability**, **Fix for singing**, **Polish lyrics**, **Add vowel marks**. Also cover: styles, language/dialect, singer/persona, **Advanced options**, **Hum** (Pro), photo mode, **Templates** (short clips — there is no standalone Nabad Clip), remix, mashup, instrumental, sounds, artwork, analytics, music presence, publishing/privacy, **Terms & Privacy**, **NabadAi Studio**, **My Vocals**, Discover, challenges, playlists, search, **credits**, **NabadAi Pro** (use the numbered Pro list in the guide), **web Pro pills**, **gifting credits**, **Listen Together** (mutual fans only), profile, friends, messages, settings, safety. If a question is unrelated to NabadAi and songwriting, politely decline in one sentence and steer back. Never pitch a standalone Nabad Clip, Nabad Producer, or Vibe product.
 2. PRIVACY: Never ask for, collect, store, or repeat passwords, verification codes, emails, phone numbers, payment details, access tokens, or user IDs. Never look up or speculate about other users. If a LIVE WALLET block is in LIVE PRODUCT UPDATES, that IS this user's current credit balance and Pro flag — you MUST use it for balance / "can I generate?" questions. Never say you cannot see their balance when LIVE WALLET is present. For other account data (email, password, IDs), refuse briefly.
 3. NO BACKEND / NO THIRD PARTIES: Everything is "NabadAi". Never mention, name, hint at, or speculate about any backend, server, infrastructure, AI model, API, or third-party/external engine or provider that powers generation (including but not limited to "Suno"). If asked how NabadAi works under the hood, what model/engine/provider it uses, or about its technology, say it is built into NabadAi and redirect to how to USE the feature. Do not discuss prompts, system internals, databases, or how songs are technically produced.
 4. STAY FRONT-END ONLY: Only describe features, screens, buttons, and steps a user can actually see and tap in the app, as described in the guide. Do not reveal internal mechanics, implementation details, or anything not user-facing.
@@ -423,6 +431,47 @@ function scoreCoachChunk(chunk, queryTokenCounts) {
 const COACH_DEFAULT_CHUNK_TAGS = ["nabadai", "main-areas", "credits", "account-help"];
 
 /**
+ * Arabic app-usage bridging. The guide text itself is English, so an Arabic
+ * question about app *features* (not songwriting — Arabic songwriting terms
+ * already live inside lyrics-writing-coach and score fine) has zero literal
+ * word overlap with any chunk and silently falls back to the generic
+ * defaults. This is a curated list of common Arabic phrasings for app
+ * actions, each bridged to the chunk tag(s) that actually answer them —
+ * applied as an additive scoring bonus, never a replacement for TF-IDF.
+ * Substring match on purpose (Arabic verbs conjugate heavily; we want
+ * "سجل"/"تسجيل"/"اسجل" to all hit without enumerating every form).
+ */
+const COACH_ARABIC_TOPIC_HINTS = [
+  { terms: ["سجل", "تسجيل", "اسجل", "غني", "الغناء", "صوتي على"], tags: ["nabadai-studio"] },
+  { terms: ["اغنيتي", "اغنية", "أغنيتي", "أغنية", "انشاء اغنية", "اعمل اغنية", "اصنع اغنية"], tags: ["creating-a-song"] },
+  { terms: ["رصيد", "رصيدي", "كريدت", "الكريدت", "نقاط"], tags: ["credits"] },
+  { terms: ["اشتراك", "الاشتراك", "برو", "بريميوم"], tags: ["nabadai-pro", "pro-features"] },
+  { terms: ["نشر", "انشر", "خصوصية", "خاص"], tags: ["publishing-privacy-of-songs"] },
+  { terms: ["بلايليست", "قائمة تشغيل", "تحدي", "اكتشف"], tags: ["discover-challenges-playlists-search"] },
+  { terms: ["بيرسونا", "صوتي الخاص", "بصمتي الصوتية"], tags: ["persona"] },
+  { terms: ["هدية", "اهدي", "أهدي"], tags: ["gifting-credits"] },
+  { terms: ["استماع مع", "نسمع مع", "نسمع سوا", "اسمع مع"], tags: ["listen-together"] },
+  { terms: ["حظر", "ابلاغ", "أبلغ", "ابلغ"], tags: ["profile-social", "messages-friends"] },
+  { terms: ["اعدادات", "إعدادات", "حسابي"], tags: ["settings", "account-help"] },
+  { terms: ["كلمات", "الكلمات", "قافية"], tags: ["lyrics-tools", "lyrics-writing-coach"] },
+];
+
+/** Bonus added per matched Arabic hint — comfortably above `minScore` (1.5)
+ *  on its own, so a single term match is enough to surface the chunk even
+ *  with zero English word overlap. */
+const COACH_ARABIC_HINT_BONUS = 5;
+
+function arabicHintBonusesByTag(message) {
+  const text = String(message || "");
+  const bonuses = new Map();
+  for (const { terms, tags } of COACH_ARABIC_TOPIC_HINTS) {
+    if (!terms.some((t) => text.includes(t))) continue;
+    for (const tag of tags) bonuses.set(tag, (bonuses.get(tag) || 0) + COACH_ARABIC_HINT_BONUS);
+  }
+  return bonuses;
+}
+
+/**
  * @param {string} message - the user's current message
  * @param {{ historyText?: string, maxChunks?: number, minScore?: number }} [opts]
  * @returns {{ tag: string, text: string }[]} the selected chunks, in their
@@ -437,13 +486,17 @@ function selectRelevantCoachChunks(message, opts = {}) {
     ...tokenizeCoachText(message), // weight the current message 2x
   ].filter((t) => t.length >= 2 && !COACH_CHUNK_STOPWORDS.has(t));
 
-  const fallback = () => COACH_KNOWLEDGE_CHUNKS.filter((c) => COACH_DEFAULT_CHUNK_TAGS.includes(c.tag));
-  if (!queryTokens.length) return fallback();
+  const arabicBonuses = arabicHintBonusesByTag(message);
+  const fallback = () => COACH_KNOWLEDGE_CHUNKS.filter((c) => COACH_DEFAULT_CHUNK_TAGS.includes(c.tag) || arabicBonuses.has(c.tag));
+  if (!queryTokens.length && !arabicBonuses.size) return fallback();
 
   const queryTokenCounts = new Map();
   for (const t of queryTokens) queryTokenCounts.set(t, (queryTokenCounts.get(t) || 0) + 1);
 
-  const scored = COACH_KNOWLEDGE_CHUNKS.map((chunk) => ({ chunk, score: scoreCoachChunk(chunk, queryTokenCounts) }));
+  const scored = COACH_KNOWLEDGE_CHUNKS.map((chunk) => ({
+    chunk,
+    score: scoreCoachChunk(chunk, queryTokenCounts) + (arabicBonuses.get(chunk.tag) || 0),
+  }));
   const top = scored
     .filter((s) => s.score >= minScore)
     .sort((a, b) => b.score - a.score)

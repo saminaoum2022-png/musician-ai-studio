@@ -33040,6 +33040,73 @@ function localProfileHasRichContent() {
   );
 }
 
+/** Boot-only: when Supabase profile fetch failed, keep this device's identity
+ *  instead of minting an empty shell (common on mobile refresh + user_ handle). */
+function bootKeepLocalProfileWhenCloudUnavailable() {
+  if (!localProfileBelongsToAuthUser()) return false;
+  if (!isPlaceholderUsername(activeProfile?.username)) return true;
+  if (localProfileHasRichContent()) return true;
+  if (normalizeDisplayName(activeProfile?.displayName)) return true;
+  const uid = String(activeProfile?.id || "").trim();
+  if (isRealUserAvatarUrl(String(activeProfile?.avatar || "").trim())) return true;
+  if (cachedProfileAvatarUrl(uid)) return true;
+  return false;
+}
+
+function bootProfileFromLocalWithAvatarSnap() {
+  const authId = String(authSession?.user?.id || "").trim();
+  let next = {
+    ...activeProfile,
+    id: authId,
+    email: activeProfile.email || authSession?.user?.email || "",
+  };
+  if (!isRealUserAvatarUrl(String(next.avatar || "").trim())) {
+    const snap = cachedProfileAvatarUrl(authId);
+    if (snap) next = { ...next, avatar: snap };
+  }
+  return next;
+}
+
+async function supabaseLoadProfileForBoot() {
+  const attempts = [
+    { reason: "boot", force: false, delayMs: 0 },
+    { reason: "boot-retry-1", force: true, delayMs: 500 },
+    { reason: "boot-retry-2", force: true, delayMs: 1500 },
+  ];
+  for (const attempt of attempts) {
+    if (attempt.delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, attempt.delayMs));
+      if (!getSupabaseAuthToken() || !authSession?.user?.id) return null;
+    }
+    const row = await supabaseLoadProfile({ reason: attempt.reason, force: attempt.force });
+    if (row) return row;
+  }
+  return null;
+}
+
+function scheduleBootProfileCloudMergeRetry() {
+  void (async () => {
+    const waits = [2500, 7000];
+    for (const ms of waits) {
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      if (!authSession?.user?.id || !getSupabaseAuthToken()) return;
+      try {
+        const cloud = await supabaseLoadProfile({ force: true, reason: "boot-deferred-merge" });
+        if (!cloud) continue;
+        const merged = await mergeActiveProfileFromCloud({
+          cloud,
+          reason: "boot-deferred-merge",
+        });
+        if (merged) {
+          try { renderProfilePreviewFromInputs(); } catch {}
+          try { setProfileHeaderLoading(false); } catch {}
+        }
+        return;
+      } catch {}
+    }
+  })();
+}
+
 /** Pick the canonical username when merging local + cloud profile rows.
  *  Stale local handles must not clobber a newer cloud username — that
  *  was the "I changed it then it reverted" bug after sign-in or boot. */
@@ -83427,7 +83494,7 @@ void (async () => {
   // Always hydrate from cloud when a valid session exists (not only callback flows).
   if (authSession?.user?.id) {
     const prevProfile = { ...activeProfile };
-    const cloud = await supabaseLoadProfile({ reason: "boot" });
+    const cloud = await supabaseLoadProfileForBoot();
     let nextProfile;
     if (cloud) {
       // Local-first merge. Cloud is the fallback for fields the user
@@ -83460,15 +83527,8 @@ void (async () => {
         cloud,
         localFilled,
       );
-    } else if (
-      localProfileBelongsToAuthUser()
-      && !isPlaceholderUsername(activeProfile?.username)
-    ) {
-      nextProfile = {
-        ...activeProfile,
-        id: String(authSession.user.id),
-        email: activeProfile.email || authSession.user.email || "",
-      };
+    } else if (bootKeepLocalProfileWhenCloudUnavailable()) {
+      nextProfile = bootProfileFromLocalWithAvatarSnap();
     } else {
       // First sign-in for this user. Don't fall back to the boot-time
       // `username: "guest"` default — that's the unauthenticated
@@ -83531,10 +83591,17 @@ void (async () => {
     // Cloud fetch failed: never push an empty shell that would erase avatar/bio.
     if (cloudIsStale) scheduleProfileCloudSync({ delayMs: 400 });
     else if (!cloud) {
-      // First sign-in — create public.profiles so admin, search, and social identity work.
-      void supabaseUpsertProfile(nextProfile).catch((e) => {
-        try { console.warn("[profile] first-sign-in cloud create failed", e); } catch {}
-      });
+      if (bootKeepLocalProfileWhenCloudUnavailable()) {
+        // Paint from local only — do not push to Supabase until a deferred merge
+        // has read the cloud row (avoids stale local username/display overwriting
+        // a handle changed on another device while this fetch failed).
+        scheduleBootProfileCloudMergeRetry();
+      } else {
+        // First sign-in — create public.profiles so admin, search, and social identity work.
+        void supabaseUpsertProfile(nextProfile).catch((e) => {
+          try { console.warn("[profile] first-sign-in cloud create failed", e); } catch {}
+        });
+      }
     } else if (localProfileHasRichContent()) scheduleProfileCloudSync({ delayMs: 600 });
 
     if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";

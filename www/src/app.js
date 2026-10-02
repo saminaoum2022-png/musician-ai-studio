@@ -35944,7 +35944,7 @@ let _authEmailSubmitInFlight = false;
 const TERMS_ACCEPTED_LS_KEY = "nabad_terms_accepted_v1";
 const TERMS_VERSION_LS_KEY = "nabad_terms_version_v1";
 /** Bump when Terms/Privacy change materially — triggers a one-time re-accept prompt. */
-const CURRENT_TERMS_VERSION = "2026-08-21";
+const CURRENT_TERMS_VERSION = "2026-10-02";
 let _termsUpdatePromptShown = false;
 
 function isTermsAccepted() {

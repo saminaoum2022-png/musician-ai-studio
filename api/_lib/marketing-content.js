@@ -160,7 +160,7 @@ function defaultHomeContentEn() {
         price: "$0",
         body: "Starter credits to create songs — no card needed.",
         features: [
-          { label: "Starter credits · 15 credits = 1 song (2 versions)" },
+          { label: "Starter credits · 15 credits = 1 full song" },
           { label: "Lyrics, hum, photo & publish to Discover" },
           { label: "AI lyrics help & ✦ Boost style" },
           { label: "NabadAi Coach · daily limit" },
@@ -182,7 +182,7 @@ function defaultHomeContentEn() {
         ],
         specialOffer: "Limited-time: songs cost fewer credits than usual.",
         finePrint:
-          "1 full song = 15 credits (2 versions). Pro included credits refresh each billing period and do not carry over (see Terms). Cancel anytime in Settings.",
+          "1 full song = 15 credits. Pro included credits refresh each billing period and do not carry over (see Terms). Cancel anytime in Settings.",
         ctaLabel: "View plans",
         ctaHref: "/app/#/pro",
         imageUrl: "",

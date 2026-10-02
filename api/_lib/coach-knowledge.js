@@ -38,7 +38,7 @@ CREATING A SONG (Create tab) — start modes (tabs on Create):
 - "Hum": record or add a short melody and NabadAi builds a song around that tune — **NabadAi Pro** on iPhone and web.
 - "Photo": start a song from a picture; the Photo Mood assistant can analyze the image and shape the lyrics, style tags, and cover.
 The Create home has segments **Create / Sparks / Templates**, plus cards for Create Song, **Studio**, Persona, Photo Mood, and Mashup, and a "Continue" card to resume your last project.
-After choosing how to start, you set a style, a singer voice, and (for lyrics) a language, then tap "Generate song". A full song returns TWO track variants (A and B). Finished songs live in Profile → Songs.
+After choosing how to start, you set a style, a singer voice, and (for lyrics) a language, then tap "Generate song". Finished songs live in Profile → Songs.
 
 SHORT CLIPS (~30 seconds) — TEMPLATES ONLY:
 - There is **no standalone "Nabad Clip" product** to open right now. Do not send people to a Nabad Clip card, Clip hub, or a separate Clip app.
@@ -102,7 +102,7 @@ PUBLISHING & PRIVACY OF SONGS:
 - PUBLISHING is what saves a song to your NabadAi account: a published song is kept permanently and shows up on any device you sign in to, plus your public profile and Discover. To share a song publicly, open it and tap "Publish" (the "Release this song" sheet). You can add an optional release note and choose whether to "Allow others to remix this song" and "Allow others to use it in mashups".
 - If the song isn't archived to permanent storage yet, publish shows **"Publishing…"** right away (you don't wait on a spinner) — archiving and going live finish in the background, and you'll get a toast when it's live. If you close the app mid-publish, it **auto-resumes** when you reopen the app.
 - To make it private again, use "Hide from public profile" — it's removed from your public profile and Discover, but your own copy stays.
-- Deleting a song removes it from your library ("Remove from your Library?"); you can also multi-select and delete several at once. Songs generated together (the A and B variants) are independent — deleting one does not delete the other.
+- Deleting a song removes it from your library ("Remove from your Library?"); you can also multi-select and delete several at once.
 - **Public content rules:** By publishing, you agree your post follows NabadAi's Terms. Do not publish illegal content, hate or harassment, spam, content that infringes someone else's copyright or voice/likeness without permission, or anything harmful to minors.
 - **Moderation:** NabadAi may review, restrict, or remove public content at any time (including unpublishing from public view). We are not obligated to monitor every post. Repeat or serious violations can lead to account suspension.
 - **Report abuse:** To report a user or public post, use **Report user** on their profile, or email **help@nabadai.com** with links, @usernames, and what happened. For copyright concerns, email help@nabadai.com with the work claimed and the link on NabadAi.
@@ -190,7 +190,7 @@ CREDITS — balance and what each action costs:
 - See your balance on your Profile (credits pill, top-left) and under Settings → **Credits & plan** → **Credits** (balance, redeem promo codes, recent activity).
 - Profile also shows a **NabadAi Pro** banner under your stats (Subscribe now) — it hides while you already have Pro.
 - Credit buckets: **Paid** (subscriptions — create and gift); **Gift received** (create only, not re-giftable); **Promo** (from codes — create and gift); **Trial** (weekly trial start — create only, not giftable). **Included Pro credits** refresh each billing period; unused included credits do not carry over (from 2 Oct 2026 for new Pro and trial→paid; paid Pro before 2 Oct 2026: from first renewal on or after 1 Nov 2026, balance not removed — Terms). Gifting in-app is not selling credits off-platform. Unused trial credits end if you don't subscribe. Failed generations refund automatically.
-- **Costs:** full song = 15 credits (2 variants A & B); Remix / cover / hum reference = 15; Mashup = 15; save Persona = 5; Sound = 2.5; Get instrumental (karaoke) on existing song = 2; Studio "Separate vocals" ≈ 2; **template clip** (~30s from Create → Templates) ≈ 10 credits.
+- **Costs:** full song = 15 credits; Remix / cover / hum reference = 15; Mashup = 15; save Persona = 5; Sound = 2.5; Get instrumental (karaoke) on existing song = 2; Studio "Separate vocals" ≈ 2; **template clip** (~30s from Create → Templates) ≈ 10 credits.
 - **Free:** AI lyrics write/refine, ✦ Boost style, artwork suggestions, Voice Lab scan.
 - **Not enough credits?** Redeem a promo code on Credits or subscribe to NabadAi Pro (Settings → NabadAi Pro). You can also contact help@nabadai.com.
 

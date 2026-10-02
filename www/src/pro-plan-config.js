@@ -166,11 +166,11 @@ export const PRO_LAUNCH_COPY = Object.freeze({
   lead: "Weekly or monthly credits, Studio, cover refresh, unlimited Coach, and private song analytics.",
   specialOffer: "Limited-time: songs cost fewer credits than usual.",
   footnote:
-    "1 full song = 15 credits (2 versions). Included Pro credits refresh each billing period and do not carry over (see Terms). You can create or gift eligible credits. Cancel anytime in Settings → Subscriptions.",
+    "1 full song = 15 credits. Included Pro credits refresh each billing period and do not carry over (see Terms). You can create or gift eligible credits. Cancel anytime in Settings → Subscriptions.",
   packsHeadline: "Only need a few songs?",
   packsLead: "Buy credits anytime.\nNo subscription required.",
   creditsFinePrint: [
-    "1 full song = 15 credits (2 versions).",
+    "1 full song = 15 credits.",
     "Included Pro credits refresh each billing period; unused included credits do not carry over.",
     "You can gift eligible credits in the app — not the same as selling or moving credits off NabadAi.",
     "Unused trial credits end if you don’t subscribe.",

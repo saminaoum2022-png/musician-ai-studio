@@ -66,7 +66,7 @@ CREDIT BUCKETS (Credits breakdown):
 - Included Pro credits are added at the start of each billing period; unused included credits do not carry over. From 2 Oct 2026 for new Pro and when a trial becomes paid. Paid Pro before that date: refresh from first renewal on or after 1 Nov 2026; existing balance is not removed (Terms). Gifting eligible credits in-app is not selling or moving credits off NabadAi. Unused trial credits end if you don't subscribe. Failed generations refund automatically.
 
 WHAT COSTS CREDITS:
-- Full song generation = ${FULL_SONG_CREDIT_COST} credits (you get 2 track variants A & B).
+- Full song generation = ${FULL_SONG_CREDIT_COST} credits.
 - Mashup = ${MASHUP_CREDIT_COST} credits · Remix / cover / hum reference = ${REMIX_CREDIT_COST} credits.
 - Save a Persona voice = ${PERSONA_CREDIT_COST} credits · Sound = ${SOUND_CREDIT_COST} credits.
 - Instrumental (karaoke) version = ${INSTRUMENTAL_CREDIT_COST} credits.
@@ -136,7 +136,7 @@ LIVE WALLET (authoritative — do not contradict):
   return `
 LIVE WALLET (authoritative — you CAN see this):
 - Current balance: ${have} credits. Pro subscriber: ${pro}.
-- Costs: full song = ${songCost} (2 versions) · Sound = ${soundCost} · template clip ≈ ${clipCost} (Create → Templates only; no standalone Nabad Clip).
+- Costs: full song = ${songCost} · Sound = ${soundCost} · template clip ≈ ${clipCost} (Create → Templates only; no standalone Nabad Clip).
 - ${nextStep}
 - Never invent a welcome bonus. Never say "enough for a first song" when balance is 50 or more.
 `.trim();

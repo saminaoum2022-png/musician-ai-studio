@@ -36,7 +36,7 @@ function isFastRender(params) {
 }
 
 function isArchivedStorageUrl(url) {
-  return /\/storage\/v1\/object\/public\/song_archive\//i.test(String(url || ""));
+  return /\/storage\/v1\/object\/(?:public\/)?song_archive\//i.test(String(url || ""));
 }
 
 function resolveFetchUrl(url) {
@@ -269,7 +269,7 @@ function readMultipart(req) {
 
 function probeMediaDurationSec(ffmpegPath, filePath) {
   const { spawnSync } = require("child_process");
-  const r = spawnSync(ffmpegPath, ["-hide_banner", "-i", filePath, "-f", "null", "-"], {
+  const r = spawnSync(ffmpegPath, ["-hide_banner", "-i", filePath], {
     encoding: "utf8",
   });
   const text = `${r.stderr || ""}\n${r.stdout || ""}`;
@@ -284,34 +284,32 @@ function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1, durationSec =
   const veryLong = dur > 75;
   const outW = veryLong && isFast ? 480 : longSong && isFast ? 540 : OUT_W;
   const outH = veryLong && isFast ? 854 : longSong && isFast ? 960 : OUT_H;
-  const outFps = veryLong && isFast ? 0.25 : longSong && isFast ? 0.5 : Math.max(1, Number(fps) || 1);
-  const vf = longSong && isFast
-    ? `scale=${outW}:${outH}:force_original_aspect_ratio=increase,crop=${outW}:${outH},format=yuv420p`
-    : `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
-      `crop=${OUT_W}:${OUT_H},fps=${outFps},format=yuv420p`;
+  const vf =
+    `scale=${outW}:${outH}:force_original_aspect_ratio=increase,` +
+    `crop=${outW}:${outH},format=yuv420p`;
   const ffArgs = ["-y", "-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "0"];
   if (imagePath) {
-    ffArgs.push("-loop", "1", "-framerate", String(outFps), "-i", imagePath);
+    ffArgs.push("-loop", "1", "-framerate", "1", "-i", imagePath);
   } else {
-    ffArgs.push("-loop", "1", "-f", "lavfi", "-i", `color=c=black:s=${outW}x${outH}:r=${outFps}`);
+    // lavfi color is already infinite; -loop is invalid before lavfi inputs.
+    ffArgs.push("-f", "lavfi", "-i", `color=c=black:s=${outW}x${outH}:r=1`);
   }
   ffArgs.push("-i", audioPath);
   ffArgs.push(
     "-map", "0:v:0",
     "-map", "1:a:0",
-    "-vf", vf,
+  );
+  if (imagePath) {
+    ffArgs.push("-vf", vf);
+  }
+  ffArgs.push(
     "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
     "-preset", "ultrafast", "-profile:v", "baseline",
-    "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
+    "-c:a", "aac", "-b:a", "96k", "-ar", "44100", "-ac", "2",
     "-movflags", "+faststart",
+    "-shortest",
+    outPath,
   );
-  if (longSong && isFast) ffArgs.push("-r", "1");
-  if (dur > 0.5) {
-    ffArgs.push("-t", String(Math.ceil(dur + 0.35)));
-  } else {
-    ffArgs.push("-shortest");
-  }
-  ffArgs.push(outPath);
   return ffArgs;
 }
 
@@ -352,10 +350,17 @@ async function renderToResponse({
     fs.writeFileSync(audioPath, audioBuffer);
     cleanup.push(audioPath);
   } else if (audioUrlFallback) {
-    const fetchMs = isArchivedStorageUrl(audioUrlFallback)
-      ? Math.min(ARCHIVED_AUDIO_FETCH_MS, remainingMs(12000))
-      : Math.min(AUDIO_FETCH_MS, remainingMs(15000));
-    const audio = await fetchToBuffer(audioUrlFallback, MAX_AUDIO_BYTES, fetchMs);
+    let audio;
+    if (isArchivedStorageUrl(audioUrlFallback)) {
+      const { keyFromStorageUrl, fetchStorageObjectBuffer } = require("./_lib/storage-private");
+      const key = keyFromStorageUrl(audioUrlFallback, "song_archive");
+      if (!key) throw new Error("invalid archive url");
+      const got = await fetchStorageObjectBuffer("song_archive", key, MAX_AUDIO_BYTES);
+      audio = { buffer: got.buffer, contentType: got.contentType };
+    } else {
+      const fetchMs = Math.min(AUDIO_FETCH_MS, remainingMs(15000));
+      audio = await fetchToBuffer(audioUrlFallback, MAX_AUDIO_BYTES, fetchMs);
+    }
     const audioExt = audioExtFromContentType(audio.contentType, audioUrlFallback, audioName);
     audioPath = path.join(tmpDir, `nabad-vid-${stamp}.${audioExt}`);
     fs.writeFileSync(audioPath, audio.buffer);
@@ -364,15 +369,22 @@ async function renderToResponse({
     throw new Error("Missing audio");
   }
 
+  const audioDurationSec = probeMediaDurationSec(ffmpegPath, audioPath);
+  const longSong = audioDurationSec > 45;
+
   let imagePath = "";
   if (imageBuffer?.length) {
     const imgExt = imageExtFromContentType(imageContentType, imageName);
     imagePath = path.join(tmpDir, `nabad-vid-${stamp}.${imgExt}`);
     fs.writeFileSync(imagePath, imageBuffer);
     cleanup.push(imagePath);
-  } else if (imageUrlFallback) {
+  } else if (imageUrlFallback && !(audioBuffer?.length && longSong)) {
     try {
-      const image = await fetchToBuffer(imageUrlFallback, MAX_IMAGE_BYTES, IMAGE_FETCH_MS);
+      const image = await fetchToBuffer(
+        imageUrlFallback,
+        MAX_IMAGE_BYTES,
+        Math.min(IMAGE_FETCH_MS, remainingMs(4000)),
+      );
       const imgExt = imageExtFromContentType(image.contentType, imageName);
       imagePath = path.join(tmpDir, `nabad-vid-${stamp}.${imgExt}`);
       fs.writeFileSync(imagePath, image.buffer);
@@ -383,11 +395,10 @@ async function renderToResponse({
   }
 
   const encodeFps = isFast ? 1 : 2;
-  const audioDurationSec = probeMediaDurationSec(ffmpegPath, audioPath);
   const ffBase = { audioPath, outPath, fps: encodeFps, durationSec: audioDurationSec, isFast };
   const ffmpegMs = audioBuffer?.length
-    ? Math.min(remainingMs(6000), Math.max(45000, Math.ceil(audioDurationSec * 420) + 12000))
-    : Math.min(remainingMs(8000), Math.max(28000, Math.ceil(audioDurationSec * 380) + 8000));
+    ? Math.min(remainingMs(6000), Math.max(42000, Math.ceil(audioDurationSec * 320) + 8000))
+    : Math.min(remainingMs(8000), Math.max(32000, Math.ceil(audioDurationSec * 280) + 6000));
 
   try {
     await runFfmpeg(ffmpegPath, buildFfmpegArgs({ ...ffBase, imagePath }), ffmpegMs);
@@ -405,15 +416,17 @@ async function renderToResponse({
   }
   cleanup.push(outPath);
 
-  const outDurationSec = probeMediaDurationSec(ffmpegPath, outPath);
-  if (
-    audioDurationSec > 3 &&
-    outDurationSec > 0 &&
-    outDurationSec < audioDurationSec * 0.85
-  ) {
-    throw new Error(
-      `Video truncated (${Math.round(outDurationSec)}s of ${Math.round(audioDurationSec)}s) — try again on Wi‑Fi`,
-    );
+  if (!isFast && !audioBuffer?.length) {
+    const outDurationSec = probeMediaDurationSec(ffmpegPath, outPath);
+    if (
+      audioDurationSec > 3 &&
+      outDurationSec > 0 &&
+      outDurationSec < audioDurationSec * 0.85
+    ) {
+      throw new Error(
+        `Video truncated (${Math.round(outDurationSec)}s of ${Math.round(audioDurationSec)}s) — try again on Wi‑Fi`,
+      );
+    }
   }
 
   const outStat = fs.statSync(outPath);
@@ -478,7 +491,7 @@ module.exports = async function handler(req, res) {
         imageBuffer: form.image?.buffer,
         imageContentType: form.image?.mime,
         imageName: form.image?.filename,
-        startedMs,
+        startedMs: Date.now(),
       });
       return;
     }
@@ -500,7 +513,7 @@ module.exports = async function handler(req, res) {
         audioContentType: contentType.split(";")[0].trim() || "application/octet-stream",
         audioName: meta.audioName,
         imageUrlFallback: meta.imageUrl,
-        startedMs,
+        startedMs: Date.now(),
       });
       return;
     }
@@ -510,11 +523,21 @@ module.exports = async function handler(req, res) {
 
     const audioUrl = resolveFetchUrl(String(params.audioUrl || "").trim());
     const audioBase64 = String(params.audioBase64 || params.audio_base64 || "").trim();
-    const imageBase64 = String(params.imageBase64 || params.image_base64 || "").trim();
+    const imageBase64Param = String(params.imageBase64 || params.image_base64 || "").trim();
     const title = String(params.title || "song").trim();
     const isFast = isFastRender(params);
     const imageUrl = String(params.imageUrl || "").trim();
     const safeImageUrl = imageUrl && /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
+
+    let imageBufferFromParam = null;
+    if (imageBase64Param) {
+      try {
+        imageBufferFromParam = Buffer.from(imageBase64Param, "base64");
+        if (!imageBufferFromParam?.length) imageBufferFromParam = null;
+      } catch {
+        imageBufferFromParam = null;
+      }
+    }
 
     if (audioBase64) {
       let audioBuffer;
@@ -538,14 +561,7 @@ module.exports = async function handler(req, res) {
         res.end(JSON.stringify({ error: "audioBase64 too large" }));
         return;
       }
-      let imageBuffer = null;
-      if (imageBase64) {
-        try {
-          imageBuffer = Buffer.from(imageBase64, "base64");
-        } catch {
-          imageBuffer = null;
-        }
-      }
+      let imageBuffer = imageBufferFromParam;
       await renderToResponse({
         res,
         title,
@@ -556,7 +572,7 @@ module.exports = async function handler(req, res) {
         imageBuffer,
         imageContentType: "image/jpeg",
         imageName: "cover.jpg",
-        startedMs,
+        startedMs: Date.now(),
       });
       return;
     }
@@ -573,8 +589,11 @@ module.exports = async function handler(req, res) {
       title,
       isFast,
       audioUrlFallback: isArchivedStorageUrl(audioUrl) ? audioUrl : (absoluteNabadAudioProxyUrl(audioUrl) || audioUrl),
-      imageUrlFallback: safeImageUrl,
-      startedMs,
+      imageBuffer: imageBufferFromParam,
+      imageContentType: "image/jpeg",
+      imageName: "cover.jpg",
+      imageUrlFallback: imageBufferFromParam ? "" : safeImageUrl,
+      startedMs: Date.now(),
     });
   } catch (e) {
     const msg = e?.message ? String(e.message) : "render failed";

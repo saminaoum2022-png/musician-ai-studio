@@ -364,7 +364,11 @@ function isLocalVoicePlayUrl(url) {
 }
 
 function isDirectVoiceStorageUrl(url) {
-  return /\/storage\/v1\/object\/public\/dm_voice\//i.test(String(url || ""));
+  return /\/storage\/v1\/object\/(?:public\/)?dm_voice\//i.test(String(url || ""));
+}
+
+function isVoiceDropStreamUrl(url) {
+  return /\/api\/messages\?[^#]*type=voice_drop/i.test(String(url || ""));
 }
 
 function cachedVoicePlayUrl(...keys) {
@@ -378,24 +382,34 @@ function cachedVoicePlayUrl(...keys) {
 function publicVoiceDropPlayUrl(url, key) {
   const cached = cachedVoicePlayUrl(key, url, voiceDropKeyFromUrl(url));
   if (cached) return cached;
-  let pubUrl = String(url || "").trim();
-  const k = String(key || "").trim() || voiceDropKeyFromUrl(pubUrl);
-  if ((!pubUrl || !/^https?:\/\//i.test(pubUrl)) && k) {
-    const base = String(d().SUPABASE_URL || "").replace(/\/$/, "");
-    if (!base) return "";
-    const enc = k.split("/").map((s) => encodeURIComponent(s)).join("/");
-    pubUrl = `${base}/storage/v1/object/public/dm_voice/${enc}`;
-  }
-  if (!pubUrl) return "";
-  if (isLocalVoicePlayUrl(pubUrl)) return pubUrl;
-  if (!/^https?:\/\//i.test(pubUrl)) return "";
-  // Public dm_voice files play directly — the Suno audio proxy adds ~2s before
-  // first audio. Proxy only as a fallback for non-storage URLs.
-  if (isDirectVoiceStorageUrl(pubUrl)) {
-    return d().normalizeAudioUrlForPlayback?.(pubUrl) || pubUrl;
-  }
-  const proxied = d().toAudioProxyUrl?.(pubUrl) || pubUrl;
-  return d().normalizeAudioUrlForPlayback?.(proxied) || proxied;
+  const u = String(url || "").trim();
+  if (isLocalVoicePlayUrl(u)) return u;
+  if (isVoiceDropStreamUrl(u)) return d().normalizeAudioUrlForPlayback?.(u) || u;
+  return "";
+}
+
+async function resolveVoiceDropPlayUrl(url, key) {
+  const cacheKey = String(key || "").trim() || voiceDropKeyFromUrl(url) || url;
+  const cached = cachedVoicePlayUrl(cacheKey, url, key);
+  if (cached) return cached;
+  const direct = publicVoiceDropPlayUrl(url, key);
+  if (direct) return direct;
+  const k = String(key || "").trim() || voiceDropKeyFromUrl(url);
+  if (!k || typeof d().messagesApi !== "function") return "";
+  try {
+    const data = await d().messagesApi("/api/messages", {
+      method: "POST",
+      timeoutMs: 15000,
+      body: JSON.stringify({ action: "sign_voice_drop_url", key: k }),
+    });
+    const playUrl = String(data?.playUrl || "").trim();
+    if (playUrl) {
+      const abs = d().normalizeAudioUrlForPlayback?.(playUrl) || playUrl;
+      cacheVoiceDropPlayUrl(k, abs);
+      return abs;
+    }
+  } catch {}
+  return "";
 }
 
 function loadVoiceDropPlayUrl(url, key) {
@@ -440,9 +454,9 @@ function getOrCreateVoiceDropAudio(playUrl) {
 }
 
 export function preloadVoiceDropAudio(url, key) {
-  const playUrl = loadVoiceDropPlayUrl(url, key);
-  if (!playUrl) return;
-  getOrCreateVoiceDropAudio(playUrl);
+  void resolveVoiceDropPlayUrl(url, key).then((playUrl) => {
+    if (playUrl) getOrCreateVoiceDropAudio(playUrl);
+  });
 }
 
 function minBytesForVoiceDrop(durationMs, blobSize = 0) {
@@ -895,7 +909,7 @@ export async function toggleVoiceDropPlayback(card) {
     return;
   }
   stopPreviewPlayback();
-  const playUrl = loadVoiceDropPlayUrl(url, key);
+  const playUrl = await resolveVoiceDropPlayUrl(url, key);
   if (!playUrl) {
     d().showToast?.("Voice drop file missing.", { durationMs: 2600 });
     return;

@@ -31393,7 +31393,9 @@ function libraryTrackForPlaybackSource(source) {
 function libraryPlaybackUrl(raw) {
   const s = String(raw?.url || raw || "").trim();
   if (!s) return "";
-  if (isArchivedSongStorageUrl(s)) return normalizeAudioUrlForPlayback(s);
+  if (isArchivedSongStorageUrl(s)) {
+    return songArchiveStreamPlaybackUrl(s, raw?.id || raw?.cloudSongId || raw?.songId || "");
+  }
   if (s.startsWith("blob:") || s.startsWith("data:")) return s;
   const leaf = unwrapInnermostHttpAudioUrl(s) || s;
   if (isLikelySunoOriginCdnUrl(leaf)) {
@@ -71318,18 +71320,37 @@ async function cacheGeneratedAudio2(url) {
     return null;
   }
 }
-/** Permanent copy in Supabase Storage — never wrap in Suno proxy. */
+/** Permanent copy in Supabase Storage — stream via /api/songs/stream (private bucket). */
 function isArchivedSongStorageUrl(url) {
   const s = String(url || "").trim();
   if (!s) return false;
-  return /\/storage\/v1\/object\/public\/song_archive\//i.test(s);
+  return /\/storage\/v1\/object\/(?:public\/)?song_archive\//i.test(s);
+}
+
+function songArchiveKeyFromUrl(url) {
+  const m = String(url || "").match(/\/song_archive\/([^?#]+)/i);
+  if (!m) return "";
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return m[1];
+  }
+}
+
+function songArchiveStreamPlaybackUrl(storedUrl, songId) {
+  const key = songArchiveKeyFromUrl(storedUrl);
+  if (!key) return normalizeAudioUrlForPlayback(storedUrl);
+  const params = new URLSearchParams({ key });
+  const sid = String(songId || "").trim();
+  if (sid) params.set("songId", sid);
+  return apiUrl(`/api/songs/stream?${params.toString()}`);
 }
 
 const _songArchiveInflight = new Map();
 
-function toAudioProxyUrl(url) {
+function toAudioProxyUrl(url, songId) {
   if (!url || url === "#") return "";
-  if (isArchivedSongStorageUrl(url)) return normalizeAudioUrlForPlayback(url);
+  if (isArchivedSongStorageUrl(url)) return songArchiveStreamPlaybackUrl(url, songId);
   // Use apiUrl() so native (Capacitor) gets an absolute URL pointing at the
   // deployed API. Relative `/api/...` resolves to `capacitor://localhost/api/...`
   // on iOS — which nothing serves — and silently breaks all audio playback.
@@ -71344,13 +71365,15 @@ function toAudioProxyUrl(url) {
  *  Supabase can also store relative proxy URLs. Run every audio.src
  *  assignment through this helper so old data heals automatically.
  */
-function normalizeAudioUrlForPlayback(url) {
+function normalizeAudioUrlForPlayback(url, songId) {
   const s = String(url || "").trim();
   if (!s) return "";
   if (s.startsWith("blob:") || s.startsWith("data:")) return s;
+  if (isArchivedSongStorageUrl(s)) return songArchiveStreamPlaybackUrl(s, songId);
   if (s.startsWith("/api/")) return apiUrl(s);
   // Older entries may have saved the relative proxy without a leading slash.
   if (/^api\/suno\/audio\?/.test(s)) return apiUrl(`/${s}`);
+  if (/^api\/songs\/stream\?/.test(s)) return apiUrl(`/${s}`);
   return s;
 }
 
@@ -71427,11 +71450,11 @@ function hubAbsoluteUrl(pathOrUrl) {
 }
 
 /** Remote feed URLs use same-origin proxy so `fetch` works; blob stays blob. */
-function hubPreloadFetchUrl(rawUrl) {
+function hubPreloadFetchUrl(rawUrl, songId) {
   const u = String(rawUrl || "").trim();
   if (!u || u === "#") return "";
   if (u.startsWith("blob:")) return u;
-  if (isArchivedSongStorageUrl(u)) return u;
+  if (isArchivedSongStorageUrl(u)) return songArchiveStreamPlaybackUrl(u, songId);
   if (u.includes("/api/suno/audio")) return hubAbsoluteUrl(u);
   if (/^https?:\/\//i.test(u)) return hubAbsoluteUrl(toAudioProxyUrl(u));
   return hubAbsoluteUrl(u);
@@ -71708,13 +71731,18 @@ function preferDirectAudioUrl(url) {
  *  Supabase archive + Suno CDN directly (WKWebView cannot rely on cross-origin
  *  staging `/api/suno/audio` proxy through `<audio src>`). */
 function inlinePlaybackUrl(raw) {
-  const leaf = unwrapInnermostHttpAudioUrl(String(raw || "").trim()) || String(raw || "").trim();
+  const track = raw && typeof raw === "object" ? raw : null;
+  const src = track ? String(track.url || "").trim() : String(raw || "").trim();
+  const leaf = unwrapInnermostHttpAudioUrl(src) || src;
+  const songId = track?.id || track?.songId || track?.cloudSongId || "";
   if (!leaf) return "";
   if (!isCapacitorNativeAuth()) {
-    return normalizeAudioUrlForPlayback(toAudioProxyUrl(leaf) || leaf);
+    return normalizeAudioUrlForPlayback(toAudioProxyUrl(leaf, songId) || leaf, songId);
   }
   if (leaf.startsWith("blob:") || leaf.startsWith("data:")) return leaf;
-  if (isArchivedSongStorageUrl(leaf)) return normalizeAudioUrlForPlayback(leaf);
+  if (isArchivedSongStorageUrl(leaf)) {
+    return songArchiveStreamPlaybackUrl(leaf, songId);
+  }
   const direct = preferDirectAudioUrl(leaf);
   if (direct && /^https?:\/\//i.test(direct) && !direct.includes("/api/suno/audio")) {
     return direct;
@@ -71747,21 +71775,24 @@ function hubPlaybackSrcForPost(postId, p) {
   // CORS on the endpoint). Bandwidth cost is acceptable for a small native
   // user base; reliability beats penny-pinching on Vercel egress.
   const raw = String(p?.url || "").trim();
+  const songId = String(p?.songId || p?.id || "").trim();
+  if (isArchivedSongStorageUrl(raw)) return songArchiveStreamPlaybackUrl(raw, songId);
   if (isCapacitorNativeAuth()) {
     if (!raw) return "";
     if (raw.startsWith("blob:") || raw.startsWith("data:")) return raw;
     if (raw.includes("/api/suno/audio")) return raw;
-    return toAudioProxyUrl(raw);
+    if (raw.includes("/api/songs/stream")) return normalizeAudioUrlForPlayback(raw);
+    return toAudioProxyUrl(raw, songId);
   }
   return preferDirectAudioUrl(raw);
 }
 
-async function fetchHubTrackIntoBlob(postId, rawUrl) {
+async function fetchHubTrackIntoBlob(postId, rawUrl, songId) {
   if (!postId || !rawUrl) return;
   if (hubAudioBlobByPostId.has(postId)) return;
   const inflight = hubPreloadInflight.get(postId);
   if (inflight) return inflight;
-  const fetchUrl = hubPreloadFetchUrl(rawUrl);
+  const fetchUrl = hubPreloadFetchUrl(rawUrl, songId);
   if (!fetchUrl) return;
   const job = (async () => {
     try {
@@ -71818,7 +71849,7 @@ function preloadNextHubTrack(currentPostId) {
   const nextPost = loadHubFeed().find((p) => p.id === nextId);
   const raw = String(nextPost?.url || "").trim();
   if (!raw) return;
-  void fetchHubTrackIntoBlob(nextId, raw);
+  void fetchHubTrackIntoBlob(nextId, raw, String(nextPost?.songId || ""));
 }
 
 function scheduleHubPreloadNext(currentPostId) {
@@ -72522,7 +72553,7 @@ function preloadInitialHubTracks() {
   const p = loadHubFeed().find((x) => x.id === id);
   const raw = String(p?.url || "").trim();
   if (!raw) return;
-  void fetchHubTrackIntoBlob(id, raw);
+  void fetchHubTrackIntoBlob(id, raw, String(p?.songId || ""));
 }
 
 function updateListenRefButton() {

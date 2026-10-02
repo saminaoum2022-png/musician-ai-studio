@@ -36,7 +36,7 @@ function isFastRender(params) {
 }
 
 function isArchivedStorageUrl(url) {
-  return /\/storage\/v1\/object\/public\/song_archive\//i.test(String(url || ""));
+  return /\/storage\/v1\/object\/(?:public\/)?song_archive\//i.test(String(url || ""));
 }
 
 function resolveFetchUrl(url) {
@@ -350,10 +350,17 @@ async function renderToResponse({
     fs.writeFileSync(audioPath, audioBuffer);
     cleanup.push(audioPath);
   } else if (audioUrlFallback) {
-    const fetchMs = isArchivedStorageUrl(audioUrlFallback)
-      ? Math.min(ARCHIVED_AUDIO_FETCH_MS, remainingMs(12000))
-      : Math.min(AUDIO_FETCH_MS, remainingMs(15000));
-    const audio = await fetchToBuffer(audioUrlFallback, MAX_AUDIO_BYTES, fetchMs);
+    let audio;
+    if (isArchivedStorageUrl(audioUrlFallback)) {
+      const { keyFromStorageUrl, fetchStorageObjectBuffer } = require("./_lib/storage-private");
+      const key = keyFromStorageUrl(audioUrlFallback, "song_archive");
+      if (!key) throw new Error("invalid archive url");
+      const got = await fetchStorageObjectBuffer("song_archive", key, MAX_AUDIO_BYTES);
+      audio = { buffer: got.buffer, contentType: got.contentType };
+    } else {
+      const fetchMs = Math.min(AUDIO_FETCH_MS, remainingMs(15000));
+      audio = await fetchToBuffer(audioUrlFallback, MAX_AUDIO_BYTES, fetchMs);
+    }
     const audioExt = audioExtFromContentType(audio.contentType, audioUrlFallback, audioName);
     audioPath = path.join(tmpDir, `nabad-vid-${stamp}.${audioExt}`);
     fs.writeFileSync(audioPath, audio.buffer);

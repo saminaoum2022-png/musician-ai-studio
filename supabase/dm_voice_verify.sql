@@ -7,9 +7,9 @@ select
   case
     when not exists (select 1 from storage.buckets where id = 'dm_voice')
       then '❌ MISSING — run supabase/dm_voice_storage.sql'
-    when not (select public from storage.buckets where id = 'dm_voice')
-      then '⚠️  Bucket exists but NOT public — re-run supabase/dm_voice_storage.sql'
-    else '✅ dm_voice bucket exists and is public'
+    when (select public from storage.buckets where id = 'dm_voice')
+      then '⚠️  Bucket is still PUBLIC — run supabase/storage_private_buckets.sql'
+    else '✅ dm_voice bucket exists and is private'
   end as status;
 
 select id, public, file_size_limit, allowed_mime_types

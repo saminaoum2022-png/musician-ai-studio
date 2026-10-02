@@ -8,7 +8,7 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values (
   'song_archive',
   'song_archive',
-  true,
+  false,
   52428800, -- 50 MB per archived song (only limit at bucket level)
   array['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4a', 'audio/wav', 'audio/webm', 'audio/ogg', 'application/json', 'application/octet-stream']
 )
@@ -17,11 +17,8 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
--- Public read (playback from app + Hub)
+-- Playback via GET /api/songs/stream (service role). No public object read.
 drop policy if exists "song_archive_public_read" on storage.objects;
-create policy "song_archive_public_read"
-  on storage.objects for select
-  using (bucket_id = 'song_archive');
 
 -- Server uploads via service role (api/songs/archive.js). Optional: allow
 -- authenticated users to upload only under their own folder.

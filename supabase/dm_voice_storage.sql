@@ -3,7 +3,7 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values (
   'dm_voice',
   'dm_voice',
-  true,
+  false,
   2097152,
   array[
     'audio/webm',
@@ -22,9 +22,6 @@ on conflict (id) do update set
   allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "dm_voice_public_read" on storage.objects;
-create policy "dm_voice_public_read"
-  on storage.objects for select
-  using (bucket_id = 'dm_voice');
 
 drop policy if exists "dm_voice_insert_own" on storage.objects;
 create policy "dm_voice_insert_own"

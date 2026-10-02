@@ -3,7 +3,6 @@
  * Text only (v1). Service role writes; user JWT verified at edge.
  */
 
-const { Readable } = require("stream");
 const {
   verifyUser,
   sendJson,
@@ -13,6 +12,13 @@ const {
 } = require("./_lib/credits-auth");
 const { queuePrivacySafePush, sendPrivacySafePush } = require("./_lib/onesignal-push");
 const { uploadObject } = require("./_lib/supabase-storage");
+const {
+  cleanVoiceKey,
+  userCanStreamVoiceKey,
+  streamStorageObject,
+  mintVoiceStreamQuery,
+  verifyStreamSig,
+} = require("./_lib/storage-private");
 const { parseBase64DataUrl, voiceDropBodyProblem } = require("./_lib/dm-voice");
 const { formatDmPushPreview } = require("./_lib/dm-message-preview");
 
@@ -785,72 +791,21 @@ async function unreadCountForUser(userId) {
   return { count: messageCount, messageCount, threadCount };
 }
 
-function cleanVoiceDropKey(v) {
-  const key = String(v || "").trim();
-  return /^[\da-f-]{36}\/\d+\.[a-z0-9]+$/i.test(key) ? key : "";
-}
-
-async function userCanStreamVoiceKey(userId, key) {
-  const uid = cleanUserId(userId);
-  const safeKey = String(key || "").trim();
-  if (!uid || !safeKey) return false;
-  const needle = safeKey.replace(/,/g, "");
-  const r = await svcFetch(
-    `dm_messages?select=thread_id&body=like.${encodeURIComponent(`%${needle}%`)}&limit=10`,
-  );
-  const rows = Array.isArray(r.data) ? r.data : [];
-  for (const row of rows) {
-    const tid = String(row.thread_id || "").trim();
-    if (!tid) continue;
-    const tr = await svcFetch(
-      `dm_threads?select=id,user_a,user_b&id=eq.${encodeURIComponent(tid)}&limit=1`,
-    );
-    const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
-    if (thread && (thread.user_a === uid || thread.user_b === uid)) return true;
+async function handleVoiceDropStreamGet(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  const key = cleanVoiceKey(url.searchParams.get("key") || "");
+  if (!key) return sendJson(res, 400, { ok: false, error: "Invalid key" });
+  const exp = url.searchParams.get("exp");
+  const sig = url.searchParams.get("sig");
+  if (exp && sig && verifyStreamSig(`voice:${key}`, exp, sig)) {
+    await streamStorageObject(res, { bucket: DM_VOICE_BUCKET, key, sendJson });
+    return;
   }
-  return false;
-}
-
-async function streamVoiceDropObject(res, key) {
-  const encKey = key.split("/").map((s) => encodeURIComponent(s)).join("/");
-  const upstream = await fetch(`${SUPABASE_URL}/storage/v1/object/${DM_VOICE_BUCKET}/${encKey}`, {
-    method: "GET",
-    headers: {
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-    },
-  });
-  if (!upstream.ok || !upstream.body) {
-    const txt = await upstream.text().catch(() => "");
-    return sendJson(res, upstream.status === 404 ? 404 : 502, {
-      ok: false,
-      error: upstream.status === 404 ? "Voice file not found" : "Voice fetch failed",
-      details: txt.slice(0, 200),
-    });
-  }
-  res.statusCode = 200;
-  res.setHeader("Content-Type", upstream.headers.get("content-type") || "audio/mp4");
-  res.setHeader("Cache-Control", "private, max-age=3600");
-  const cl = upstream.headers.get("content-length");
-  if (cl) res.setHeader("Content-Length", cl);
-  try {
-    const nodeStream = Readable.fromWeb(upstream.body);
-    nodeStream.on("error", () => {
-      try {
-        if (!res.writableEnded) res.end();
-      } catch {}
-    });
-    res.on("close", () => {
-      try {
-        nodeStream.destroy();
-      } catch {}
-    });
-    nodeStream.pipe(res);
-  } catch {
-    const ab = await upstream.arrayBuffer();
-    res.end(Buffer.from(ab));
-  }
-  return true;
+  const user = await verifyUser(req);
+  if (!user) return sendJson(res, 401, { ok: false, error: "Not signed in" });
+  const allowed = await userCanStreamVoiceKey(user.userId, key);
+  if (!allowed) return sendJson(res, 403, { ok: false, error: "Forbidden" });
+  await streamStorageObject(res, { bucket: DM_VOICE_BUCKET, key, sendJson });
 }
 
 async function markUndeliveredPartnerMessages(thread, viewerId) {
@@ -956,15 +911,6 @@ async function handleGet(req, res, user) {
     if (!partnerId) return sendJson(res, 400, { ok: false, error: "Missing userId" });
     const presence = await presenceForViewer(user.userId, partnerId);
     return sendJson(res, 200, { ok: true, presence });
-  }
-
-  if (type === "voice_drop") {
-    const key = cleanVoiceDropKey(url.searchParams.get("key"));
-    if (!key) return sendJson(res, 400, { ok: false, error: "Invalid key" });
-    const allowed = await userCanStreamVoiceKey(user.userId, key);
-    if (!allowed) return sendJson(res, 403, { ok: false, error: "Forbidden" });
-    await streamVoiceDropObject(res, key);
-    return;
   }
 
   if (type === "ack_delivery") {
@@ -1160,6 +1106,19 @@ async function handlePost(req, res, user) {
       key: uploaded.key,
       bytes: uploaded.bytes,
     });
+  }
+
+  if (action === "sign_voice_drop_url") {
+    const key = cleanVoiceKey(body?.key || "");
+    if (!key) return sendJson(res, 400, { ok: false, error: "Invalid key" });
+    const allowed = await userCanStreamVoiceKey(user.userId, key);
+    if (!allowed) return sendJson(res, 403, { ok: false, error: "Forbidden" });
+    const tok = mintVoiceStreamQuery(key);
+    if (!tok) return sendJson(res, 500, { ok: false, error: "Signing unavailable" });
+    const playUrl =
+      `/api/messages?type=voice_drop&key=${encodeURIComponent(tok.key)}` +
+      `&exp=${encodeURIComponent(String(tok.exp))}&sig=${encodeURIComponent(tok.sig)}`;
+    return sendJson(res, 200, { ok: true, playUrl, exp: tok.exp });
   }
 
   if (action === "set_presence") {
@@ -1546,6 +1505,13 @@ async function handlePost(req, res, user) {
 module.exports = async function handler(req, res) {
   setCors(res);
   if (req.method === "OPTIONS") return res.end();
+  if (req.method === "GET") {
+    const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+    if (String(url.searchParams.get("type") || "") === "voice_drop") {
+      await handleVoiceDropStreamGet(req, res);
+      return;
+    }
+  }
   const user = await verifyUser(req);
   if (req.method === "GET") return handleGet(req, res, user);
   if (req.method === "POST") return handlePost(req, res, user);

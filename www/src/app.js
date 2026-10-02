@@ -4131,6 +4131,12 @@ function enterProfileRouteHooks({ skipHeavy = false } = {}) {
   try { setProfileEditing(false); } catch {}
   scheduleProfileSongsRender();
   try { syncArtistAvatarFlipVisibility(); } catch {}
+  if (authSession?.user?.id && ownerProfileIdentityUnsettled()) {
+    try { setProfileHeaderLoading(true); } catch {}
+    void ensureOwnerProfileIdentityHydrated({
+      reason: skipHeavy ? "profile-tab-light" : "profile-tab-heavy",
+    });
+  }
   if (skipHeavy || shouldSkipRouteHeavy("profile")) {
     try {
       setProfileHeaderLoading(shouldShowProfileHeaderSkeleton());
@@ -20408,6 +20414,9 @@ async function finishPostAuthNavigation() {
   }
   maybePromptTermsUpdate();
   const postAuthUid = String(authSession?.user?.id || "").trim();
+  if (postAuthUid) {
+    void ensureOwnerProfileIdentityHydrated({ reason: "post-auth", force: true });
+  }
   if (postAuthUid && shouldShowOnboardingForUser(postAuthUid)) {
     try { sessionStorage.setItem(ONBOARDING_ACTIVE_KEY, "1"); } catch {}
     try { location.hash = "#/onboarding"; } catch {}
@@ -33094,27 +33103,70 @@ function scheduleBootProfileCloudMergeRetry() {
       await new Promise((resolve) => setTimeout(resolve, ms));
       if (!authSession?.user?.id) return;
       try {
-        let merged = false;
-        if (getSupabaseAuthToken()) {
-          const cloud = await supabaseLoadProfile({ force: true, reason: "boot-deferred-merge" });
-          if (cloud) {
-            merged = await mergeActiveProfileFromCloud({
-              cloud,
-              reason: "boot-deferred-merge",
-            });
-          }
-        }
-        if (!merged) {
-          merged = await hydrateOwnerProfileFromPublicDirectory("boot-deferred-public");
-        }
-        if (merged) {
-          try { renderProfilePreviewFromInputs(); } catch {}
-          try { setProfileHeaderLoading(false); } catch {}
-          return;
-        }
+        const ok = await ensureOwnerProfileIdentityHydrated({
+          reason: "boot-deferred",
+          force: true,
+        });
+        if (ok) return;
       } catch {}
     }
   })();
+}
+
+/** Header still missing display name / photo / real handle (tab bar skips full applyRoute). */
+function ownerProfileIdentityUnsettled() {
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid) return false;
+  if (!localProfileBelongsToAuthUser()) return true;
+  const dn = normalizeDisplayName(activeProfile?.displayName);
+  const av = String(activeProfile?.avatar || "").trim();
+  const hasAvatar =
+    isRealUserAvatarUrl(av) || Boolean(cachedProfileAvatarUrl(uid));
+  const handle = normalizeProfileUsername(activeProfile?.username);
+  const hasHandle = Boolean(handle && !isPlaceholderUsername(handle));
+  return !(hasAvatar && (dn || hasHandle));
+}
+
+let _ownerProfileIdentityHydrateInFlight = null;
+
+/** JWT merge + public-directory fallback — sign-in, Profile tab, boot retries. */
+async function ensureOwnerProfileIdentityHydrated(opts = {}) {
+  const reason = String(opts.reason || "identity-hydrate");
+  const force = Boolean(opts.force);
+  if (!authSession?.user?.id) return false;
+  if (!force && !ownerProfileIdentityUnsettled()) return false;
+  if (_ownerProfileIdentityHydrateInFlight) return _ownerProfileIdentityHydrateInFlight;
+  const run = async () => {
+    try {
+      const unsettled = ownerProfileIdentityUnsettled();
+      if (force || unsettled) {
+        try { setProfileHeaderLoading(true); } catch {}
+      }
+      let merged = false;
+      if (getSupabaseAuthToken()) {
+        merged = await mergeActiveProfileFromCloud({
+          reason,
+          skipIfRecent: !(force || unsettled),
+        });
+      }
+      if (!merged) {
+        merged = await hydrateOwnerProfileFromPublicDirectory(`${reason}-public`);
+      }
+      try { renderProfilePreviewFromInputs(); } catch {}
+      try { syncMobileTabbarProfileAvatar(); } catch {}
+      if (!ownerProfileIdentityUnsettled()) {
+        try { setProfileHeaderLoading(false); } catch {}
+      }
+      return merged || !ownerProfileIdentityUnsettled();
+    } catch {
+      try { setProfileHeaderLoading(false); } catch {}
+      return false;
+    } finally {
+      _ownerProfileIdentityHydrateInFlight = null;
+    }
+  };
+  _ownerProfileIdentityHydrateInFlight = run();
+  return _ownerProfileIdentityHydrateInFlight;
 }
 
 /** Pick the canonical username when merging local + cloud profile rows.
@@ -34212,6 +34264,12 @@ function saveAuthSession(sess, { persist = true } = {}) {
     void ensureUserLibraryHydrated(undefined, { reason: "saveAuthSession:relogin" });
     try { refreshProfileHandleFromActiveProfile(); } catch {}
     if (!shouldShowProfileHeaderSkeleton()) setProfileHeaderLoading(false);
+  }
+  if (nextUserId) {
+    void ensureOwnerProfileIdentityHydrated({
+      reason: "saveAuthSession",
+      force: Boolean(nextUserId !== prevUserId),
+    });
   }
   if (authSession) {
     const payload = JSON.stringify(authSession);

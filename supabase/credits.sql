@@ -58,10 +58,9 @@ create index if not exists promo_redemptions_user_idx
 
 -- ---------- RLS -------------------------------------------------------
 --
--- Users can READ their own balance + their own ledger rows. Writes
--- always go through SECURITY DEFINER RPCs, so we don't need INSERT/
--- UPDATE policies here at all. promo_codes is fully locked down (only
--- the service role on the server can touch it).
+-- No anon/authenticated policies — balances and ledger are server-only
+-- (GET /api/credits/me). After first deploy run
+-- supabase/credits_billing_client_lockdown.sql on Supabase.
 
 alter table public.user_credits enable row level security;
 alter table public.credit_ledger enable row level security;
@@ -69,19 +68,8 @@ alter table public.promo_codes enable row level security;
 alter table public.promo_redemptions enable row level security;
 
 drop policy if exists "user_credits_select_own" on public.user_credits;
-create policy "user_credits_select_own"
-  on public.user_credits for select
-  using (auth.uid() = user_id);
-
 drop policy if exists "credit_ledger_select_own" on public.credit_ledger;
-create policy "credit_ledger_select_own"
-  on public.credit_ledger for select
-  using (auth.uid() = user_id);
-
 drop policy if exists "promo_redemptions_select_own" on public.promo_redemptions;
-create policy "promo_redemptions_select_own"
-  on public.promo_redemptions for select
-  using (auth.uid() = user_id);
 
 -- ---------- RPCs ------------------------------------------------------
 

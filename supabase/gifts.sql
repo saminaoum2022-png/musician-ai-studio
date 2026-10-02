@@ -47,9 +47,6 @@ create index if not exists gift_events_target_idx
 alter table public.gift_events enable row level security;
 
 drop policy if exists "gift_events_select_involved" on public.gift_events;
-create policy "gift_events_select_involved"
-  on public.gift_events for select
-  using (auth.uid() = sender_user_id or auth.uid() = recipient_user_id);
 
 -- ---------- bucket-aware promo redeem ---------------------------------
 

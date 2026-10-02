@@ -73,9 +73,6 @@ create index if not exists credits_transactions_created_idx
 alter table public.credits_transactions enable row level security;
 
 drop policy if exists "credits_transactions_admin_select" on public.credits_transactions;
-create policy "credits_transactions_admin_select"
-  on public.credits_transactions for select
-  using (public.is_admin_user(auth.uid()));
 
 -- ---------- music_generation_logs ------------------------------------------
 

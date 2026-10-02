@@ -39355,11 +39355,17 @@ body[data-route="messages"]{
 }
 .messagesInboxPresenceAvatar,
 .messagesInboxPresenceAvatar.messagesAvatarFallback{
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
+}
+.messagesInboxPresenceAvatar.messagesAvatarFallback.emptyProfileAvatar svg{
+  width: 54%;
+  height: 54%;
 }
 .messagesInboxPresenceAvatarWrap.is-online::after{
   content: "";
@@ -70234,8 +70240,8 @@ body #discoverOccasionsSongs .discoverTemplatesChip{ scroll-snap-align: none; }
 body[data-route="discover"] #discoverOccasionsPanel .discoverOccasionStartCta{ display: flex; align-items: center; justify-content: center; text-align: center; }
 
 /* ===== Friends v3: edge-to-edge covers, sleeve ⇄ record, hairline line ===== */
-html:not(.is-web-shell) .followAct--edge .feedEdge{ position: relative; width: 100vw; margin: 10px calc(50% - 50vw) 0; }
-html.is-web-shell .followAct--edge .feedEdge{ position: relative; width: 100%; max-width: 100%; margin: 10px 0 0; }
+/* Full-bleed covers on native + mobile web; desktop column clip is @media (min-width: 1024px) below. */
+.followAct--edge .feedEdge{ position: relative; width: 100vw; margin: 10px calc(50% - 50vw) 0; }
 .feedEdgeStage{ position: relative; aspect-ratio: 4 / 5; overflow: hidden; background: #0b0c12; isolation: isolate; }
 /* the sleeve (cover). Fills the stage; when the record is out it steps aside, tilted */
 .feedEdgeSleeve{
@@ -70412,9 +70418,9 @@ body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profile
 .followActCaptionHandle{ font-weight: 800; color: #fff; }
 body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle .followActReleaseCaption .followActCaptionText{ color: #fff; }
 /* header, action row and note each span the viewport (same trick as the cover) so the page gutter never offsets them from the 16pt edge */
-html:not(.is-web-shell) body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActTop,
-html:not(.is-web-shell) body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActActionsBar,
-html:not(.is-web-shell) body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActReleaseCaption{
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActTop,
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActActionsBar,
+body :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--edge.followAct--xstyle > .followActReleaseCaption{
   width: 100vw !important; max-width: 100vw !important; margin-left: calc(50% - 50vw) !important; margin-right: calc(50% - 50vw) !important; box-sizing: border-box !important;
 }
 
@@ -70439,9 +70445,9 @@ body.isOnboarding .onboardingScreen.ob3{ border-radius: 0 !important; background
 .ob3Skip{ position: absolute; z-index: 4; right: 16px; top: 26px; border: 0; background: transparent; color: #9aa1b6; font: inherit; font-size: 15px; font-weight: 600; padding: 8px 8px; cursor: pointer; }
 .ob3Skip[hidden]{ display: none; }
 .ob3Slides{ position: relative; flex: 1 1 auto; min-height: 0; }
-.ob3Slide{ position: absolute; inset: 0; padding: 62px 22px 0; opacity: 0; pointer-events: none; transition: opacity .28s ease; }
+.ob3Slide{ position: absolute; inset: 0; padding: 62px 22px 76px; opacity: 0; pointer-events: none; transition: opacity .28s ease; box-sizing: border-box; overflow: hidden; }
 .ob3Slide.is-active{ opacity: 1; pointer-events: auto; }
-.ob3Scene{ position: relative; height: 380px; margin: 6px -22px 0; }
+.ob3Scene{ position: relative; height: clamp(220px, 40vh, 380px); margin: 6px -22px 0; flex-shrink: 0; }
 .ob3Title{ margin: 0 0 12px; font-family: var(--dz-display, inherit); font-size: clamp(30px, 8.6vw, 34px); font-weight: 800; line-height: 1.06; letter-spacing: -0.015em; color: #f5f6fb; text-wrap: balance; text-align: left; }
 .ob3Lead{ margin: 0; max-width: 34ch; font-size: 16px; line-height: 1.5; color: #9aa1b6; text-align: left; }
 .ob3Hint{ position: absolute; left: 0; right: 0; bottom: 26px; margin: 0; text-align: center; font-size: 13px; font-weight: 600; color: #9aa1b6; pointer-events: none; }
@@ -70484,6 +70490,18 @@ body.isOnboarding .onboardingScreen.ob3{ border-radius: 0 !important; background
 .ob3Who{ position: absolute; left: 22px; right: 22px; top: 168px; height: 54px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.85); background: rgba(255,255,255,.10); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); display: flex; align-items: center; padding: 0 20px; font-size: 17px; font-weight: 600; color: #f5f6fb; text-align: left; }
 .ob3Made{ position: absolute; left: 22px; right: 22px; top: 246px; margin: 0; text-align: center; font-size: 16px; font-weight: 600; color: #f5f6fb; }
 .ob3Made2{ position: absolute; left: 22px; right: 22px; top: 274px; margin: 0; text-align: center; font-size: 14px; color: #9aa1b6; }
+@media (max-height: 740px){
+  .ob3Slide{ padding-top: 54px; padding-bottom: 82px; }
+  .ob3Scene{
+    height: clamp(200px, 34vh, 300px);
+    transform: scale(0.88);
+    transform-origin: top center;
+    margin-bottom: -8px;
+  }
+  .ob3Title{ font-size: clamp(26px, 7.4vw, 30px); margin-bottom: 8px; }
+  .ob3Lead{ font-size: 15px; line-height: 1.45; max-width: 36ch; }
+  .ob3Hint, .ob3Cta{ bottom: max(20px, env(safe-area-inset-bottom, 0)); }
+}
 @media (prefers-reduced-motion: reduce){ .ob3Spin, .ob3Caret{ animation: none; } .ob3Segs i.is-current::after{ animation-duration: 6s; } }
 
 /* --- sign-in: vinyl hero on top, logo + headline just above the buttons, buttons anchored low --- */
@@ -70504,8 +70522,34 @@ body .authScreen .authLoginPrompt{ margin: 22px 0 0; text-align: center; }
 body .authScreen .authTermsLine{ margin: 26px 0 0; padding: 0; text-align: left; font-size: 12px; line-height: 1.5; color: #6d748a; }
 body .authScreen .authTermsLine a{ color: #f5f6fb; text-decoration: underline; text-decoration-color: rgba(255,255,255,.28); text-underline-offset: 3px; }
 /* the vinyl: a complete record, centred in the upper area, slowly turning */
-.authVinyl{ position: absolute; z-index: 0; left: 50%; top: 22px; width: min(50vw, 200px); aspect-ratio: 1; margin-left: calc(min(50vw, 200px) / -2); border-radius: 50%; pointer-events: none;
+.authVinyl{ position: absolute; z-index: 0; left: 50%; top: max(18px, env(safe-area-inset-top, 0)); width: min(44vw, 168px); aspect-ratio: 1; margin-left: calc(min(44vw, 168px) / -2); border-radius: 50%; pointer-events: none;
   background: repeating-radial-gradient(circle, #0a0b10 0 2px, #151720 2px 3px), #0a0b10; box-shadow: 0 22px 60px rgba(0,0,0,.65), 0 0 90px rgba(119,82,248,.18), inset 0 0 0 2px rgba(255,255,255,.05); animation: authVinylTurn 14s linear infinite; }
+@media (max-width: 720px){
+  .authVinyl{
+    left: auto;
+    right: max(16px, env(safe-area-inset-right, 0));
+    margin-left: 0;
+    width: min(38vw, 140px);
+    top: max(12px, env(safe-area-inset-top, 0));
+  }
+  body .authScreen .authInner{
+    min-height: 100%;
+    justify-content: flex-end;
+    padding-bottom: max(18px, env(safe-area-inset-bottom, 0));
+  }
+  body .authScreen .authBrand{ margin-top: auto; margin-bottom: 0; }
+  body .authScreen .authTagline{ margin-top: 24px; }
+  body .authScreen .authTogether{ font-size: clamp(30px, 8.6vw, 38px); }
+  body .authScreen .authSub{ margin-bottom: 24px; }
+}
+@media (min-width: 721px){
+  .authVinyl{
+    width: min(50vw, 200px);
+    margin-left: calc(min(50vw, 200px) / -2);
+    left: 50%;
+    right: auto;
+  }
+}
 .authVinyl::before{ content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, transparent 0 18%, rgba(255,255,255,.10) 24%, transparent 32% 68%, rgba(255,255,255,.08) 74%, transparent 82%); }
 .authVinylLab{ position: absolute; left: 50%; top: 50%; width: 36%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: 0 0 0 3px rgba(255,255,255,.85);
   background: radial-gradient(70% 55% at 28% 24%, #e7b56b, transparent 62%), radial-gradient(70% 70% at 82% 78%, #5b3cc0, transparent 66%), #1c1233; }

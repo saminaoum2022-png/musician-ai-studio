@@ -53664,6 +53664,35 @@ function discoverSurfaceOpensPlayer(el) {
   return true;
 }
 
+/** Heal Suno links and copy draft audio into song_archive before play (private bucket). */
+async function prepareLibraryTrackForPlayback(track) {
+  let t = track;
+  if (!t?.id || !String(t.url || "").trim()) return t;
+  if (isArchivedSongStorageUrl(String(t.url))) return t;
+  if (String(t.taskId || "").trim()) {
+    const refreshed = await withTimeout(tryRefreshLibraryTrackAudioFromSuno(t), 4500, null);
+    if (refreshed?.url) {
+      const freshInner = String(refreshed.url).trim();
+      const rawForPlay = unwrapInnermostHttpAudioUrl(t.url) || String(t.url || "").trim();
+      if (freshInner && freshInner !== rawForPlay) {
+        patchLibraryRowWithRefreshedUrl(String(t.id), freshInner, freshInner, t);
+        t = loadLibrary().find((x) => String(x.id) === String(t.id)) || { ...t, url: freshInner };
+      }
+    }
+  }
+  if (
+    !isArchivedSongStorageUrl(String(t.url)) &&
+    !libraryTrackIsLivePublic(t) &&
+    authSession?.user?.id
+  ) {
+    const permanent = await withTimeout(archiveLibraryTrackToCloud(t), 60000, null);
+    if (permanent) {
+      t = loadLibrary().find((x) => String(x.id) === String(t.id)) || { ...t, url: permanent };
+    }
+  }
+  return t;
+}
+
 async function playLibraryListRowById(id, opts) {
   let t = loadLibrary().find((x) => x.id === id);
   if (!t) return;
@@ -53674,16 +53703,10 @@ async function playLibraryListRowById(id, opts) {
     } catch {}
   }
   if (!t?.url) return;
-  if (!isArchivedSongStorageUrl(String(t.url || "")) && String(t.taskId || "").trim()) {
-    const refreshed = await withTimeout(tryRefreshLibraryTrackAudioFromSuno(t), 4500, null);
-    if (refreshed?.url) {
-      const freshInner = String(refreshed.url).trim();
-      const rawForPlay = unwrapInnermostHttpAudioUrl(t.url) || String(t.url || "").trim();
-      if (freshInner && freshInner !== rawForPlay) {
-        patchLibraryRowWithRefreshedUrl(id, freshInner, freshInner, t);
-        t = loadLibrary().find((x) => x.id === id) || { ...t, url: freshInner };
-      }
-    }
+  t = await prepareLibraryTrackForPlayback(t);
+  if (!String(t.url || "").trim()) {
+    showToast("This song has no playable audio yet.", { durationMs: 3800 });
+    return;
   }
   primeGlobalPlayerInGesture();
   setPlaybackPending({ type: "library", id });
@@ -71449,10 +71472,9 @@ async function resolveArchivePlaybackUrl(track) {
   const uid = String(authSession?.user?.id || "").trim();
   const ownerId = String((key || "").split("/")[0] || "").trim();
   const isOwner = Boolean(uid && ownerId && uid === ownerId);
-  const isPublic = libraryTrackIsLivePublic(track);
 
-  // Unpublished / draft rows must not rely on unsigned stream + songId (<audio> has no JWT).
-  if (isOwner && !isPublic) {
+  // Owner playback: always prefer signed URL (works for drafts; no JWT on <audio>).
+  if (isOwner && key) {
     const signed = await trySignArchiveStreamUrl(key, sid);
     if (signed) return signed;
   }
@@ -71461,12 +71483,7 @@ async function resolveArchivePlaybackUrl(track) {
     return songArchiveStreamPlaybackUrl(url, sid);
   }
 
-  if (isOwner) {
-    const signed = await trySignArchiveStreamUrl(key, sid);
-    if (signed) return signed;
-  }
-
-  return songArchiveStreamPlaybackUrl(url, isShareUuid(sid) ? sid : "");
+  return songArchiveStreamPlaybackUrl(url, "");
 }
 
 const _songArchiveInflight = new Map();
@@ -71492,6 +71509,10 @@ function normalizeAudioUrlForPlayback(url, songId) {
   const s = String(url || "").trim();
   if (!s) return "";
   if (s.startsWith("blob:") || s.startsWith("data:")) return s;
+  if (isSignedSongStreamPlaybackUrl(s)) {
+    if (/^https?:\/\//i.test(s)) return s;
+    return apiUrl(s.startsWith("/") ? s : `/${s}`);
+  }
   if (isArchivedSongStorageUrl(s)) return songArchiveStreamPlaybackUrl(s, songId);
   if (s.startsWith("/api/")) return apiUrl(s);
   // Older entries may have saved the relative proxy without a leading slash.

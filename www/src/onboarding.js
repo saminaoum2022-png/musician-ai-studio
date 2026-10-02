@@ -154,6 +154,7 @@ function setStep(next) {
   if (hint) hint.hidden = last;
   const cta = qs("#btnOnboardingGetStarted");
   if (cta) cta.hidden = !last;
+  root.querySelector(".ob3Inner")?.classList.toggle("is-ob3-last", last);
   startAutoAdvance();
 }
 

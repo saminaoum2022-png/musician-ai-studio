@@ -14,7 +14,8 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const ARCHIVE_KEY_RE = /^[0-9a-f-]{36}\/[^/]+\.[a-z0-9]+$/i;
+// `<uid>/<file>.ext` (archive API) or `<uid>/<folder>/.../<file>.ext` (music generate / producer).
+const ARCHIVE_KEY_RE = /^[0-9a-f-]{36}(?:\/[A-Za-z0-9._ %+-]+)+\.[a-z0-9]+$/i;
 const VOICE_KEY_RE = /^[0-9a-f-]{36}\/\d+\.[a-z0-9]+$/i;
 
 function streamSignSecret() {
@@ -25,7 +26,9 @@ function streamSignSecret() {
 
 function cleanArchiveKey(v) {
   const key = String(v || "").trim();
-  return ARCHIVE_KEY_RE.test(key) ? key : "";
+  if (!ARCHIVE_KEY_RE.test(key)) return "";
+  if (key.split("/").some((seg) => seg === ".." || seg === ".")) return "";
+  return key;
 }
 
 function cleanVoiceKey(v) {

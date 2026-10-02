@@ -11,6 +11,7 @@ const {
   cleanArchiveKey,
   userCanStreamArchiveKey,
   streamStorageObject,
+  verifyStreamSig,
   verifyUser,
   userIsAdmin,
 } = require("../_lib/storage-private");
@@ -30,6 +31,18 @@ module.exports = async function handler(req, res) {
   } catch {}
 
   if (!key) return sendJson(res, 400, { ok: false, error: "Invalid key" });
+
+  let exp = "";
+  let sig = "";
+  try {
+    const u = new URL(req.url, "http://localhost");
+    exp = String(u.searchParams.get("exp") || "");
+    sig = String(u.searchParams.get("sig") || "");
+  } catch {}
+  if (exp && sig && verifyStreamSig(`archive:${key}`, exp, sig)) {
+    await streamStorageObject(res, { bucket: BUCKET, key, sendJson });
+    return;
+  }
 
   const user = await verifyUser(req);
   const admin = user ? await userIsAdmin(user) : false;

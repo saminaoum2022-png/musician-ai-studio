@@ -103,9 +103,7 @@ function songRowDeleted(meta) {
 function songIsPublic(row) {
   if (!row) return false;
   if (songRowDeleted(row.meta)) return false;
-  if (!row.public_on_profile) return false;
-  const pub = String(row.published_at || "").trim();
-  return Boolean(pub);
+  return Boolean(row.public_on_profile);
 }
 
 async function findUserSongsForArchiveKey(key) {
@@ -157,7 +155,9 @@ async function userCanStreamArchiveKey({ userId, key, songId, isAdmin }) {
   if (sid) {
     const match = rows.find((r) => String(r.id) === sid);
     if (!match) return false;
-    if (!urlMatchesArchiveKey(match.song_url)) return false;
+    const ownerMatches = String(match.user_id || "") === ownerId;
+    // `song_url` may still be a Suno/proxy link while the mp3 lives in song_archive.
+    if (!urlMatchesArchiveKey(match.song_url) && !ownerMatches) return false;
     if (userId && String(match.user_id || "") === userId) return true;
     if (songIsPublic(match)) return true;
     // Same as GET /api/songs/shared — anyone with the song UUID can play.
@@ -196,6 +196,15 @@ function mintVoiceStreamQuery(key, ttlSec = 3600) {
   if (!k) return null;
   const exp = Math.floor(Date.now() / 1000) + Math.min(7200, Math.max(60, ttlSec));
   const sig = mintStreamSig(`voice:${k}`, exp);
+  if (!sig) return null;
+  return { key: k, exp, sig };
+}
+
+function mintArchiveStreamQuery(key, ttlSec = 3600) {
+  const k = cleanArchiveKey(key);
+  if (!k) return null;
+  const exp = Math.floor(Date.now() / 1000) + Math.min(7200, Math.max(60, ttlSec));
+  const sig = mintStreamSig(`archive:${k}`, exp);
   if (!sig) return null;
   return { key: k, exp, sig };
 }
@@ -275,6 +284,7 @@ module.exports = {
   userCanStreamVoiceKey,
   userCanStreamArchiveKey,
   mintVoiceStreamQuery,
+  mintArchiveStreamQuery,
   verifyStreamSig,
   streamStorageObject,
   fetchStorageObjectBuffer,

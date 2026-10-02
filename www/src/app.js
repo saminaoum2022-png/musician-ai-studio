@@ -2512,7 +2512,10 @@ async function startHubPlayback(postId) {
     hubFocusedPostId = postId;
   }
 
-  const targetSrc = normalizeAudioUrlForPlayback(hubPlaybackSrcForPost(postId, p));
+  const targetSrc = normalizeAudioUrlForPlayback(
+    hubPlaybackSrcForPost(postId, p),
+    String(p?.songId || p?.meta?.cloudSongId || p?.meta?.song_id || "").trim(),
+  );
   if (!targetSrc) {
     coverWrap?.classList.remove("isLoading");
     stopHubPlayback();
@@ -31394,7 +31397,8 @@ function libraryPlaybackUrl(raw) {
   const s = String(raw?.url || raw || "").trim();
   if (!s) return "";
   if (isArchivedSongStorageUrl(s)) {
-    return songArchiveStreamPlaybackUrl(s, raw?.id || raw?.cloudSongId || raw?.songId || "");
+    const sid = String(raw?.cloudSongId || raw?.songId || "").trim();
+    return songArchiveStreamPlaybackUrl(s, isShareUuid(sid) ? sid : "");
   }
   if (s.startsWith("blob:") || s.startsWith("data:")) return s;
   const leaf = unwrapInnermostHttpAudioUrl(s) || s;
@@ -31409,6 +31413,10 @@ function libraryPlaybackUrl(raw) {
 
 function playbackUrlForSource(url, source) {
   const passed = String(url || "").trim();
+  const sid = String(source?.cloudSongId || source?.songId || source?.id || "").trim();
+  if (isArchivedSongStorageUrl(passed)) {
+    return songArchiveStreamPlaybackUrl(passed, isShareUuid(sid) ? sid : "");
+  }
   const track = libraryTrackForPlaybackSource(source);
   if (source?.type === "generateResult") {
     if (passed.startsWith("blob:") || passed.startsWith("data:")) return passed;
@@ -53126,8 +53134,16 @@ function publicPlaySourceFromEl(el) {
   const taskId = String(decodeDiscoverDataAttr(el, "data-play-task-id") || "").trim();
   const audioId = String(decodeDiscoverDataAttr(el, "data-play-audio-id") || "").trim();
   const releaseCaption = String(decodeDiscoverDataAttr(el, "data-play-release-caption") || "").trim();
-  if (!songId || !ownerUserId) return null;
-  return { type: "public_song", songId, ownerUserId, taskId, audioId, releaseCaption };
+  if (!isShareUuid(songId)) return null;
+  return {
+    type: "public_song",
+    songId,
+    cloudSongId: songId,
+    ownerUserId,
+    taskId,
+    audioId,
+    releaseCaption,
+  };
 }
 
 /** Build a share URL for a Discover row (creator profile when we know the handle). */
@@ -53667,7 +53683,7 @@ async function playLibraryListRowById(id, opts) {
   try {
     stopVocalsPlayback();
   } catch {}
-  const playSource = libraryPlaybackUrl(t);
+  const playSource = await resolveArchivePlaybackUrl(t);
   const openPlayer = openPlayerUnlessFeedOrDesk(opts);
   if (openPlayer && !isDeskWebLayout()) {
     try {
@@ -53684,7 +53700,7 @@ async function playLibraryListRowById(id, opts) {
       const freshInner = String(refreshed.url).trim();
       const rawForPlay = unwrapInnermostHttpAudioUrl(t.url) || String(t.url || "").trim();
       if (!freshInner || freshInner === rawForPlay) return;
-      const newProx = inlinePlaybackUrl(freshInner) || normalizeAudioUrlForPlayback(freshInner);
+      const newProx = await resolveArchivePlaybackUrl({ ...t, ...refreshed, url: freshInner });
       patchLibraryRowWithRefreshedUrl(id, freshInner, freshInner, t);
       const stillThis =
         libraryNowPlayingId === id || String(currentPlayerTrackRef?.id || "") === String(id);
@@ -53703,7 +53719,7 @@ async function playLibraryListRowById(id, opts) {
       if (openPlayer) {
         await playOnPlayerPage(newProx, "Full song", meta, { trackRef: updated, coverImmediate: true });
       } else {
-        await playInline(newProx, "Full song", { type: "library", id });
+        await playInline(newProx, "Full song", { type: "library", id, cloudSongId: updated.cloudSongId, songId: updated.cloudSongId });
         setPlayerMeta(meta, { trackRef: updated, coverImmediate: true });
       }
     } catch {}
@@ -54610,21 +54626,42 @@ function resolveDiscoverPlayTarget(el) {
   }
   raw = String(raw || "").trim();
   const songId = String(decodeDiscoverDataAttr(el, "data-play-song-id") || "").trim();
-  if (!raw && songId) {
-    const hit = (_discoveryFeedTracks || []).find(
-      (t) => String(t.songId || t.id || "") === songId,
-    );
-    if (hit?.url) raw = String(hit.url).trim();
+  const hit = songId
+    ? (_discoveryFeedTracks || []).find((t) => String(t.songId || t.id || "") === songId)
+    : null;
+  // Friends feed sometimes skips list HTML rebuild — DOM `data-user-lib-url` can
+  // lag behind `_discoveryFeedTracks` (e.g. after archive migration or Suno refresh).
+  if (hit?.url) {
+    const canon = String(hit.url).trim();
+    if (canon) raw = canon;
   }
-  const title = decodeDiscoverDataAttr(el, "data-user-lib-title") || "Song";
-  const art = decodeDiscoverDataAttr(el, "data-user-lib-art") || "";
-  const by = decodeDiscoverDataAttr(el, "data-discovery-by") || "";
+  let title = decodeDiscoverDataAttr(el, "data-user-lib-title") || "Song";
+  let art = decodeDiscoverDataAttr(el, "data-user-lib-art") || "";
+  let by = decodeDiscoverDataAttr(el, "data-discovery-by") || "";
+  if (hit) {
+    if (hit.title) title = String(hit.title);
+    if (hit.artUrl) art = String(hit.artUrl);
+    if (hit.byLine) by = String(hit.byLine);
+  }
+  let playSource = publicPlaySourceFromEl(el);
+  if (hit && isShareUuid(songId)) {
+    playSource = {
+      ...(playSource || {}),
+      type: "public_song",
+      songId,
+      ownerUserId: String(playSource?.ownerUserId || hit.ownerUserId || "").trim(),
+      taskId: String(playSource?.taskId || hit.taskId || "").trim(),
+      audioId: String(playSource?.audioId || hit.audioId || "").trim(),
+      releaseCaption: String(playSource?.releaseCaption || hit.releaseCaption || "").trim(),
+      cloudSongId: songId,
+    };
+  }
   return {
     raw,
     title,
     art,
     by,
-    playSource: publicPlaySourceFromEl(el),
+    playSource,
     songId,
   };
 }
@@ -56542,13 +56579,15 @@ function discoveryTrackPlaybackMeta(t, profMap) {
   const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
+  const cloudId = trackCloudShareId(t) || (isShareUuid(String(t.id || "")) ? String(t.id) : "");
   return {
     id: String(t.id || ""),
     url: String(t.url || "").trim(),
     title: String(t.title || "Untitled"),
     artUrl: artSafe,
     byLine,
-    songId: String(t.id || ""),
+    songId: cloudId || String(t.id || ""),
+    cloudSongId: cloudId,
     ownerUserId: String(t.userId || ""),
     taskId: String(t.taskId || ""),
     audioId: String(t.audioId || ""),
@@ -58488,7 +58527,10 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     try { clearDiscoverReelFullBleedLayout(); } catch {}
   }
   const byLine = fromDiscover || fromUserPlaylist || fromDm ? String(opts?.discoverBy || "").trim() : "";
-  const playSource = opts?.playSource && opts.playSource.songId ? opts.playSource : null;
+  const playSource =
+    opts?.playSource && isShareUuid(String(opts.playSource.songId || opts.playSource.cloudSongId || ""))
+      ? opts.playSource
+      : null;
   const publicTrackMeta = playSource ? publicPlaybackTrackBySource(playSource, raw) : null;
   const releaseCaption =
     releaseCaptionForTrack(publicTrackMeta) ||
@@ -58511,7 +58553,6 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     audioId: playSource.audioId || "",
     url: playableRaw,
   } : null;
-  const prox = inlinePlaybackUrl(playableRaw);
   currentPlayerTrackRef = {
     id: `public_${String(title || "").slice(0, 24)}`,
     url: playableRaw,
@@ -58566,6 +58607,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     ? Number(opts.feedHookSec)
     : feedHookStartFromTrack(publicTrackMeta || { meta: currentPlayerTrackRef.meta, url: playableRaw });
   if (pinnedHook > 0) publicSource.feedHookSec = pinnedHook;
+  const prox = playbackUrlForSource(playableRaw, publicSource);
   if (opts?.liveListenJoin || isLiveListenActive()) {
     publicSource.applyFeedHook = false;
     delete publicSource.feedHookSec;
@@ -58597,7 +58639,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
         const a = ensurePlayer();
         if (!a.paused && !a.error) return;
         currentPlayerTrackRef = { ...currentPlayerTrackRef, url: fresh };
-        await playInline(inlinePlaybackUrl(fresh), title || "Song", bgSource);
+        await playInline(playbackUrlForSource(fresh, bgSource), title || "Song", bgSource);
       } catch {}
     })();
   }
@@ -71342,8 +71384,39 @@ function songArchiveStreamPlaybackUrl(storedUrl, songId) {
   if (!key) return normalizeAudioUrlForPlayback(storedUrl);
   const params = new URLSearchParams({ key });
   const sid = String(songId || "").trim();
-  if (sid) params.set("songId", sid);
+  if (sid && isShareUuid(sid)) params.set("songId", sid);
   return apiUrl(`/api/songs/stream?${params.toString()}`);
+}
+
+/** Private archived drafts need a signed stream URL (audio tags cannot send JWT). */
+async function resolveArchivePlaybackUrl(track) {
+  const url = String(track?.url || track || "").trim();
+  if (!url) return "";
+  if (!isArchivedSongStorageUrl(url)) {
+    return playbackUrlForSource(url, track);
+  }
+  const sid = String(track?.cloudSongId || track?.songId || "").trim();
+  if (isShareUuid(sid)) return songArchiveStreamPlaybackUrl(url, sid);
+  const key = songArchiveKeyFromUrl(url);
+  const ownerId = String((key || "").split("/")[0] || "").trim();
+  const uid = String(authSession?.user?.id || "").trim();
+  if (key && ownerId && uid === ownerId) {
+    try {
+      await prepareApiAuthForFetch();
+      const token = getSupabaseAuthToken();
+      const r = await apiFetch("/api/songs/sign-stream", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ key, songId: isShareUuid(sid) ? sid : "" }),
+      });
+      const data = await r.json().catch(() => null);
+      if (r.ok && data?.playUrl) return normalizeAudioUrlForPlayback(data.playUrl);
+    } catch {}
+  }
+  return songArchiveStreamPlaybackUrl(url, isShareUuid(sid) ? sid : "");
 }
 
 const _songArchiveInflight = new Map();
@@ -71741,7 +71814,8 @@ function inlinePlaybackUrl(raw) {
   }
   if (leaf.startsWith("blob:") || leaf.startsWith("data:")) return leaf;
   if (isArchivedSongStorageUrl(leaf)) {
-    return songArchiveStreamPlaybackUrl(leaf, songId);
+    const sid = String(songId || "").trim();
+    return songArchiveStreamPlaybackUrl(leaf, isShareUuid(sid) ? sid : "");
   }
   const direct = preferDirectAudioUrl(leaf);
   if (direct && /^https?:\/\//i.test(direct) && !direct.includes("/api/suno/audio")) {
@@ -71775,7 +71849,9 @@ function hubPlaybackSrcForPost(postId, p) {
   // CORS on the endpoint). Bandwidth cost is acceptable for a small native
   // user base; reliability beats penny-pinching on Vercel egress.
   const raw = String(p?.url || "").trim();
-  const songId = String(p?.songId || p?.id || "").trim();
+  const songId = String(
+    p?.songId || p?.meta?.cloudSongId || p?.meta?.song_id || p?.meta?.songId || "",
+  ).trim();
   if (isArchivedSongStorageUrl(raw)) return songArchiveStreamPlaybackUrl(raw, songId);
   if (isCapacitorNativeAuth()) {
     if (!raw) return "";
@@ -72713,7 +72789,7 @@ async function playInline(url, label, source, opts = {}) {
   resetPublicPlayTracking(miniSource);
   setPlayerSource(url, label);
   const a = ensurePlayer();
-  const playUrl = normalizeAudioUrlForPlayback(url);
+  const playUrl = normalizeAudioUrlForPlayback(url, miniSource?.songId || "");
   try { a.muted = false; } catch {}
   void primeAudioDurationHint(playUrl);
   try {

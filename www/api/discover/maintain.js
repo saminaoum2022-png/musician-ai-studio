@@ -3,10 +3,13 @@
  * Graduated songs (score >= 0) stay public; failed ones leave Discover only.
  *
  * POST /api/discover/maintain
+ *
+ * Auth: Authorization: Bearer <CRON_SECRET> (Vercel cron or ops scripts only).
  */
 
 const { applyCors } = require("../_lib/cors");
 const { sendJson } = require("../_lib/credits-auth");
+const { requireCronSecret } = require("../_lib/require-cron-secret");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -16,6 +19,10 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method !== "POST" && req.method !== "GET") {
       return sendJson(res, 405, { error: "Method not allowed" });
+    }
+    const cronGate = requireCronSecret(req);
+    if (!cronGate.ok) {
+      return sendJson(res, cronGate.status, { error: cronGate.error });
     }
     if (!SUPABASE_SERVICE_ROLE_KEY) {
       return sendJson(res, 500, { error: "Missing SUPABASE_SERVICE_ROLE_KEY" });

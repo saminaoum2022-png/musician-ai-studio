@@ -35161,6 +35161,7 @@ async function refreshMyCredits({ silent = false } = {}) {
       void reconcileProSubscriptionFromDevice();
     }
     if (!creditsState.isAdmin) sunoCreditsLive = null;
+    else void refreshSunoCredits().catch(() => null);
     creditsState.loaded = true;
     creditsState.lastError = "";
     setCreditsBalance(creditsState.balance);
@@ -74101,10 +74102,15 @@ function setSunoCreditsNote(text) {
 }
 
 async function refreshSunoCredits() {
+  if (!creditsState.isAdmin) return null;
+  const token = getSupabaseAuthToken();
+  if (!token) return null;
   try {
     if (els.btnSunoCredits) els.btnSunoCredits.disabled = true;
     setSunoCreditsNote("updating…");
-    const r = await fetch(apiUrl("/api/suno/credits"));
+    const r = await fetch(apiUrl("/api/suno/credits"), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data?.error || "credits failed");
     const credits = data?.data;
@@ -83509,7 +83515,6 @@ loadPublicConfigFromCache();
 if (isNativeShell() && isStagingNativeBuild() && bakedNativeApiBase()) {
   forceNativeApiBase(bakedNativeApiBase());
 }
-void refreshSunoCredits();
 renderCreditsHistory();
 loadAuthSession();
 ensureAuthSessionUserFromToken();

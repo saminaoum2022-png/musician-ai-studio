@@ -6607,10 +6607,13 @@ function applyRoute({ passGen } = {}) {
       ) {
         void (async () => {
           try {
-            const merged = await mergeActiveProfileFromCloud({
+            let merged = await mergeActiveProfileFromCloud({
               reason: "applyRoute:profile",
               skipIfRecent: true,
             });
+            if (!merged) {
+              merged = await hydrateOwnerProfileFromPublicDirectory("applyRoute:profile-public");
+            }
             if (merged) {
               void ensurePersonalizedUsernameSyncedToCloud();
             }
@@ -33089,19 +33092,26 @@ function scheduleBootProfileCloudMergeRetry() {
     const waits = [2500, 7000];
     for (const ms of waits) {
       await new Promise((resolve) => setTimeout(resolve, ms));
-      if (!authSession?.user?.id || !getSupabaseAuthToken()) return;
+      if (!authSession?.user?.id) return;
       try {
-        const cloud = await supabaseLoadProfile({ force: true, reason: "boot-deferred-merge" });
-        if (!cloud) continue;
-        const merged = await mergeActiveProfileFromCloud({
-          cloud,
-          reason: "boot-deferred-merge",
-        });
+        let merged = false;
+        if (getSupabaseAuthToken()) {
+          const cloud = await supabaseLoadProfile({ force: true, reason: "boot-deferred-merge" });
+          if (cloud) {
+            merged = await mergeActiveProfileFromCloud({
+              cloud,
+              reason: "boot-deferred-merge",
+            });
+          }
+        }
+        if (!merged) {
+          merged = await hydrateOwnerProfileFromPublicDirectory("boot-deferred-public");
+        }
         if (merged) {
           try { renderProfilePreviewFromInputs(); } catch {}
           try { setProfileHeaderLoading(false); } catch {}
+          return;
         }
-        return;
       } catch {}
     }
   })();
@@ -38609,6 +38619,45 @@ async function fetchPublicProfileRowByUserId(userId) {
     || (await tryOne(selLegacy))
     || (await tryOne(selLegacyCore))
   );
+}
+
+/** Map a public-directory row into the same shape as `supabaseLoadProfile`. */
+function mapPublicRowToOwnerProfile(row) {
+  const p = row && typeof row === "object" ? row : null;
+  if (!p?.user_id) return null;
+  return {
+    id: p.user_id,
+    username: p.username || "guest",
+    displayName: normalizeDisplayName(p.display_name || p.displayName || ""),
+    usernameChangedAt: 0,
+    email: "",
+    gender: p.gender || "",
+    voiceTimbre: p.voice_timbre || "",
+    bio: p.bio || "",
+    avatar: p.avatar || "",
+    genres: p.genres || "",
+    artistAvatar: p.artist_avatar || "",
+    artistAvatarUpdatedAt: 0,
+    artistAvatarConsentedAt: 0,
+    artistAvatarGallery: [],
+    links: {},
+    isPublic: true,
+    callingCardUrl: "",
+    callingCardUpdatedAt: 0,
+    soundCertified: profileSoundCertifiedTruthy(p.sound_certified),
+    savedPersonas: [],
+    signupPlatform: "",
+  };
+}
+
+/** Same source as search / #/user — works when JWT profile fetch fails on mobile. */
+async function hydrateOwnerProfileFromPublicDirectory(reason = "public-directory") {
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid) return false;
+  const row = await fetchPublicProfileRowByUserId(uid);
+  const cloud = mapPublicRowToOwnerProfile(row);
+  if (!cloud || !profileCloudRowHasRichContent(cloud)) return false;
+  return mergeActiveProfileFromCloud({ cloud, reason });
 }
 
 /** Public `profiles` row by handle — anon when `profiles_select_public_directory` exists. */
@@ -83530,28 +83579,44 @@ void (async () => {
     } else if (bootKeepLocalProfileWhenCloudUnavailable()) {
       nextProfile = bootProfileFromLocalWithAvatarSnap();
     } else {
-      // First sign-in for this user. Don't fall back to the boot-time
-      // `username: "guest"` default — that's the unauthenticated
-      // sentinel and any post they share would inherit/leak across
-      // accounts (this is the bug just reported: a new user signed in
-      // on another device got @guest and "inherited" old demo posts).
-      nextProfile = {
-        id: String(authSession.user.id),
-        email: authSession.user.email || "",
-        username: deriveUsernameFromAuth(authSession.user),
-        gender: "",
-        voiceTimbre: "",
-        bio: "",
-        avatar: "",
-        genres: "",
-        links: {},
-        isPublic: true,
-        callingCardUrl: "",
-        callingCardUpdatedAt: 0,
-        soundCertified: false,
-      };
-      if (!isMusicPreferencesComplete(authSession.user.id, nextProfile)) {
-        markMusicPreferencesPending();
+      const publicRow = await fetchPublicProfileRowByUserId(authSession.user.id);
+      const publicCloud = mapPublicRowToOwnerProfile(publicRow);
+      if (publicCloud && profileCloudRowHasRichContent(publicCloud)) {
+        const localFilled = localProfileFilledForCloudMerge();
+        nextProfile = applyMergedIdentityFields(
+          {
+            ...publicCloud,
+            ...localFilled,
+            id: String(authSession.user.id),
+            email: localFilled.email || authSession.user.email || "",
+          },
+          publicCloud,
+          localFilled,
+        );
+      } else {
+        // First sign-in for this user. Don't fall back to the boot-time
+        // `username: "guest"` default — that's the unauthenticated
+        // sentinel and any post they share would inherit/leak across
+        // accounts (this is the bug just reported: a new user signed in
+        // on another device got @guest and "inherited" old demo posts).
+        nextProfile = {
+          id: String(authSession.user.id),
+          email: authSession.user.email || "",
+          username: deriveUsernameFromAuth(authSession.user),
+          gender: "",
+          voiceTimbre: "",
+          bio: "",
+          avatar: "",
+          genres: "",
+          links: {},
+          isPublic: true,
+          callingCardUrl: "",
+          callingCardUpdatedAt: 0,
+          soundCertified: false,
+        };
+        if (!isMusicPreferencesComplete(authSession.user.id, nextProfile)) {
+          markMusicPreferencesPending();
+        }
       }
     }
     // Migration safety net: only mint an anonymous handle when there
@@ -83608,7 +83673,9 @@ void (async () => {
     if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre || "";
     if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
     if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
-    _profileCloudMergedAt = Date.now();
+    if (cloud || profileCloudRowHasRichContent(nextProfile)) {
+      _profileCloudMergedAt = Date.now();
+    }
     try { syncOwnProfileSocialStatsUi(); } catch {}
     renderProfilePreviewFromInputs();
     refreshProfilePostsAfterIdentityMerge(prevProfile, nextProfile);

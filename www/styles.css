@@ -70432,21 +70432,12 @@ body.isOnboarding::before{
   background: radial-gradient(90% 45% at 100% 0%, rgba(119,82,248,.16), transparent 60%), radial-gradient(90% 45% at 0% 100%, rgba(34,197,169,.13), transparent 60%), #05070d;
 }
 body.isOnboarding .app{ position: relative; z-index: 1; background: transparent; }
-body.isOnboarding .onboardingScreen.ob3{
-  border-radius: 0 !important;
-  background: transparent !important;
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-/* Onboarding shell: scrollable deck + pinned footer (hint / Get started). Same pattern as iOS signup flows — not per-device CSS files. */
+body.isOnboarding .onboardingScreen.ob3{ border-radius: 0 !important; background: transparent !important; }
 body.isOnboarding .onboardingInner.ob3Inner{
-  display: grid !important;
-  grid-template-rows: minmax(0, 1fr) auto;
-  flex: 1 1 auto;
+  display: flex !important;
+  flex-direction: column;
+  height: 100%;
   min-height: 0;
-  height: auto;
   padding: 0 !important;
   overflow: hidden;
   -webkit-user-select: none;
@@ -70466,9 +70457,8 @@ body.isOnboarding .onboardingInner.ob3Inner{
 .ob3Skip[hidden]{ display: none; }
 .ob3Slides{
   position: relative;
-  grid-row: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden;
   container-type: size;
   container-name: ob3deck;
 }
@@ -70522,54 +70512,31 @@ body.isOnboarding .onboardingInner.ob3Inner{
   text-align: left;
 }
 .ob3Hint{
-  grid-row: 2;
   position: relative;
-  z-index: 2;
+  flex: 0 0 auto;
   left: auto;
   right: auto;
   bottom: auto;
-  margin: 0 22px max(12px, env(safe-area-inset-bottom, 0));
-  padding: 10px 0 0;
+  margin: 4px 22px max(12px, env(safe-area-inset-bottom, 0));
   text-align: center;
   font-size: 13px;
   font-weight: 600;
   color: #9aa1b6;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(5,7,13,0) 0%, #05070d 36%);
 }
 .ob3Hint[hidden]{ display: none; }
 .ob3Cta{
-  grid-row: 2;
   position: relative;
-  z-index: 2;
+  flex: 0 0 auto;
   left: auto;
   right: auto;
   bottom: auto;
   width: auto;
   margin: 0 22px max(14px, env(safe-area-inset-bottom, 0));
-  padding: 10px 0 0;
   height: 56px;
   font-size: 17px;
-  background: linear-gradient(180deg, rgba(5,7,13,0) 0%, #05070d 32%);
-  box-sizing: content-box;
 }
 .ob3Cta[hidden]{ display: none; }
-.ob3Inner.is-ob3-last .ob3Scene{
-  height: min(340px, 36svh);
-  --ob3-scale: min(1, calc((100cqh - 96px) / 380px));
-}
-.ob3Inner.is-ob3-last .ob3Title{ margin-top: 6px; }
-.ob3Inner.is-ob3-last .ob3Lead{ margin-bottom: 4px; }
-@container ob3deck (max-height: 520px){
-  .ob3Inner.is-ob3-last .ob3Scene{
-    height: min(300px, 32svh);
-    --ob3-scale: min(0.9, calc((100cqh - 104px) / 340px));
-  }
-  .ob3Inner.is-ob3-last .ob3Tile{ height: 100px; }
-  .ob3Inner.is-ob3-last .ob3Who{ top: 42%; height: 48px; font-size: 16px; }
-  .ob3Inner.is-ob3-last .ob3Made{ top: 62%; font-size: 15px; }
-  .ob3Inner.is-ob3-last .ob3Made2{ top: 69%; font-size: 13px; }
-}
 /* scenes */
 .ob3Glass{ background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 26px; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
 .ob3Composer{ position: absolute; left: 22px; right: 22px; top: 2.6%; padding: 18px 18px 16px; text-align: left; }

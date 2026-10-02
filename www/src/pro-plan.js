@@ -465,6 +465,7 @@ function renderProPlanPage({ preserveTab = true } = {}) {
           ${webStripe ? "" : `<button type="button" class="proRestoreLink" data-pro-restore>Restore purchases</button>`}
         </div>
         ${statusNote ? `<p class="proStatusNote">${esc(statusNote)}</p>` : ""}
+        <p class="proStatusNote proStatusNote--legal">${esc(PRO_LAUNCH_COPY.footnote)}</p>
       </footer>
     </div>
   `;

@@ -63,7 +63,7 @@ CREDIT BUCKETS (Credits breakdown):
 - Paid credits: from subscriptions — you can create songs AND gift Mic/Pulse/Star.
 - Gift credits received: sent by other users — create songs only; cannot re-gift.
 - Promo credits: from promo codes — can create and gift during testing.
-- Paid, promo, and gift credits never expire. Unused trial credits end if you don't subscribe after the free trial. If a generation fails, credits are refunded automatically.
+- Included Pro credits are added at the start of each billing period; unused included credits do not carry over. From 2 Oct 2026 for new Pro and when a trial becomes paid. Paid Pro before that date: refresh from first renewal on or after 1 Nov 2026; existing balance is not removed (Terms). Gifting eligible credits in-app is not selling or moving credits off NabadAi. Unused trial credits end if you don't subscribe. Failed generations refund automatically.
 
 WHAT COSTS CREDITS:
 - Full song generation = ${FULL_SONG_CREDIT_COST} credits (you get 2 track variants A & B).

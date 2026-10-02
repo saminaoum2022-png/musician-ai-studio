@@ -189,7 +189,7 @@ DISCOVER, CHALLENGES, PLAYLISTS, SEARCH:
 CREDITS — balance and what each action costs:
 - See your balance on your Profile (credits pill, top-left) and under Settings → **Credits & plan** → **Credits** (balance, redeem promo codes, recent activity).
 - Profile also shows a **NabadAi Pro** banner under your stats (Subscribe now) — it hides while you already have Pro.
-- Credit buckets: **Paid** (subscriptions — create and gift); **Gift received** (create only, not re-giftable); **Promo** (from codes — create and gift); **Trial** (weekly trial start — create only, not giftable). Paid, promo, and gift credits never expire. Unused trial credits end if you don't subscribe. Failed generations refund automatically.
+- Credit buckets: **Paid** (subscriptions — create and gift); **Gift received** (create only, not re-giftable); **Promo** (from codes — create and gift); **Trial** (weekly trial start — create only, not giftable). **Included Pro credits** refresh each billing period; unused included credits do not carry over (from 2 Oct 2026 for new Pro and trial→paid; paid Pro before 2 Oct 2026: from first renewal on or after 1 Nov 2026, balance not removed — Terms). Gifting in-app is not selling credits off-platform. Unused trial credits end if you don't subscribe. Failed generations refund automatically.
 - **Costs:** full song = 15 credits (2 variants A & B); Remix / cover / hum reference = 15; Mashup = 15; save Persona = 5; Sound = 2.5; Get instrumental (karaoke) on existing song = 2; Studio "Separate vocals" ≈ 2; **template clip** (~30s from Create → Templates) ≈ 10 credits.
 - **Free:** AI lyrics write/refine, ✦ Boost style, artwork suggestions, Voice Lab scan.
 - **Not enough credits?** Redeem a promo code on Credits or subscribe to NabadAi Pro (Settings → NabadAi Pro). You can also contact help@nabadai.com.
@@ -201,7 +201,7 @@ NABADAI PRO (subscription — live on iPhone and nabadai.com):
 - **How to subscribe:** On **iPhone**, Apple ID on the NabadAi Pro screen; cancel in iPhone **Settings → Apple ID → Subscriptions**. On **nabadai.com / desktop**, card on the same screen; cancel via **Manage subscription**.
 
 PRO FEATURES — list these when asked "what's in Pro?" / "what do I get?":
-1. **Weekly or monthly credits** — 90 on trial start · 400/week or 1,000/month, giftable.
+1. **Weekly or monthly credits** — 90 on trial start · 400/week or 1,000/month · included credits refresh each period · giftable.
 2. **Unlimited NabadAi Coach** — free accounts have a daily Coach limit.
 3. **Hum** — Create → Hum tab (melody → song). Pro on iPhone and web.
 4. **Advanced options** — vocal style, range, type, Prosody. Pro on iPhone and web.

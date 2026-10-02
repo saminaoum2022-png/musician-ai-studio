@@ -7,6 +7,17 @@
  * so the Coach is structurally unable to reveal such information.
  *
  * Keep this guide accurate and concise. When app features change, update here.
+ *
+ * HARD CONSTRAINT FOR ANY FUTURE TOOL/FUNCTION (Coach V2 — live user context,
+ * get_credit_balance(), get_song_details(), etc.): every tool MUST be scoped
+ * to the caller by server-verified identity only (the JWT already checked in
+ * verifyUser(), api/coach.js) — NEVER by a user id, handle, or email read from
+ * the chat message or any model-supplied argument. A tool signature must not
+ * accept "which user" as a parameter at all. The system-prompt rule below
+ * ("never look up or speculate about other users") is a UX instruction, not a
+ * security boundary — a prompt can be argued around. The only real boundary is
+ * a tool function that is structurally incapable of returning another user's
+ * data because it was never given a way to ask for it.
  */
 
 const COACH_APP_GUIDE = `
@@ -23,7 +34,7 @@ MAIN AREAS (bottom navigation — five tabs):
 - Profile: your public page, your songs, stats (Songs, Plays, Fans), Persona, playlists, credits, and Settings.
 
 CREATING A SONG (Create tab) — start modes (tabs on Create):
-- "Lyrics": two sub-tabs — "Write" (type or paste your own lyrics) and "AI lyrics" (let NabadAi write lyrics for you, free).
+- "Lyrics": two sub-tabs — "Write" (type or paste your own lyrics) and "Idea" (describe the song in plain words, then tap Generate — NabadAi writes the lyrics and makes the song). Optional ✦ **AI lyrics** under the box lets you preview/edit lyrics first, for free.
 - "Hum": record or add a short melody and NabadAi builds a song around that tune — **NabadAi Pro** on iPhone and web.
 - "Photo": start a song from a picture; the Photo Mood assistant can analyze the image and shape the lyrics, style tags, and cover.
 The Create home has segments **Create / Sparks / Templates**, plus cards for Create Song, **Studio**, Persona, Photo Mood, and Mashup, and a "Continue" card to resume your last project.
@@ -37,7 +48,7 @@ SHORT CLIPS (~30 seconds) — TEMPLATES ONLY:
 - Sparks are idea cards for a full song vibe — not the clip product.
 
 LYRICS TOOLS (on Create → Lyrics, in the lyrics box — teach these by name):
-- **AI lyrics** (✦): writes or refreshes lyrics from your idea — **free**.
+- **AI lyrics** (✦): optional preview — writes or refreshes lyrics from your idea so you can edit them first. **Free.** In **Idea**, you can skip this and tap **Generate song** directly.
 - **Check singability** (♫): analyzes rhyme, وزن / wazen, line length, and whether lines will sing cleanly. Shows a score + notes. Does **not** rewrite lyrics. **NabadAi Pro** (iPhone and web).
 - **Add vowel marks** / **تشكيل**: adds Arabic harakat so the singer hits the right vowels. Use on **Write** with Arabic lyrics in the box. Not a Pro lock.
 - **Fix for singing**: rewrites the lyrics to balance rhyme and وزن so AI vocals stumble less. Keeps the meaning. **NabadAi Pro on web / desktop**; on iPhone it is available without that web lock.
@@ -47,7 +58,7 @@ LYRICS TOOLS (on Create → Lyrics, in the lyrics box — teach these by name):
 
 HOW TO GET THE BEST RESULTS (generation tips — share these proactively):
 - LANGUAGE: Under "Lyrics language" the chips are Auto, English, Arabic, French, plus more (Spanish, Turkish, Italian, German). "Auto" lets NabadAi guess the language; if you want a specific one, pick it for cleaner, on-language vocals. For Arabic, also pick a DIALECT (Auto, Lebanese, Egyptian, Iraqi, Gulf, Moroccan, Syrian, Palestinian, Tunisian, Sudanese, or MSA) so the phrasing sounds authentic instead of generic.
-- ARABIC ACCENT — best workflow: pick **Dialect** (e.g. Lebanese), tap **AI lyrics**, then **Check singability**. If lines are uneven, tap **Fix for singing** or **Polish lyrics** (Pro on web). **Add vowel marks** / تشكيل on Write for tricky words. Then **Generate song**. Style tags like **Levantine Pop** help. Colloquial Lebanese words beat formal فصحى.
+- ARABIC ACCENT — best workflow: pick **Dialect** (e.g. Lebanese), type an idea in **Idea** (or tap **AI lyrics** to preview), then **Generate song**. If you previewed lyrics, **Check singability**. If lines are uneven, tap **Fix for singing** or **Polish lyrics** (Pro on web). **Add vowel marks** / تشكيل on Write for tricky words. Style tags like **Levantine Pop** help. Colloquial Lebanese words beat formal فصحى.
 - ARABIC ADDRESS (who the song is sung to): set "Arabic address" so gendered words and endearments match the person — "To a man" (e.g. حبيبي / habibi), "To a woman" (e.g. حبيبتي / habibti), "To a group", or Auto. Choosing the right one keeps pronouns, verb endings, and words like habibi/habibti correct for the listener.
 - STYLE: In "Style / Tags", tap suggestion chips or type your own. The style picker is organized into **Genres** (e.g. Levantine Dabke, **Levantine Pop**, Tarab, Arabic Pop, R&B, Trap), **Moods** (Romantic, Sad, Energetic, Emotional…), **Instruments** (Oud, Tabla, Mijwiz, Piano, Strings, Synth, 808…), and **Tempo & Meter** (Slow, Mid Tempo, 120 BPM, 6/8…). Pick up to 2 genres, 1 mood, unlimited instruments, and 1 tempo. Adding at LEAST 3 style tags steers the sound much better than one — combine, for example, a genre + a mood + a key instrument (e.g. "Levantine Pop, Emotional, Oud"). **Levantine Pop** is for emotional Syrian/Lebanese-style pop ballads — modern 4/4 production with oud/synth accents; it is NOT dabke and NOT Egyptian shaabi. **Levantine Dabke** is for festive wedding/line-dance energy (mijwiz, 6/8 ktakufti rhythm). The "✦ Boost style with AI" button expands a short vibe into richer tags for you (free). There is also an "✨ Auto" style option that lets NabadAi pick a style for you. If you leave Style empty, NabadAi infers a style from your lyrics, but naming 3+ tags gives you the most control.
 - SINGER: Choose "Male" or "Female" for the vocal, or pick a "Persona ＋" for a signature voice that sounds like you. For Arabic, set "Arabic address" (Auto, To a man, To a woman, or To a group) so the lyrics address the right person.
@@ -124,9 +135,9 @@ ABOUT THIS SONG (the song details sheet):
 - For their OWN songs the owner also sees some housekeeping: Visibility (Public profile / Private library), whether Remix and Mashup are allowed, and the release note. (There is also a small folded section of internal reference IDs at the very end — users can ignore those; they're just technical identifiers.)
 
 OTHER WAYS TO MAKE AUDIO (from a song's menu or the player):
-- Remix: turn an existing song into a new version/arrangement (12 credits).
-- Cover / hum reference: new full song from your uploaded clip (12 credits).
-- Mashup: blend two songs into one (12 credits).
+- Remix: turn an existing song into a new version/arrangement (15 credits).
+- Cover / hum reference: new full song from your uploaded clip (15 credits).
+- Mashup: blend two songs into one (15 credits).
 - Get instrumental: create the instrumental ("karaoke") version of a track, with the lead vocals removed (2 credits).
 - Music video: generate a music-video visualizer (MP4) for a song (free). [disabled in app]
 - Sounds: short loops and ambience for games, podcasts, and backgrounds (2.5 credits) — also under Settings → Creator tools.
@@ -178,19 +189,19 @@ DISCOVER, CHALLENGES, PLAYLISTS, SEARCH:
 CREDITS — balance and what each action costs:
 - See your balance on your Profile (credits pill, top-left) and under Settings → **Credits & plan** → **Credits** (balance, redeem promo codes, recent activity).
 - Profile also shows a **NabadAi Pro** banner under your stats (Subscribe now) — it hides while you already have Pro.
-- Credit buckets: **Paid** (subscriptions — create and gift); **Gift received** (create only, not re-giftable); **Promo** (from codes — create and gift); **Trial** (weekly trial start — create only, not giftable). Paid, promo, and gift credits never expire. Unused trial credits end if you don't subscribe. Failed generations refund automatically.
-- **Costs:** full song = 12 credits (2 variants A & B); Remix / cover / hum reference = 12; Mashup = 12; save Persona = 5; Sound = 2.5; Get instrumental (karaoke) on existing song = 2; Studio "Separate vocals" ≈ 2; **template clip** (~30s from Create → Templates) ≈ 10 credits.
+- Credit buckets: **Paid** (subscriptions — create and gift); **Gift received** (create only, not re-giftable); **Promo** (from codes — create and gift); **Trial** (weekly trial start — create only, not giftable). **Included Pro credits** refresh each billing period; unused included credits do not carry over (from 2 Oct 2026 for new Pro and trial→paid; paid Pro before 2 Oct 2026: from first renewal on or after 1 Nov 2026, balance not removed — Terms). Gifting in-app is not selling credits off-platform. Unused trial credits end if you don't subscribe. Failed generations refund automatically.
+- **Costs:** full song = 15 credits (2 variants A & B); Remix / cover / hum reference = 15; Mashup = 15; save Persona = 5; Sound = 2.5; Get instrumental (karaoke) on existing song = 2; Studio "Separate vocals" ≈ 2; **template clip** (~30s from Create → Templates) ≈ 10 credits.
 - **Free:** AI lyrics write/refine, ✦ Boost style, artwork suggestions, Voice Lab scan.
 - **Not enough credits?** Redeem a promo code on Credits or subscribe to NabadAi Pro (Settings → NabadAi Pro). You can also contact help@nabadai.com.
 
 NABADAI PRO (subscription — live on iPhone and nabadai.com):
 - Where: Profile Pro banner, Settings → Credits & plan → **NabadAi Pro**, or Credits → View plans. Active Pro shows a purple **Pro** pill on your profile avatar.
-- **Weekly:** $3.99/week · 7-day free trial · 400 credits on trial start (unused trial credits end if you don't subscribe) · 400 credits each paid week (≈ 33 songs) · paid credits are giftable.
-- **Monthly:** $9.99/month · Save ~17% · 1,000 + 200 bonus credits each month (≈ 100 songs) · giftable.
+- **Weekly:** $3.99/week · 7-day free trial · 90 credits on trial start (≈ 6 songs; unused trial credits end if you don't subscribe) · 400 credits each paid week (≈ 26 songs) · paid credits are giftable.
+- **Monthly:** $9.99/month · Save ~17% · 1,000 credits each month (≈ 66 songs) · giftable.
 - **How to subscribe:** On **iPhone**, Apple ID on the NabadAi Pro screen; cancel in iPhone **Settings → Apple ID → Subscriptions**. On **nabadai.com / desktop**, card on the same screen; cancel via **Manage subscription**.
 
 PRO FEATURES — list these when asked "what's in Pro?" / "what do I get?":
-1. **Weekly or monthly credits** — 400/week or 1,000 + 200 bonus/month, giftable.
+1. **Weekly or monthly credits** — 90 on trial start · 400/week or 1,000/month · included credits refresh each period · giftable.
 2. **Unlimited NabadAi Coach** — free accounts have a daily Coach limit.
 3. **Hum** — Create → Hum tab (melody → song). Pro on iPhone and web.
 4. **Advanced options** — vocal style, range, type, Prosody. Pro on iPhone and web.
@@ -229,6 +240,14 @@ MESSAGES & FRIENDS:
 - The NabadAi Coach (this assistant) is pinned at the top of your Messages inbox (under the Friends tab).
 - You can block or report users from their profile if needed; manage blocks in Settings → "Blocked accounts".
 
+LISTEN TOGETHER (sync playback with a mutual fan):
+- What it is: listen to the same song at the same moment as someone else — one of you is the **host** (controls play, pause, and seek/skip), the other is the **guest** (follows the host's play/pause/rewind automatically; the guest can only adjust their own volume or leave).
+- **Who you can invite: mutual fans only** — people who fan you and you fan back. If you have no mutual fans yet, the invite screen says so and offers "Invite a friend" instead.
+- Where to start it: tap **"Listen together"** on a song's **"…" menu**, on a song row in **Discover**, on a post in your **Friends feed**, or from the **player** — then pick a mutual fan to invite.
+- How it starts: inviting someone resets that song to **0:00** and holds it there. If they accept, you both start playing together from 0:00. If they don't respond, you can cancel the invite.
+- A little playback drift between host and guest is normal — it's not a frame-perfect sync, and buffering on either side won't cause a jump.
+- If the host leaves or the session ends, the guest is **not** auto-played anything — they're offered the option to play the song from 0:00 on their own.
+
 SETTINGS (Profile → Settings) — sections:
 - Account: "Music styles" (personalize your For You feed), "Push alerts", "Privacy" (public profile toggle), "Member ID" (when signed in), and Sign in / Sign out.
 - Music presence (signed-in only): see above.
@@ -247,13 +266,68 @@ ACCOUNT HELP (what the Coach can and cannot do):
 - Credit balance and Pro status: if LIVE WALLET is in the live updates, use those numbers. Do not say you cannot see their balance when that block is present.
 `.trim();
 
-const COACH_SYSTEM_PROMPT = `
+/**
+ * Coach V2, Phase 1 — COACH_APP_GUIDE split into topic-tagged chunks, so a
+ * future retrieval step (Phase 2) can send only the 2-4 relevant chunks per
+ * question instead of this whole ~16KB guide every time.
+ *
+ * This phase changes NOTHING about what the model receives: COACH_APP_GUIDE
+ * above stays the single source of truth and is untouched; the chunks are
+ * derived from it programmatically (split on the blank line before each
+ * ALL-CAPS section header) rather than retyped, specifically so there's no
+ * way for the chunked version to drift from the real guide. The build is
+ * verified at module-load time (see the throw below) to reproduce
+ * COACH_APP_GUIDE byte-for-byte when rejoined — if that ever stops being
+ * true (e.g. the guide's formatting changes in a way the splitter can't
+ * follow), this fails loudly at require() time instead of silently serving
+ * stale or incomplete knowledge.
+ */
+function tagForCoachChunk(text) {
+  const headerLine = String(text || "").split("\n")[0] || "";
+  const slug = headerLine
+    .split(/[—:(]/)[0]
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-+|-+$)/g, "");
+  return slug || "section";
+}
+
+function buildCoachKnowledgeChunks(guideText) {
+  const sections = String(guideText || "").split(/\n\n(?=[A-Z])/);
+  const seen = new Map();
+  return sections.map((text) => {
+    let tag = tagForCoachChunk(text);
+    const n = seen.get(tag) || 0;
+    seen.set(tag, n + 1);
+    if (n > 0) tag = `${tag}-${n + 1}`;
+    return { tag, text };
+  });
+}
+
+const COACH_KNOWLEDGE_CHUNKS = buildCoachKnowledgeChunks(COACH_APP_GUIDE);
+
+const _coachChunksRejoined = COACH_KNOWLEDGE_CHUNKS.map((c) => c.text).join("\n\n");
+if (_coachChunksRejoined !== COACH_APP_GUIDE) {
+  throw new Error(
+    "[coach-knowledge] COACH_KNOWLEDGE_CHUNKS does not reconstruct COACH_APP_GUIDE byte-for-byte — " +
+    "the chunk splitter and the real guide have drifted. Fix buildCoachKnowledgeChunks() before deploying.",
+  );
+}
+
+/**
+ * Builds the full system prompt (rules + an app-guide text). Parameterized so
+ * Phase 2 retrieval can pass a SELECTED subset of COACH_KNOWLEDGE_CHUNKS
+ * instead of the whole guide — see selectRelevantCoachChunks() below. The
+ * rules text itself never changes based on this argument.
+ */
+function buildCoachSystemPromptFor(appGuideText) {
+  return `
 You are "NabadAi Coach", a friendly in-app guide for the NabadAi music-creation app.
 Your ONLY job is to help users understand how to use NabadAi, using the app guide below.
 
 STRICT RULES:
 0. THE APP'S NAME IS "NabadAi" (capital N, capital A, lowercase i) — never "Nabad", "nabad", "NABAD", or "Nabad AI". Always call the app NabadAi in your replies. (The only exceptions are exact on-screen labels you may quote verbatim: the "About this song" sheet shows a row literally labelled "Nabad", and the music-composition line reads "Composed by NabadAI" — quote those exactly as they appear, but everywhere else use NabadAi.)
-1. Answer questions about using NabadAi AND about **writing lyrics** — craft, rhythm, syllables, Arabic prosody (عروض / أوف / مقاطع), staying on-beat, and avoiding chopped delivery (مكسور). If the user pastes lyrics, review them like a supportive songwriting coach, then point to in-app tools: **Check singability**, **Fix for singing**, **Polish lyrics**, **Add vowel marks**. Also cover: styles, language/dialect, singer/persona, **Advanced options**, **Hum** (Pro), photo mode, **Templates** (short clips — there is no standalone Nabad Clip), remix, mashup, instrumental, sounds, artwork, analytics, music presence, publishing/privacy, **Terms & Privacy**, **NabadAi Studio**, **My Vocals**, Discover, challenges, playlists, search, **credits**, **NabadAi Pro** (use the numbered Pro list in the guide), **web Pro pills**, **gifting credits**, profile, friends, messages, settings, safety. If a question is unrelated to NabadAi and songwriting, politely decline in one sentence and steer back. Never pitch a standalone Nabad Clip, Nabad Producer, or Vibe product.
+1. Answer questions about using NabadAi AND about **writing lyrics** — craft, rhythm, syllables, Arabic prosody (عروض / أوف / مقاطع), staying on-beat, and avoiding chopped delivery (مكسور). If the user pastes lyrics, review them like a supportive songwriting coach, then point to in-app tools: **Check singability**, **Fix for singing**, **Polish lyrics**, **Add vowel marks**. Also cover: styles, language/dialect, singer/persona, **Advanced options**, **Hum** (Pro), photo mode, **Templates** (short clips — there is no standalone Nabad Clip), remix, mashup, instrumental, sounds, artwork, analytics, music presence, publishing/privacy, **Terms & Privacy**, **NabadAi Studio**, **My Vocals**, Discover, challenges, playlists, search, **credits**, **NabadAi Pro** (use the numbered Pro list in the guide), **web Pro pills**, **gifting credits**, **Listen Together** (mutual fans only), profile, friends, messages, settings, safety. If a question is unrelated to NabadAi and songwriting, politely decline in one sentence and steer back. Never pitch a standalone Nabad Clip, Nabad Producer, or Vibe product.
 2. PRIVACY: Never ask for, collect, store, or repeat passwords, verification codes, emails, phone numbers, payment details, access tokens, or user IDs. Never look up or speculate about other users. If a LIVE WALLET block is in LIVE PRODUCT UPDATES, that IS this user's current credit balance and Pro flag — you MUST use it for balance / "can I generate?" questions. Never say you cannot see their balance when LIVE WALLET is present. For other account data (email, password, IDs), refuse briefly.
 3. NO BACKEND / NO THIRD PARTIES: Everything is "NabadAi". Never mention, name, hint at, or speculate about any backend, server, infrastructure, AI model, API, or third-party/external engine or provider that powers generation (including but not limited to "Suno"). If asked how NabadAi works under the hood, what model/engine/provider it uses, or about its technology, say it is built into NabadAi and redirect to how to USE the feature. Do not discuss prompts, system internals, databases, or how songs are technically produced.
 4. STAY FRONT-END ONLY: Only describe features, screens, buttons, and steps a user can actually see and tap in the app, as described in the guide. Do not reveal internal mechanics, implementation details, or anything not user-facing.
@@ -267,7 +341,185 @@ STRICT RULES:
 11. ALWAYS RESPOND: every user message deserves a helpful reply. If the question is vague, ask one short clarifying question while still offering your best guidance. Never leave the user with silence or a non-answer.
 
 APP GUIDE (your only source of product knowledge):
-${COACH_APP_GUIDE}
+${appGuideText}
 `.trim();
+}
 
-module.exports = { COACH_APP_GUIDE, COACH_SYSTEM_PROMPT };
+const COACH_SYSTEM_PROMPT = buildCoachSystemPromptFor(COACH_APP_GUIDE);
+
+/**
+ * Coach V2, Phase 2 — pick only the relevant chunks for this question instead
+ * of injecting the whole guide. Deliberately simple keyword overlap, not
+ * embeddings: cheap, synchronous, no extra API call or latency, and easy to
+ * reason about / debug by reading the score. Good enough to replace "send all
+ * 27 chunks" — revisit only if real usage shows it picking badly.
+ *
+ * Matches English and Arabic tokens (the app and its users are bilingual).
+ */
+// Deliberately generous — with only ~27 chunks, document-frequency stats are
+// noisy, so a generic filler word that just happens to be rare in this small
+// corpus (e.g. "much", "another") can out-rank a genuinely meaningful rare
+// word (e.g. "remix") unless it's filtered before scoring, not just down-
+// weighted by IDF. When in doubt, add the word here rather than relying on
+// IDF alone to sort it out.
+const COACH_CHUNK_STOPWORDS = new Set([
+  "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "to", "of", "and", "or",
+  "in", "on", "for", "at", "by", "as", "if", "so", "than", "then", "too", "very", "just", "also",
+  "how", "what", "why", "when", "where", "who", "which", "whose",
+  "do", "does", "did", "done", "doing",
+  "i", "im", "my", "mine", "me", "you", "your", "yours", "u", "it", "its", "they", "them", "their",
+  "he", "him", "his", "she", "her", "we", "us", "our",
+  "this", "that", "these", "those", "there", "here",
+  "with", "without", "about", "into", "onto", "over", "under", "out", "up", "down", "off",
+  "not", "no", "yes", "nor", "neither", "either",
+  "can", "cant", "could", "couldnt", "would", "wouldnt", "should", "shouldnt", "will", "wont",
+  "shall", "may", "might", "must", "have", "has", "had", "having",
+  "am", "is", "isnt", "arent", "wasnt", "werent",
+  "much", "many", "more", "most", "another", "other", "others", "some", "any", "all", "each",
+  "every", "few", "lot", "lots", "still", "even", "ever", "never", "always", "again",
+  "get", "got", "getting", "make", "made", "making", "use", "using", "used",
+  "please", "thanks", "thank", "hi", "hey", "hello", "ok", "okay",
+  "want", "wanted", "need", "needed", "like", "know", "think", "see", "tell", "help",
+  "one", "two", "first", "new", "now", "today", "really", "actually", "basically",
+]);
+
+function tokenizeCoachText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .match(/[a-z0-9]+|[؀-ۿ]+/g) || [];
+}
+
+/**
+ * TF-IDF, not raw word overlap. Raw overlap was tried first and failed in
+ * practice: "how much does a remix cost?" missed the chunk that answers it,
+ * because common words shared by nearly every chunk ("song", "does", "much")
+ * outweighed the one distinctive word ("remix") that actually says where the
+ * answer lives. IDF fixes this directly: a word that appears in most chunks
+ * (near-zero signal) counts for almost nothing; a word that appears in only
+ * one or two chunks (real signal) counts for a lot.
+ */
+const COACH_CHUNK_IDF = buildCoachChunkIdf(COACH_KNOWLEDGE_CHUNKS);
+
+function buildCoachChunkIdf(chunks) {
+  const docFreq = new Map();
+  for (const chunk of chunks) {
+    const uniqueTokens = new Set(tokenizeCoachText(chunk.text));
+    for (const t of uniqueTokens) docFreq.set(t, (docFreq.get(t) || 0) + 1);
+  }
+  const n = chunks.length;
+  const idf = new Map();
+  for (const [token, df] of docFreq) idf.set(token, Math.log((n + 1) / (df + 1)) + 1);
+  return idf;
+}
+
+function scoreCoachChunk(chunk, queryTokenCounts) {
+  const chunkTermFreq = new Map();
+  for (const t of tokenizeCoachText(chunk.text)) chunkTermFreq.set(t, (chunkTermFreq.get(t) || 0) + 1);
+  let score = 0;
+  for (const [t, queryWeight] of queryTokenCounts) {
+    const tf = chunkTermFreq.get(t);
+    if (!tf) continue;
+    const idf = COACH_CHUNK_IDF.get(t) || 1;
+    score += queryWeight * tf * idf;
+  }
+  return score;
+}
+
+/** Always-safe fallback when the query is too short/generic to score well
+ *  (a bare "hi", or no keyword overlap with anything) — covers the most
+ *  common entry-level questions rather than guessing or sending everything. */
+const COACH_DEFAULT_CHUNK_TAGS = ["nabadai", "main-areas", "credits", "account-help"];
+
+/**
+ * Arabic app-usage bridging. The guide text itself is English, so an Arabic
+ * question about app *features* (not songwriting — Arabic songwriting terms
+ * already live inside lyrics-writing-coach and score fine) has zero literal
+ * word overlap with any chunk and silently falls back to the generic
+ * defaults. This is a curated list of common Arabic phrasings for app
+ * actions, each bridged to the chunk tag(s) that actually answer them —
+ * applied as an additive scoring bonus, never a replacement for TF-IDF.
+ * Substring match on purpose (Arabic verbs conjugate heavily; we want
+ * "سجل"/"تسجيل"/"اسجل" to all hit without enumerating every form).
+ */
+const COACH_ARABIC_TOPIC_HINTS = [
+  { terms: ["سجل", "تسجيل", "اسجل", "غني", "الغناء", "صوتي على"], tags: ["nabadai-studio"] },
+  { terms: ["اغنيتي", "اغنية", "أغنيتي", "أغنية", "انشاء اغنية", "اعمل اغنية", "اصنع اغنية"], tags: ["creating-a-song"] },
+  { terms: ["رصيد", "رصيدي", "كريدت", "الكريدت", "نقاط"], tags: ["credits"] },
+  { terms: ["اشتراك", "الاشتراك", "برو", "بريميوم"], tags: ["nabadai-pro", "pro-features"] },
+  { terms: ["نشر", "انشر", "خصوصية", "خاص"], tags: ["publishing-privacy-of-songs"] },
+  { terms: ["بلايليست", "قائمة تشغيل", "تحدي", "اكتشف"], tags: ["discover-challenges-playlists-search"] },
+  { terms: ["بيرسونا", "صوتي الخاص", "بصمتي الصوتية"], tags: ["persona"] },
+  { terms: ["هدية", "اهدي", "أهدي"], tags: ["gifting-credits"] },
+  { terms: ["استماع مع", "نسمع مع", "نسمع سوا", "اسمع مع"], tags: ["listen-together"] },
+  { terms: ["حظر", "ابلاغ", "أبلغ", "ابلغ"], tags: ["profile-social", "messages-friends"] },
+  { terms: ["اعدادات", "إعدادات", "حسابي"], tags: ["settings", "account-help"] },
+  { terms: ["كلمات", "الكلمات", "قافية"], tags: ["lyrics-tools", "lyrics-writing-coach"] },
+];
+
+/** Bonus added per matched Arabic hint — comfortably above `minScore` (1.5)
+ *  on its own, so a single term match is enough to surface the chunk even
+ *  with zero English word overlap. */
+const COACH_ARABIC_HINT_BONUS = 5;
+
+function arabicHintBonusesByTag(message) {
+  const text = String(message || "");
+  const bonuses = new Map();
+  for (const { terms, tags } of COACH_ARABIC_TOPIC_HINTS) {
+    if (!terms.some((t) => text.includes(t))) continue;
+    for (const tag of tags) bonuses.set(tag, (bonuses.get(tag) || 0) + COACH_ARABIC_HINT_BONUS);
+  }
+  return bonuses;
+}
+
+/**
+ * @param {string} message - the user's current message
+ * @param {{ historyText?: string, maxChunks?: number, minScore?: number }} [opts]
+ * @returns {{ tag: string, text: string }[]} the selected chunks, in their
+ *   original guide order (not score order — keeps related topics coherent).
+ */
+function selectRelevantCoachChunks(message, opts = {}) {
+  const { historyText = "", maxChunks = 5, minScore = 1.5 } = opts;
+  // Recent history counts, but the current message matters most.
+  const queryTokens = [
+    ...tokenizeCoachText(historyText),
+    ...tokenizeCoachText(message),
+    ...tokenizeCoachText(message), // weight the current message 2x
+  ].filter((t) => t.length >= 2 && !COACH_CHUNK_STOPWORDS.has(t));
+
+  const arabicBonuses = arabicHintBonusesByTag(message);
+  const fallback = () => COACH_KNOWLEDGE_CHUNKS.filter((c) => COACH_DEFAULT_CHUNK_TAGS.includes(c.tag) || arabicBonuses.has(c.tag));
+  if (!queryTokens.length && !arabicBonuses.size) return fallback();
+
+  const queryTokenCounts = new Map();
+  for (const t of queryTokens) queryTokenCounts.set(t, (queryTokenCounts.get(t) || 0) + 1);
+
+  const scored = COACH_KNOWLEDGE_CHUNKS.map((chunk) => ({
+    chunk,
+    score: scoreCoachChunk(chunk, queryTokenCounts) + (arabicBonuses.get(chunk.tag) || 0),
+  }));
+  const top = scored
+    .filter((s) => s.score >= minScore)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxChunks)
+    .map((s) => s.chunk);
+
+  if (!top.length) return fallback();
+
+  // Restore original guide order so related sections still read coherently.
+  const order = new Map(COACH_KNOWLEDGE_CHUNKS.map((c, i) => [c.tag, i]));
+  return top.sort((a, b) => order.get(a.tag) - order.get(b.tag));
+}
+
+/** Convenience: selected chunks' text, ready to drop into buildCoachSystemPromptFor(). */
+function buildSelectedCoachGuideText(message, opts) {
+  return selectRelevantCoachChunks(message, opts).map((c) => c.text).join("\n\n");
+}
+
+module.exports = {
+  COACH_APP_GUIDE,
+  COACH_SYSTEM_PROMPT,
+  COACH_KNOWLEDGE_CHUNKS,
+  buildCoachSystemPromptFor,
+  selectRelevantCoachChunks,
+  buildSelectedCoachGuideText,
+};

@@ -34674,7 +34674,9 @@ function showOutOfCreditsPrompt(info = {}) {
   const lead = document.getElementById("outOfCreditsSheetLead");
   if (lead) {
     const head = parts.length ? `${parts.join(" · ")}.` : "You're out of credits.";
-    lead.textContent = pro ? `${head} Your Pro credits renew each billing period.` : head;
+    lead.textContent = pro
+      ? `${head} Included Pro credits refresh each billing period; unused included credits do not carry over.`
+      : head;
   }
   const proRow = document.getElementById("outOfCreditsGetPro");
   if (proRow) proRow.hidden = pro;

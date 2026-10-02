@@ -1,0 +1,29 @@
+---
+description: Desktop web (≥1024px, html.is-web-shell) — keep UI in the ~720px center column; no viewport bleed.
+globs: styles.css,www/styles.css,src/app.js,index.html
+alwaysApply: false
+---
+
+# Desktop web — center column (no full-bleed)
+
+On **desktop web** (`html.is-web-shell`, `@media (min-width: 1024px)`), main-tab content must stay in the **middle content column** (~**720px** max, centered in `main.grid`), not stretch across the shell or under the right rail.
+
+## Do
+
+- Reuse existing shell patterns in `styles.css` (~55320+ shell grid, ~55472 `720px` page list, ~55547+ feed contain, ~69840+ profile poster contain).
+- Scope desktop-only overrides with **`html.is-web-shell`** so **native iOS** and **mobile web** keep full-bleed poster/feed behavior where intended.
+- When adding profile-like surfaces (**`body[data-route="profile"]`**, **`body[data-route="user"]`**, Connect/Friends, messages, edit sheets), mirror the **profile desktop poster** fix: contain wrappers with **`width: 100%`**, not **`100vw`** / **`left: 50%; margin-left: -50vw`**.
+- Add new single-column pages to the **`720px; margin-inline: auto`** list when they live in `main.grid`.
+- After CSS/layout changes, smoke-test **search → public user profile** (`#/user/…`) on desktop, not only `#/profile`.
+
+## Do not
+
+- Add **`100vw`** breakout centering on posters, hero media, or feed covers for **`html.is-web-shell`** unless explicitly designing edge-to-edge **Discover** (or other documented exceptions).
+- Set **`max-width: none !important`** on `.userPublic` / `.profileSection` without a matching **`html.is-web-shell`** desktop override.
+
+## Quick checklist
+
+1. Does the change affect layout at **≥1024px** on nabadai.com / staging web?
+2. If yes, is it gated with **`html.is-web-shell`**?
+3. Does anything still use **`100vw`** or negative viewport margins in that path?
+4. Preview desktop **`#/user/handle`** and **`#/profile`** after poster/header work.

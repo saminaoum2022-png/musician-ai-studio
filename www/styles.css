@@ -55473,6 +55473,7 @@ body[data-route="user"] #userPublicRepostsList{
   .connectFriendsPane,
   #messagesPage.messagesPage,
   .profileSection,
+  .userPublic,
   .activityPage,
   .settingsPage{
     max-width: 720px;
@@ -55553,9 +55554,11 @@ body[data-route="user"] #userPublicRepostsList{
     overflow-x: clip;
   }
 
-  /* Profile column clip — full desktop poster layout lives after mobile poster rules. */
+  /* Profile + public user column clip — desktop poster layout lives after mobile poster rules. */
   html.is-web-shell body[data-route="profile"] .profileSection,
-  html.is-web-shell body[data-route="profile"] .ptrMovable--profile{
+  html.is-web-shell body[data-route="profile"] .ptrMovable--profile,
+  html.is-web-shell body[data-route="user"] section.card.wide[data-route="user"],
+  html.is-web-shell body[data-route="user"] .userPublic{
     width: 100%;
     min-width: 0;
     overflow-x: clip;
@@ -69866,6 +69869,39 @@ body[data-route="profile"] .profileAura{ padding-bottom: 6px !important; }
     margin-bottom: 0 !important;
   }
   html.is-web-shell body[data-route="profile"] .profileSongsBlock{
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Public profile (search → #/user/…) — same center-column poster contain as own profile. */
+  html.is-web-shell body[data-route="user"] .userPublic{
+    max-width: 720px !important;
+    margin-inline: auto !important;
+    width: 100% !important;
+  }
+  html.is-web-shell body[data-route="user"] .userPublicHead{
+    padding-top: var(--nb-desk-profile-poster-h) !important;
+    overflow: visible !important;
+  }
+  html.is-web-shell body[data-route="user"] .userPublicAvatarWrap{
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    height: var(--nb-desk-profile-poster-h) !important;
+  }
+  html.is-web-shell body[data-route="user"] .userPublicAvatarWrap::after{
+    display: block !important;
+    content: "" !important;
+  }
+  html.is-web-shell body[data-route="user"] .userPublicArtistBadge{
+    right: 20px !important;
+    top: auto !important;
+    bottom: 52px !important;
+  }
+  html.is-web-shell body[data-route="user"] .userPublicSongsBlock{
     flex: 0 0 auto;
     width: 100%;
     min-width: 0;

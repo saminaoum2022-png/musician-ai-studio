@@ -1,5 +1,5 @@
 {
-  "buildCommand": "node scripts/inject-marketing-shell.mjs && node scripts/vercel-prepare-web.mjs && node scripts/sync-client-env.mjs && node scripts/bundle-supabase.mjs",
+  "buildCommand": "node scripts/verify-bundle.mjs --no-mirror && node scripts/inject-marketing-shell.mjs && node scripts/vercel-prepare-web.mjs && node scripts/sync-client-env.mjs && node scripts/bundle-supabase.mjs",
   "outputDirectory": ".",
   "cleanUrls": true,
   "trailingSlash": false,
@@ -26,6 +26,18 @@
     "api/songs/archive.js": {
       "maxDuration": 60
     },
+    "api/songs/stream.js": {
+      "maxDuration": 60
+    },
+    "api/songs/sign-stream.js": {
+      "maxDuration": 30
+    },
+    "api/music/studio-master.js": {
+      "maxDuration": 120
+    },
+    "api/music/studio-master-stream.js": {
+      "maxDuration": 120
+    },
     "api/music/cover-art.js": {
       "maxDuration": 60
     },
@@ -35,6 +47,21 @@
     "api/music/mix-voice-band.js": {
       "includeFiles": "node_modules/ffmpeg-static/**",
       "maxDuration": 90
+    },
+    "api/music/edit-prepare.js": {
+      "maxDuration": 120
+    },
+    "api/music/producer/chat.js": {
+      "maxDuration": 60
+    },
+    "api/music/producer/generate.js": {
+      "maxDuration": 300
+    },
+    "api/music/producer/recover.js": {
+      "maxDuration": 30
+    },
+    "api/blog/page.js": {
+      "includeFiles": "blog-post.html,ar/blog-post.html"
     }
   },
   "crons": [
@@ -45,6 +72,8 @@
     { "source": "/robots.txt", "destination": "/api/robots" },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/s/:id", "destination": "/api/share?id=:id" },
+    { "source": "/blog/:slug", "destination": "/api/blog/page?slug=:slug&locale=en" },
+    { "source": "/ar/blog/:slug", "destination": "/api/blog/page?slug=:slug&locale=ar" },
     {
       "source": "/admin",
       "destination": "/admin/index.html"

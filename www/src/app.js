@@ -53674,6 +53674,17 @@ async function playLibraryListRowById(id, opts) {
     } catch {}
   }
   if (!t?.url) return;
+  if (!isArchivedSongStorageUrl(String(t.url || "")) && String(t.taskId || "").trim()) {
+    const refreshed = await withTimeout(tryRefreshLibraryTrackAudioFromSuno(t), 4500, null);
+    if (refreshed?.url) {
+      const freshInner = String(refreshed.url).trim();
+      const rawForPlay = unwrapInnermostHttpAudioUrl(t.url) || String(t.url || "").trim();
+      if (freshInner && freshInner !== rawForPlay) {
+        patchLibraryRowWithRefreshedUrl(id, freshInner, freshInner, t);
+        t = loadLibrary().find((x) => x.id === id) || { ...t, url: freshInner };
+      }
+    }
+  }
   primeGlobalPlayerInGesture();
   setPlaybackPending({ type: "library", id });
   try { syncAllPlaybackRowHighlights(); } catch {}
@@ -53732,14 +53743,23 @@ async function playLibraryListRowById(id, opts) {
     releaseCaption: releaseCaptionForTrack(t),
     remixOf: remixAttributionForTrack(t),
   };
-  miniSource = { type: "library", id };
+  const libSource = {
+    type: "library",
+    id,
+    cloudSongId: String(t.cloudSongId || trackCloudShareId(t) || ""),
+    songId: trackCloudShareId(t) || "",
+    taskId: String(t.taskId || ""),
+    audioId: String(t.audioId || ""),
+    publicOnProfile: Boolean(t.publicOnProfile),
+  };
+  miniSource = libSource;
   libraryNowPlayingId = id;
   refreshOwnSongsUi();
   if (openPlayer) {
     await playOnPlayerPage(playSource, "Full song", meta, { trackRef: t, coverImmediate: true });
   } else {
     setPlayerMeta(meta, { trackRef: t, coverImmediate: true });
-    await playInline(playSource, "Full song", { type: "library", id });
+    await playInline(playSource, "Full song", libSource);
   }
 }
 
@@ -71285,7 +71305,8 @@ function setPlayerSource(url, label) {
   a.pause();
   // Heal legacy library URLs (relative `/api/...`) into absolute URLs so the
   // native shell can fetch them. No-op on web.
-  const playUrl = normalizeAudioUrlForPlayback(url);
+  const sid = trackCloudShareId(currentPlayerTrackRef) || "";
+  const playUrl = normalizeAudioUrlForPlayback(url, sid);
   if (typeof playUrl === "string" && /^https?:\/\//i.test(playUrl)) {
     lastPlayerHttpUrl = playUrl;
   }
@@ -71388,6 +71409,34 @@ function songArchiveStreamPlaybackUrl(storedUrl, songId) {
   return apiUrl(`/api/songs/stream?${params.toString()}`);
 }
 
+function isSignedSongStreamPlaybackUrl(url) {
+  const s = String(url || "");
+  return /\/api\/songs\/stream\?/i.test(s) && /(?:^|[?&])sig=/i.test(s);
+}
+
+/** Mint GET /api/songs/stream?…&exp=&sig= (audio tags cannot send JWT). */
+async function trySignArchiveStreamUrl(key, songId) {
+  const k = String(key || "").trim();
+  if (!k) return "";
+  try {
+    await prepareApiAuthForFetch();
+    const token = getSupabaseAuthToken();
+    if (!token) return "";
+    const sid = isShareUuid(String(songId || "")) ? String(songId) : "";
+    const r = await apiFetch("/api/songs/sign-stream", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ key: k, songId: sid }),
+    });
+    const data = await r.json().catch(() => null);
+    if (r.ok && data?.playUrl) return normalizeAudioUrlForPlayback(data.playUrl);
+  } catch {}
+  return "";
+}
+
 /** Private archived drafts need a signed stream URL (audio tags cannot send JWT). */
 async function resolveArchivePlaybackUrl(track) {
   const url = String(track?.url || track || "").trim();
@@ -71395,27 +71444,28 @@ async function resolveArchivePlaybackUrl(track) {
   if (!isArchivedSongStorageUrl(url)) {
     return playbackUrlForSource(url, track);
   }
-  const sid = String(track?.cloudSongId || track?.songId || "").trim();
-  if (isShareUuid(sid)) return songArchiveStreamPlaybackUrl(url, sid);
+  const sid = trackCloudShareId(track) || "";
   const key = songArchiveKeyFromUrl(url);
-  const ownerId = String((key || "").split("/")[0] || "").trim();
   const uid = String(authSession?.user?.id || "").trim();
-  if (key && ownerId && uid === ownerId) {
-    try {
-      await prepareApiAuthForFetch();
-      const token = getSupabaseAuthToken();
-      const r = await apiFetch("/api/songs/sign-stream", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ key, songId: isShareUuid(sid) ? sid : "" }),
-      });
-      const data = await r.json().catch(() => null);
-      if (r.ok && data?.playUrl) return normalizeAudioUrlForPlayback(data.playUrl);
-    } catch {}
+  const ownerId = String((key || "").split("/")[0] || "").trim();
+  const isOwner = Boolean(uid && ownerId && uid === ownerId);
+  const isPublic = libraryTrackIsLivePublic(track);
+
+  // Unpublished / draft rows must not rely on unsigned stream + songId (<audio> has no JWT).
+  if (isOwner && !isPublic) {
+    const signed = await trySignArchiveStreamUrl(key, sid);
+    if (signed) return signed;
   }
+
+  if (isShareUuid(sid)) {
+    return songArchiveStreamPlaybackUrl(url, sid);
+  }
+
+  if (isOwner) {
+    const signed = await trySignArchiveStreamUrl(key, sid);
+    if (signed) return signed;
+  }
+
   return songArchiveStreamPlaybackUrl(url, isShareUuid(sid) ? sid : "");
 }
 
@@ -72683,7 +72733,8 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
     }, 520);
   }
   const a = ensurePlayer();
-  const playUrl = normalizeAudioUrlForPlayback(url);
+  const sid = trackCloudShareId(opts?.trackRef || currentPlayerTrackRef) || "";
+  const playUrl = normalizeAudioUrlForPlayback(url, sid);
   if (opts.liveListenHold) {
     cancelPendingFeedHook();
     try { a.muted = false; } catch {}
@@ -72775,7 +72826,7 @@ function audioLoadFailureMessage(a) {
 
 async function playInline(url, label, source, opts = {}) {
   if (!url) return false;
-  if (String(source?.type || "") !== "studio_vocal") {
+  if (String(source?.type || "") !== "studio_vocal" && !isSignedSongStreamPlaybackUrl(url)) {
     url = playbackUrlForSource(url, source);
     queueArchiveForPlaybackSource(source);
   }

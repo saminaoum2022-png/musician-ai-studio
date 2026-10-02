@@ -71444,7 +71444,7 @@ async function trySignArchiveStreamUrl(key, songId) {
   try {
     await prepareApiAuthForFetch();
     const token = getSupabaseAuthToken();
-    if (!token) { _lastSignStreamDebug = "no-token"; return ""; }
+    if (!token) return "";
     const sid = isShareUuid(String(songId || "")) ? String(songId) : "";
     const r = await apiFetch("/api/songs/sign-stream", {
       method: "POST",
@@ -71455,12 +71455,8 @@ async function trySignArchiveStreamUrl(key, songId) {
       body: JSON.stringify({ key: k, songId: sid }),
     });
     const data = await r.json().catch(() => null);
-    _lastSignStreamDebug = `${r.status}${data?.error ? " " + String(data.error).slice(0, 40) : ""}`;
     if (r.ok && data?.playUrl) return normalizeAudioUrlForPlayback(data.playUrl);
-  } catch (e) {
-    _lastSignStreamDebug = `throw:${String(e?.message || e).slice(0, 40)}`;
-  }
-  _lastSignStreamDebug = _lastSignStreamDebug || "empty";
+  } catch {}
   return "";
 }
 
@@ -72836,39 +72832,9 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
     setStatus(`In-app playback failed (${e?.name || "error"}). Tap Open Direct.`);
     try {
       showToast(audioLoadFailureMessage(a), { icon: "♪", durationMs: 4200 });
-      void reportArchiveStreamFailure(a);
     } catch {}
     try { syncPlayerUI(); renderHubNowPlaying(); } catch {}
   }
-}
-
-let _lastSignStreamDebug = "none";
-
-/** Staging diagnostic: when a private-archive stream fails, show the real HTTP status. */
-async function reportArchiveStreamFailure(a) {
-  try {
-    const src = String(a?.currentSrc || a?.src || "");
-    if (!/\/api\/songs\/stream\?/i.test(src)) return;
-    const signed = /[?&]sig=/.test(src) ? "signed" : "UNSIGNED";
-    const hasSid = /[?&]songId=/.test(src) ? "sid" : "nosid";
-    let probe = "";
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 8000);
-      const r = await fetch(src, { cache: "no-store", signal: ctrl.signal });
-      let body = "";
-      if (!r.ok) body = (await r.text().catch(() => "")).slice(0, 90);
-      clearTimeout(t);
-      try { ctrl.abort(); } catch {}
-      probe = `${r.status} ${body}`.trim();
-    } catch (e) {
-      probe = `net:${e?.name || "err"}`;
-    }
-    const key = (src.match(/[?&]key=([^&]+)/) || [])[1] || "";
-    const msg = `DEBUG ${signed}/${hasSid} stream=${probe} sign=${_lastSignStreamDebug} key=…${decodeURIComponent(key).slice(-18)}`;
-    console.warn("[archive-stream]", msg, src);
-    showToast(msg, { icon: "!", durationMs: 15000 });
-  } catch {}
 }
 
 /** Honest failure copy: only a real media error says the song can't be loaded; a stall says it's slow. */
@@ -72942,7 +72908,6 @@ async function playInline(url, label, source, opts = {}) {
     // Say what actually happened: a hard load error vs. just a slow connection.
     try {
       showToast(audioLoadFailureMessage(a), { icon: "♪", durationMs: 4200 });
-      void reportArchiveStreamFailure(a);
     } catch {}
     try {
       syncAllPlaybackRowHighlights();

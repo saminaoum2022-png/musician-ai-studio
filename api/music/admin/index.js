@@ -31,6 +31,8 @@ const {
   listAssignableRoles,
 } = require("../../_lib/admin-permissions");
 const { adminSearchUserIds, resolveUserLookup, escapeLike, searchNeedle } = require("../../_lib/admin-user-resolve");
+const { displayCreditBuckets } = require("../../_lib/credit-display");
+const { proRefreshExistingFromMs, isMonthlyLegacyAllowlisted } = require("../../_lib/billing-config");
 const {
   suggestSupportEmailTemplate,
   isPendingCancel,
@@ -2602,10 +2604,19 @@ async function getUserDetail(userIdInput, search = "") {
   const reasonIn = GENERATION_DEBIT_REASONS.map((r) => encodeURIComponent(r)).join(",");
   const sinceUserLedger = new Date(Date.now() - LEDGER_RECOVERY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const [profRes, creditsRes, subRes, billingRes, ledgerMerged, genLedgerRes, gensRes, songsRes] = await Promise.all([
+  const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const [profRes, creditsRes, subRes, billingRes, ledgerMerged, genLedgerRes, gensRes, songsRes, giftLotsRes, giftSentRes] = await Promise.all([
     serviceFetch(`profiles?select=user_id,username,display_name,role,last_active_at,created_at,signup_platform&user_id=eq.${enc}&limit=1`),
-    serviceFetch(`user_credits?select=balance,paid_balance,gift_balance,promo_balance,updated_at&user_id=eq.${enc}&limit=1`),
-    serviceFetch(`pro_subscriptions?select=provider,plan_id,status,current_period_end,cancel_at_period_end,provider_subscription_id,created_at,updated_at&user_id=eq.${enc}&limit=1`),
+    (async () => {
+      const full = await serviceFetch(`user_credits?select=balance,paid_balance,gift_balance,promo_balance,trial_balance,pro_included_balance,updated_at&user_id=eq.${enc}&limit=1`);
+      if (full.ok) return full;
+      return serviceFetch(`user_credits?select=balance,paid_balance,gift_balance,promo_balance,updated_at&user_id=eq.${enc}&limit=1`);
+    })(),
+    (async () => {
+      const full = await serviceFetch(`pro_subscriptions?select=provider,plan_id,status,current_period_end,cancel_at_period_end,provider_subscription_id,credit_policy,created_at,updated_at&user_id=eq.${enc}&limit=1`);
+      if (full.ok) return full;
+      return serviceFetch(`pro_subscriptions?select=provider,plan_id,status,current_period_end,cancel_at_period_end,provider_subscription_id,created_at,updated_at&user_id=eq.${enc}&limit=1`);
+    })(),
     serviceFetch(`billing_events?select=id,provider,event_type,plan_id,product_id,credits_granted,created_at&user_id=eq.${enc}&order=created_at.desc&limit=50`),
     fetchMergedCreditRows({ userId: uid, limit: 40, offset: 0 }),
     serviceFetch(
@@ -2621,6 +2632,8 @@ async function getUserDetail(userIdInput, search = "") {
     ),
     serviceFetch(`music_generation_logs?select=id,kind,provider,status,credits_used,error_message,prompt,request_detail,created_at&user_id=eq.${enc}&order=created_at.desc&limit=100`),
     serviceFetch(`user_songs?select=id,title,created_at,public_on_profile&user_id=eq.${enc}&order=created_at.desc&limit=12`),
+    serviceFetch(`gift_credit_lots?select=id,amount,remaining,received_at,expires_at&user_id=eq.${enc}&remaining=gt.0&order=expires_at.asc&limit=50`),
+    serviceFetch(`gift_events?select=amount&sender_user_id=eq.${enc}&created_at=gte.${encodeURIComponent(since24h)}&limit=500`),
   ]);
 
   const prof = Array.isArray(profRes.data) && profRes.data[0] ? profRes.data[0] : null;
@@ -2710,12 +2723,22 @@ async function getUserDetail(userIdInput, search = "") {
         currentPeriodEnd: sub.current_period_end || null,
         cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
         providerSubscriptionId: sub.provider_subscription_id || "",
+        creditPolicy: sub.credit_policy || "",
         createdAt: sub.created_at || null,
         updatedAt: sub.updated_at || null,
       }
     : null;
   if (subscriptionRow) {
     subscriptionRow.renewalLabel = subscriptionRenewalLabel(subscriptionRow);
+    const live = ["active", "trialing", "grace"].includes(String(subscriptionRow.status || "").toLowerCase());
+    const cutoffMs = proRefreshExistingFromMs();
+    const endMs = Date.parse(String(subscriptionRow.currentPeriodEnd || ""));
+    const stacking = String(subscriptionRow.creditPolicy || "") === "stack";
+    subscriptionRow.grandfathered = Boolean(stacking && live && Date.now() < cutoffMs);
+    subscriptionRow.refreshFrom = new Date(cutoffMs).toISOString();
+    // The next renewal is the switch point when it lands on/after the cutoff.
+    subscriptionRow.switchesAtNextRenewal = Boolean(subscriptionRow.grandfathered && Number.isFinite(endMs) && endMs >= cutoffMs);
+    subscriptionRow.legacyMonthly1200 = Boolean(isMonthlyLegacyAllowlisted && isMonthlyLegacyAllowlisted(uid));
   }
   const suggestedEmailTemplate = subscriptionRow
     ? suggestSupportEmailTemplate({
@@ -2737,13 +2760,59 @@ async function getUserDetail(userIdInput, search = "") {
       signupPlatform: auth.signupPlatform || String(prof?.signup_platform || "").trim().toLowerCase() || null,
       profilePending: !prof,
     },
-    credits: {
-      balance: Number(cr?.balance || 0),
-      paid: Number(cr?.paid_balance || 0),
-      gift: Number(cr?.gift_balance || 0),
-      promo: Number(cr?.promo_balance || 0),
-      updatedAt: cr?.updated_at || null,
-    },
+    credits: (() => {
+      const balance = Number(cr?.balance || 0);
+      const stored = {
+        paid: Number(cr?.paid_balance || 0),
+        gift: Number(cr?.gift_balance || 0),
+        promo: Number(cr?.promo_balance || 0),
+        trial: Number(cr?.trial_balance || 0),
+        included: Number(cr?.pro_included_balance || 0),
+      };
+      const storedSum = stored.paid + stored.gift + stored.promo + stored.trial + stored.included;
+      // Same rows the user sees on the mobile Credits screen (they always add up to the total).
+      const shown = displayCreditBuckets({
+        balance,
+        included: stored.included,
+        gift: stored.gift,
+        promo: stored.promo,
+        trial: stored.trial,
+      });
+      const nowMs = Date.now();
+      const giftLots = (Array.isArray(giftLotsRes.data) ? giftLotsRes.data : []).map((l) => ({
+        id: l.id,
+        amount: Number(l.amount || 0),
+        remaining: Number(l.remaining || 0),
+        receivedAt: l.received_at || null,
+        expiresAt: l.expires_at || null,
+        expired: Date.parse(String(l.expires_at || "")) <= nowMs,
+      }));
+      const giftSent24h = (Array.isArray(giftSentRes.data) ? giftSentRes.data : [])
+        .reduce((sum, g) => sum + Number(g.amount || 0), 0);
+      return {
+        balance,
+        // stored columns (kept for older admin code)
+        paid: stored.paid,
+        gift: stored.gift,
+        promo: stored.promo,
+        stored,
+        shown: {
+          included: shown.proIncludedBalance,
+          trial: shown.trialBalance,
+          saved: shown.paidBalance,
+          gift: shown.giftBalance,
+          promo: shown.promoBalance,
+        },
+        storedSum: Math.round(storedSum * 10000) / 10000,
+        // balance minus buckets: > 0 means credits not sitting in any bucket (older accounts)
+        mismatch: Math.round((balance - storedSum) * 10000) / 10000,
+        giftable: Math.min(balance, stored.paid + stored.promo + stored.included),
+        giftSent24h: Math.round(giftSent24h * 100) / 100,
+        giftDailyLimit: 25,
+        giftLots,
+        updatedAt: cr?.updated_at || null,
+      };
+    })(),
     subscription: subscriptionRow,
     supportEmail: subscriptionRow
       ? {

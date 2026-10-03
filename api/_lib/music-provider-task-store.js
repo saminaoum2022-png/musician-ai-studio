@@ -2,7 +2,7 @@
  * Persist provider-neutral generation status payloads (Suno-compatible shape) in Supabase Storage.
  * Spike store — no new DB table required.
  */
-const { uploadObject, publicObjectUrl } = require("./supabase-storage");
+const { uploadObject, publicObjectUrl, storageObjectExists, readStorageJson } = require("./supabase-storage");
 
 const BUCKET = "song_archive";
 
@@ -22,15 +22,8 @@ function taskObjectKey(userId, taskId) {
   return `${uid}/${folder}/${tid}.json`;
 }
 
-async function readJsonUrl(url) {
-  try {
-    const r = await fetch(String(url), { cache: "no-store" });
-    if (!r.ok) return null;
-    return await r.json().catch(() => null);
-  } catch {
-    return null;
-  }
-}
+// song_archive is private — read with the service role (public URL 404s).
+const readJsonUrl = readStorageJson;
 
 async function probeArchiveAudioUrl(userId, taskId) {
   const uid = String(userId || "").trim();
@@ -40,12 +33,7 @@ async function probeArchiveAudioUrl(userId, taskId) {
   for (const ext of ["mp3", "wav"]) {
     const key = `${uid}/${folder}/${tid}.${ext}`;
     const url = publicObjectUrl(BUCKET, key);
-    try {
-      const r = await fetch(url, { method: "HEAD", cache: "no-store" });
-      if (r.ok) return { ok: true, url, ext };
-    } catch {
-      /* try next ext */
-    }
+    if (await storageObjectExists(url)) return { ok: true, url, ext };
   }
   return { ok: false };
 }

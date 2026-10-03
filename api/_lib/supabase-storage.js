@@ -10,6 +10,48 @@ function publicObjectUrl(bucket, objectKey) {
   return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${enc}`;
 }
 
+/**
+ * Buckets such as `song_archive` are private, so `/object/public/...` returns 400/404.
+ * Server-side reads must use the service-role endpoint instead. These helpers accept either a
+ * `publicObjectUrl(...)` URL or any other URL (non-Supabase URLs are fetched as-is).
+ */
+function serviceReadUrl(url) {
+  const target = String(url || "").trim();
+  if (!target) return { url: "", headers: {} };
+  const publicPrefix = `${SUPABASE_URL}/storage/v1/object/public/`;
+  if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && target.startsWith(publicPrefix)) {
+    return {
+      url: `${SUPABASE_URL}/storage/v1/object/${target.slice(publicPrefix.length)}`,
+      headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+    };
+  }
+  return { url: target, headers: {} };
+}
+
+async function storageObjectExists(url) {
+  const { url: target, headers } = serviceReadUrl(url);
+  if (!target) return false;
+  try {
+    // Storage's authenticated endpoint can reject HEAD; use a 1-byte ranged GET instead.
+    const r = await fetch(target, { method: "GET", headers: { ...headers, Range: "bytes=0-0" }, cache: "no-store" });
+    return r.ok || r.status === 206;
+  } catch {
+    return false;
+  }
+}
+
+async function readStorageJson(url) {
+  const { url: target, headers } = serviceReadUrl(url);
+  if (!target) return null;
+  try {
+    const r = await fetch(target, { headers, cache: "no-store" });
+    if (!r.ok) return null;
+    return await r.json().catch(() => null);
+  } catch {
+    return null;
+  }
+}
+
 async function uploadObject({ bucket, key, body, contentType }) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return { ok: false, status: 500, error: "Missing SUPABASE_SERVICE_ROLE_KEY on server" };
@@ -73,6 +115,8 @@ async function patchUserSongUrl({ userId, audioId, taskId, songUrl }) {
 module.exports = {
   SUPABASE_URL,
   publicObjectUrl,
+  storageObjectExists,
+  readStorageJson,
   uploadObject,
   patchUserSongUrl,
 };

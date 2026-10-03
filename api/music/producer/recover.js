@@ -8,7 +8,7 @@ const { verifyUser, sendJson } = require("../../_lib/credits-auth");
 const { applyCors } = require("../../_lib/cors");
 const { selectFromTable } = require("../../_lib/credits-auth");
 const { loadMusicProviderTaskStatus } = require("../../_lib/music-provider-task-store");
-const { publicObjectUrl } = require("../../_lib/supabase-storage");
+const { publicObjectUrl, storageObjectExists } = require("../../_lib/supabase-storage");
 const { nabadProducerEnabled } = require("../../_lib/nabad-producer-lib");
 
 const SONG_ARCHIVE_BUCKET = "song_archive";
@@ -32,11 +32,7 @@ function extractTaskStatusTitle(statusPayload, fallback = "") {
 async function probePublicStorageUrl(url) {
   const target = String(url || "").trim();
   if (!target) return "";
-  try {
-    const r = await fetch(target, { method: "HEAD", cache: "no-store" });
-    if (r.ok) return target;
-  } catch {}
-  return "";
+  return (await storageObjectExists(target)) ? target : "";
 }
 
 async function resolveTaskOutput({ userId, taskId, titleHint = "" }) {

@@ -2,7 +2,7 @@
  * Resolve provider output clips for admin generation detail + recovery.
  */
 const { loadMusicProviderTaskStatus, providerFolder } = require("./music-provider-task-store");
-const { publicObjectUrl } = require("./supabase-storage");
+const { publicObjectUrl, storageObjectExists } = require("./supabase-storage");
 const {
   sunoJsonRequest,
   pickSunoClipAudioUrl,
@@ -55,11 +55,7 @@ function extractTaskErrorFromPayload(statusPayload) {
 async function probePublicStorageUrl(url) {
   const target = String(url || "").trim();
   if (!target) return "";
-  try {
-    const r = await fetch(target, { method: "HEAD", cache: "no-store" });
-    if (r.ok) return target;
-  } catch {}
-  return "";
+  return (await storageObjectExists(target)) ? target : "";
 }
 
 async function probeArchivedClipUrls({ userId, taskId, audioId }) {

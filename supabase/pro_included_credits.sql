@@ -257,7 +257,9 @@ begin
   v_remaining := v_remaining - v_from_promo;
   v_from_trial := least(coalesce(v_row.trial_balance, 0), v_remaining);
   v_remaining := v_remaining - v_from_trial;
-  v_from_paid := v_remaining;
+  -- Paid takes what the paid bucket really has. Anything beyond the buckets (older accounts, refunds that
+  -- only went to the total) still comes off balance, so a bucket mismatch can never block a generation.
+  v_from_paid := least(coalesce(v_row.paid_balance, 0), v_remaining);
 
   v_before := v_row.balance;
   update public.user_credits

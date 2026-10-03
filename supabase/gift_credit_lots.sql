@@ -191,7 +191,9 @@ begin
   v_remaining := v_remaining - v_from_promo;
   v_from_trial := least(coalesce(v_row.trial_balance, 0), v_remaining);
   v_remaining := v_remaining - v_from_trial;
-  v_from_paid := v_remaining;
+  -- Paid takes what the paid bucket really has. Anything beyond the buckets (older accounts, refunds that
+  -- only went to the total) still comes off balance, so a bucket mismatch can never block a generation.
+  v_from_paid := least(coalesce(v_row.paid_balance, 0), v_remaining);
 
   -- Draw the gift spend from expiring lots first; any rest comes from the grandfathered (non-expiring) part.
   if v_from_gift > 0 then
@@ -341,9 +343,14 @@ begin
     );
   end if;
 
-  v_giftable := coalesce(v_sender.pro_included_balance, 0)
-    + coalesce(v_sender.paid_balance, 0)
-    + coalesce(v_sender.promo_balance, 0);
+  -- Some older accounts have bucket totals above their real balance (history from before buckets
+  -- existed), so never allow gifting more than the actual balance.
+  v_giftable := least(
+    coalesce(v_sender.balance, 0),
+    coalesce(v_sender.pro_included_balance, 0)
+      + coalesce(v_sender.paid_balance, 0)
+      + coalesce(v_sender.promo_balance, 0)
+  );
   if v_giftable < p_amount then
     return json_build_object(
       'ok', false, 'status', 'insufficient_giftable',

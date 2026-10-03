@@ -101,7 +101,7 @@ module.exports = async function handler(req, res) {
     trialBalance: bucketsReady ? trialBalance : 0,
     proIncludedBalance,
     // Included Pro + paid + promo are giftable; received gifts and trial credits are not.
-    giftableBalance: bucketsReady ? paidBalance + promoBalance + proIncludedBalance : 0,
+    giftableBalance: bucketsReady ? Math.min(balance, paidBalance + promoBalance + proIncludedBalance) : 0,
     giftLots,
     giftSentLast24h,
     giftDailyLimit: GIFT_DAILY_LIMIT,

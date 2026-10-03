@@ -99,7 +99,12 @@ function mapSunoUpstreamFailure(raw) {
     };
   }
 
-  if (code === 413 || m.includes("too long")) {
+  // e.g. "The length of lyrics in custom mode cannot exceed 5000 characters" (arrives as code 400)
+  const looksLengthLimit =
+    m.includes("too long")
+    || (m.includes("exceed") && (m.includes("character") || m.includes("length")))
+    || (m.includes("length of") && m.includes("cannot"));
+  if (code === 413 || looksLengthLimit) {
     return {
       failureKind: "tooLong",
       userMessage: "Lyrics or style are too long — shorten and retry.",

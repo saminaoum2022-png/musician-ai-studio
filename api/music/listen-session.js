@@ -17,6 +17,7 @@ const {
 } = require("../_lib/credits-auth");
 const { sendPrivacySafePush } = require("../_lib/onesignal-push");
 const { nabadLiveListenEnabled } = require("../_lib/nabad-live-listen-lib");
+const { cleanArchiveKey, mintArchiveStreamQuery } = require("../_lib/storage-private");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -170,7 +171,34 @@ function publicUser(map, userId) {
   };
 }
 
-function serializeSession(row, { viewerId, profiles } = {}) {
+function requestOrigin(req) {
+  const host = String(req?.headers?.["x-forwarded-host"] || req?.headers?.host || "").split(",")[0].trim();
+  if (!host || /^localhost(?::|$)/i.test(host)) return "";
+  return `https://${host}`;
+}
+
+/**
+ * Drafts live in the private song_archive bucket. A guest cannot stream the host's draft (not public, not
+ * theirs), so give the GUEST a short-lived signed stream link for exactly this session's song.
+ * Safe because we only sign a key that belongs to the host (the host is sharing their own song).
+ */
+function guestSignedPlayUrl(row, { live, viewer, hostId, guestId, origin }) {
+  if (!live || !viewer || viewer !== guestId) return "";
+  const m = String(row.song_url || "").match(/\/storage\/v1\/object\/(?:public\/)?song_archive\/([^?#]+)/i);
+  if (!m) return "";
+  let key = "";
+  try {
+    key = cleanArchiveKey(decodeURIComponent(m[1]));
+  } catch {
+    return "";
+  }
+  if (!key || (key.split("/")[0] || "").toLowerCase() !== hostId.toLowerCase()) return "";
+  const tok = mintArchiveStreamQuery(key, 7200);
+  if (!tok) return "";
+  return `${origin || ""}/api/songs/stream?key=${encodeURIComponent(tok.key)}&exp=${encodeURIComponent(String(tok.exp))}&sig=${encodeURIComponent(tok.sig)}`;
+}
+
+function serializeSession(row, { viewerId, profiles, origin = "" } = {}) {
   const hideTitles = row.hide_titles === true;
   const viewer = cleanUserId(viewerId);
   const hostId = cleanUserId(row.host_user_id);
@@ -180,6 +208,7 @@ function serializeSession(row, { viewerId, profiles } = {}) {
   const title = hideTitles && viewer && viewer !== hostId
     ? ""
     : String(row.song_title || "");
+  const playUrl = guestSignedPlayUrl(row, { live, viewer, hostId, guestId, origin });
   let role = null;
   if (viewer && viewer === hostId) role = "host";
   else if (viewer && viewer === guestId) role = "guest";
@@ -192,7 +221,8 @@ function serializeSession(row, { viewerId, profiles } = {}) {
     songId: String(row.song_id || ""),
     songTitle: title,
     songCover: String(row.song_cover || ""),
-    songUrl: String(row.song_url || ""),
+    songUrl: playUrl || String(row.song_url || ""),
+    playUrl,
     songOwnerId: String(row.song_owner_id || ""),
     playing: live ? row.playing !== false : false,
     positionMs: Math.max(0, Number(row.position_ms) || 0),
@@ -254,6 +284,7 @@ module.exports = async function handler(req, res) {
     }
     const user = await verifyUser(req);
     if (!user?.userId) return sendJson(res, 401, { error: "Sign in required" });
+    const origin = requestOrigin(req);
 
     if (req.method === "GET") {
       const url = new URL(req.url, "http://localhost");
@@ -277,7 +308,7 @@ module.exports = async function handler(req, res) {
         );
         return sendJson(res, 200, {
           ok: true,
-          sessions: liveRows.map((row) => serializeSession(row, { viewerId: me, profiles })),
+          sessions: liveRows.map((row) => serializeSession(row, { viewerId: me, profiles, origin })),
         });
       }
       const sessionId = String(url.searchParams.get("sessionId") || "").trim();
@@ -293,7 +324,7 @@ module.exports = async function handler(req, res) {
       const profiles = await fetchProfilesForRow(loaded.row);
       return sendJson(res, 200, {
         ok: true,
-        session: serializeSession(loaded.row, { viewerId: me, profiles }),
+        session: serializeSession(loaded.row, { viewerId: me, profiles, origin }),
       });
     }
 
@@ -399,7 +430,7 @@ module.exports = async function handler(req, res) {
       }
       return sendJson(res, 200, {
         ok: true,
-        session: serializeSession(created, { viewerId: me, profiles }),
+        session: serializeSession(created, { viewerId: me, profiles, origin }),
       });
     }
 
@@ -422,7 +453,7 @@ module.exports = async function handler(req, res) {
           return sendJson(res, 200, {
             ok: true,
             live: false,
-            session: serializeSession({ ...row, status: "ended", playing: false }, { viewerId: me, profiles }),
+            session: serializeSession({ ...row, status: "ended", playing: false }, { viewerId: me, profiles, origin }),
           });
         }
         let next = row;
@@ -449,7 +480,7 @@ module.exports = async function handler(req, res) {
         const profiles = await fetchProfilesForRow(next);
         return sendJson(res, 200, {
           ok: true,
-          session: serializeSession({ ...next, guest_joined: true }, { viewerId: me, profiles }),
+          session: serializeSession({ ...next, guest_joined: true }, { viewerId: me, profiles, origin }),
           live: true,
         });
       }
@@ -460,7 +491,7 @@ module.exports = async function handler(req, res) {
           const profiles = await fetchProfilesForRow(row);
           return sendJson(res, 200, {
             ok: true,
-            session: serializeSession({ ...row, status: "ended", playing: false }, { viewerId: me, profiles }),
+            session: serializeSession({ ...row, status: "ended", playing: false }, { viewerId: me, profiles, origin }),
           });
         }
         const positionMs = Math.max(0, Math.round(Number(body.positionMs) || 0));
@@ -489,7 +520,7 @@ module.exports = async function handler(req, res) {
         const profiles = await fetchProfilesForRow(next);
         return sendJson(res, 200, {
           ok: true,
-          session: serializeSession(next, { viewerId: me, profiles }),
+          session: serializeSession(next, { viewerId: me, profiles, origin }),
         });
       }
 
@@ -511,7 +542,7 @@ module.exports = async function handler(req, res) {
         const profiles = await fetchProfilesForRow(next);
         return sendJson(res, 200, {
           ok: true,
-          session: serializeSession(next, { viewerId: me, profiles }),
+          session: serializeSession(next, { viewerId: me, profiles, origin }),
         });
       }
 
@@ -534,7 +565,7 @@ module.exports = async function handler(req, res) {
         return sendJson(res, 200, {
           ok: true,
           left: true,
-          session: serializeSession(next, { viewerId: me, profiles }),
+          session: serializeSession(next, { viewerId: me, profiles, origin }),
         });
       }
     }

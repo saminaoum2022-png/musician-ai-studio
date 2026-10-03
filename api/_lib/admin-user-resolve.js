@@ -116,6 +116,18 @@ async function adminSearchUserIds(query, { authMap = null, limit = 100 } = {}) {
     }
   }
 
+  // Search by user id: full id or the first/any 6+ characters of it (hex and dashes only).
+  if (needle.length >= 6 && /^[0-9a-f-]+$/.test(needle)) {
+    if (authMap) {
+      for (const userId of authMap.keys()) {
+        if (String(userId).toLowerCase().includes(needle)) idSet.add(String(userId));
+      }
+    }
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(needle)) {
+      idSet.add(needle);
+    }
+  }
+
   return [...idSet].slice(0, lim);
 }
 

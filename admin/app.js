@@ -2945,6 +2945,65 @@ function renderUserDetail(data) {
       </tr>`).join("")
     : `<tr><td colspan="3" class="loading">No saved songs.</td></tr>`;
 
+  const shown = cr.shown || { included: 0, trial: 0, saved: cr.paid || 0, gift: cr.gift || 0, promo: cr.promo || 0 };
+  const stored = cr.stored || { paid: cr.paid || 0, gift: cr.gift || 0, promo: cr.promo || 0, trial: 0, included: 0 };
+  const lots = Array.isArray(cr.giftLots) ? cr.giftLots : [];
+  const liveLots = lots.filter((l) => !l.expired);
+  const nextLot = liveLots[0] || null;
+  const fmtDay = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—");
+  const creditRow = (label, value, note, { hideZero = false } = {}) => (hideZero && !(Number(value) > 0)
+    ? ""
+    : `<tr><td><strong>${label}</strong></td><td class="num">${fmtNum(value, 1)}</td><td class="cellMuted">${note}</td></tr>`);
+  const creditsCardBody = [
+    creditRow("Pro included", shown.included, sub?.grandfathered ? "Included with Pro · stacks until the switch (grandfathered)" : "Included with Pro · refreshes each billing period", { hideZero: true }),
+    creditRow("Free trial", shown.trial, "Best used soon · create only"),
+    creditRow("Saved credits", shown.saved, "Carried over · best used soon"),
+    creditRow("Gifts", shown.gift, nextLot
+      ? `From friends · ${liveLots.length} lot${liveLots.length === 1 ? "" : "s"} · next expires ${fmtDay(nextLot.expiresAt)}`
+      : "From friends"),
+    creditRow("Promo", shown.promo, "Promo codes"),
+    `<tr class="totalRow"><td><strong>Total (what the user sees)</strong></td><td class="num"><strong>${fmtNum(cr.balance, 1)}</strong></td><td class="cellMuted">Used first → last: Pro included, Gifts, Promo, Free trial, Saved</td></tr>`,
+  ].join("");
+  const mismatch = Number(cr.mismatch || 0);
+  const mismatchNote = Math.abs(mismatch) >= 0.05
+    ? `<div class="userDetailAlert">Balance (${fmtNum(cr.balance, 1)}) ≠ stored buckets (${fmtNum(cr.storedSum, 1)}) — difference ${mismatch > 0 ? "+" : ""}${fmtNum(mismatch, 1)}. ${mismatch > 0 ? "Some credits are not in any bucket (older account / refunds)." : "Buckets hold more than the balance."} The user screen already hides this by showing the rest as Saved credits.</div>`
+    : "";
+  const storedBody = `
+    <tr><td>Balance (source of truth)</td><td class="num"><strong>${fmtNum(cr.balance, 1)}</strong></td></tr>
+    <tr><td>Pro included</td><td class="num">${fmtNum(stored.included, 1)}</td></tr>
+    <tr><td>Free trial</td><td class="num">${fmtNum(stored.trial, 1)}</td></tr>
+    <tr><td>Saved (paid)</td><td class="num">${fmtNum(stored.paid, 1)}</td></tr>
+    <tr><td>Gifts</td><td class="num">${fmtNum(stored.gift, 1)}</td></tr>
+    <tr><td>Promo</td><td class="num">${fmtNum(stored.promo, 1)}</td></tr>
+    <tr><td>Buckets total</td><td class="num">${fmtNum(cr.storedSum, 1)}</td></tr>
+    <tr><td>Giftable now</td><td class="num">${fmtNum(cr.giftable, 1)}</td></tr>
+    <tr><td>Sent as gifts in last 24h</td><td class="num">${fmtNum(cr.giftSent24h, 1)} / ${fmtNum(cr.giftDailyLimit || 25)}</td></tr>`;
+  const lotsBody = lots.length
+    ? lots.map((l) => `<tr>
+        ${dateCell(l.receivedAt)}
+        <td class="num">${fmtNum(l.amount, 1)}</td>
+        <td class="num">${fmtNum(l.remaining, 1)}</td>
+        ${dateCell(l.expiresAt)}
+        <td>${l.expired ? `<span class="badge expired">expired · not swept yet</span>` : `<span class="badge active">active</span>`}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="5" class="loading">No dated gift lots. ${stored.gift > 0 ? "Older gifts (before 3 Oct 2026) do not expire." : ""}</td></tr>`;
+  const subCardRows = sub
+    ? [
+      ["Plan", `${escapeHtml(sub.planId || "—")} · ${escapeHtml(sub.provider || "—")}`],
+      ["Status", `<span class="badge ${escapeHtml(sub.status || "none")}">${escapeHtml(sub.statusLabel || sub.status || "—")}</span>${sub.cancelAtPeriodEnd ? ` <span class="badge willNotRenew">Will not renew</span>` : ""}`],
+      [sub.status === "trialing" ? "Trial ends" : (sub.cancelAtPeriodEnd || ["cancelled", "expired"].includes(sub.status) ? "Access until" : "Next renewal"), sub.currentPeriodEnd ? escapeHtml(fmtDate(sub.currentPeriodEnd)) : "—"],
+      ["Credit policy", sub.creditPolicy === "stack"
+        ? (sub.grandfathered
+          ? `<span class="badge grandfathered">Grandfathered</span> credits stack until the first renewal on/after ${escapeHtml(fmtDay(sub.refreshFrom))}. ${sub.switchesAtNextRenewal ? "<strong>The next renewal switches this user to refresh.</strong>" : "Next renewal still stacks."}`
+          : `<span class="badge">Was grandfathered</span> now refreshes each period`)
+        : `Refresh — included credits reset each billing period`],
+      ...(sub.legacyMonthly1200 ? [["Monthly rate", `<span class="badge grandfathered">Legacy 1,200 / renewal</span> (allowlist)`]] : []),
+      ["Started", sub.createdAt ? escapeHtml(fmtDate(sub.createdAt)) : "—"],
+      ["Last updated", sub.updatedAt ? escapeHtml(fmtDate(sub.updatedAt)) : "—"],
+      ["Subscription id", `<code class="promoCode">${escapeHtml(sub.providerSubscriptionId || "—")}</code>${stripeSyncBtn}`],
+    ].map(([k, v]) => `<tr><td class="cellMuted" style="width:160px">${k}</td><td>${v}</td></tr>`).join("")
+    : `<tr><td class="loading">No Pro subscription on file.</td></tr>`;
+
   const grantBtn = state.adminSession?.canGrantCredits && u.email
     ? `<button type="button" class="btnPrimary" id="btnUserDetailGrant" data-grant-email="${escapeHtml(u.email)}">Grant credits</button>
        <button type="button" class="btnGhost" id="btnUserDetailAdjust" data-grant-email="${escapeHtml(u.email)}">Adjust credits</button>`
@@ -2962,16 +3021,33 @@ function renderUserDetail(data) {
         <p class="detailHeroSub">${escapeHtml(u.email || "No email")}</p>
       </div>
       <div class="cardsGrid cardsGrid--inSection">
-        ${statCard("Total credits", fmtNum(cr.balance, 1), `Paid ${fmtNum(cr.paid, 1)} · Promo ${fmtNum(cr.promo, 1)} · Gift ${fmtNum(cr.gift, 1)}`)}
+        ${statCard("Total credits", fmtNum(cr.balance, 1), `Giftable ${fmtNum(cr.giftable, 1)} · details below`)}
         ${statCard("Signup", fmtDateCompact(u.signupAt), fmtSignupPlatform(u.signupPlatform))}
         ${statCard("Last active", fmtDateCompact(u.lastActiveAt), u.role ? `Role ${u.role}` : "")}
         ${statCard("Songs saved", fmtNum(songRows.length), insights.billingEventCount ? `${fmtNum(insights.billingEventCount)} billing events` : "")}
       </div>
-      <div class="detailMetaBlock">
-        <strong>Subscription</strong> — ${subBlock}${stripeSyncBtn}
-      </div>
       ${supportEmailBlock}
     </div>
+    ${listSection({
+      title: "Credits — as the user sees them",
+      note: "Mirrors the Credits screen in the app. Rows always add up to the total.",
+      extraHtml: mismatchNote,
+      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr><th>Type</th><th>Credits</th><th>Note</th></tr></thead><tbody>${creditsCardBody}</tbody></table></div>`,
+    })}
+    ${listSection({
+      title: "Subscription",
+      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><tbody>${subCardRows}</tbody></table></div>`,
+    })}
+    ${listSection({
+      title: "Stored buckets (detail)",
+      note: "What the database holds. The balance gates spending; buckets decide gifting.",
+      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><tbody>${storedBody}</tbody></table></div>`,
+    })}
+    ${listSection({
+      title: "Gifts received (dated lots)",
+      note: "Gifts received from 3 Oct 2026 expire 30 days after receipt.",
+      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr><th>Received</th><th>Amount</th><th>Remaining</th><th>Expires</th><th>Status</th></tr></thead><tbody>${lotsBody}</tbody></table></div>`,
+    })}
     ${listSection({
       title: "Billing events",
       tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>

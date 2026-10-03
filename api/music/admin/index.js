@@ -2605,7 +2605,7 @@ async function getUserDetail(userIdInput, search = "") {
   const sinceUserLedger = new Date(Date.now() - LEDGER_RECOVERY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const [profRes, creditsRes, subRes, billingRes, ledgerMerged, genLedgerRes, gensRes, songsRes, giftLotsRes, giftSentRes] = await Promise.all([
+  const [profRes, creditsRes, subRes, billingRes, ledgerMerged, genLedgerRes, gensRes, songsRes, giftLotsRes, giftSentRes, errorsRes, giftEventsRes] = await Promise.all([
     serviceFetch(`profiles?select=user_id,username,display_name,role,last_active_at,created_at,signup_platform&user_id=eq.${enc}&limit=1`),
     (async () => {
       const full = await serviceFetch(`user_credits?select=balance,paid_balance,gift_balance,promo_balance,trial_balance,pro_included_balance,updated_at&user_id=eq.${enc}&limit=1`);
@@ -2617,8 +2617,8 @@ async function getUserDetail(userIdInput, search = "") {
       if (full.ok) return full;
       return serviceFetch(`pro_subscriptions?select=provider,plan_id,status,current_period_end,cancel_at_period_end,provider_subscription_id,created_at,updated_at&user_id=eq.${enc}&limit=1`);
     })(),
-    serviceFetch(`billing_events?select=id,provider,event_type,plan_id,product_id,credits_granted,created_at&user_id=eq.${enc}&order=created_at.desc&limit=50`),
-    fetchMergedCreditRows({ userId: uid, limit: 40, offset: 0 }),
+    serviceFetch(`billing_events?select=id,provider,event_type,plan_id,product_id,credits_granted,created_at&user_id=eq.${enc}&order=created_at.desc&limit=100`),
+    fetchMergedCreditRows({ userId: uid, limit: 150, offset: 0 }),
     serviceFetch(
       [
         "credits_transactions?select=id,user_id,delta,reason,ref,created_at",
@@ -2630,10 +2630,12 @@ async function getUserDetail(userIdInput, search = "") {
         "limit=300",
       ].join("&"),
     ),
-    serviceFetch(`music_generation_logs?select=id,kind,provider,status,credits_used,error_message,prompt,request_detail,created_at&user_id=eq.${enc}&order=created_at.desc&limit=100`),
+    serviceFetch(`music_generation_logs?select=id,kind,provider,status,credits_used,error_message,prompt,request_detail,created_at&user_id=eq.${enc}&order=created_at.desc&limit=150`),
     serviceFetch(`user_songs?select=id,title,created_at,public_on_profile&user_id=eq.${enc}&order=created_at.desc&limit=12`),
     serviceFetch(`gift_credit_lots?select=id,amount,remaining,received_at,expires_at&user_id=eq.${enc}&remaining=gt.0&order=expires_at.asc&limit=50`),
     serviceFetch(`gift_events?select=amount&sender_user_id=eq.${enc}&created_at=gte.${encodeURIComponent(since24h)}&limit=500`),
+    serviceFetch(`music_generation_logs?select=id,kind,provider,status,credits_used,error_message,prompt,request_detail,created_at&user_id=eq.${enc}&or=(status.eq.failed,error_message.not.is.null)&order=created_at.desc&limit=100`),
+    serviceFetch(`gift_events?select=id,sender_user_id,recipient_user_id,target_kind,target_id,amount,created_at&or=(sender_user_id.eq.${enc},recipient_user_id.eq.${enc})&order=created_at.desc&limit=100`),
   ]);
 
   const prof = Array.isArray(profRes.data) && profRes.data[0] ? profRes.data[0] : null;
@@ -2711,6 +2713,47 @@ async function getUserDetail(userIdInput, search = "") {
     createdAt: row.created_at,
     publicOnProfile: Boolean(row.public_on_profile),
   }));
+
+  const errorRows = (Array.isArray(errorsRes.data) ? errorsRes.data : [])
+    .filter((row) => String(row.status || "").toLowerCase() === "failed" || String(row.error_message || "").trim())
+    .map((row) => ({
+      id: row.id,
+      kind: inferGenerationKind(row.kind, row.request_detail, row.prompt, {
+        provider: row.provider,
+        creditsUsed: row.credits_used,
+      }),
+      provider: row.provider || "",
+      status: row.status || "",
+      creditsUsed: Number(row.credits_used || 0),
+      errorMessage: row.error_message || "",
+      createdAt: row.created_at,
+    }));
+
+  const giftRowsRaw = Array.isArray(giftEventsRes.data) ? giftEventsRes.data : [];
+  const otherIds = [...new Set(giftRowsRaw
+    .map((g) => (String(g.sender_user_id) === uid ? g.recipient_user_id : g.sender_user_id))
+    .filter(Boolean))];
+  const otherProfiles = new Map();
+  if (otherIds.length) {
+    const inOther = otherIds.map((id) => encodeURIComponent(id)).join(",");
+    const profOther = await serviceFetch(`profiles?select=user_id,username,display_name&user_id=in.(${inOther})`);
+    for (const p of Array.isArray(profOther.data) ? profOther.data : []) otherProfiles.set(p.user_id, p);
+  }
+  const gifts = giftRowsRaw.map((g) => {
+    const sent = String(g.sender_user_id) === uid;
+    const otherId = sent ? g.recipient_user_id : g.sender_user_id;
+    const op = otherProfiles.get(otherId) || {};
+    return {
+      id: g.id,
+      direction: sent ? "sent" : "received",
+      otherUserId: otherId,
+      otherName: String(op.display_name || op.username || "—"),
+      otherEmail: (authMap.get(otherId) || {}).email || "",
+      targetKind: g.target_kind || "",
+      amount: Number(g.amount || 0),
+      createdAt: g.created_at,
+    };
+  });
 
   const emailLogsMap = await fetchSupportEmailLogsMap([uid]);
   const emailLogs = emailLogsMap.get(uid) || [];
@@ -2825,6 +2868,8 @@ async function getUserDetail(userIdInput, search = "") {
     billingEvents,
     ledger,
     generations,
+    errors: errorRows,
+    gifts,
     songs,
     insights: {
       renewalsLast7d,

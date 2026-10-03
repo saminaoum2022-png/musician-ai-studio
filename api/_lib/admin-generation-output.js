@@ -10,6 +10,7 @@ const {
   isSunoMusicGenerationTaskId,
 } = require("./suno-upstream");
 const { archiveRemoteSongToStorage } = require("./archive-remote-song");
+const { mintArchiveStreamQuery } = require("./storage-private");
 
 const SONG_ARCHIVE_BUCKET = "song_archive";
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
@@ -24,6 +25,27 @@ function pickSunoClipImageUrl(clip) {
     if (s.startsWith("http")) return s;
   }
   return "";
+}
+
+/**
+ * song_archive is private, so its `/object/public/...` links are dead in a browser.
+ * Turn them into short-lived signed `/api/songs/stream` links the admin page can open.
+ * Non-archive URLs (e.g. upstream CDN links) are returned unchanged.
+ */
+function toListenUrl(url) {
+  const target = String(url || "").trim();
+  if (!target) return "";
+  const prefix = `${SUPABASE_URL}/storage/v1/object/public/${SONG_ARCHIVE_BUCKET}/`;
+  if (!SUPABASE_URL || !target.startsWith(prefix)) return target;
+  let key = "";
+  try {
+    key = target.slice(prefix.length).split("?")[0].split("/").map((seg) => decodeURIComponent(seg)).join("/");
+  } catch {
+    return target;
+  }
+  const tok = mintArchiveStreamQuery(key);
+  if (!tok) return target;
+  return `/api/songs/stream?key=${encodeURIComponent(tok.key)}&exp=${encodeURIComponent(String(tok.exp))}&sig=${encodeURIComponent(tok.sig)}`;
 }
 
 function clipVariantLabel(index, total) {
@@ -128,6 +150,7 @@ async function buildOutputClip(clip, index, total, { userId, taskId, savedSongs 
     title: String(clip?.title || "").trim(),
     imageUrl: pickSunoClipImageUrl(clip),
     playUrl,
+    listenUrl: toListenUrl(playUrl),
     upstreamUrl,
     archivedUrls,
     audioUrlCandidates: [
@@ -214,9 +237,12 @@ async function resolveGenerationOutput({ userId, taskId, savedSongs = [] }) {
   return {
     taskStatus,
     taskStatusUrl,
+    taskStatusListenUrl: toListenUrl(taskStatusUrl),
     taskError,
     outputAudioUrl,
+    outputAudioListenUrl: toListenUrl(outputAudioUrl),
     outputAudioCandidates: allUrls,
+    outputAudioListenCandidates: allUrls.map(toListenUrl),
     outputClips,
   };
 }

@@ -3063,20 +3063,22 @@ function renderGenerationDetail(data) {
   const outputClips = Array.isArray(g.outputClips) ? g.outputClips : [];
   const outputLinks = [];
   if (g.outputAudioUrl) {
-    outputLinks.push(`<a href="${escapeHtml(g.outputAudioUrl)}" target="_blank" rel="noopener noreferrer">Play / download audio</a>`);
+    outputLinks.push(`<a href="${escapeHtml(g.outputAudioListenUrl || g.outputAudioUrl)}" target="_blank" rel="noopener noreferrer">Play / download audio</a>`);
   }
-  for (const url of g.outputAudioCandidates || []) {
+  const listenCandidates = g.outputAudioListenCandidates || [];
+  (g.outputAudioCandidates || []).forEach((url, i) => {
     if (url && url !== g.outputAudioUrl) {
-      outputLinks.push(`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url.split("/").pop() || "Archive")}</a>`);
+      const href = listenCandidates[i] || url;
+      outputLinks.push(`<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url.split("/").pop() || "Archive")}</a>`);
     }
-  }
+  });
   if (g.taskStatusUrl) {
-    outputLinks.push(`<a href="${escapeHtml(g.taskStatusUrl)}" target="_blank" rel="noopener noreferrer">Task status JSON</a>`);
+    outputLinks.push(`<a href="${escapeHtml(g.taskStatusListenUrl || g.taskStatusUrl)}" target="_blank" rel="noopener noreferrer">Task status JSON</a>`);
   }
 
   const clipRows = outputClips.length
     ? outputClips.map((clip) => {
-      const playHref = clip.playUrl || clip.upstreamUrl || "";
+      const playHref = clip.listenUrl || clip.playUrl || clip.upstreamUrl || "";
       const playCell = playHref
         ? `<a href="${escapeHtml(playHref)}" target="_blank" rel="noopener noreferrer">Play</a>`
         : "—";

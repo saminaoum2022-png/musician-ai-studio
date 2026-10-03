@@ -263,8 +263,8 @@ async function sendGift(amount) {
   _sending = true;
   _sendingTier = amount;
   paintGiftSheet();
-  closeGiftSheet();
-  showGiftSentOverlay(amount, { haptic: _deps?.haptic });
+  // Keep the sheet up while the server answers (the tapped tier shows as sending). The celebration only
+  // plays once the gift really went through, so a refused gift (daily or per-person cap) never looks sent.
 
   try {
     const r = await fetch(_deps.apiUrl("/api/gifts/send"), {
@@ -277,6 +277,7 @@ async function sendGift(amount) {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) {
+      closeGiftSheet();
       hideGiftSentOverlay();
       const msg = String(d?.error || "Could not send gift.");
       if (d?.code === "gifts_not_migrated") {
@@ -293,11 +294,14 @@ async function sendGift(amount) {
       return;
     }
 
+    closeGiftSheet();
+    showGiftSentOverlay(amount, { haptic: _deps?.haptic });
     if (typeof _deps?.refreshCredits === "function") {
       void _deps.refreshCredits({ silent: true });
     }
     _deps?.markPostGifted?.(giftedTarget.targetKind, giftedTarget.targetId);
   } catch (e) {
+    closeGiftSheet();
     hideGiftSentOverlay();
     _deps?.showToast?.(e?.message || "Gift failed.", { icon: "!", durationMs: 3200 });
     try {

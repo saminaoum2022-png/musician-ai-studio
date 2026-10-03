@@ -26338,6 +26338,7 @@ a.vwPrimary,
   padding: 14px 16px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
 }
+.creditsKind[hidden]{ display: none; }
 .creditsKind:last-child{ border-bottom: 0; }
 .creditsKindCopy{
   min-width: 0;

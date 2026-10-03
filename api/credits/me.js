@@ -18,6 +18,7 @@ const { fetchProfileRole } = require("../_lib/admin-auth");
 const { fetchProSubscriptionForUser } = require("../_lib/pro-subscription");
 const { grantSignupWelcomeCreditsIfNeeded, WELCOME_CREDITS, readSignupPlatform } = require("../_lib/signup-welcome-credits");
 const { ensureProfileRow } = require("../_lib/ensure-profile-row");
+const { GIFT_DAILY_LIMIT, GIFT_RECIPIENT_DAILY_LIMIT, GIFT_EXPIRY_DAYS } = require("../_lib/gift-config");
 
 module.exports = async function handler(req, res) {
   setCors(res);
@@ -39,6 +40,9 @@ module.exports = async function handler(req, res) {
     clientShell,
   });
 
+  // Remove gifted credits past their 30-day expiry before reading balances (no-op until gift_credit_lots.sql).
+  await callRpc("expire_gift_credit_lots", { p_user_id: user.userId }).catch(() => null);
+
   const balanceRes = await selectFromTable(
     `user_credits?select=balance,paid_balance,gift_balance,promo_balance,trial_balance,updated_at&user_id=eq.${encodeURIComponent(user.userId)}`
   );
@@ -49,6 +53,22 @@ module.exports = async function handler(req, res) {
   const proIncludedBalance =
     includedRes.ok && Array.isArray(includedRes.data) && includedRes.data[0]
       ? Number(includedRes.data[0].pro_included_balance || 0)
+      : 0;
+  const nowIso = new Date().toISOString();
+  const since24hIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const lotsRes = await selectFromTable(
+    `gift_credit_lots?select=remaining,expires_at&user_id=eq.${encodeURIComponent(user.userId)}&remaining=gt.0&expires_at=gt.${encodeURIComponent(nowIso)}&order=expires_at.asc&limit=20`
+  );
+  const giftLots =
+    lotsRes.ok && Array.isArray(lotsRes.data)
+      ? lotsRes.data.map((l) => ({ amount: Number(l.remaining || 0), expiresAt: l.expires_at }))
+      : [];
+  const sentRes = await selectFromTable(
+    `gift_events?select=amount&sender_user_id=eq.${encodeURIComponent(user.userId)}&created_at=gt.${encodeURIComponent(since24hIso)}&limit=200`
+  );
+  const giftSentLast24h =
+    sentRes.ok && Array.isArray(sentRes.data)
+      ? sentRes.data.reduce((sum, g) => sum + Number(g.amount || 0), 0)
       : 0;
   const ledgerRes = await selectFromTable(
     `credit_ledger?select=delta,reason,ref,created_at&user_id=eq.${encodeURIComponent(
@@ -80,7 +100,13 @@ module.exports = async function handler(req, res) {
     promoBalance: bucketsReady ? promoBalance : 0,
     trialBalance: bucketsReady ? trialBalance : 0,
     proIncludedBalance,
-    giftableBalance: bucketsReady ? paidBalance + promoBalance : 0,
+    // Included Pro + paid + promo are giftable; received gifts and trial credits are not.
+    giftableBalance: bucketsReady ? paidBalance + promoBalance + proIncludedBalance : 0,
+    giftLots,
+    giftSentLast24h,
+    giftDailyLimit: GIFT_DAILY_LIMIT,
+    giftRecipientDailyLimit: GIFT_RECIPIENT_DAILY_LIMIT,
+    giftExpiryDays: GIFT_EXPIRY_DAYS,
     bucketsReady,
     ledger,
     isAdmin,

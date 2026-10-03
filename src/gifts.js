@@ -1,5 +1,6 @@
 /**
- * Post gifts — send paid or promo credits to another creator (never re-gift received gifts).
+ * Post gifts — send included Pro, paid or promo credits to another creator (never re-gift received gifts).
+ * Daily cap is enforced by the API; the sheet only mirrors it so people see what is left.
  */
 
 import { GIFT_TIER_OPTIONS, giftTierSheetIconHtml } from "./gift-tier-icons.js";
@@ -64,11 +65,19 @@ function paintGiftSheet() {
   sub.textContent = p.recipientHandle ? `to @${p.recipientHandle}` : "to this creator";
   const giftable = Number(_deps?.getGiftableBalance?.() || 0);
   balanceAmount.textContent = String(_deps?.formatCreditsAmount?.(giftable) ?? giftable);
+  const dailyLeftRaw = _deps?.getGiftDailyRemaining?.();
+  const dailyLeft = Number.isFinite(Number(dailyLeftRaw)) ? Number(dailyLeftRaw) : Infinity;
+  const caption = el("giftSheetBalanceCaption");
+  if (caption) {
+    caption.textContent = Number.isFinite(dailyLeft)
+      ? `Credits Available · ${_deps?.formatCreditsAmount?.(dailyLeft) ?? dailyLeft} left to gift today`
+      : "Credits Available";
+  }
   const tierWrap = el("giftSheetTiers");
   if (tierWrap) {
     tierWrap.querySelectorAll("[data-gift-tier]").forEach((btn) => {
       const tier = Number(btn.getAttribute("data-gift-tier"));
-      const disabled = !Number.isFinite(tier) || tier > giftable || _sending;
+      const disabled = !Number.isFinite(tier) || tier > giftable || tier > dailyLeft || _sending;
       btn.disabled = disabled;
       btn.setAttribute("aria-disabled", disabled ? "true" : "false");
       btn.classList.toggle("isSending", _sending && tier === _sendingTier);

@@ -1781,7 +1781,38 @@ async function getCredits(limit, offset) {
     }
   }
   const transactions = hydrateCreditRows(rows, profileMap);
-  return { transactions, total };
+
+  // Repeated gifting between the same two accounts (7 days). Needs supabase/gift_credit_lots.sql; [] until then.
+  let giftPairs = [];
+  try {
+    const pairRes = await serviceFetch(
+      "gift_pair_flow_7d?select=sender_user_id,recipient_user_id,gifts,credits,last_gift_at&order=credits.desc&limit=25",
+    );
+    if (pairRes.ok && Array.isArray(pairRes.data)) {
+      const pairIds = [...new Set(pairRes.data.flatMap((p) => [p.sender_user_id, p.recipient_user_id]).filter(Boolean))];
+      const nameMap = new Map();
+      if (pairIds.length) {
+        const inClause = pairIds.map((id) => encodeURIComponent(id)).join(",");
+        const prof = await serviceFetch(`profiles?select=user_id,username,display_name&user_id=in.(${inClause})`);
+        for (const p of Array.isArray(prof.data) ? prof.data : []) nameMap.set(p.user_id, p);
+      }
+      const label = (id) => {
+        const p = nameMap.get(id);
+        return p?.username ? `@${p.username}` : p?.display_name || id;
+      };
+      giftPairs = pairRes.data.map((p) => ({
+        senderUserId: p.sender_user_id,
+        recipientUserId: p.recipient_user_id,
+        sender: label(p.sender_user_id),
+        recipient: label(p.recipient_user_id),
+        gifts: Number(p.gifts || 0),
+        credits: Number(p.credits || 0),
+        lastGiftAt: p.last_gift_at,
+      }));
+    }
+  } catch {}
+
+  return { transactions, total, giftPairs };
 }
 
 function inferGenerationKind(kind, requestDetail = "", prompt = "", ctx = {}) {

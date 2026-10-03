@@ -9073,6 +9073,11 @@ try {
         creditsState.giftableBalance ??
           (Number(creditsState.paidBalance ?? 0) + Number(creditsState.promoBalance ?? 0))
       ),
+    getGiftDailyRemaining: () =>
+      Math.max(
+        0,
+        Number(creditsState.giftDailyLimit ?? 25) - Number(creditsState.giftSentLast24h ?? 0),
+      ),
     formatCreditsAmount,
     refreshCredits: refreshMyCredits,
     showToast,
@@ -34523,6 +34528,10 @@ const creditsState = {
   giftBalance: 0,
   promoBalance: 0,
   giftableBalance: 0,
+  proIncludedBalance: 0,
+  giftLots: [],
+  giftSentLast24h: 0,
+  giftDailyLimit: 25,
   bucketsReady: false,
   ledger: [],
   isAdmin: false,
@@ -35037,6 +35046,37 @@ function renderCreditsBreakdown() {
   if (paidEl) paidEl.textContent = formatCreditsAmount(creditsState.paidBalance);
   if (giftEl) giftEl.textContent = formatCreditsAmount(creditsState.giftBalance);
   if (promoEl) promoEl.textContent = formatCreditsAmount(creditsState.promoBalance);
+
+  // Included Pro credits (refresh each billing period) — only shown while there is a balance.
+  const includedRow = document.getElementById("creditsIncludedRow");
+  const includedVal = document.getElementById("creditsIncludedValue");
+  const includedNote = document.getElementById("creditsIncludedNote");
+  const included = Number(creditsState.proIncludedBalance || 0);
+  if (includedRow) includedRow.hidden = !(included > 0);
+  if (includedVal) includedVal.textContent = formatCreditsAmount(included);
+  if (includedNote) {
+    const end = creditsState.proPeriodEnd ? new Date(creditsState.proPeriodEnd) : null;
+    includedNote.textContent =
+      end && Number.isFinite(end.getTime())
+        ? `Refreshes ${end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+        : "Refreshes each billing period";
+  }
+
+  // Gifts you received expire 30 days after receipt — say when the next ones go.
+  const giftNote = document.getElementById("creditsGiftNote");
+  if (giftNote) {
+    const lots = Array.isArray(creditsState.giftLots) ? creditsState.giftLots : [];
+    const first = lots[0];
+    const firstDate = first ? new Date(first.expiresAt) : null;
+    if (first && firstDate && Number.isFinite(firstDate.getTime())) {
+      const sameDay = lots
+        .filter((l) => new Date(l.expiresAt).toDateString() === firstDate.toDateString())
+        .reduce((sum, l) => sum + Number(l.amount || 0), 0);
+      giftNote.textContent = `From friends · ${formatCreditsAmount(sameDay)} expire ${firstDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+    } else {
+      giftNote.textContent = "From friends · create only";
+    }
+  }
 }
 
 function paintCreditsDisplays() {
@@ -35076,6 +35116,9 @@ function formatLedgerReason(reason) {
   if (r === "paid_purchase") return "Paid credits added";
   if (r === "gift_sent") return "Gift sent";
   if (r === "gift_received") return "Gift received";
+  if (r === "gift_expire") return "Gifted credits expired";
+  if (r === "pro_period_grant") return "Pro credits for this billing period";
+  if (r === "pro_period_expire") return "Pro credits reset";
   if (r === "full_song") return "Full song generation";
   if (r === "sound_generate") return "Sound generation";
   if (r === "refund_full_song") return "Refund (failed generation)";
@@ -35163,6 +35206,10 @@ async function refreshMyCredits({ silent = false } = {}) {
     creditsState.giftBalance = Number(d?.giftBalance ?? 0);
     creditsState.promoBalance = Number(d?.promoBalance ?? 0);
     creditsState.giftableBalance = Number(d?.giftableBalance ?? d?.paidBalance ?? 0);
+    creditsState.proIncludedBalance = Number(d?.proIncludedBalance ?? 0);
+    creditsState.giftLots = Array.isArray(d?.giftLots) ? d.giftLots : [];
+    creditsState.giftSentLast24h = Number(d?.giftSentLast24h ?? 0);
+    creditsState.giftDailyLimit = Number(d?.giftDailyLimit ?? 25);
     creditsState.bucketsReady = Boolean(d?.bucketsReady);
     creditsState.ledger = Array.isArray(d?.ledger) ? d.ledger : [];
     creditsState.isAdmin = Boolean(d?.isAdmin);
@@ -35898,6 +35945,9 @@ function resetProfileUiToGuest() {
   creditsState.giftBalance = 0;
   creditsState.promoBalance = 0;
   creditsState.giftableBalance = 0;
+  creditsState.proIncludedBalance = 0;
+  creditsState.giftLots = [];
+  creditsState.giftSentLast24h = 0;
   creditsState.bucketsReady = false;
   creditsState.ledger = [];
   creditsState.isAdmin = false;

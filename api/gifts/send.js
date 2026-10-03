@@ -2,8 +2,9 @@
  * POST /api/gifts/send
  * Body: { targetKind: "song"|"status", targetId, amount: 1|3|5, recipientUserId? }
  *
- * Paid + promo credits can be gifted (testing). gift_balance is never sent.
- * Recipient receives gift_balance (create-only, not re-giftable).
+ * Giftable: included Pro → paid → promo. Received gift credits and trial credits are never sent.
+ * Limits (enforced in send_gift): 25 credits / 24h per sender, 10 credits / 24h per recipient.
+ * Recipient receives gift_balance (create-only, not re-giftable) that expires 30 days after receipt.
  */
 const {
   verifyUser,
@@ -105,13 +106,15 @@ module.exports = async function handler(req, res) {
   if (!rpc.ok || out.ok === false) {
     const status =
       out.status === "insufficient_giftable" || out.status === "insufficient_paid" ? 402 :
-      out.status === "rate_limited" ? 429 :
+      out.status === "rate_limited" || out.status === "daily_limit" || out.status === "recipient_limit" ? 429 :
       400;
     return sendJson(res, status, {
       error: out.message || "Could not send gift.",
       code: out.status || "gift_failed",
       paidBalance: out.paid_balance,
       giftable: out.giftable,
+      dailyLimit: out.daily_limit,
+      sent24h: out.sent_24h,
     });
   }
 
@@ -155,5 +158,8 @@ module.exports = async function handler(req, res) {
     amount: out.amount,
     balance: out.sender_balance,
     paidBalance: out.sender_paid_balance,
+    giftable: out.giftable,
+    sent24h: out.sent_24h,
+    dailyLimit: out.daily_limit,
   });
 };

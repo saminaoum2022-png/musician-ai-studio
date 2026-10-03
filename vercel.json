@@ -66,7 +66,8 @@
   },
   "crons": [
     { "path": "/api/social?type=chart_notify_cron", "schedule": "0 17 * * *" },
-    { "path": "/api/cron/suno-watch-sweep", "schedule": "*/2 * * * *" }
+    { "path": "/api/cron/suno-watch-sweep", "schedule": "*/2 * * * *" },
+    { "path": "/api/cron/expire-gift-credits", "schedule": "30 2 * * *" }
   ],
   "rewrites": [
     { "source": "/robots.txt", "destination": "/api/robots" },

@@ -2802,7 +2802,7 @@
             <div class="giftSheetBalance" id="giftSheetBalance" aria-live="polite">
               <p class="giftSheetBalanceLabel">Your balance</p>
               <p class="giftSheetBalanceAmount" id="giftSheetBalanceAmount">0</p>
-              <p class="giftSheetBalanceCaption">Credits Available</p>
+              <p class="giftSheetBalanceCaption" id="giftSheetBalanceCaption">Credits Available</p>
             </div>
             <div class="giftSheetTiers" id="giftSheetTiers" aria-label="Choose a gift"></div>
             <p class="giftSheetPreviewHint" id="giftSheetPreviewHint">Hold to preview</p>
@@ -3715,19 +3715,26 @@
 
           <section id="creditsBreakdown" class="creditsKinds" hidden aria-labelledby="creditsKindsKicker">
             <h3 class="creditsSectionKicker" id="creditsKindsKicker">Where they come from</h3>
-            <p class="creditsKindsLead">Gifts spend first, then promo, then paid. Included Pro credits refresh each billing period; unused included credits do not carry over (<a href="/terms.html">Terms</a>).</p>
+            <p class="creditsKindsLead">Included Pro credits spend first, then gifts, then promo, then paid. Included credits refresh each billing period and unused ones do not carry over; gifts you receive expire 30 days after you get them (<a href="/terms.html">Terms</a>).</p>
             <div class="creditsKindsList">
-              <div class="creditsKind" title="From Pro renewals — can gift and create. Included Pro credits refresh each billing period.">
+              <div class="creditsKind" id="creditsIncludedRow" hidden title="Included with your Pro plan — can gift and create. Refreshes each billing period; unused credits do not carry over.">
+                <div class="creditsKindCopy">
+                  <strong>Pro included</strong>
+                  <span id="creditsIncludedNote">Refreshes each billing period</span>
+                </div>
+                <span class="creditsKindValue" id="creditsIncludedValue">0</span>
+              </div>
+              <div class="creditsKind" title="Credits that do not expire — can gift and create.">
                 <div class="creditsKindCopy">
                   <strong>Paid</strong>
                   <span>Yours to spend or gift</span>
                 </div>
                 <span class="creditsKindValue" id="creditsPaidValue">0</span>
               </div>
-              <div class="creditsKind" title="Received from others — create only, not giftable.">
+              <div class="creditsKind" title="Received from others — create only, not giftable. Gifts expire 30 days after you receive them.">
                 <div class="creditsKindCopy">
                   <strong>Gifts</strong>
-                  <span>From friends · create only</span>
+                  <span id="creditsGiftNote">From friends · create only</span>
                 </div>
                 <span class="creditsKindValue" id="creditsGiftValue">0</span>
               </div>
@@ -3768,7 +3775,7 @@
               <li><strong>Full song:</strong> 10–50 credits — depends on song type and options.</li>
               <li><strong>Sounds:</strong> 2.5 credits · <strong>Lyrics</strong> are free.</li>
               <li>Failed generations are <strong>refunded automatically</strong>.</li>
-              <li>Promo codes: once per account. Paid and promo credits can be <strong>gifted</strong>; gift credits are create-only. Gifting is in-app only — not selling credits or moving them off NabadAi.</li>
+              <li>Promo codes: once per account. Included Pro, paid and promo credits can be <strong>gifted</strong> (up to 25 credits a day); credits you receive as gifts are create-only and expire 30 days after you receive them. Gifting is in-app only — not selling credits or moving them off NabadAi.</li>
               <li><strong>Pro subscription:</strong> Included credits are added at the start of each billing period. Unused included credits from that period do not carry over. Details in <a href="/terms.html">Terms</a>.</li>
             </ul>
           </details>

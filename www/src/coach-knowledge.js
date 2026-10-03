@@ -60,9 +60,10 @@ WHERE TO SEE BALANCE & PLANS:
 - Credits page also has a NabadAi Pro upsell card with "View plans".
 
 CREDIT BUCKETS (Credits breakdown):
-- Paid credits: from subscriptions — you can create songs AND gift Mic/Pulse/Star.
-- Gift credits received: sent by other users — create songs only; cannot re-gift.
-- Promo credits: from promo codes — can create and gift during testing.
+- Pro included credits: your plan's credits for the current billing period — spent first; you can create songs AND gift Mic/Pulse/Star. They refresh each billing period.
+- Paid credits: do not expire — you can create songs AND gift Mic/Pulse/Star.
+- Gift credits received: sent by other users — create songs only; cannot re-gift. They expire 30 days after you receive them (the Credits page shows when).
+- Promo credits: from promo codes — can create and gift.
 - Included Pro credits are added at the start of each billing period; unused included credits do not carry over. From 2 Oct 2026 for new Pro and when a trial becomes paid. Paid Pro before that date: refresh from first renewal on or after 1 Nov 2026; existing balance is not removed (Terms). Gifting eligible credits in-app is not selling or moving credits off NabadAi. Unused trial credits end if you don't subscribe. Failed generations refund automatically.
 
 WHAT COSTS CREDITS:
@@ -76,7 +77,8 @@ FREE (no credits): Idea → Generate, AI lyrics preview, Add vowel marks, ✦ Bo
 
 GIFTING CREDITS (on someone else's published song post):
 - Tap Gift on the post → Mic (${GIFT_TIERS[0].credits} cr), Pulse (${GIFT_TIERS[1].credits} cr), or Star (${GIFT_TIERS[2].credits} cr).
-- Only paid + promo credits are giftable; trial credits and received gift credits cannot be gifted.
+- Included Pro, paid and promo credits are giftable; trial credits and received gift credits cannot be gifted.
+- Gifting limit: 25 credits per day in total, and up to 10 credits per day to the same person. Gifts you receive expire after 30 days.
 - Hold a tier ~0.5s to preview the animation without spending.
 
 NABADAI PRO SUBSCRIPTION (live — iPhone + nabadai.com):

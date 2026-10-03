@@ -22,6 +22,9 @@ const state = {
   view: "overview",
   offset: 0,
   userSearch: "",
+  userFilter: "all",
+  subFilter: "active",
+  subSearch: "",
   billingSearch: "",
   generationFilters: { dateFrom: "", dateTo: "", kind: "", provider: "", status: "" },
   userDetailId: "",
@@ -223,11 +226,19 @@ function signupPlatformBadgeClass(platform) {
   return "none";
 }
 
+function filterPillsHtml(attr, options, active, counts = null) {
+  return `<div class="mailFilterPills" role="tablist" style="flex-wrap:wrap;margin:0 0 12px">${options.map(([id, label]) => {
+    const n = counts && counts[id] != null ? ` <span class="cellMuted">${fmtNum(counts[id])}</span>` : "";
+    return `<button type="button" class="mailFilterPill${active === id ? " isActive" : ""}" data-${attr}="${id}" role="tab" aria-selected="${active === id}">${label}${n}</button>`;
+  }).join("")}</div>`;
+}
+
 function userNameCell(u) {
   const pending = u.profilePending
     ? ` <span class="badge pending">pending</span>`
     : "";
-  return `<strong>${escapeHtml(u.name || "—")}</strong> <span class="cellMuted">@${escapeHtml(u.username || "—")}</span>${pending}`;
+  const shortId = u.userId ? `<br><span class="cellMuted monoCell" title="${escapeHtml(u.userId)}">id ${escapeHtml(String(u.userId).slice(0, 8))}…</span>` : "";
+  return `<strong>${escapeHtml(u.name || "—")}</strong> <span class="cellMuted">@${escapeHtml(u.username || "—")}</span>${pending}${shortId}`;
 }
 
 function showError(msg) {
@@ -583,6 +594,7 @@ async function adminFetch(view, {
   offset = 0,
   limit = PAGE_SIZE,
   search = "",
+  filter = "",
   userId = "",
   generationId = "",
   generationFilters = null,
@@ -595,6 +607,7 @@ async function adminFetch(view, {
   const qs = new URLSearchParams({ view: apiView, limit: String(limit), offset: String(offset) });
   const trimmedSearch = String(search || "").trim();
   if (trimmedSearch.length >= 2) qs.set("search", trimmedSearch);
+  if (filter) qs.set("filter", String(filter));
   const trimmedUserId = String(userId || "").trim();
   if (trimmedUserId) qs.set("userId", trimmedUserId);
   const trimmedGenerationId = String(generationId || "").trim();
@@ -1215,7 +1228,10 @@ function renderRenewalCell(s) {
 function renderPlanCell(s) {
   const plan = escapeHtml(s.planId || "—");
   const provider = escapeHtml(String(s.provider || "").toLowerCase() || "—");
-  return `<div class="subPlanCell"><span class="subPlanName">${plan}</span><span class="subPlanProvider">${provider}</span></div>`;
+  const gf = String(s.creditPolicy || "") === "stack"
+    ? `<span class="badge grandfathered" title="Credits stack until the first renewal on or after 1 Nov 2026, then refresh each period">Grandfathered</span>`
+    : "";
+  return `<div class="subPlanCell"><span class="subPlanName">${plan}</span><span class="subPlanProvider">${provider}</span>${gf}</div>`;
 }
 
 async function marketingAdminFetch(page = "home", locale = "en") {
@@ -1475,6 +1491,12 @@ function viewCacheKey() {
   let key = `${state.view}:${state.offset}`;
   if (state.view === "users" && state.userSearch.trim().length >= 2) {
     key += `:${state.userSearch.trim().toLowerCase()}`;
+  }
+  if (state.view === "users") {
+    key += `:f:${state.userFilter || "all"}`;
+  }
+  if (state.view === "subscriptions") {
+    key += `:f:${state.subFilter || "active"}:${state.subSearch.trim().toLowerCase()}`;
   }
   if (state.view === "billing" && state.billingSearch.trim().length >= 2) {
     key += `:${state.billingSearch.trim().toLowerCase()}`;
@@ -3208,7 +3230,7 @@ function renderUsers(data) {
         <td class="emailCell">${escapeHtml(u.email || "—")}</td>
         ${dateCell(u.signupAt)}
         <td><span class="badge ${signupPlatformBadgeClass(u.signupPlatform)}">${fmtSignupPlatform(u.signupPlatform)}</span></td>
-        <td><span class="badge ${u.subscriptionStatus || "none"}">${u.subscriptionStatus || "none"}</span></td>
+        <td><span class="badge ${u.subscriptionStatus || "none"}">${u.subscriptionStatus || "none"}</span>${u.creditPolicy === "stack" && ["active", "trialing", "grace"].includes(u.subscriptionStatus) ? ` <span class="badge grandfathered">Grandfathered</span>` : ""}${u.subscriptionPeriodEnd && u.subscriptionStatus && u.subscriptionStatus !== "none" ? `<br><span class="cellMuted">${["cancelled", "expired"].includes(u.subscriptionStatus) ? "ended" : u.subscriptionCancelAtPeriodEnd ? "ends" : "renews"} ${fmtDateCompact(u.subscriptionPeriodEnd)}</span>` : ""}</td>
         <td class="num">${fmtNum(u.credits, 1)}</td>
         <td class="num">${fmtNum(u.songsGenerated)}</td>
         ${dateCell(u.lastActiveAt)}
@@ -3220,13 +3242,21 @@ function renderUsers(data) {
     <form id="userSearchForm" class="toolbarRow userSearchForm">
       <label class="field grantField userSearchField">
         <span>Search users</span>
-        <input id="userSearchInput" type="search" value="${escapeHtml(searchVal)}" placeholder="email or @username" autocomplete="off" />
+        <input id="userSearchInput" type="search" value="${escapeHtml(searchVal)}" placeholder="email, @username or user id" autocomplete="off" />
       </label>
       <button type="submit" class="btnPrimary">Search</button>
       ${searchVal.trim().length >= 2 ? `<button type="button" class="btnGhost" id="btnUserSearchClear">Clear</button>` : ""}
     </form>
+    ${filterPillsHtml("user-filter", [
+      ["all", "All"],
+      ["pro", "Pro"],
+      ["trial", "Trial"],
+      ["grandfathered", "Grandfathered"],
+      ["expired", "Expired"],
+      ["errors", "Errors (7d)"],
+    ], state.userFilter || "all")}
     ${listSection({
-    title: searchVal.trim().length >= 2 ? "Search results" : "All users",
+    title: searchVal.trim().length >= 2 ? "Search results" : (state.userFilter && state.userFilter !== "all" ? "Filtered users" : "All users"),
     note: "Click a row to open the user profile.",
     tableHtml: `
     <div class="tableWrap tableWrap--plain">
@@ -4146,7 +4176,7 @@ function renderSubscriptions(data) {
   const body = rows.length
     ? rows.map((s) => `
       <tr>
-        <td class="subUserCell"><span class="subUserName">${escapeHtml(s.userLabel || "—")}</span><span class="subUserEmail">${escapeHtml(s.email || "")}</span></td>
+        <td class="subUserCell rowClickable" tabindex="0" role="link" data-user-view="${escapeHtml(s.userId || "")}" data-return-view="subscriptions"><span class="subUserName">${escapeHtml(s.userLabel || "—")}</span><span class="subUserEmail">${escapeHtml(s.email || "")}</span><span class="cellMuted monoCell">id ${escapeHtml(String(s.userId || "").slice(0, 8))}…</span></td>
         <td>${renderPlanCell(s)}</td>
         <td><span class="badge ${escapeHtml(s.status || "")}">${escapeHtml(s.statusLabel || s.status || "—")}</span></td>
         <td class="subRenewalCol">${renderRenewalCell(s)}</td>
@@ -4156,11 +4186,29 @@ function renderSubscriptions(data) {
     `).join("")
     : `<tr><td colspan="6" class="loading">No subscriptions yet</td></tr>`;
 
+  const subSearchVal = state.subSearch || "";
+  const subFilterNames = { active: "Active", trial: "Trial", cancelling: "Will not renew", grandfathered: "Grandfathered", expired: "Expired", all: "All" };
   els.panels.subscriptions.innerHTML = adminPageStack(`
     ${resendNote}
-    ${churnSection}
+    <form id="subSearchForm" class="toolbarRow userSearchForm">
+      <label class="field grantField userSearchField">
+        <span>Search subscriptions</span>
+        <input id="subSearchInput" type="search" value="${escapeHtml(subSearchVal)}" placeholder="email, @username or user id" autocomplete="off" />
+      </label>
+      <button type="submit" class="btnPrimary">Search</button>
+      ${subSearchVal.trim().length >= 2 ? `<button type="button" class="btnGhost" id="btnSubSearchClear">Clear</button>` : ""}
+    </form>
+    ${filterPillsHtml("sub-filter", [
+      ["active", "Active"],
+      ["trial", "Trial"],
+      ["cancelling", "Will not renew"],
+      ["grandfathered", "Grandfathered"],
+      ["expired", "Expired"],
+      ["all", "All"],
+    ], state.subFilter || "active", data?.counts || null)}
     ${listSection({
-    title: "All Pro subscriptions",
+    title: `${subFilterNames[state.subFilter || "active"] || "Subscriptions"} subscriptions`,
+    note: ["active", "trial", "cancelling", "grandfathered"].includes(state.subFilter || "active") ? "Soonest renewal first. Click a name to open the user." : "",
     tableHtml: `
     <div class="tableWrap tableWrap--plain tableWrap--subscriptions">
       <table class="table--compact table--subscriptions">
@@ -4173,7 +4221,8 @@ function renderSubscriptions(data) {
       </table>
     </div>`,
     pager: pagerHtml(total, state.offset),
-  })}`, { plain: true });
+  })}
+    ${churnSection}`, { plain: true });
 }
 
 function stripHtml(html) {
@@ -6119,7 +6168,14 @@ function setView(view) {
   }
   state.view = view;
   state.offset = 0;
-  if (view !== "users") state.userSearch = "";
+  if (view !== "users") {
+    state.userSearch = "";
+    state.userFilter = "all";
+  }
+  if (view !== "subscriptions") {
+    state.subSearch = "";
+    state.subFilter = "active";
+  }
   if (view !== "billing") state.billingSearch = "";
   if (view !== "user") state.userDetailId = "";
   if (view !== "generation") state.generationDetailId = "";
@@ -6572,6 +6628,13 @@ async function loadView({ force = false } = {}) {
           ? state.userSearch
           : view === "billing"
             ? state.billingSearch
+            : view === "subscriptions"
+              ? state.subSearch
+              : "",
+        filter: view === "users"
+          ? (state.userFilter === "all" ? "" : state.userFilter)
+          : view === "subscriptions"
+            ? state.subFilter
             : "",
         userId: view === "user" ? state.userDetailId : "",
         generationId: view === "generation" ? state.generationDetailId : "",
@@ -6879,6 +6942,16 @@ document.body.addEventListener("submit", (e) => {
     e.preventDefault();
     const input = userSearchForm.querySelector("#userSearchInput");
     state.userSearch = String(input?.value || "").trim();
+    state.offset = 0;
+    void loadView({ force: true });
+    return;
+  }
+
+  const subSearchForm = e.target.closest("#subSearchForm");
+  if (subSearchForm) {
+    e.preventDefault();
+    const input = subSearchForm.querySelector("#subSearchInput");
+    state.subSearch = String(input?.value || "").trim();
     state.offset = 0;
     void loadView({ force: true });
     return;
@@ -7283,6 +7356,32 @@ document.body.addEventListener("click", (e) => {
       supportEmailOpen.dataset.supportEmailOpen,
       supportEmailOpen.dataset.supportEmailTemplate || "",
     );
+    return;
+  }
+
+  const userFilterBtn = e.target.closest("[data-user-filter]");
+  if (userFilterBtn) {
+    e.preventDefault();
+    state.userFilter = String(userFilterBtn.dataset.userFilter || "all");
+    state.offset = 0;
+    void loadView({ force: true });
+    return;
+  }
+
+  const subFilterBtn = e.target.closest("[data-sub-filter]");
+  if (subFilterBtn) {
+    e.preventDefault();
+    state.subFilter = String(subFilterBtn.dataset.subFilter || "active");
+    state.offset = 0;
+    void loadView({ force: true });
+    return;
+  }
+
+  const subSearchClear = e.target.closest("#btnSubSearchClear");
+  if (subSearchClear) {
+    state.subSearch = "";
+    state.offset = 0;
+    void loadView({ force: true });
     return;
   }
 

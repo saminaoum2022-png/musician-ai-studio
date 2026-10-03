@@ -1441,7 +1441,7 @@ async function hydrateUsersFromProfiles(profiles, authMap, orphanAuthUsers = [],
   const [creditsRes, subsRes, songsRes] = ids.length
     ? await Promise.all([
         serviceFetch(`user_credits?select=user_id,balance,paid_balance,gift_balance,promo_balance,updated_at&user_id=in.(${inClause})`),
-        serviceFetch(`pro_subscriptions?select=user_id,plan_id,status,current_period_end&user_id=in.(${inClause})`),
+        serviceFetch(`pro_subscriptions?select=user_id,plan_id,status,current_period_end,cancel_at_period_end,credit_policy&user_id=in.(${inClause})`),
         serviceFetch(`user_songs?select=user_id&user_id=in.(${inClause})&limit=5000`),
       ])
     : [{ data: [] }, { data: [] }, { data: [] }];
@@ -1474,6 +1474,8 @@ async function hydrateUsersFromProfiles(profiles, authMap, orphanAuthUsers = [],
       subscriptionStatus: sub?.status || "none",
       subscriptionPlan: sub?.plan_id || null,
       subscriptionPeriodEnd: sub?.current_period_end || null,
+      subscriptionCancelAtPeriodEnd: Boolean(sub?.cancel_at_period_end),
+      creditPolicy: sub?.credit_policy || "",
       credits: Number(cr.balance || 0),
       paidCredits: Number(cr.paid_balance || 0),
       giftCredits: Number(cr.gift_balance || 0),
@@ -1490,16 +1492,57 @@ async function hydrateUsersFromProfiles(profiles, authMap, orphanAuthUsers = [],
   };
 }
 
-async function getUsers(limit, offset, search = "") {
+const USER_LIST_FILTERS = new Set(["pro", "trial", "grandfathered", "expired", "errors"]);
+
+/** Ordered user ids for a Users-page filter tab. */
+async function filterUserIds(filter) {
+  const dedupe = (rows) => [...new Set((Array.isArray(rows) ? rows : []).map((r) => r?.user_id).filter(Boolean))];
+  if (filter === "pro") {
+    const res = await serviceFetch("pro_subscriptions?select=user_id&status=in.(active,grace)&order=current_period_end.asc&limit=5000");
+    return dedupe(res.data);
+  }
+  if (filter === "trial") {
+    const res = await serviceFetch("pro_subscriptions?select=user_id&status=eq.trialing&order=current_period_end.asc&limit=5000");
+    return dedupe(res.data);
+  }
+  if (filter === "grandfathered") {
+    const res = await serviceFetch("pro_subscriptions?select=user_id&credit_policy=eq.stack&status=in.(active,trialing,grace)&order=current_period_end.asc&limit=5000");
+    return dedupe(res.data);
+  }
+  if (filter === "expired") {
+    const res = await serviceFetch("pro_subscriptions?select=user_id&status=in.(cancelled,expired)&order=updated_at.desc&limit=5000");
+    return dedupe(res.data);
+  }
+  if (filter === "errors") {
+    const since = new Date(Date.now() - 7 * 86400000).toISOString();
+    const res = await serviceFetch(
+      `music_generation_logs?select=user_id&status=eq.failed&created_at=gte.${encodeURIComponent(since)}&order=created_at.desc&limit=3000`,
+    );
+    return dedupe(res.data);
+  }
+  return [];
+}
+
+async function getUsers(limit, offset, search = "", filter = "") {
   const authMap = await fetchAuthUsersMap();
   const searchQ = String(search || "").trim();
+  const filterKey = USER_LIST_FILTERS.has(String(filter || "")) ? String(filter) : "";
 
-  if (searchQ.length >= 2) {
-    const allIds = await findUserIdsBySearch(searchQ, authMap);
+  if (searchQ.length >= 2 || filterKey) {
+    let allIds = searchQ.length >= 2 ? await findUserIdsBySearch(searchQ, authMap) : null;
+    if (filterKey) {
+      const filterIds = await filterUserIds(filterKey);
+      if (allIds) {
+        const allow = new Set(filterIds.map(String));
+        allIds = allIds.filter((id) => allow.has(String(id)));
+      } else {
+        allIds = filterIds;
+      }
+    }
     const total = allIds.length;
     const pageIds = allIds.slice(offset, offset + limit);
     if (!pageIds.length) {
-      return { users: [], total, search: searchQ };
+      return { users: [], total, search: searchQ, filter: filterKey };
     }
     const inClause = pageIds.map((id) => encodeURIComponent(id)).join(",");
     const profRes = await serviceFetch(
@@ -1517,7 +1560,7 @@ async function getUsers(limit, offset, search = "") {
         return buildOrphanUserFromAuth(userId, auth);
       });
     const payload = await hydrateUsersFromProfiles(profiles, authMap, orphanFromSearch, total);
-    return { ...payload, search: searchQ };
+    return { ...payload, search: searchQ, filter: filterKey };
   }
 
   let profRes = await fetchProfilesForAdmin(limit, offset);
@@ -2242,6 +2285,7 @@ function mapSubscriptionRow(r, profileMap, authMap, supportMeta = null) {
     currentPeriodEnd: r.current_period_end,
     cancelAtPeriodEnd,
     providerSubscriptionId: r.provider_subscription_id || "",
+    creditPolicy: r.credit_policy || "",
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -2389,16 +2433,64 @@ async function getSubscriptionChurn() {
   };
 }
 
-async function getSubscriptions(limit, offset) {
+const SUB_LIST_FILTERS = {
+  active: { where: "status=in.(active,grace)", order: "current_period_end.asc" },
+  trial: { where: "status=eq.trialing", order: "current_period_end.asc" },
+  cancelling: { where: "cancel_at_period_end=eq.true&status=in.(active,trialing,grace)", order: "current_period_end.asc" },
+  grandfathered: { where: "credit_policy=eq.stack&status=in.(active,trialing,grace)", order: "current_period_end.asc" },
+  expired: { where: "status=in.(cancelled,expired)", order: "updated_at.desc" },
+  all: { where: "", order: "updated_at.desc" },
+};
+
+async function getSubscriptionFilterCounts() {
+  const res = await serviceFetch("pro_subscriptions?select=status,cancel_at_period_end,credit_policy&limit=5000");
+  const rows = Array.isArray(res.data) ? res.data : [];
+  const counts = { active: 0, trial: 0, cancelling: 0, grandfathered: 0, expired: 0, all: rows.length };
+  for (const r of rows) {
+    const st = String(r.status || "").toLowerCase();
+    const live = st === "active" || st === "trialing" || st === "grace";
+    if (st === "active" || st === "grace") counts.active += 1;
+    if (st === "trialing") counts.trial += 1;
+    if (live && r.cancel_at_period_end) counts.cancelling += 1;
+    if (live && String(r.credit_policy || "") === "stack") counts.grandfathered += 1;
+    if (st === "cancelled" || st === "expired") counts.expired += 1;
+  }
+  return counts;
+}
+
+async function getSubscriptions(limit, offset, { filter = "", search = "" } = {}) {
+  const key = SUB_LIST_FILTERS[filter] ? filter : "active";
+  const def = SUB_LIST_FILTERS[key];
+  const searchQ = String(search || "").trim();
+  const cols = "user_id,provider,plan_id,status,current_period_end,cancel_at_period_end,provider_subscription_id,credit_policy,created_at,updated_at";
+
+  let userClause = "";
+  if (searchQ.length >= 2) {
+    const authMap = await fetchAuthUsersMap();
+    const ids = await adminSearchUserIds(searchQ, { authMap, limit: 100 });
+    if (!ids.length) {
+      const counts = await getSubscriptionFilterCounts();
+      return { subscriptions: [], total: 0, filter: key, search: searchQ, counts, churn: await getSubscriptionChurn(), supportEmailTemplates: SUPPORT_TEMPLATES, resendConfigured: isResendConfigured() };
+    }
+    userClause = `user_id=in.(${ids.map((id) => encodeURIComponent(id)).join(",")})`;
+  }
+
+  const where = [def.where, userClause].filter(Boolean).join("&");
   const res = await serviceFetch(
-    `pro_subscriptions?select=user_id,provider,plan_id,status,current_period_end,cancel_at_period_end,provider_subscription_id,created_at,updated_at&order=updated_at.desc&limit=${limit}&offset=${offset}`,
+    `pro_subscriptions?select=${cols}${where ? `&${where}` : ""}&order=${def.order}&limit=${limit}&offset=${offset}`,
   );
   const rows = Array.isArray(res.data) ? res.data : [];
-  const subscriptions = await enrichSubscriptionRows(rows);
-  const churn = await getSubscriptionChurn();
+  const [subscriptions, churn, counts] = await Promise.all([
+    enrichSubscriptionRows(rows),
+    getSubscriptionChurn(),
+    getSubscriptionFilterCounts(),
+  ]);
   return {
     subscriptions,
     total: res.total ?? subscriptions.length,
+    filter: key,
+    search: searchQ,
+    counts,
     churn,
     supportEmailTemplates: SUPPORT_TEMPLATES,
     resendConfigured: isResendConfigured(),
@@ -3239,7 +3331,7 @@ module.exports = async function handler(req, res) {
     if (view === "overview") {
       payload.overview = await getOverview();
     } else if (view === "users") {
-      payload = { ...payload, ...(await getUsers(limit, offset, search)) };
+      payload = { ...payload, ...(await getUsers(limit, offset, search, String(url.searchParams.get("filter") || "").trim().toLowerCase())) };
     } else if (view === "credits") {
       payload = { ...payload, ...(await getCredits(limit, offset)) };
     } else if (view === "generations") {
@@ -3254,7 +3346,13 @@ module.exports = async function handler(req, res) {
         })),
       };
     } else if (view === "subscriptions") {
-      payload = { ...payload, ...(await getSubscriptions(limit, offset)) };
+      payload = {
+        ...payload,
+        ...(await getSubscriptions(limit, offset, {
+          filter: String(url.searchParams.get("filter") || "").trim().toLowerCase(),
+          search,
+        })),
+      };
     } else if (view === "billing") {
       payload = { ...payload, ...(await getBillingEvents(limit, offset, search)) };
     } else if (view === "user") {

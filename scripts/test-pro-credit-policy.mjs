@@ -138,6 +138,19 @@ up = writes.find((w) => w.method === "POST" && w.url.includes("pro_subscriptions
 assert.equal("credit_policy" in up.body, false, "new row: DB default (refresh) applies");
 console.log("ok upsert policy transitions");
 
+// trial -> paid on a refresh plan: leftover trial joins the FIRST period (after the grant), not saved credits
+const all = () => rpcCalls.map((c) => c.name).filter((n) => /^(grant_|convert_)/.test(n));
+resetDb({ sub: { status: "active", credit_policy: "refresh" } });
+await billing.grantCreditsOnce(sub());
+assert.deepEqual(all(), ["grant_pro_period_credits", "convert_trial_credits_to_included"]);
+console.log("ok trial->paid on refresh plan: grant first, then fold trial into included");
+
+// grandfathered stack member keeps the original behaviour (convert to saved first)
+resetDb({ sub: { status: "active", credit_policy: "stack" } });
+await billing.grantCreditsOnce(sub());
+assert.deepEqual(all(), ["convert_trial_credits_to_paid", "grant_paid_credits"]);
+console.log("ok stack member trial conversion unchanged");
+
 // expiry
 resetDb();
 await expireProIncludedCredits(uid, "rc:x");
@@ -151,6 +164,12 @@ assert.deepEqual(names(), ["grant_paid_credits"]);
 await billing.upsertProSubscription({ userId: uid, provider: "revenuecat", planId: "weekly", status: "active", periodEndIso: null });
 assert.ok(writes.some((w) => w.method === "POST" && w.url.includes("pro_subscriptions")), "upsert still writes");
 console.log("ok column missing -> falls back to additive grant");
+
+// new fold function not applied yet -> trial leftover still converts to saved credits
+resetDb({ missingRpcs: new Set(["convert_trial_credits_to_included"]) });
+await billing.grantCreditsOnce(sub());
+assert.deepEqual(all(), ["grant_pro_period_credits", "convert_trial_credits_to_paid"]);
+console.log("ok fold function missing -> falls back to saved credits");
 
 // RPC missing (SQL partially applied) → fall back to additive, never lose the grant (keep LAST: caches the 404)
 resetDb({ missingRpcs: new Set(["grant_pro_period_credits"]) });

@@ -53,6 +53,25 @@ async function convertTrialCreditsToPaid(userId, ref = "") {
   return { converted: Number(out.converted || 0), skipped: false, balance: out.balance };
 }
 
+/**
+ * Refresh-policy members: leftover trial credits join the first paid period's included credits, so they
+ * refresh away at the next renewal instead of becoming permanent saved credits.
+ * Needs supabase/trial_to_included.sql; returns { skipped: true } when it is not applied.
+ */
+async function convertTrialCreditsToIncluded(userId, ref = "") {
+  const uid = String(userId || "").trim();
+  if (!uid) return { converted: 0, skipped: true };
+  const rpc = await callRpc("convert_trial_credits_to_included", {
+    p_user_id: uid,
+    p_ref: String(ref || "").trim(),
+  });
+  const out = rpc.data || {};
+  if (rpc.skipped || rpc.status === 404 || !rpc.ok || out.ok === false) {
+    return { converted: 0, skipped: true };
+  }
+  return { converted: Number(out.converted || 0), skipped: false, balance: out.balance };
+}
+
 async function expireUnusedTrialCredits(userId, ref = "") {
   const uid = String(userId || "").trim();
   if (!uid) return { expired: 0, skipped: true };
@@ -94,6 +113,7 @@ module.exports = {
   isTrialGrant,
   grantTrialCredits,
   convertTrialCreditsToPaid,
+  convertTrialCreditsToIncluded,
   expireUnusedTrialCredits,
   remainingTrialCreditsToProtect,
 };

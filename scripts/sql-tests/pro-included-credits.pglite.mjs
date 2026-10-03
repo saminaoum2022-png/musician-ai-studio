@@ -125,6 +125,25 @@ out = await rpc("expire_pro_included_credits", [U.grand, "rc:exp1"]);
 assert.equal(Number(out.expired), 0);
 console.log("ok 7: expiry removes only unspent included (700), paid 2000 kept, second call no-op");
 
+// ---- 7b. trial leftover joins the first paid period, gone at the next renewal ----
+{
+  const T = "00000000-0000-0000-0000-0000000000a1";
+  await db.query("insert into auth.users (id) values ($1)", [T]);
+  await db.query("insert into public.pro_subscriptions (user_id, plan_id, status) values ($1,'weekly','trialing')", [T]);
+  await db.query("insert into public.user_credits (user_id, balance, trial_balance) values ($1,76,76)", [T]);
+  await db.exec(fs.readFileSync(new URL("../../supabase/trial_to_included.sql", import.meta.url), "utf8"));
+  await rpc("grant_pro_period_credits", [T, 400, "pro:weekly:t1"]);
+  out = await rpc("convert_trial_credits_to_included", [T, "pro:weekly:t1"]);
+  assert.equal(Number(out.converted), 76);
+  assert.deepEqual(await cr(T), { balance: 476, paid: 0, gift: 0, promo: 0, trial: 0, inc: 476 }, "first period = 400 + 76 trial");
+  out = await rpc("convert_trial_credits_to_included", [T, "pro:weekly:t1"]);
+  assert.equal(Number(out.converted), 0, "second call is a no-op");
+  await rpc("consume_credits", [T, 100, "song", "t-s1"]);
+  await rpc("grant_pro_period_credits", [T, 400, "pro:weekly:t2"]);
+  assert.deepEqual(await cr(T), { balance: 400, paid: 0, gift: 0, promo: 0, trial: 0, inc: 400 }, "next renewal resets: leftover trial gone with the rest");
+  console.log("ok 7b: trial leftover (76) joins first period (476), next renewal resets to 400");
+}
+
 // ---- 8. ledger + invariant ----
 const sums = await db.query(`
   select c.user_id, c.balance, (c.paid_balance+c.gift_balance+c.promo_balance+c.trial_balance+c.pro_included_balance) as s

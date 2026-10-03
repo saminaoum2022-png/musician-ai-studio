@@ -10,6 +10,7 @@ const {
   isTrialGrant,
   grantTrialCredits,
   convertTrialCreditsToPaid,
+  convertTrialCreditsToIncluded,
   expireUnusedTrialCredits,
 } = require("./trial-credits");
 const {
@@ -305,7 +306,14 @@ async function grantCreditsOnce({
     claimedViaRpc = true;
   }
 
-  if (convertTrial) {
+  // Refresh-policy plans: trial leftovers join the first paid period (see below), so convert AFTER the
+  // period grant. Everyone else keeps the original behaviour (leftover becomes saved credits first).
+  let foldTrialIntoIncluded = false;
+  if (convertTrial && planId && String(bucket || "paid") === "paid") {
+    const eff0 = await effectiveProCreditPolicy(uid);
+    foldTrialIntoIncluded = Boolean(eff0.supported && eff0.policy === "refresh");
+  }
+  if (convertTrial && !foldTrialIntoIncluded) {
     await convertTrialCreditsToPaid(uid, grantRef);
   }
 
@@ -326,6 +334,7 @@ async function grantCreditsOnce({
   // allowance instead of stacking. Packs/adjustments (no planId) and grandfathered members keep
   // the additive paid grant. Falls back to additive when the SQL/columns are not applied yet.
   let rpc = null;
+  let usedRefreshRpc = false;
   if (planId && String(bucket || "paid") === "paid") {
     const eff = await effectiveProCreditPolicy(uid);
     if (eff.supported && eff.policy === "refresh") {
@@ -341,7 +350,10 @@ async function grantCreditsOnce({
         p_amount: credits,
         p_ref: grantRef,
       });
-      if (!(refreshRpc.skipped || refreshRpc.status === 404)) rpc = refreshRpc;
+      if (!(refreshRpc.skipped || refreshRpc.status === 404)) {
+        rpc = refreshRpc;
+        usedRefreshRpc = true;
+      }
     }
   }
   if (!rpc) {
@@ -363,6 +375,13 @@ async function grantCreditsOnce({
   if (!rpc.ok || out.ok === false) {
     if (claimedViaRpc) await releaseBillingEventClaim(id);
     return { granted: 0, skipped: true, error: out.message || "grant_failed" };
+  }
+
+  if (foldTrialIntoIncluded) {
+    // Period grant is in: move trial leftovers into the same period's included credits. Falls back to
+    // saved credits when the SQL is missing or the period grant itself fell back to the additive path.
+    const folded = usedRefreshRpc ? await convertTrialCreditsToIncluded(uid, grantRef) : { skipped: true };
+    if (folded.skipped) await convertTrialCreditsToPaid(uid, grantRef);
   }
 
   if (claimedViaRpc) {

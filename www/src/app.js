@@ -71491,6 +71491,9 @@ const _songArchiveInflight = new Map();
 function toAudioProxyUrl(url, songId) {
   if (!url || url === "#") return "";
   if (isArchivedSongStorageUrl(url)) return songArchiveStreamPlaybackUrl(url, songId);
+  // Already our own stream URL (relative on web, absolute on native): never wrap it in the Suno audio
+  // proxy — that proxy only accepts http(s) CDN links and answers 400 for `/api/songs/stream?…`.
+  if (/\/api\/songs\/stream\?/i.test(String(url))) return normalizeAudioUrlForPlayback(url, songId);
   // Use apiUrl() so native (Capacitor) gets an absolute URL pointing at the
   // deployed API. Relative `/api/...` resolves to `capacitor://localhost/api/...`
   // on iOS — which nothing serves — and silently breaks all audio playback.

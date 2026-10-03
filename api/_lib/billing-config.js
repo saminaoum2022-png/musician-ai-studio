@@ -91,6 +91,46 @@ const CREDIT_GRANT_EVENT_TYPES = new Set([
   "UNCANCELLATION",
 ]);
 
+/**
+ * Included Pro credits: refresh each billing period (no stacking) — NabadAi Terms, 2 Oct 2026.
+ *
+ *  - "refresh": new Pro, trial→paid, or re-subscribe after a lapse. Included credits RESET each period.
+ *  - "stack": grandfathered (paid before 2 Oct 2026). Keeps the old additive grant until the first
+ *    renewal on/after 1 Nov 2026, then moves to "refresh". Existing balances are never wiped.
+ *
+ * Env override for staging tests: NABAD_PRO_REFRESH_EXISTING_FROM (ISO date).
+ */
+const PRO_REFRESH_EXISTING_FROM_DEFAULT = "2026-11-01T00:00:00.000Z";
+const PRO_LIVE_STATUSES = new Set(["active", "trialing", "grace"]);
+
+function proRefreshExistingFromMs() {
+  const raw = String(process.env.NABAD_PRO_REFRESH_EXISTING_FROM || "").trim();
+  const ms = Date.parse(raw || PRO_REFRESH_EXISTING_FROM_DEFAULT);
+  return Number.isFinite(ms) ? ms : Date.parse(PRO_REFRESH_EXISTING_FROM_DEFAULT);
+}
+
+/**
+ * @param storedPolicy   current pro_subscriptions.credit_policy ("" when there is no row yet)
+ * @param previousStatus status before this event ("" when unknown)
+ * @param incomingStatus status after this event ("" when unknown)
+ */
+function resolveProCreditPolicy({
+  storedPolicy = "",
+  previousStatus = "",
+  incomingStatus = "",
+  nowMs = Date.now(),
+} = {}) {
+  const stored = String(storedPolicy || "").trim().toLowerCase();
+  const prev = String(previousStatus || "").trim().toLowerCase();
+  const incoming = String(incomingStatus || "").trim().toLowerCase();
+  if (stored !== "stack") return "refresh";
+  // Grandfathered member who lapsed and came back is a new start.
+  if (prev === "expired" && PRO_LIVE_STATUSES.has(incoming)) return "refresh";
+  // First renewal on/after the effective date moves existing members to refresh.
+  if (nowMs >= proRefreshExistingFromMs()) return "refresh";
+  return "stack";
+}
+
 function planForProductId(productId) {
   const pid = String(productId || "").trim();
   return PRO_PRODUCTS[pid] || null;
@@ -234,6 +274,9 @@ module.exports = {
   STUDIO_PRO_MASTER_REDEEMED_EVENT,
   ENTITLEMENT_PRO,
   CREDIT_GRANT_EVENT_TYPES,
+  PRO_LIVE_STATUSES,
+  proRefreshExistingFromMs,
+  resolveProCreditPolicy,
   MONTHLY_LEGACY_CREDITS,
   MONTHLY_LEGACY_CUTOFF_MS,
   MONTHLY_LEGACY_1200_USER_IDS,

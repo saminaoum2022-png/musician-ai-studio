@@ -19,6 +19,7 @@ const {
   refreshMonthlySubscriptionStart,
 } = require("./billing-subscription");
 const { expireUnusedTrialCredits } = require("./trial-credits");
+const { expireProIncludedCredits } = require("./pro-included-credits");
 const { fetchProSubscriptionForUser } = require("./pro-subscription");
 const {
   hasUsedStripeTrial,
@@ -248,6 +249,9 @@ async function applyStripeSubscription(
   if (!isProStripeStatus(status)) {
     await expireUnusedTrialCredits(userId, `stripe:sync:${target.id}`);
   }
+  if (status === "expired") {
+    await expireProIncludedCredits(userId, `stripe:sync:${target.id}`);
+  }
 
   let grant = { granted: 0, skipped: true };
   if (grantCredits && CREDIT_GRANT_EVENT_TYPES.has("INITIAL_PURCHASE")) {
@@ -422,7 +426,8 @@ async function applyStripeEvent(event) {
       cancelAtPeriodEnd: false,
     });
     const expire = await expireUnusedTrialCredits(userId, `stripe:${sub.id || "expired"}`);
-    return { ok: true, kind: "expiration", userId, planId, expire };
+    const expireIncluded = await expireProIncludedCredits(userId, `stripe:${sub.id || "expired"}`);
+    return { ok: true, kind: "expiration", userId, planId, expire, expireIncluded };
   }
 
   if (type === "customer.subscription.created" || type === "customer.subscription.updated") {

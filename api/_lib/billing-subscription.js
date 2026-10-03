@@ -13,6 +13,12 @@ const {
   expireUnusedTrialCredits,
 } = require("./trial-credits");
 const {
+  fetchProCreditPolicyRow,
+  effectiveProCreditPolicy,
+  expireProIncludedCredits,
+} = require("./pro-included-credits");
+const {
+  resolveProCreditPolicy,
   planForProductId,
   creditsForPackProductId,
   creditsForSubscriptionGrant,
@@ -183,6 +189,17 @@ async function upsertProSubscription({
   if (cancelAtPeriodEnd != null) {
     row.cancel_at_period_end = Boolean(cancelAtPeriodEnd);
   }
+  // Included-credit policy: new rows default to "refresh" in the DB; existing rows move
+  // stack → refresh on re-subscribe after a lapse or once the 1 Nov effective date passes.
+  const pol = await fetchProCreditPolicyRow(uid);
+  if (pol.supported && pol.exists) {
+    const nextPolicy = resolveProCreditPolicy({
+      storedPolicy: pol.policy,
+      previousStatus: pol.status,
+      incomingStatus: row.status,
+    });
+    if (nextPolicy !== pol.policy) row.credit_policy = nextPolicy;
+  }
   return restWrite("pro_subscriptions", {
     method: "POST",
     body: row,
@@ -305,11 +322,35 @@ async function grantCreditsOnce({
     }
   }
 
-  const rpc = await callRpc("grant_paid_credits", {
-    p_user_id: uid,
-    p_amount: credits,
-    p_ref: grantRef,
-  });
+  // Subscription (plan) grants follow the included-credit policy: "refresh" RESETS the period
+  // allowance instead of stacking. Packs/adjustments (no planId) and grandfathered members keep
+  // the additive paid grant. Falls back to additive when the SQL/columns are not applied yet.
+  let rpc = null;
+  if (planId && String(bucket || "paid") === "paid") {
+    const eff = await effectiveProCreditPolicy(uid);
+    if (eff.supported && eff.policy === "refresh") {
+      if (eff.stored !== "refresh") {
+        await restWrite(`pro_subscriptions?user_id=eq.${encodeURIComponent(uid)}`, {
+          method: "PATCH",
+          body: { credit_policy: "refresh", updated_at: new Date().toISOString() },
+          prefer: "return=minimal",
+        }).catch(() => null);
+      }
+      const refreshRpc = await callRpc("grant_pro_period_credits", {
+        p_user_id: uid,
+        p_amount: credits,
+        p_ref: grantRef,
+      });
+      if (!(refreshRpc.skipped || refreshRpc.status === 404)) rpc = refreshRpc;
+    }
+  }
+  if (!rpc) {
+    rpc = await callRpc("grant_paid_credits", {
+      p_user_id: uid,
+      p_amount: credits,
+      p_ref: grantRef,
+    });
+  }
   if (rpc.skipped || rpc.status === 404) {
     if (claimedViaRpc) await releaseBillingEventClaim(id);
     return { granted: 0, skipped: true, error: "gifts_not_migrated" };
@@ -412,7 +453,8 @@ async function applyRevenueCatEvent(event) {
       providerSubscriptionId: transactionId,
     });
     const expire = await expireUnusedTrialCredits(userId, `rc:${transactionId || eventId}`);
-    return { ok: true, kind: "expiration", userId, planId: plan.planId, expire };
+    const expireIncluded = await expireProIncludedCredits(userId, `rc:${transactionId || eventId}`);
+    return { ok: true, kind: "expiration", userId, planId: plan.planId, expire, expireIncluded };
   }
 
   const status = await resolveStatusForUpsert(
@@ -566,6 +608,7 @@ async function syncRevenueCatSubscriber(userId) {
   });
   if (status === "expired") {
     await expireUnusedTrialCredits(uid, "rc:sync");
+    await expireProIncludedCredits(uid, "rc:sync");
   }
 
   return {

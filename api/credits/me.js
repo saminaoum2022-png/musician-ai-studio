@@ -42,6 +42,14 @@ module.exports = async function handler(req, res) {
   const balanceRes = await selectFromTable(
     `user_credits?select=balance,paid_balance,gift_balance,promo_balance,trial_balance,updated_at&user_id=eq.${encodeURIComponent(user.userId)}`
   );
+  // Included Pro credits (needs supabase/pro_included_credits.sql); absent column → 0.
+  const includedRes = await selectFromTable(
+    `user_credits?select=pro_included_balance&user_id=eq.${encodeURIComponent(user.userId)}`
+  );
+  const proIncludedBalance =
+    includedRes.ok && Array.isArray(includedRes.data) && includedRes.data[0]
+      ? Number(includedRes.data[0].pro_included_balance || 0)
+      : 0;
   const ledgerRes = await selectFromTable(
     `credit_ledger?select=delta,reason,ref,created_at&user_id=eq.${encodeURIComponent(
       user.userId
@@ -71,6 +79,7 @@ module.exports = async function handler(req, res) {
     giftBalance: bucketsReady ? giftBalance : 0,
     promoBalance: bucketsReady ? promoBalance : 0,
     trialBalance: bucketsReady ? trialBalance : 0,
+    proIncludedBalance,
     giftableBalance: bucketsReady ? paidBalance + promoBalance : 0,
     bucketsReady,
     ledger,

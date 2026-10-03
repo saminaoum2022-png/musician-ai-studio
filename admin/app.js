@@ -23,6 +23,9 @@ const state = {
   offset: 0,
   userSearch: "",
   userFilter: "all",
+  userTab: "overview",
+  userTimelineFilter: "all",
+  userDetailData: null,
   subFilter: "active",
   subSearch: "",
   billingSearch: "",
@@ -1422,6 +1425,10 @@ function canAccessView(view) {
 function openUserDetail(userId, returnView = "users") {
   const uid = String(userId || "").trim();
   if (!uid) return;
+  if (uid !== state.userDetailId) {
+    state.userTab = "overview";
+    state.userTimelineFilter = "all";
+  }
   state.userDetailId = uid;
   state.returnView = returnView || "users";
   state.view = "user";
@@ -2845,6 +2852,7 @@ function generationViewButton(generationId, returnView = "generations", label = 
 }
 
 function renderUserDetail(data) {
+  state.userDetailData = data;
   const u = data?.user;
   const panel = els.panels.user;
   if (!u) {
@@ -3009,25 +3017,104 @@ function renderUserDetail(data) {
        <button type="button" class="btnGhost" id="btnUserDetailAdjust" data-grant-email="${escapeHtml(u.email)}">Adjust credits</button>`
     : "";
 
-  panel.innerHTML = adminPageStack(`
-    <div class="detailHero">
-      <div class="userDetailToolbar">
-        <button type="button" class="btnGhost" id="btnUserDetailBack">← Back</button>
-        <div class="userDetailActions">${grantBtn}</div>
-      </div>
-      ${sandboxBanner}
-      <div class="detailHeroMain">
-        <h3 class="detailHeroTitle">${escapeHtml(u.name)} ${u.username ? `<span class="detailHeroMuted">@${escapeHtml(u.username)}</span>` : ""}</h3>
-        <p class="detailHeroSub">${escapeHtml(u.email || "No email")}</p>
-      </div>
-      <div class="cardsGrid cardsGrid--inSection">
-        ${statCard("Total credits", fmtNum(cr.balance, 1), `Giftable ${fmtNum(cr.giftable, 1)} · details below`)}
-        ${statCard("Signup", fmtDateCompact(u.signupAt), fmtSignupPlatform(u.signupPlatform))}
-        ${statCard("Last active", fmtDateCompact(u.lastActiveAt), u.role ? `Role ${u.role}` : "")}
-        ${statCard("Songs saved", fmtNum(songRows.length), insights.billingEventCount ? `${fmtNum(insights.billingEventCount)} billing events` : "")}
-      </div>
-      ${supportEmailBlock}
-    </div>
+  // ---- History tabs ----
+  const errorList = Array.isArray(data.errors) ? data.errors : [];
+  const giftList = Array.isArray(data.gifts) ? data.gifts : [];
+  const tableOf = (head, body) => `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+
+  const errorsBody = errorList.length
+    ? errorList.map((g) => `<tr class="rowClickable" tabindex="0" role="link" data-generation-view="${escapeHtml(g.id || "")}" data-return-view="user">
+        ${dateCell(g.createdAt)}
+        <td>${escapeHtml(g.kind || "—")}</td>
+        <td>${escapeHtml(g.provider || "—")}</td>
+        <td><span class="badge ${escapeHtml(g.status || "")}">${escapeHtml(g.status || "—")}</span></td>
+        <td class="num">${fmtNum(g.creditsUsed, 1)}</td>
+        <td style="white-space:normal;min-width:240px">${escapeHtml(String(g.errorMessage || "—"))}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="6" class="loading">No failed generations. 🎉</td></tr>`;
+
+  const giftsBody = giftList.length
+    ? giftList.map((g) => `<tr>
+        ${dateCell(g.createdAt)}
+        <td><span class="badge ${g.direction === "sent" ? "pending" : "active"}">${g.direction === "sent" ? "Sent" : "Received"}</span></td>
+        <td class="rowClickable" tabindex="0" role="link" data-user-view="${escapeHtml(g.otherUserId || "")}" data-return-view="user"><strong>${escapeHtml(g.otherName || "—")}</strong><br><span class="cellMuted">${escapeHtml(g.otherEmail || "")}</span></td>
+        <td class="num">${g.direction === "sent" ? "−" : "+"}${fmtNum(g.amount, 1)}</td>
+        <td>${escapeHtml(g.targetKind || "—")}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="5" class="loading">No gifts sent or received.</td></tr>`;
+
+  const tl = [];
+  if (u.signupAt) tl.push({ t: u.signupAt, type: "account", title: "Signed up", detail: fmtSignupPlatform(u.signupPlatform) || "" });
+  for (const ev of billingRows) {
+    tl.push({
+      t: ev.createdAt, type: "billing", title: ev.eventTypeLabel || ev.eventType || "Billing event",
+      detail: [ev.planId, ev.provider].filter(Boolean).join(" · "),
+      amount: ev.creditsGranted > 0 ? `+${fmtNum(ev.creditsGranted, 0)}` : "",
+    });
+  }
+  for (const row of ledgerRows) {
+    tl.push({
+      t: row.createdAt, type: "credits", title: fmtReason(row.reason),
+      detail: `balance ${fmtNum(row.balanceAfter, 1)}`,
+      amount: `${row.delta >= 0 ? "+" : ""}${fmtNum(row.delta, 1)}`,
+    });
+  }
+  for (const g of genRows) {
+    const failed = String(g.status || "").toLowerCase() === "failed";
+    tl.push({
+      t: g.createdAt, type: failed ? "errors" : "generations",
+      title: `${g.kind || "Generation"} · ${g.status || "—"}`,
+      detail: String(g.errorMessage || "").slice(0, 120),
+      amount: g.creditsUsed ? `−${fmtNum(g.creditsUsed, 1)}` : "",
+      genId: g.id,
+    });
+  }
+  for (const g of giftList) {
+    tl.push({
+      t: g.createdAt, type: "gifts",
+      title: g.direction === "sent" ? `Gift sent to ${g.otherName}` : `Gift received from ${g.otherName}`,
+      detail: g.targetKind || "",
+      amount: `${g.direction === "sent" ? "−" : "+"}${fmtNum(g.amount, 1)}`,
+    });
+  }
+  for (const sg of songRows) tl.push({ t: sg.createdAt, type: "songs", title: `Saved song: ${sg.title || "Untitled"}`, detail: sg.publicOnProfile ? "public" : "" });
+  tl.sort((a, b) => String(b.t || "").localeCompare(String(a.t || "")));
+  const tlFilter = state.userTimelineFilter || "all";
+  const tlShown = tl.filter((x) => tlFilter === "all" || x.type === tlFilter).slice(0, 300);
+  const tlBody = tlShown.length
+    ? tlShown.map((x) => `<tr${x.genId ? ` class="rowClickable" tabindex="0" role="link" data-generation-view="${escapeHtml(x.genId)}" data-return-view="user"` : ""}>
+        ${dateCell(x.t)}
+        <td><span class="badge ${x.type === "errors" ? "failed" : x.type === "billing" ? "active" : ""}">${escapeHtml(x.type)}</span></td>
+        <td>${escapeHtml(x.title || "")}</td>
+        <td class="cellMuted">${escapeHtml(x.detail || "")}</td>
+        <td class="num">${escapeHtml(x.amount || "")}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="5" class="loading">Nothing here yet.</td></tr>`;
+  const tlCounts = {};
+  for (const x of tl) tlCounts[x.type] = (tlCounts[x.type] || 0) + 1;
+  tlCounts.all = tl.length;
+
+  const userTab = state.userTab || "overview";
+  const tabs = filterPillsHtml("user-tab", [
+    ["overview", "Overview"],
+    ["timeline", "Timeline"],
+    ["credits", "Credits"],
+    ["generations", "Generations"],
+    ["errors", "Errors"],
+    ["gifts", "Gifts"],
+    ["billing", "Billing"],
+    ["songs", "Songs"],
+  ], userTab, {
+    credits: ledgerRows.length,
+    generations: genRows.length,
+    errors: errorList.length,
+    gifts: giftList.length,
+    billing: billingRows.length,
+    songs: songRows.length,
+  });
+
+  const sec = {
+    overview: `
     ${listSection({
       title: "Credits — as the user sees them",
       note: "Mirrors the Credits screen in the app. Rows always add up to the total.",
@@ -3047,32 +3134,68 @@ function renderUserDetail(data) {
       title: "Gifts received (dated lots)",
       note: "Gifts received from 3 Oct 2026 expire 30 days after receipt.",
       tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr><th>Received</th><th>Amount</th><th>Remaining</th><th>Expires</th><th>Status</th></tr></thead><tbody>${lotsBody}</tbody></table></div>`,
-    })}
-    ${listSection({
-      title: "Billing events",
-      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>
-        <th>When</th><th>Event</th><th>Provider</th><th>Plan</th><th>Credits</th><th>Txn</th>
-      </tr></thead><tbody>${billingBody}</tbody></table></div>`,
-    })}
-    ${listSection({
+    })}`,
+    timeline: listSection({
+      title: "Timeline",
+      note: "Everything for this user, newest first (latest 300).",
+      extraHtml: filterPillsHtml("timeline-filter", [
+        ["all", "All"], ["billing", "Billing"], ["credits", "Credits"], ["generations", "Generations"],
+        ["errors", "Errors"], ["gifts", "Gifts"], ["songs", "Songs"], ["account", "Account"],
+      ], tlFilter, tlCounts),
+      tableHtml: tableOf("<th>When</th><th>Type</th><th>What</th><th>Detail</th><th>Credits</th>", tlBody),
+    }),
+    credits: listSection({
       title: "Credit ledger",
-      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>
-        <th>When</th><th>Delta</th><th>Balance</th><th>Reason</th><th>Ref</th>
-      </tr></thead><tbody>${ledgerBody}</tbody></table></div>`,
-    })}
-    ${listSection({
-      title: "Recent generations",
-      note: "Click a row for full details.",
-      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>
-        <th>When</th><th>Kind</th><th>Status</th><th>Reason</th><th>Credits</th>
-      </tr></thead><tbody>${genBody}</tbody></table></div>`,
-    })}
-    ${listSection({
+      note: "Latest 150 credit movements.",
+      tableHtml: tableOf("<th>When</th><th>Delta</th><th>Balance</th><th>Reason</th><th>Ref</th>", ledgerBody),
+    }),
+    generations: listSection({
+      title: "Generations",
+      note: "Latest 150. Click a row for full details.",
+      tableHtml: tableOf("<th>When</th><th>Kind</th><th>Status</th><th>Reason</th><th>Credits</th>", genBody),
+    }),
+    errors: listSection({
+      title: "Errors this user hit",
+      note: "Failed generations and any with an error message. Click a row to open it.",
+      tableHtml: tableOf("<th>When</th><th>Kind</th><th>Provider</th><th>Status</th><th>Credits</th><th>Error</th>", errorsBody),
+    }),
+    gifts: listSection({
+      title: "Gifts sent and received",
+      note: "Latest 100.",
+      tableHtml: tableOf("<th>When</th><th>Direction</th><th>Other user</th><th>Amount</th><th>On</th>", giftsBody),
+    }),
+    billing: listSection({
+      title: "Billing events",
+      note: "Latest 100.",
+      tableHtml: tableOf("<th>When</th><th>Event</th><th>Provider</th><th>Plan</th><th>Credits</th><th>Txn</th>", billingBody),
+    }),
+    songs: listSection({
       title: "Saved songs",
-      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>
-        <th>Title</th><th>Public</th><th>Created</th>
-      </tr></thead><tbody>${songBody}</tbody></table></div>`,
-    })}
+      tableHtml: tableOf("<th>Title</th><th>Public</th><th>Created</th>", songBody),
+    }),
+  };
+
+  panel.innerHTML = adminPageStack(`
+    <div class="detailHero">
+      <div class="userDetailToolbar">
+        <button type="button" class="btnGhost" id="btnUserDetailBack">← Back</button>
+        <div class="userDetailActions">${grantBtn}</div>
+      </div>
+      ${sandboxBanner}
+      <div class="detailHeroMain">
+        <h3 class="detailHeroTitle">${escapeHtml(u.name)} ${u.username ? `<span class="detailHeroMuted">@${escapeHtml(u.username)}</span>` : ""}</h3>
+        <p class="detailHeroSub">${escapeHtml(u.email || "No email")}</p>
+      </div>
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Total credits", fmtNum(cr.balance, 1), `Giftable ${fmtNum(cr.giftable, 1)} · details below`)}
+        ${statCard("Signup", fmtDateCompact(u.signupAt), fmtSignupPlatform(u.signupPlatform))}
+        ${statCard("Last active", fmtDateCompact(u.lastActiveAt), u.role ? `Role ${u.role}` : "")}
+        ${statCard("Songs saved", fmtNum(songRows.length), insights.billingEventCount ? `${fmtNum(insights.billingEventCount)} billing events` : "")}
+      </div>
+      ${supportEmailBlock}
+    </div>
+    ${tabs}
+    ${sec[userTab] || sec.overview}
   `, { plain: true });
 
   els.pageTitle.textContent = u.name || "User detail";
@@ -7432,6 +7555,22 @@ document.body.addEventListener("click", (e) => {
       supportEmailOpen.dataset.supportEmailOpen,
       supportEmailOpen.dataset.supportEmailTemplate || "",
     );
+    return;
+  }
+
+  const userTabBtn = e.target.closest("[data-user-tab]");
+  if (userTabBtn) {
+    e.preventDefault();
+    state.userTab = String(userTabBtn.dataset.userTab || "overview");
+    if (state.userDetailData) renderUserDetail(state.userDetailData);
+    return;
+  }
+
+  const timelineFilterBtn = e.target.closest("[data-timeline-filter]");
+  if (timelineFilterBtn) {
+    e.preventDefault();
+    state.userTimelineFilter = String(timelineFilterBtn.dataset.timelineFilter || "all");
+    if (state.userDetailData) renderUserDetail(state.userDetailData);
     return;
   }
 

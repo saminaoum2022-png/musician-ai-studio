@@ -18,6 +18,7 @@ const { fetchProfileRole } = require("../_lib/admin-auth");
 const { fetchProSubscriptionForUser } = require("../_lib/pro-subscription");
 const { grantSignupWelcomeCreditsIfNeeded, WELCOME_CREDITS, readSignupPlatform } = require("../_lib/signup-welcome-credits");
 const { ensureProfileRow } = require("../_lib/ensure-profile-row");
+const { displayCreditBuckets } = require("../_lib/credit-display");
 const { GIFT_DAILY_LIMIT, GIFT_RECIPIENT_DAILY_LIMIT, GIFT_EXPIRY_DAYS } = require("../_lib/gift-config");
 
 module.exports = async function handler(req, res) {
@@ -87,6 +88,16 @@ module.exports = async function handler(req, res) {
   const trialBalance = row && row.trial_balance != null ? Number(row.trial_balance || 0) : 0;
   const bucketsReady = paidBalance != null && giftBalance != null && promoBalance != null;
   const ledger = Array.isArray(ledgerRes.data) ? ledgerRes.data : [];
+  // Rows shown on the Credits screen always add up to `balance` (see credit-display.js).
+  const shown = bucketsReady
+    ? displayCreditBuckets({
+        balance,
+        included: proIncludedBalance,
+        gift: giftBalance,
+        promo: promoBalance,
+        trial: trialBalance,
+      })
+    : null;
   const pro = await fetchProSubscriptionForUser(user.userId);
   const role = await fetchProfileRole(user.userId);
   const isAdmin = role === "admin" || isAdminEmail(user.email);
@@ -95,11 +106,11 @@ module.exports = async function handler(req, res) {
   return sendJson(res, 200, {
     ok: true,
     balance,
-    paidBalance: bucketsReady ? paidBalance : balance,
-    giftBalance: bucketsReady ? giftBalance : 0,
-    promoBalance: bucketsReady ? promoBalance : 0,
-    trialBalance: bucketsReady ? trialBalance : 0,
-    proIncludedBalance,
+    paidBalance: shown ? shown.paidBalance : balance,
+    giftBalance: shown ? shown.giftBalance : 0,
+    promoBalance: shown ? shown.promoBalance : 0,
+    trialBalance: shown ? shown.trialBalance : 0,
+    proIncludedBalance: shown ? shown.proIncludedBalance : proIncludedBalance,
     // Included Pro + paid + promo are giftable; received gifts and trial credits are not.
     giftableBalance: bucketsReady ? Math.min(balance, paidBalance + promoBalance + proIncludedBalance) : 0,
     giftLots,

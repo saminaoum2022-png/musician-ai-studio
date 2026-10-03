@@ -34529,6 +34529,7 @@ const creditsState = {
   promoBalance: 0,
   giftableBalance: 0,
   proIncludedBalance: 0,
+  trialBalance: 0,
   giftLots: [],
   giftSentLast24h: 0,
   giftDailyLimit: 25,
@@ -35044,6 +35045,14 @@ function renderCreditsBreakdown() {
   const giftEl = document.getElementById("creditsGiftValue");
   const promoEl = document.getElementById("creditsPromoValue");
   if (paidEl) paidEl.textContent = formatCreditsAmount(creditsState.paidBalance);
+  // Saved credits and Free trial only show while there is something in them.
+  const paidRow = document.getElementById("creditsPaidRow");
+  if (paidRow) paidRow.hidden = !(Number(creditsState.paidBalance || 0) > 0);
+  const trialRow = document.getElementById("creditsTrialRow");
+  const trialEl = document.getElementById("creditsTrialValue");
+  const trial = Number(creditsState.trialBalance || 0);
+  if (trialRow) trialRow.hidden = !(trial > 0);
+  if (trialEl) trialEl.textContent = formatCreditsAmount(trial);
   if (giftEl) giftEl.textContent = formatCreditsAmount(creditsState.giftBalance);
   if (promoEl) promoEl.textContent = formatCreditsAmount(creditsState.promoBalance);
 
@@ -35207,6 +35216,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     creditsState.promoBalance = Number(d?.promoBalance ?? 0);
     creditsState.giftableBalance = Number(d?.giftableBalance ?? d?.paidBalance ?? 0);
     creditsState.proIncludedBalance = Number(d?.proIncludedBalance ?? 0);
+    creditsState.trialBalance = Number(d?.trialBalance ?? 0);
     creditsState.giftLots = Array.isArray(d?.giftLots) ? d.giftLots : [];
     creditsState.giftSentLast24h = Number(d?.giftSentLast24h ?? 0);
     creditsState.giftDailyLimit = Number(d?.giftDailyLimit ?? 25);
@@ -35946,6 +35956,7 @@ function resetProfileUiToGuest() {
   creditsState.promoBalance = 0;
   creditsState.giftableBalance = 0;
   creditsState.proIncludedBalance = 0;
+  creditsState.trialBalance = 0;
   creditsState.giftLots = [];
   creditsState.giftSentLast24h = 0;
   creditsState.bucketsReady = false;

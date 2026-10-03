@@ -3715,7 +3715,7 @@
 
           <section id="creditsBreakdown" class="creditsKinds" hidden aria-labelledby="creditsKindsKicker">
             <h3 class="creditsSectionKicker" id="creditsKindsKicker">Where they come from</h3>
-            <p class="creditsKindsLead">Included Pro credits spend first, then gifts, then promo, then paid. Included credits refresh each billing period and unused ones do not carry over; gifts you receive expire 30 days after you get them (<a href="/terms.html">Terms</a>).</p>
+            <p class="creditsKindsLead">Included Pro credits spend first, then gifts, promo, your free trial, and saved credits. Included credits refresh each billing period and unused ones do not carry over; gifts you receive expire 30 days after you get them (<a href="/terms.html">Terms</a>).</p>
             <div class="creditsKindsList">
               <div class="creditsKind" id="creditsIncludedRow" hidden title="Included with your Pro plan — can gift and create. Refreshes each billing period; unused credits do not carry over.">
                 <div class="creditsKindCopy">
@@ -3724,10 +3724,17 @@
                 </div>
                 <span class="creditsKindValue" id="creditsIncludedValue">0</span>
               </div>
-              <div class="creditsKind" title="Credits that do not expire — can gift and create.">
+              <div class="creditsKind" id="creditsTrialRow" hidden title="From your free trial — can create, not giftable. Best used while your trial is active.">
                 <div class="creditsKindCopy">
-                  <strong>Paid</strong>
-                  <span>Yours to spend or gift</span>
+                  <strong>Free trial</strong>
+                  <span>Best used soon · create only</span>
+                </div>
+                <span class="creditsKindValue" id="creditsTrialValue">0</span>
+              </div>
+              <div class="creditsKind" id="creditsPaidRow" title="Credits carried over from your earlier plan — can gift and create.">
+                <div class="creditsKindCopy">
+                  <strong>Saved credits</strong>
+                  <span>Carried over · best used soon</span>
                 </div>
                 <span class="creditsKindValue" id="creditsPaidValue">0</span>
               </div>

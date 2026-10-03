@@ -591,6 +591,18 @@ async function serviceFetch(path, { method = "GET", body } = {}) {
   }
 }
 
+/** Page through a PostgREST query (the API caps a single response, so we read in chunks). `path` must not contain limit/offset. */
+async function serviceFetchAll(path, { pageSize = 1000, maxRows = 20000 } = {}) {
+  const rows = [];
+  for (let offset = 0; offset < maxRows; offset += pageSize) {
+    const res = await serviceFetch(`${path}&limit=${pageSize}&offset=${offset}`);
+    if (!res.ok || !Array.isArray(res.data)) break;
+    rows.push(...res.data);
+    if (res.data.length < pageSize) return { rows, truncated: false };
+  }
+  return { rows, truncated: rows.length >= maxRows };
+}
+
 async function fetchSunoMasterBalance() {
   const apiKey = process.env.SUNO_API_KEY;
   if (!apiKey) return null;
@@ -1855,9 +1867,151 @@ async function getCredits(limit, offset) {
         lastGiftAt: p.last_gift_at,
       }));
     }
+    const pairKey = new Set(giftPairs.map((p) => `${p.senderUserId}>${p.recipientUserId}`));
+    for (const p of giftPairs) p.loop = pairKey.has(`${p.recipientUserId}>${p.senderUserId}`);
   } catch {}
 
-  return { transactions, total, giftPairs };
+  // Top gifters over the last 7 days (who sends the most, and to how many different people).
+  let topGifters = [];
+  try {
+    const since7 = new Date(Date.now() - 7 * 86400000).toISOString();
+    const { rows: ge } = await serviceFetchAll(
+      `gift_events?select=sender_user_id,recipient_user_id,amount&created_at=gte.${encodeURIComponent(since7)}&order=created_at.desc`,
+      { maxRows: 10000 },
+    );
+    const by = new Map();
+    for (const g of ge) {
+      const id = String(g.sender_user_id || "");
+      if (!id) continue;
+      const cur = by.get(id) || { userId: id, gifts: 0, credits: 0, recipients: new Set() };
+      cur.gifts += 1;
+      cur.credits += Number(g.amount || 0);
+      cur.recipients.add(String(g.recipient_user_id || ""));
+      by.set(id, cur);
+    }
+    const top = [...by.values()].sort((a, b) => b.credits - a.credits).slice(0, 10);
+    if (top.length) {
+      const inTop = top.map((t) => encodeURIComponent(t.userId)).join(",");
+      const prof = await serviceFetch(`profiles?select=user_id,username,display_name&user_id=in.(${inTop})`);
+      const names = new Map((Array.isArray(prof.data) ? prof.data : []).map((p) => [p.user_id, p]));
+      topGifters = top.map((t) => {
+        const p = names.get(t.userId) || {};
+        return {
+          userId: t.userId,
+          name: p.username ? `@${p.username}` : (p.display_name || t.userId),
+          gifts: t.gifts,
+          credits: Math.round(t.credits * 100) / 100,
+          recipients: t.recipients.size,
+        };
+      });
+    }
+  } catch {}
+
+  return { transactions, total, giftPairs, topGifters };
+}
+
+/**
+ * Leaderboards for the Users page ("Top users"): best generators and VIP clients.
+ * Activity is counted from real actions (generations + credit spends) because the app only stores
+ * each user's LAST active time, not one record per day.
+ */
+async function getTopUsers(windowDaysInput) {
+  const windowDays = [7, 30, 90].includes(Number(windowDaysInput)) ? Number(windowDaysInput) : 30;
+  const sinceIso = new Date(Date.now() - windowDays * 86400000).toISOString();
+  const enc = encodeURIComponent(sinceIso);
+  const [gensAll, spendAll] = await Promise.all([
+    serviceFetchAll(`music_generation_logs?select=user_id,status,credits_used,created_at&created_at=gte.${enc}&order=created_at.desc`),
+    serviceFetchAll(`credits_transactions?select=user_id,delta,created_at&delta=lt.0&created_at=gte.${enc}&order=created_at.desc`),
+  ]);
+
+  const stats = new Map();
+  const touch = (id) => {
+    let cur = stats.get(id);
+    if (!cur) {
+      cur = { userId: id, songs: 0, failed: 0, spent: 0, days: new Set() };
+      stats.set(id, cur);
+    }
+    return cur;
+  };
+  const dayOf = (iso) => String(iso || "").slice(0, 10);
+  for (const g of gensAll.rows) {
+    if (!g.user_id) continue;
+    const cur = touch(String(g.user_id));
+    const st = String(g.status || "").toLowerCase();
+    if (st === "failed") cur.failed += 1;
+    else if (st === "completed" || st === "success" || st === "succeeded") cur.songs += 1;
+    if (g.created_at) cur.days.add(dayOf(g.created_at));
+  }
+  for (const t of spendAll.rows) {
+    if (!t.user_id) continue;
+    const cur = touch(String(t.user_id));
+    cur.spent += Math.abs(Number(t.delta || 0));
+    if (t.created_at) cur.days.add(dayOf(t.created_at));
+  }
+
+  const candidates = [...stats.values()];
+  const byGenerators = [...candidates].sort((a, b) => b.songs - a.songs || b.spent - a.spent).slice(0, 60);
+  const byActivity = [...candidates].sort((a, b) => b.days.size - a.days.size || b.songs - a.songs).slice(0, 60);
+  const ids = [...new Set([...byGenerators, ...byActivity].map((c) => c.userId))];
+  if (!ids.length) {
+    return { mode: "top", windowDays, generators: [], vip: [], truncated: false };
+  }
+
+  const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
+  const [profRes, subsRes, authMap] = await Promise.all([
+    serviceFetch(`profiles?select=user_id,username,display_name,role,last_active_at,created_at&user_id=in.(${inClause})&limit=200`),
+    serviceFetch(`pro_subscriptions?select=user_id,plan_id,status&user_id=in.(${inClause})&limit=200`),
+    fetchAuthUsersMap(),
+  ]);
+  const profs = new Map((Array.isArray(profRes.data) ? profRes.data : []).map((p) => [p.user_id, p]));
+  const subs = new Map((Array.isArray(subsRes.data) ? subsRes.data : []).map((p) => [p.user_id, p]));
+
+  const decorate = (c) => {
+    const p = profs.get(c.userId) || {};
+    const sub = subs.get(c.userId);
+    const live = sub && ["active", "trialing", "grace"].includes(String(sub.status || "").toLowerCase());
+    const signupMs = Date.parse(String((authMap.get(c.userId) || {}).signupAt || p.created_at || ""));
+    const tenureDays = Number.isFinite(signupMs) ? Math.max(0, (Date.now() - signupMs) / 86400000) : 0;
+    // VIP score (0-100): showing up (40) + making songs (25) + paying (25) + tenure (10).
+    const partActive = Math.min(c.days.size / windowDays, 1) * 40;
+    const partSongs = Math.min(c.songs / windowDays, 1) * 25;
+    const partPaying = live ? (String(sub.status).toLowerCase() === "trialing" ? 10 : 25) : 0;
+    const partTenure = Math.min(tenureDays / 60, 1) * 10;
+    return {
+      userId: c.userId,
+      name: String(p.display_name || p.username || "—"),
+      username: p.username || "",
+      email: (authMap.get(c.userId) || {}).email || "",
+      role: p.role || "user",
+      plan: live ? `${sub.plan_id || "pro"}${String(sub.status).toLowerCase() === "trialing" ? " (trial)" : ""}` : "",
+      songs: c.songs,
+      failed: c.failed,
+      creditsSpent: Math.round(c.spent * 10) / 10,
+      activeDays: c.days.size,
+      lastActiveAt: p.last_active_at || null,
+      score: Math.round(partActive + partSongs + partPaying + partTenure),
+      scoreParts: {
+        showingUp: Math.round(partActive),
+        songs: Math.round(partSongs),
+        paying: Math.round(partPaying),
+        tenure: Math.round(partTenure),
+      },
+    };
+  };
+  const isMember = (u) => !u.role || u.role === "user";
+  const generators = byGenerators.map(decorate).filter(isMember).slice(0, 25);
+  const vip = [...new Map([...byGenerators, ...byActivity].map((c) => [c.userId, c])).values()]
+    .map(decorate)
+    .filter(isMember)
+    .sort((a, b) => b.score - a.score || b.songs - a.songs)
+    .slice(0, 25);
+  return {
+    mode: "top",
+    windowDays,
+    generators,
+    vip,
+    truncated: Boolean(gensAll.truncated || spendAll.truncated),
+  };
 }
 
 function inferGenerationKind(kind, requestDetail = "", prompt = "", ctx = {}) {
@@ -3445,7 +3599,11 @@ module.exports = async function handler(req, res) {
     if (view === "overview") {
       payload.overview = await getOverview();
     } else if (view === "users") {
-      payload = { ...payload, ...(await getUsers(limit, offset, search, String(url.searchParams.get("filter") || "").trim().toLowerCase())) };
+      if (String(url.searchParams.get("mode") || "") === "top") {
+        payload = { ...payload, ...(await getTopUsers(url.searchParams.get("window"))) };
+      } else {
+        payload = { ...payload, ...(await getUsers(limit, offset, search, String(url.searchParams.get("filter") || "").trim().toLowerCase())) };
+      }
     } else if (view === "credits") {
       payload = { ...payload, ...(await getCredits(limit, offset)) };
     } else if (view === "generations") {

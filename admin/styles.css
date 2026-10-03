@@ -3347,3 +3347,12 @@ tr.singerRowClickable.isNew td {
   color: var(--warn);
 }
 
+
+/* Top users bar chart */
+.topBars { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 16px; }
+.topBarRow { display: grid; grid-template-columns: minmax(120px, 220px) 1fr 56px; gap: 12px; align-items: center; cursor: pointer; }
+.topBarRow:hover .topBarFill { filter: brightness(1.15); }
+.topBarLabel { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topBarTrack { height: 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+.topBarFill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #60a5fa, #a78bfa); }
+.topBarValue { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }

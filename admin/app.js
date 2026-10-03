@@ -23,6 +23,9 @@ const state = {
   offset: 0,
   userSearch: "",
   userFilter: "all",
+  usersMode: "directory",
+  topWindow: 30,
+  topView: "generators",
   userTab: "overview",
   userTimelineFilter: "all",
   userDetailData: null,
@@ -598,6 +601,8 @@ async function adminFetch(view, {
   limit = PAGE_SIZE,
   search = "",
   filter = "",
+  mode = "",
+  windowDays = 0,
   userId = "",
   generationId = "",
   generationFilters = null,
@@ -611,6 +616,8 @@ async function adminFetch(view, {
   const trimmedSearch = String(search || "").trim();
   if (trimmedSearch.length >= 2) qs.set("search", trimmedSearch);
   if (filter) qs.set("filter", String(filter));
+  if (mode) qs.set("mode", String(mode));
+  if (windowDays) qs.set("window", String(windowDays));
   const trimmedUserId = String(userId || "").trim();
   if (trimmedUserId) qs.set("userId", trimmedUserId);
   const trimmedGenerationId = String(generationId || "").trim();
@@ -1500,7 +1507,7 @@ function viewCacheKey() {
     key += `:${state.userSearch.trim().toLowerCase()}`;
   }
   if (state.view === "users") {
-    key += `:f:${state.userFilter || "all"}`;
+    key += `:f:${state.userFilter || "all"}:m:${state.usersMode || "directory"}:w:${state.topWindow}`;
   }
   if (state.view === "subscriptions") {
     key += `:f:${state.subFilter || "active"}:${state.subSearch.trim().toLowerCase()}`;
@@ -3416,7 +3423,58 @@ function renderGenerationDetail(data) {
   els.pageSub.textContent = g.userLabel || g.email || VIEW_META.generation.sub;
 }
 
+function usersModePills() {
+  return filterPillsHtml("users-mode", [["directory", "Directory"], ["top", "Top users"]], state.usersMode || "directory");
+}
+
+function renderTopUsers(data) {
+  const view = state.topView === "vip" ? "vip" : "generators";
+  const rows = (view === "vip" ? data.vip : data.generators) || [];
+  const metric = (r) => (view === "vip" ? r.score : r.songs);
+  const barsTop = rows.slice(0, 10);
+  const max = Math.max(1, ...barsTop.map(metric));
+  const bars = barsTop.length
+    ? barsTop.map((r) => `<div class="topBarRow" data-user-view="${escapeHtml(r.userId)}" data-return-view="users" role="link" tabindex="0">
+        <span class="topBarLabel">${escapeHtml(r.name)}${r.plan ? ` <span class="badge grandfathered">${escapeHtml(r.plan)}</span>` : ""}</span>
+        <span class="topBarTrack"><span class="topBarFill" style="width:${Math.max(3, Math.round((metric(r) / max) * 100))}%"></span></span>
+        <span class="topBarValue">${fmtNum(metric(r))}</span>
+      </div>`).join("")
+    : `<p class="sectionNote">No activity in this window yet.</p>`;
+  const body = rows.length
+    ? rows.map((r, i) => `<tr class="rowClickable" tabindex="0" role="link" data-user-view="${escapeHtml(r.userId)}" data-return-view="users">
+        <td class="num">${i + 1}</td>
+        <td><strong>${escapeHtml(r.name)}</strong> <span class="cellMuted">${r.username ? "@" + escapeHtml(r.username) : ""}</span><br><span class="cellMuted">${escapeHtml(r.email || "")}</span></td>
+        <td>${r.plan ? `<span class="badge active">${escapeHtml(r.plan)}</span>` : `<span class="cellMuted">free</span>`}</td>
+        ${view === "vip" ? `<td class="num" title="Showing up ${r.scoreParts.showingUp}/40 · Songs ${r.scoreParts.songs}/25 · Paying ${r.scoreParts.paying}/25 · Tenure ${r.scoreParts.tenure}/10"><strong>${fmtNum(r.score)}</strong></td>` : ""}
+        <td class="num">${fmtNum(r.activeDays)} / ${fmtNum(data.windowDays)}</td>
+        <td class="num">${fmtNum(r.songs)}</td>
+        <td class="num">${r.failed ? `<span class="deltaNeg">${fmtNum(r.failed)}</span>` : "0"}</td>
+        <td class="num">${fmtNum(r.creditsSpent, 1)}</td>
+        ${dateCell(r.lastActiveAt)}
+      </tr>`).join("")
+    : `<tr><td colspan="9" class="loading">No activity in this window yet.</td></tr>`;
+  const windowPills = `<div class="mailFilterPills" style="margin:0 12px 12px 0">${[7, 30, 90].map((d) =>
+    `<button type="button" class="mailFilterPill${data.windowDays === d ? " isActive" : ""}" data-top-window="${d}">${d} days</button>`).join("")}</div>`;
+  const viewPills = filterPillsHtml("top-view", [["generators", "Best generators"], ["vip", "VIP clients"]], view);
+  els.panels.users.innerHTML = adminPageStack(`
+    ${usersModePills()}
+    <div style="display:flex;flex-wrap:wrap;align-items:flex-start">${windowPills}${viewPills}</div>
+    ${listSection({
+      title: view === "vip" ? `VIP clients — last ${data.windowDays} days` : `Best generators — last ${data.windowDays} days`,
+      note: view === "vip"
+        ? "Score out of 100: showing up (40) + making songs (25) + paying (25) + membership length (10). Hover a score for its breakdown. Admins and team accounts are excluded."
+        : "Ranked by completed songs. Admins and team accounts are excluded.",
+      extraHtml: `<div class="topBars">${bars}</div>${data.truncated ? `<p class="sectionNote">Very large window: based on the latest 20,000 records.</p>` : ""}`,
+      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>
+        <th>#</th><th>User</th><th>Plan</th>${view === "vip" ? "<th>Score</th>" : ""}<th>Active days</th><th>Songs</th><th>Failed</th><th>Credits spent</th><th>Last active</th>
+      </tr></thead><tbody>${body}</tbody></table></div>`,
+    })}
+    <p class="sectionNote">"Active days" counts days with a real action (a generation or a credit spend). Users who only listen are not counted.</p>
+  `, { plain: true });
+}
+
 function renderUsers(data) {
+  if (data?.mode === "top" && state.usersMode === "top") return renderTopUsers(data);
   const rows = data?.users || [];
   const total = data?.total || rows.length;
   const searchVal = state.userSearch || "";
@@ -3438,6 +3496,7 @@ function renderUsers(data) {
     : `<tr><td colspan="8" class="loading">${searchVal.trim().length >= 2 ? "No users match your search." : "No users yet"}</td></tr>`;
 
   els.panels.users.innerHTML = adminPageStack(`
+    ${usersModePills()}
     <form id="userSearchForm" class="toolbarRow userSearchForm">
       <label class="field grantField userSearchField">
         <span>Search users</span>
@@ -3771,6 +3830,37 @@ function renderCredits(data) {
     }).join("")
     : `<tr><td colspan="7" class="loading">No transactions yet — run supabase/admin_dashboard.sql</td></tr>`;
 
+  const pairs = Array.isArray(data?.giftPairs) ? data.giftPairs : [];
+  const gifters = Array.isArray(data?.topGifters) ? data.topGifters : [];
+  const userLink = (id, label) => `<span class="cellLink" data-user-view="${escapeHtml(id)}" data-return-view="credits" role="link" tabindex="0"><strong>${escapeHtml(label)}</strong></span>`;
+  const pairsBody = pairs.length
+    ? pairs.map((p) => `<tr>
+        <td>${userLink(p.senderUserId, p.sender)} → ${userLink(p.recipientUserId, p.recipient)}</td>
+        <td class="num">${fmtNum(p.gifts)}</td>
+        <td class="num"><strong>${fmtNum(p.credits, 1)}</strong></td>
+        <td>${p.loop ? `<span class="badge failed" title="They also gift each other back">back-and-forth</span>` : `<span class="badge pending">one way</span>`}</td>
+        ${dateCell(p.lastGiftAt)}
+      </tr>`).join("")
+    : `<tr><td colspan="5" class="loading">No repeated gifting between the same two accounts in the last 7 days. ✅</td></tr>`;
+  const giftersBody = gifters.length
+    ? gifters.map((g) => `<tr>
+        <td>${userLink(g.userId, g.name)}</td>
+        <td class="num">${fmtNum(g.gifts)}</td>
+        <td class="num"><strong>${fmtNum(g.credits, 1)}</strong></td>
+        <td class="num">${fmtNum(g.recipients)}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="4" class="loading">No gifts sent in the last 7 days.</td></tr>`;
+  const giftWatch = `
+    ${listSection({
+      title: "Gift watch — repeated pairs (7 days)",
+      note: "Two accounts that moved 30+ credits between them. “Back-and-forth” can mean credits being passed around; check the accounts before acting.",
+      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr><th>Sender → Recipient</th><th>Gifts</th><th>Credits</th><th>Pattern</th><th>Last gift</th></tr></thead><tbody>${pairsBody}</tbody></table></div>`,
+    })}
+    ${listSection({
+      title: "Top gifters (7 days)",
+      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr><th>User</th><th>Gifts</th><th>Credits</th><th>Different people</th></tr></thead><tbody>${giftersBody}</tbody></table></div>`,
+    })}`;
+
   els.panels.credits.innerHTML = adminPageStack(`
     ${state.adminSession?.canGrantCredits ? `
     <div class="toolbarBlock">
@@ -3810,6 +3900,7 @@ function renderCredits(data) {
       </form>
       <p id="adjustCreditsMsg" class="grantMsg" hidden></p>
     </div>` : ""}
+    ${giftWatch}
     ${listSection({
       title: "Credit ledger",
       tableHtml: `
@@ -6370,6 +6461,7 @@ function setView(view) {
   if (view !== "users") {
     state.userSearch = "";
     state.userFilter = "all";
+    state.usersMode = "directory";
   }
   if (view !== "subscriptions") {
     state.subSearch = "";
@@ -6830,6 +6922,8 @@ async function loadView({ force = false } = {}) {
             : view === "subscriptions"
               ? state.subSearch
               : "",
+        mode: view === "users" && state.usersMode === "top" ? "top" : "",
+        windowDays: view === "users" && state.usersMode === "top" ? state.topWindow : 0,
         filter: view === "users"
           ? (state.userFilter === "all" ? "" : state.userFilter)
           : view === "subscriptions"
@@ -7555,6 +7649,33 @@ document.body.addEventListener("click", (e) => {
       supportEmailOpen.dataset.supportEmailOpen,
       supportEmailOpen.dataset.supportEmailTemplate || "",
     );
+    return;
+  }
+
+  const usersModeBtn = e.target.closest("[data-users-mode]");
+  if (usersModeBtn) {
+    e.preventDefault();
+    state.usersMode = usersModeBtn.dataset.usersMode === "top" ? "top" : "directory";
+    state.offset = 0;
+    void loadView({ force: true });
+    return;
+  }
+
+  const topWindowBtn = e.target.closest("[data-top-window]");
+  if (topWindowBtn) {
+    e.preventDefault();
+    state.topWindow = Number(topWindowBtn.dataset.topWindow) || 30;
+    void loadView({ force: true });
+    return;
+  }
+
+  const topViewBtn = e.target.closest("[data-top-view]");
+  if (topViewBtn) {
+    e.preventDefault();
+    state.topView = topViewBtn.dataset.topView === "vip" ? "vip" : "generators";
+    const cached = state.cache[viewCacheKey()];
+    if (cached) renderTopUsers(cached);
+    else void loadView({ force: true });
     return;
   }
 

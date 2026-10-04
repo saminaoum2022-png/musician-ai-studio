@@ -47453,6 +47453,30 @@ html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .fol
   padding: 4px 18px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
+.feedReplySheet--thread .feedReplySheetHead{
+  padding-left: 52px;
+}
+.feedReplySheetBack{
+  position: absolute;
+  top: -2px;
+  left: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(232, 238, 247, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.feedReplySheetBack[hidden]{ display: none !important; }
+.feedReplySheetBack:hover{
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
+}
 .feedReplySheetClose{
   position: absolute;
   top: -2px;
@@ -47853,6 +47877,41 @@ html[data-theme="light"] .upmBio .userHashtag{
 .feedReplyWhen{
   font-size: 12.5px;
   color: rgba(232, 238, 247, 0.48);
+}
+.feedReplyActs{
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 6px;
+}
+.feedReplyLike,
+.feedReplyReply,
+.feedReplyThread{
+  border: 0;
+  background: transparent;
+  color: rgba(154, 161, 182, 0.95);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.feedReplyLike svg{ display: block; }
+.feedReplyLike.isLiked{ color: #ff4d6d; }
+.feedReplyLike.isLiked svg path{ fill: currentColor; }
+.feedReplyReply:hover,
+.feedReplyThread:hover,
+.feedReplyLike:hover{ color: #fff; }
+.feedReplyLike.isLiked:hover{ color: #ff4d6d; }
+.feedReplyEmpty{
+  padding: 22px 18px 8px;
+  text-align: center;
+  color: rgba(154, 161, 182, 0.9);
+  font-size: 13px;
 }
 .feedReplyBody{
   margin: 0;
@@ -61117,10 +61176,20 @@ html[data-theme="light"] .feedReplySheetGrab{
 html[data-theme="light"] .feedReplySheetHead{
   border-bottom-color: var(--border);
 }
+html[data-theme="light"] .feedReplySheetBack,
 html[data-theme="light"] .feedReplySheetClose{
   border-color: var(--border);
   background: var(--surface-secondary);
   color: var(--text-secondary);
+}
+html[data-theme="light"] .feedReplyLike,
+html[data-theme="light"] .feedReplyReply,
+html[data-theme="light"] .feedReplyThread{
+  color: rgba(15, 23, 40, 0.55);
+}
+html[data-theme="light"] .feedReplyLike.isLiked,
+html[data-theme="light"] .feedReplyLike.isLiked:hover{
+  color: #e11d48;
 }
 html[data-theme="light"] .feedReplySheetClose:hover{
   background: var(--card);

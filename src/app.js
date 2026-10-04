@@ -22463,16 +22463,14 @@ function openFeedReplySheet({ targetKind, targetId, handle, sub }) {
   if (!sheet) return;
   bindFeedReplySheetOnce();
   wireFeedReplySheetKeyboardOnce();
-  _feedReplyContext = { targetKind, targetId };
-
-  const header = document.getElementById("feedReplyHeader");
-  const subEl = document.getElementById("feedReplySub");
-  if (header) header.textContent = handle ? `Reply to ${handle}` : "Replies";
-  if (subEl) {
-    subEl.textContent = sub
-      ? sub.slice(0, 200)
-      : "Tap a comment to mention them. Only mutual fans get notified.";
-  }
+  _feedReplyContext = {
+    targetKind,
+    targetId,
+    postHandle: handle || "",
+    postSub: sub || "",
+    thread: null,
+  };
+  paintFeedReplySheetChrome();
 
   const list = document.getElementById("feedReplyList");
   if (list) list.innerHTML = feedReplyListSkeletonHtml();
@@ -22500,6 +22498,9 @@ function closeFeedReplySheet() {
   if (!sheet) return;
   closeAllFeedReplyMenus();
   dismissFeedReplyKeyboard();
+  sheet.classList.remove("feedReplySheet--thread");
+  const back = document.getElementById("feedReplyBack");
+  if (back) back.hidden = true;
   sheet.setAttribute("aria-hidden", "true");
   applyFeedReplyKeyboardInset(0);
   window.setTimeout(() => {
@@ -22532,19 +22533,67 @@ async function loadFeedReplyList() {
     params.set("targetKind", ctx.targetKind);
     params.set("targetId", ctx.targetId);
     params.set("limit", "100");
+    if (ctx.thread?.replyId) params.set("parentReplyId", ctx.thread.replyId);
     const data = await socialApi(`/api/social?${params.toString()}`);
     if (!_feedReplyContext || _feedReplyContext.targetId !== ctx.targetId) return;
+    if (Boolean(_feedReplyContext.thread) !== Boolean(ctx.thread)) return;
     const replies = Array.isArray(data?.replies) ? data.replies : [];
-    list.innerHTML = replies.map((r) => feedReplyRowHtml(r)).join("");
-    // Update count in the underlying feed row optimistically.
-    setFeedSocialStat(ctx.targetKind, ctx.targetId, { replyCount: replies.length });
-    applyFeedSocialStatsToDom(document);
+    const parent = data?.parent || null;
+    const inThread = Boolean(ctx.thread);
+    const parts = [];
+    if (inThread && parent) parts.push(feedReplyRowHtml(parent, { isThreadRoot: true }));
+    parts.push(...replies.map((r) => feedReplyRowHtml(r, { inThread })));
+    if (!parts.length) {
+      list.innerHTML = `<div class="feedReplyEmpty">${inThread ? "No replies yet." : "No comments yet."}</div>`;
+    } else if (inThread && parts.length === 1) {
+      list.innerHTML = `${parts[0]}<div class="feedReplyEmpty">No replies yet.</div>`;
+    } else {
+      list.innerHTML = parts.join("");
+    }
+    if (!inThread) {
+      const total = Number(data?.count);
+      setFeedSocialStat(ctx.targetKind, ctx.targetId, {
+        replyCount: Number.isFinite(total) ? total : replies.length,
+      });
+      applyFeedSocialStatsToDom(document);
+    }
   } catch (e) {
     list.innerHTML = `<div style="padding:24px;text-align:center;color:rgba(255,100,130,0.85);font-size:13px;">${escapeHtml(e?.message || "Could not load replies.")}</div>`;
   }
 }
 
-function feedReplyRowHtml(reply) {
+function feedReplyLikeIconHtml() {
+  return `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true"><path d="M12 20 C11.2 19.3 10.2 18.4 9.2 17.5 C6.4 15.1 4.5 13.1 4.5 9.9 C4.5 7.3 6.3 5.5 8.8 5.5 C10.2 5.5 11.3 6.1 12 7.2 C12.7 6.1 13.8 5.5 15.2 5.5 C17.7 5.5 19.5 7.3 19.5 9.9 C19.5 13.1 17.6 15.1 14.8 17.5 C13.8 18.4 12.8 19.3 12 20Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+function feedReplyActionsHtml(reply, { inThread = false, isThreadRoot = false } = {}) {
+  const replyId = escapeHtml(String(reply?.id || ""));
+  const likes = Math.max(0, Number(reply?.likeCount) || 0);
+  const replies = Math.max(0, Number(reply?.replyCount) || 0);
+  const liked = Boolean(reply?.liked);
+  const likeCount = likes ? String(likes) : "";
+  const threadLabel = replies === 1 ? "1 reply" : `${replies} replies`;
+  const openThread = !inThread && !isThreadRoot;
+  const replyBtn = isThreadRoot
+    ? ""
+    : openThread
+      ? `<button type="button" class="feedReplyReply" data-feed-reply-thread="${replyId}" data-feed-reply-focus="1">Reply</button>`
+      : `<button type="button" class="feedReplyReply" data-feed-reply-mention="${replyId}">Reply</button>`;
+  const threadBtn = openThread && replies
+    ? `<button type="button" class="feedReplyThread" data-feed-reply-thread="${replyId}">${threadLabel}</button>`
+    : "";
+  return `
+    <div class="feedReplyActs">
+      <button type="button" class="feedReplyLike${liked ? " isLiked" : ""}" data-feed-reply-like="${replyId}" aria-pressed="${liked ? "true" : "false"}" aria-label="Like comment">
+        ${feedReplyLikeIconHtml()}
+        <span class="feedReplyLikeCount">${likeCount}</span>
+      </button>
+      ${replyBtn}
+      ${threadBtn}
+    </div>`;
+}
+
+function feedReplyRowHtml(reply, opts = {}) {
   const handle = String(reply?.username || "").trim();
   const replyProf = {
     user_id: reply?.userId,
@@ -22585,8 +22634,91 @@ function feedReplyRowHtml(reply) {
           ${menuHtml}
         </div>
         ${userTextWithMentionsHtml(bodyRaw, { tag: "p", className: "feedReplyBody", escapeHtml })}
+        ${feedReplyActionsHtml(reply, opts)}
       </div>
     </article>`;
+}
+
+function paintFeedReplySheetChrome() {
+  const ctx = _feedReplyContext;
+  const sheet = document.getElementById("feedReplySheet");
+  const back = document.getElementById("feedReplyBack");
+  const header = document.getElementById("feedReplyHeader");
+  const subEl = document.getElementById("feedReplySub");
+  const kicker = sheet?.querySelector(".feedReplySheetKicker");
+  const input = document.getElementById("feedReplyInput");
+  const thread = ctx?.thread || null;
+  const handle = String(thread?.handle || "").replace(/^@/, "");
+  sheet?.classList.toggle("feedReplySheet--thread", Boolean(thread));
+  if (back) back.hidden = !thread;
+  if (thread) {
+    if (kicker) kicker.textContent = "Thread";
+    if (header) header.textContent = handle ? `Reply to @${handle}` : "Thread";
+    if (subEl) subEl.textContent = String(thread.body || "").trim().slice(0, 160);
+    if (input) input.placeholder = handle ? `Reply to @${handle}` : "Reply";
+    return;
+  }
+  if (kicker) kicker.textContent = "Replies";
+  if (header) header.textContent = ctx?.postHandle ? `Reply to ${ctx.postHandle}` : "Replies";
+  if (subEl) {
+    subEl.textContent = ctx?.postSub
+      ? String(ctx.postSub).slice(0, 200)
+      : "Reply opens a thread on that comment.";
+  }
+  if (input) input.placeholder = "Post your reply";
+}
+
+function openFeedReplyThread(replyId, { focus = false } = {}) {
+  const ctx = _feedReplyContext;
+  const id = String(replyId || "").trim();
+  if (!ctx || !id) return;
+  const row = document.querySelector(`.feedReplyRow[data-feed-reply-id="${CSS.escape(id)}"]`);
+  const handle = String(row?.getAttribute("data-reply-handle") || "").trim().replace(/^@/, "");
+  const body = String(row?.querySelector(".feedReplyBody")?.textContent || "").trim();
+  ctx.thread = { replyId: id, handle, body };
+  paintFeedReplySheetChrome();
+  const list = document.getElementById("feedReplyList");
+  if (list) list.innerHTML = feedReplyListSkeletonHtml();
+  void loadFeedReplyList().then(() => {
+    if (!focus) return;
+    const input = document.getElementById("feedReplyInput");
+    if (!input) return;
+    try { input.focus(); } catch {}
+  });
+}
+
+function closeFeedReplyThread() {
+  const ctx = _feedReplyContext;
+  if (!ctx?.thread) return;
+  ctx.thread = null;
+  const input = document.getElementById("feedReplyInput");
+  if (input) {
+    input.value = "";
+    syncFeedReplyInputHeight(input);
+  }
+  updateFeedReplyFormState();
+  paintFeedReplySheetChrome();
+  const list = document.getElementById("feedReplyList");
+  if (list) list.innerHTML = feedReplyListSkeletonHtml();
+  void loadFeedReplyList();
+}
+
+function mentionFeedReplyFromRow(row) {
+  const input = document.getElementById("feedReplyInput");
+  if (!input || !row) return;
+  const handle = String(row.getAttribute("data-reply-handle") || "").trim().replace(/^@/, "");
+  if (!handle) return;
+  const mention = `@${handle} `;
+  if (!String(input.value || "").includes(mention)) {
+    input.value = `${mention}${String(input.value || "").replace(new RegExp(`^@${handle}\\s*`), "")}`;
+  }
+  applyUserTextInputDir(input);
+  syncFeedReplyInputHeight(input);
+  try {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  } catch {}
+  updateFeedReplyFormState();
 }
 
 function feedReplyMoreMenuHtml({ replyId, isOwn, signedIn }) {
@@ -22826,23 +22958,24 @@ async function submitFeedReply() {
         action: "reply",
         targetKind: ctx.targetKind,
         targetId: ctx.targetId,
+        parentReplyId: ctx.thread?.replyId || "",
         body,
       }),
     });
-    if (data?.ok && data.reply) {
-      const list = document.getElementById("feedReplyList");
-      if (list) list.insertAdjacentHTML("beforeend", feedReplyRowHtml(data.reply));
+    if (data?.ok) {
       input.value = "";
-      setFeedSocialStat(ctx.targetKind, ctx.targetId, {
-        replyCount: Number(data.count) || (getFeedSocialStat(ctx.targetKind, ctx.targetId).replyCount + 1),
-      });
-      applyFeedSocialStatsToDom(document);
+      const total = Number(data.count);
+      if (Number.isFinite(total)) {
+        setFeedSocialStat(ctx.targetKind, ctx.targetId, { replyCount: total });
+        applyFeedSocialStatsToDom(document);
+      }
       try { haptic("light"); } catch {}
       const mentioned = Number(data?.mentionsNotified || 0);
       if (mentioned > 0) {
         showToast(`Mentioned ${mentioned} ${mentioned === 1 ? "person" : "people"}.`, { durationMs: 2400 });
       }
-      // Scroll list to the new reply.
+      await loadFeedReplyList();
+      const list = document.getElementById("feedReplyList");
       if (list) list.scrollTop = list.scrollHeight;
     }
   } catch (e) {
@@ -22865,16 +22998,58 @@ async function deleteFeedReply(replyId) {
       body: JSON.stringify({ action: "delete_reply", replyId }),
     });
     if (data?.ok) {
-      const row = document.querySelector(`[data-feed-reply-id="${CSS.escape(String(replyId))}"]`);
-      if (row) row.remove();
       const newCount = Number(data.count);
       if (Number.isFinite(newCount)) {
         setFeedSocialStat(ctx.targetKind, ctx.targetId, { replyCount: newCount });
         applyFeedSocialStatsToDom(document);
       }
+      if (ctx.thread?.replyId === String(replyId)) closeFeedReplyThread();
+      else void loadFeedReplyList();
     }
   } catch (e) {
     showToast(e?.message || "Could not remove reply.");
+  }
+}
+
+async function toggleFeedReplyLike(btn) {
+  const replyId = String(btn?.getAttribute("data-feed-reply-like") || "").trim();
+  if (!replyId) return;
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast("Sign in to like comments.");
+    location.hash = "#/auth";
+    return;
+  }
+  if (btn.dataset.busy === "1") return;
+  const wasLiked = btn.classList.contains("isLiked");
+  const countEl = btn.querySelector(".feedReplyLikeCount");
+  const prevCount = Math.max(0, Number(countEl?.textContent) || 0);
+  const nextLiked = !wasLiked;
+  const nextCount = Math.max(0, prevCount + (nextLiked ? 1 : -1));
+  btn.dataset.busy = "1";
+  btn.classList.toggle("isLiked", nextLiked);
+  btn.setAttribute("aria-pressed", nextLiked ? "true" : "false");
+  if (countEl) countEl.textContent = nextCount ? String(nextCount) : "";
+  try {
+    const data = await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({
+        action: nextLiked ? "like_reply" : "unlike_reply",
+        replyId,
+      }),
+    });
+    const liked = Boolean(data?.liked);
+    const count = Math.max(0, Number(data?.count) || 0);
+    btn.classList.toggle("isLiked", liked);
+    btn.setAttribute("aria-pressed", liked ? "true" : "false");
+    if (countEl) countEl.textContent = count ? String(count) : "";
+    try { if (liked) haptic("light"); } catch {}
+  } catch (e) {
+    btn.classList.toggle("isLiked", wasLiked);
+    btn.setAttribute("aria-pressed", wasLiked ? "true" : "false");
+    if (countEl) countEl.textContent = prevCount ? String(prevCount) : "";
+    showToast(e?.message || "Could not like comment.");
+  } finally {
+    delete btn.dataset.busy;
   }
 }
 
@@ -22892,6 +23067,11 @@ function bindFeedReplySheetOnce() {
   bindFeedReplyKeyboardInput(repostInput);
 
   sheet.addEventListener("click", (e) => {
+    if (e.target.closest("#feedReplyBack")) {
+      e.preventDefault();
+      closeFeedReplyThread();
+      return;
+    }
     if (e.target.closest("[data-feed-reply-dismiss]")) {
       e.preventDefault();
       closeFeedReplySheet();
@@ -22912,6 +23092,29 @@ function bindFeedReplySheetOnce() {
   });
 
   list.addEventListener("click", (e) => {
+    const likeBtn = e.target.closest("[data-feed-reply-like]");
+    if (likeBtn && list.contains(likeBtn)) {
+      e.preventDefault();
+      e.stopPropagation();
+      void toggleFeedReplyLike(likeBtn);
+      return;
+    }
+    const threadBtn = e.target.closest("[data-feed-reply-thread]");
+    if (threadBtn && list.contains(threadBtn)) {
+      e.preventDefault();
+      e.stopPropagation();
+      openFeedReplyThread(threadBtn.getAttribute("data-feed-reply-thread"), {
+        focus: threadBtn.getAttribute("data-feed-reply-focus") === "1",
+      });
+      return;
+    }
+    const mentionBtn = e.target.closest("[data-feed-reply-mention]");
+    if (mentionBtn && list.contains(mentionBtn)) {
+      e.preventDefault();
+      e.stopPropagation();
+      mentionFeedReplyFromRow(mentionBtn.closest(".feedReplyRow"));
+      return;
+    }
     const menuBtn = e.target.closest("[data-feed-reply-menu]");
     if (menuBtn && list.contains(menuBtn)) {
       e.preventDefault();
@@ -22944,17 +23147,12 @@ function bindFeedReplySheetOnce() {
       return;
     }
     const row = e.target.closest(".feedReplyRow");
-    if (!row || e.target.closest(".feedReplyMenuWrap, .feedReplyAvatar, .feedReplyName, .userMention, a[data-route-link]")) return;
-    const handle = String(row.getAttribute("data-reply-handle") || "").trim().replace(/^@/, "");
-    if (!handle) return;
-    input.value = `@${handle} `;
-    applyUserTextInputDir(input);
-    syncFeedReplyInputHeight(input);
-    input.focus();
-    try {
-      input.setSelectionRange(input.value.length, input.value.length);
-    } catch {}
-    updateFeedReplyFormState();
+    if (!row || e.target.closest(".feedReplyMenuWrap, .feedReplyAvatar, .feedReplyName, .userMention, a[data-route-link], .feedReplyActs")) return;
+    if (!_feedReplyContext?.thread) {
+      openFeedReplyThread(row.getAttribute("data-feed-reply-id"));
+      return;
+    }
+    mentionFeedReplyFromRow(row);
   });
 
   document.addEventListener("keydown", (e) => {
@@ -51671,17 +51869,24 @@ function activityItemDisplayParts(n, msg) {
   }
   if (t === "social_like") {
     const songTitle = String(meta.target_title || meta.song_title || "").trim();
+    const commentLike = meta.comment_like === true || meta.comment_like === "true";
+    const preview = screenshotSanitizeCopy(String(meta.reply_preview || "").trim());
     return {
       category: "New Like",
-      title: username ? `${username} liked your song` : "Someone liked your song",
-      description: songTitle,
+      title: commentLike
+        ? (username ? `${username} liked your comment` : "Someone liked your comment")
+        : (username ? `${username} liked your song` : "Someone liked your song"),
+      description: commentLike ? (preview ? `"${preview.slice(0, 100)}"` : songTitle) : songTitle,
     };
   }
   if (t === "social_reply") {
     const preview = screenshotSanitizeCopy(String(meta.reply_preview || msg.body || "").trim());
+    const onComment = meta.reply_to_comment === true || meta.reply_to_comment === "true";
     return {
       category: "New Reply",
-      title: username ? `@${username} replied` : "New reply",
+      title: onComment
+        ? (username ? `@${username} replied to your comment` : "New reply on your comment")
+        : (username ? `@${username} replied` : "New reply"),
       description: preview ? `"${preview.slice(0, 100)}${preview.length > 100 ? "…" : ""}"` : (msg.body || "Open the thread"),
     };
   }

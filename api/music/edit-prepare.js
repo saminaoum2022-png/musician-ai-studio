@@ -10,6 +10,14 @@ const { applyCors } = require("../_lib/cors");
 const { userIsAdmin } = require("../_lib/admin-auth");
 const { nabadSongEditEnabled } = require("../_lib/nabad-song-edit-lib");
 const {
+  cleanArchiveKey,
+  fetchStorageObjectBuffer,
+  isArchivedStorageUrl,
+  keyFromStorageUrl,
+  userCanStreamArchiveKey,
+  userIsAdmin: userIsAdminForArchive,
+} = require("../_lib/storage-private");
+const {
   decodeReferenceAudioPayload,
   elevenlabsUploadMusic,
   estimateReferenceDurationMs,
@@ -63,6 +71,17 @@ function resolveEditAudioUrl(raw) {
   }
 }
 
+/** song_archive key from a raw storage URL or one of our `/api/songs/stream?key=…` links. */
+function archiveKeyFromEditUrl(url) {
+  const u = String(url || "").trim();
+  if (isArchivedStorageUrl(u)) return keyFromStorageUrl(u, "song_archive");
+  try {
+    const parsed = new URL(u);
+    if (/\/api\/songs\/stream$/i.test(parsed.pathname)) return parsed.searchParams.get("key") || "";
+  } catch {}
+  return "";
+}
+
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
   if (req.method === "OPTIONS") return res.status(204).end();
@@ -104,9 +123,36 @@ module.exports = async function handler(req, res) {
     let mimeType = "audio/mpeg";
 
     if (audioUrl) {
-      const fetched = await fetchElevenReferenceBytesFromUrl(audioUrl);
+      // Private song_archive file (library drafts): read it with the service role, only if this user may stream it.
+      const archiveKey = archiveKeyFromEditUrl(audioUrl);
+      let fetched;
+      if (archiveKey) {
+        try {
+          const admin = await userIsAdminForArchive(user);
+          const allowed = await userCanStreamArchiveKey({
+            userId: user.userId,
+            key: cleanArchiveKey(archiveKey),
+            songId: "",
+            isAdmin: admin,
+          });
+          if (!allowed) return sendJson(res, 403, { error: "You can only edit your own songs." });
+          const obj = await fetchStorageObjectBuffer("song_archive", cleanArchiveKey(archiveKey), MAX_AUDIO_BYTES + 1);
+          fetched = { ok: true, buffer: obj.buffer, mimeType: String(obj.contentType || "audio/mpeg").split(";")[0] };
+        } catch (e) {
+          fetched = { ok: false, error: e?.message || String(e) };
+        }
+      } else {
+        fetched = await fetchElevenReferenceBytesFromUrl(audioUrl);
+      }
       if (!fetched.ok || !fetched.buffer?.length) {
-        return sendJson(res, 400, { error: "Could not load that song for Edit — try again." });
+        console.warn("[music/edit-prepare] source fetch failed", {
+          archive: Boolean(archiveKey),
+          reason: fetched?.error || "empty",
+        });
+        return sendJson(res, 400, {
+          error: "Could not load that song for Edit — try again.",
+          details: String(fetched?.error || "empty").slice(0, 120),
+        });
       }
       buffer = fetched.buffer;
       mimeType = fetched.mimeType || "audio/mpeg";

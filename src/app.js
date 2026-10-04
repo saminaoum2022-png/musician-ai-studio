@@ -15609,7 +15609,7 @@ function wireDiscoverLiveClicksOnce() {
     const heroBtn = document.querySelector("[data-discover-listen-together]");
     const id = heroBtn?.getAttribute("data-discover-listen-together") || "";
     if (id && String(document.body.getAttribute("data-route") || "") === "discover") startDiscoverListenTogether(id);
-    else if (isLiveListenActive()) showToast("Leave the current listen first.");
+    else if (isLiveListenActive()) showToast("You're already in a live listen — leave it to start a new one.");
     else {
       // The "+": friends first, same sheet as everywhere else. The song is what you are playing (or your latest one), and can be changed.
       const def = discoverListenDefaultTrack();
@@ -25349,7 +25349,7 @@ async function openSongEditFromLibraryTrack(track) {
   const title = String(track?.title || "").trim();
   setCreateEditAttachmentPreview("Loading this song…", title || "Song");
   try {
-    const blob = await fetchAudioForRemix(url);
+    const blob = await fetchAudioForRemix(url, { songId: trackCloudShareId(track) || "" });
     const safeName = `${(title || "song").replace(/[^\w\s.-]+/g, "").trim() || "song"}.mp3`;
     let file;
     try {
@@ -25411,7 +25411,7 @@ async function prepareSongEditFromFile(file, { audioUrl } = {}) {
       body: JSON.stringify(useRemote ? { audioUrl: remoteUrl } : { audio: prep.dataUrl }),
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d?.error || "Could not prepare this song for Edit.");
+    if (!r.ok) throw new Error(`${d?.error || "Could not prepare this song for Edit."}${d?.details ? ` (${String(d.details).slice(0, 80)})` : ""}`);
     const chunks = Array.isArray(d?.chunks) ? d.chunks : [];
     if (!d?.songId || !chunks.length) throw new Error("ElevenLabs did not return sections for this track.");
     let objectUrl = "";
@@ -27636,11 +27636,13 @@ function teardownPublishHookUi() {
   const ui = _publishHookUi;
   _publishHookUi = null;
   if (!ui) return;
+  ui.previewing = false;
   try { ui.previewAudio?.pause(); } catch {}
   if (ui.previewAudio) {
     try { ui.previewAudio.src = ""; } catch {}
   }
-  if (ui.previewTimer) window.clearInterval(ui.previewTimer);
+  if (ui.blobUrl) { try { URL.revokeObjectURL(ui.blobUrl); } catch {} ui.blobUrl = ""; }
+  if (ui.previewTimer) window.clearTimeout(ui.previewTimer);
   ui.sheet?.classList.remove("isFindingHook");
 }
 
@@ -27709,10 +27711,19 @@ async function initPublishHookUi(sheet, track) {
   sheet.querySelector("#pubWave")?.classList.add("isLoading");
 
   const previewAudio = new Audio();
-  previewAudio.preload = "metadata";
+  previewAudio.preload = "metadata"; // the full song is downloaded separately below
   previewAudio.playsInline = true;
-  try { previewAudio.crossOrigin = "anonymous"; } catch {}
-  const url = normalizeAudioUrlForPlayback(String(track?.url || "").trim());
+  try { previewAudio.setAttribute("playsinline", ""); } catch {}
+  let url = normalizeAudioUrlForPlayback(String(track?.url || "").trim());
+  // Private song_archive drafts need a signed link — the raw storage URL is refused now.
+  try {
+    const rawTrackUrl = String(track?.url || "").trim();
+    const leaf = unwrapInnermostHttpAudioUrl(rawTrackUrl) || rawTrackUrl;
+    if (isArchivedSongStorageUrl(leaf) || /\/api\/songs\/stream\?/i.test(leaf)) {
+      const signed = await resolveArchivePlaybackUrl({ ...track, url: leaf });
+      if (signed) url = normalizeAudioUrlForPlayback(signed);
+    }
+  } catch {}
   if (url) previewAudio.src = url;
 
   const ui = {
@@ -27734,6 +27745,22 @@ async function initPublishHookUi(sheet, track) {
   };
   _publishHookUi = ui;
   ui.waveBars = [...(sheet.querySelector("#pubWaveBars")?.children || [])];
+  // Download the song once and play the preview from that local copy. Streaming straight from the
+  // server can't jump to the chosen moment reliably (no range support), which made the preview
+  // sometimes start at the wrong place or not play at all.
+  ui.blobPromise = url ? fetchPublishAudioBlob(url) : Promise.resolve(null);
+  ui.blobPending = true;
+  void ui.blobPromise.then((blob) => {
+    if (_publishHookUi !== ui) return;
+    ui.blobPending = false;
+    if (!blob) return;
+    try {
+      ui.blobUrl = URL.createObjectURL(blob);
+      previewAudio.src = ui.blobUrl;
+      previewAudio.load();
+      ui.blobReady = true;
+    } catch {}
+  });
 
   const onRangeInput = () => {
     ui.userTouched = true;
@@ -27780,15 +27807,57 @@ async function initPublishHookUi(sheet, track) {
   }
 
   if (previewBtn) {
-    previewBtn.addEventListener("click", () => {
-      const sec = ui.fromStart ? 0 : normalizeHookStartSec(Number(range.value || 0), ui.durationSec);
+    const stopPreview = () => {
+      if (ui.previewTimer) { window.clearTimeout(ui.previewTimer); ui.previewTimer = null; }
+      ui.previewing = false;
       try { previewAudio.pause(); } catch {}
-      if (ui.previewTimer) window.clearInterval(ui.previewTimer);
-      previewAudio.currentTime = sec;
-      void previewAudio.play().catch(() => {});
-      ui.previewTimer = window.setTimeout(() => {
-        try { previewAudio.pause(); } catch {}
-      }, 4500);
+      try { previewAudio.muted = false; } catch {}
+      previewBtn.classList.remove("on");
+    };
+    ui.stopPreview = stopPreview;
+    previewBtn.addEventListener("click", () => {
+      if (ui.previewing) { stopPreview(); return; }
+      const sec = ui.fromStart ? 0 : normalizeHookStartSec(Number(range.value || 0), ui.durationSec);
+      const a = previewAudio;
+      // Local copy still downloading: say so instead of playing from the wrong spot.
+      if (!ui.blobReady && ui.blobPending !== false) {
+        showToast("Loading the song — try again in a second.", { durationMs: 1800 });
+        return;
+      }
+      // Whatever was playing in the background stops so the preview is the only thing you hear.
+      try { playerEl?.pause(); } catch {}
+      try { document.querySelectorAll("audio, video").forEach((m) => { if (m !== previewAudio && !m.paused) m.pause(); }); } catch {}
+      ui.previewing = true;
+      previewBtn.classList.add("on");
+      let started = false;
+      const armStop = () => {
+        if (started || !ui.previewing) return;
+        started = true;
+        if (ui.previewTimer) window.clearTimeout(ui.previewTimer);
+        ui.previewTimer = window.setTimeout(stopPreview, 4500);
+      };
+      try { a.pause(); } catch {}
+      try { a.muted = false; } catch {}
+      a.addEventListener("playing", armStop, { once: true });
+      if (ui.blobReady) {
+        // Local file: seek and play inside the tap — instant and exact.
+        try { a.currentTime = sec; } catch {}
+      } else {
+        // Fallback (download failed): stream from the server and jump once it can seek.
+        a.muted = true;
+        const jump = () => { try { a.currentTime = sec; } catch {} try { a.muted = false; } catch {} };
+        if (a.readyState >= 1) jump(); else a.addEventListener("loadedmetadata", jump, { once: true });
+      }
+      let playPromise;
+      try { playPromise = a.play(); } catch (e) { playPromise = Promise.reject(e); }
+      window.setTimeout(armStop, 3000);
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {
+          if (!ui.previewing) return;
+          stopPreview();
+          showToast("Couldn't play the preview — try again.", { durationMs: 2600 });
+        });
+      }
     });
   }
 
@@ -27816,7 +27885,7 @@ async function initPublishHookUi(sheet, track) {
   range.step = "0.1";
 
   // the waveform loads in parallel with the chorus search; if it cannot be read the bar stays plain
-  void loadPublishWavePeaks(url).then((peaks) => {
+  void loadPublishWavePeaks(url, ui.blobPromise).then((peaks) => {
     if (_publishHookUi !== ui) return;
     renderPublishWaveBars(ui, peaks);
   });
@@ -28493,11 +28562,31 @@ function renderRemixSourceBanner() {
  *
  *  Returns the Blob on success. Throws an Error with a useful message
  *  describing where the failure happened. */
-async function fetchAudioForRemix(rawUrl) {
-  const original = String(rawUrl || "").trim();
+async function fetchAudioForRemix(rawUrl, opts = {}) {
+  let original = String(rawUrl || "").trim();
   if (!original || original === "#") {
     throw new Error("This post has no audio URL");
   }
+  // Private drafts live in the locked song_archive bucket: this download carries no login, so
+  // it needs a short-lived signed link first (same step playback uses). Public songs skip it.
+  try {
+    const leaf = unwrapInnermostHttpAudioUrl(original) || original;
+    const needsSigning =
+      isArchivedSongStorageUrl(leaf)
+      || (/\/api\/songs\/stream\?/i.test(leaf) && !isSignedSongStreamPlaybackUrl(leaf));
+    if (needsSigning) {
+      let key = songArchiveKeyFromUrl(leaf);
+      if (!key) {
+        try {
+          key = new URL(leaf, "https://x.invalid").searchParams.get("key") || "";
+        } catch {}
+      }
+      if (key) {
+        const signed = await trySignArchiveStreamUrl(key, String(opts?.songId || ""));
+        if (signed) original = signed;
+      }
+    }
+  } catch {}
   // blob: URLs (a freshly-shared local placeholder) — fetch directly,
   // they live in the current document context.
   if (original.startsWith("blob:") || original.startsWith("data:")) {
@@ -28627,7 +28716,14 @@ async function startHubRemix(post) {
   try {
     setStatus("Loading remix source…");
     let remixAudioUrl = String(post.url || "").trim();
+    // Archived songs (incl. your private drafts) are permanent in our own storage: never swap the
+    // good archive / signed stream link for a short-lived provider link that has already expired.
+    const remixLeafForRefresh = unwrapInnermostHttpAudioUrl(remixAudioUrl) || remixAudioUrl;
+    const remixIsOurArchive =
+      isArchivedSongStorageUrl(remixLeafForRefresh)
+      || /\/api\/songs\/stream\?/i.test(remixLeafForRefresh);
     try {
+      if (remixIsOurArchive) throw new Error("skip_refresh_archived");
       const refreshed = await tryRefreshLibraryTrackAudioFromSuno({
         taskId: post.taskId || post?.meta?.taskId || "",
         audioId: post.audioId || post?.meta?.audioId || "",
@@ -28635,7 +28731,7 @@ async function startHubRemix(post) {
       });
       if (refreshed?.url) remixAudioUrl = String(refreshed.url).trim();
     } catch {}
-    const blob = await fetchAudioForRemix(remixAudioUrl);
+    const blob = await fetchAudioForRemix(remixAudioUrl, { songId: post.songId || post.id || "" });
     if (blob.size < 40 * 1024) {
       throw new Error("Source audio looks too short — pick a full song or try again");
     }
@@ -37980,15 +38076,40 @@ function renderPublishWaveBars(ui, peaks) {
 }
 
 /** Read the song's loudness shape. Any failure (no CORS, too big, undecodable) returns null and the bar stays plain. */
-async function loadPublishWavePeaks(url) {
+async function fetchPublishAudioBlob(url) {
+  const ctrl = new AbortController();
+  const timer = window.setTimeout(() => ctrl.abort(), 25000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) return null;
+    if (Number(res.headers.get("content-length") || 0) > 40 * 1024 * 1024) return null;
+    const buf = await res.arrayBuffer();
+    let type = String(res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    if (!/^audio\//.test(type)) type = "audio/mpeg";
+    return new Blob([buf], { type });
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+async function loadPublishWavePeaks(url, blobPromise) {
   const n = PUBLISH_WAVE_BARS;
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), 9000);
   try {
-    const res = await fetch(url, { signal: ctrl.signal });
-    if (!res.ok) return null;
-    if (Number(res.headers.get("content-length") || 0) > 14 * 1024 * 1024) return null;
-    const buf = await res.arrayBuffer();
+    let buf;
+    const shared = blobPromise ? await blobPromise : null;
+    if (shared) {
+      if (shared.size > 14 * 1024 * 1024) return null;
+      buf = await shared.arrayBuffer();
+    } else {
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (!res.ok) return null;
+      if (Number(res.headers.get("content-length") || 0) > 14 * 1024 * 1024) return null;
+      buf = await res.arrayBuffer();
+    }
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return null;
     const ac = new Ctx();
@@ -43866,7 +43987,7 @@ function wireConnectNewSheetsOnce() {
       void openMessagesShareSheet({ mode: "publish", noPartner: true });
     } else if (which === "listen") {
       if (isLiveListenActive()) {
-        try { showToast("Leave the current listen first."); } catch {}
+        try { showToast("You're already in a live listen — leave it to start a new one."); } catch {}
         return;
       }
       void openMessagesShareSheet({ mode: "listen", noPartner: true });
@@ -53873,8 +53994,15 @@ async function startLibraryRemixForLibraryTrack(t) {
       showToast("Could not resolve audio for remix.", { icon: "!", durationMs: 3400 });
       return;
     }
-    const remixUrl =
+    let remixUrl =
       normalizeAudioUrlForPlayback(toAudioProxyUrl(rawInner) || rawInner) || rawInner;
+    if (isArchivedSongStorageUrl(rawInner)) {
+      // Own draft in the private archive: use the signed link, like playback does.
+      try {
+        const signed = await resolveArchivePlaybackUrl({ ...track, url: rawInner });
+        if (signed) remixUrl = signed;
+      } catch {}
+    }
     const art =
       String((track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "").trim() ||
       "./assets/icons/splash-mark.png";

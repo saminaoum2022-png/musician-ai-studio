@@ -109,7 +109,26 @@ const STYLE_CORE =
 
 /** Flux Schnell defaults to candlelit still lifes when the prompt is vague. */
 const NO_CANDLE_GUARD =
-  "no candles, no candlelight, no candlesticks, no dripping wax, lit by studio light or window light or neon only";
+  "lit only by cool teal and violet neon light and soft studio window light, clean electric glow";
+
+/**
+ * Flux Schnell has no negative prompt and its text encoder reads every word literally, so a
+ * phrase like "no candles" actually puts candles in the picture. For the Cloudflare/Flux path we
+ * drop any "no/without/avoid … candle" clause and rewrite stray candle words into neutral light,
+ * unless the user explicitly asked for candles.
+ */
+export function scrubCandlesForFlux(text, { userRequestedCandles = false } = {}) {
+  const src = String(text || "");
+  if (userRequestedCandles || !/candle|dripping wax/i.test(src)) return src;
+  const kept = src
+    .split(",")
+    .map((c) => c.trim())
+    .filter((c) => c && !/^(?:no|without|avoid|zero)\b[^]*\b(?:candles?|candlelight|candlesticks?|wax)\b/i.test(c) && !/^dripping wax$/i.test(c))
+    .map((c) => c
+      .replace(/\b(?:soft |warm |gentle |flickering )?candle(?:light|s|stick|sticks)?(?: glow)?\b/gi, "warm string-light bokeh")
+      .replace(/\bdripping wax\b/gi, "glossy surface"));
+  return kept.join(", ");
+}
 
 function wantsCandleScene(text) {
   const stripped = String(text || "")
@@ -902,8 +921,8 @@ const TEXT_TRIGGER_REPLACEMENTS = [
   ["christmas tree", "evergreen tree with warm golden lights and star topper"],
   ["christmas", "evergreen tree with warm golden lights and star"],
   ["xmas", "evergreen tree with warm golden lights"],
-  ["birthday", "celebration balloons and soft candle glow still life"],
-  ["happy birthday", "celebration balloons and soft candle glow"],
+  ["birthday", "celebration balloons and warm string-light glow still life"],
+  ["happy birthday", "celebration balloons and warm string-light glow"],
   ["new year", "midnight fireworks and sparkling lights"],
   ["congratulations", "confetti burst and golden celebration light"],
   ["merry", "festive warm light"],
@@ -1073,7 +1092,7 @@ function compressPromptForFlux(prompt, maxLen) {
   return (lastComma > maxLen * 0.55 ? cut.slice(0, lastComma) : cut).trim();
 }
 
-export function buildFluxCoverPrompt(prompt, { avoidTags = "", visualMode = "" } = {}) {
+export function buildFluxCoverPrompt(prompt, { avoidTags = "", visualMode = "", userArtwork = "" } = {}) {
   const parsedAvoid = parseAvoidTagsList(avoidTags).slice(0, 4);
   const suffixBits = [MINIMAL_TEXT_GUARD];
   if (parsedAvoid.length) suffixBits.push(`avoid ${parsedAvoid.join(", ")}`);
@@ -1094,7 +1113,9 @@ export function buildFluxCoverPrompt(prompt, { avoidTags = "", visualMode = "" }
       base = `${lead}${base}`;
     }
   }
-  const merged = `${base}${suffix}`.replace(/\s+/g, " ").trim();
+  const merged = scrubCandlesForFlux(`${base}${suffix}`.replace(/\s+/g, " ").trim(), {
+    userRequestedCandles: wantsCandleScene(userArtwork),
+  });
   return merged.length > FLUX_PROMPT_MAX ? merged.slice(0, FLUX_PROMPT_MAX) : merged;
 }
 

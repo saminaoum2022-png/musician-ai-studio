@@ -88,9 +88,10 @@ function parseLyricsModelChain() {
   return [...new Set([primary, fallback].filter(Boolean))];
 }
 
-async function callOpenAIResponses({ key, model, prompt, temperature }) {
+async function callOpenAIResponses({ key, model, prompt, temperature, signal }) {
   const r = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
+    signal,
     headers: {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
@@ -117,9 +118,10 @@ async function callOpenAIResponses({ key, model, prompt, temperature }) {
   return { ok: true, lyrics: out, model, api: "responses" };
 }
 
-async function callOpenAIChatCompletions({ key, model, prompt, temperature }) {
+async function callOpenAIChatCompletions({ key, model, prompt, temperature, signal }) {
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
+    signal,
     headers: {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
@@ -146,21 +148,21 @@ async function callOpenAIChatCompletions({ key, model, prompt, temperature }) {
   return { ok: true, lyrics: out, model, api: "chat" };
 }
 
-async function callOpenAIModel({ key, model, prompt, temperature }) {
+async function callOpenAIModel({ key, model, prompt, temperature, signal }) {
   // Chat Completions is what shows in platform Logs → Completions for most keys.
   const preferChat = !/^(0|false|no)$/i.test(String(process.env.OPENAI_LYRICS_PREFER_CHAT || "1").trim());
 
   if (!preferChat) {
-    const res = await callOpenAIResponses({ key, model, prompt, temperature });
+    const res = await callOpenAIResponses({ key, model, prompt, temperature, signal });
     if (res.ok) return res;
-    const chat = await callOpenAIChatCompletions({ key, model, prompt, temperature });
+    const chat = await callOpenAIChatCompletions({ key, model, prompt, temperature, signal });
     if (chat.ok) return { ...chat, fallbackApi: res.error ? `responses:${String(res.error).slice(0, 80)}` : "" };
     return chat;
   }
 
-  const chat = await callOpenAIChatCompletions({ key, model, prompt, temperature });
+  const chat = await callOpenAIChatCompletions({ key, model, prompt, temperature, signal });
   if (chat.ok) return chat;
-  const res = await callOpenAIResponses({ key, model, prompt, temperature });
+  const res = await callOpenAIResponses({ key, model, prompt, temperature, signal });
   if (res.ok) return { ...res, fallbackApi: `chat:${String(chat.error).slice(0, 80)}` };
   return chat;
 }
@@ -201,12 +203,30 @@ async function tryOpenAILyrics({
   let models = model ? [String(model).trim()] : parseLyricsModelChain();
   const attempts = [];
   let lastError = "unknown";
+  // Total time budget so a slow / down OpenAI never starves the Gemini fallback.
+  const budgetMs = Math.max(
+    3000,
+    Number(process.env.OPENAI_LYRICS_BUDGET_MS) || 20000,
+  );
+  const deadline = Date.now() + budgetMs;
 
   async function tryModels(modelList) {
     for (const m of modelList) {
       if (!m) continue;
+      const remaining = deadline - Date.now();
+      if (remaining < 1500) {
+        attempts.push({ model: m, error: "time_budget_exhausted" });
+        lastError = `${m}: time_budget_exhausted`;
+        break;
+      }
       try {
-        const result = await callOpenAIModel({ key, model: m, prompt, temperature });
+        const result = await callOpenAIModel({
+          key,
+          model: m,
+          prompt,
+          temperature,
+          signal: AbortSignal.timeout(remaining),
+        });
         if (result?.ok) {
           return {
             ok: true,
@@ -232,7 +252,10 @@ async function tryOpenAILyrics({
   let hit = await tryModels(models);
   if (hit) return hit;
 
-  if (/^(1|true|yes)$/i.test(String(process.env.OPENAI_LYRICS_AUTO_DISCOVER || "1").trim())) {
+  if (
+    Date.now() < deadline - 3000
+    && /^(1|true|yes)$/i.test(String(process.env.OPENAI_LYRICS_AUTO_DISCOVER || "1").trim())
+  ) {
     const ids = await listOpenAIModelIds(key);
     const discovered = discoverLyricsModelCandidates(ids).filter((id) => !models.includes(id));
     if (discovered.length) {
@@ -248,13 +271,16 @@ async function tryOpenAILyrics({
   return { ok: false, error: String(lastError).slice(0, 400), attempts };
 }
 
-function openAiLyricsAllowedForRequest(lyricsProvider) {
-  const p = String(lyricsProvider || "").trim().toLowerCase();
-  if (p !== "openai" && p !== "chatgpt") return false;
+/**
+ * ChatGPT writes lyrics for every request (all branches / all app builds) when OPENAI_API_KEY is set.
+ * The client's lyricsProvider hint no longer matters. Kill switch: OPENAI_LYRICS_ENABLED=0.
+ * "suno" (Suno's own lyrics) is a separate path handled before this check.
+ */
+function openAiLyricsAllowedForRequest(_lyricsProvider) {
   if (!(process.env.OPENAI_API_KEY || "").trim()) return false;
-  if (String(process.env.OPENAI_LYRICS_ENABLED || "").trim() === "1") return true;
-  if (String(process.env.VERCEL_ENV || "").trim().toLowerCase() === "preview") return true;
-  return false;
+  const flag = String(process.env.OPENAI_LYRICS_ENABLED || "").trim().toLowerCase();
+  if (flag === "0" || flag === "false" || flag === "no" || flag === "off") return false;
+  return true;
 }
 
 module.exports = {

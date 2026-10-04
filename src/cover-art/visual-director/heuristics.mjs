@@ -55,7 +55,7 @@ function visualSymbolsFromContext(ctx) {
   /** @type {string[]} */
   const symbols = [];
   const occasion = String(ctx.occasionLabel || "").toLowerCase();
-  if (occasion === "birthday") symbols.push("soft candle glow", "celebration balloons as bokeh");
+  if (occasion === "birthday") symbols.push("warm string-light glow", "celebration balloons as bokeh");
   if (occasion === "wedding") symbols.push("soft floral glow", "champagne gold bokeh");
   if (occasion === "christmas") symbols.push("evergreen lights", "warm star glow");
   if (occasion === "graduation") symbols.push("mortarboard cap", "rolled diploma", "golden tassel");

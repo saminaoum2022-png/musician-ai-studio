@@ -1164,6 +1164,10 @@ export async function openCoverStudio(opts = {}) {
     dom.root.classList.remove("csLoading");
     if (!S) return;
   }
+  // No cover yet: skip the "give this song a cover" page and open straight into the editor on a
+  // default gradient. Photo / AI / Gradient are one tap away on the stage, so nothing is lost.
+  // (Not marked as changed, so closing without touching anything doesn't ask to discard.)
+  if (!S.photo && !S.bg) S.bg = { i: 0 };
   syncUi();
   fitStage();
   requestRender();

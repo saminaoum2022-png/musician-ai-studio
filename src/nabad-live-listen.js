@@ -267,6 +267,8 @@ function setBodyRole() {
     document.body.classList.toggle("liveListenHost", isLiveListenHost());
     document.body.classList.toggle("liveListenGuest", isLiveListenGuest());
     document.body.classList.toggle("liveListenActive", Boolean(_state?.role));
+    // A real two-person session (not a solo/leftover state): hides every "Listen together" entry point.
+    document.body.classList.toggle("liveListenSession", isLiveListenActive());
     const live = Boolean(_state?.role) && !_state?.solo
       && _state?.session?.status !== "pending" && !hostAwaitingGuest();
     document.body.classList.toggle("liveListenLive", live);
@@ -351,6 +353,73 @@ function syncLockNote(guest) {
   if (guest) note.innerHTML = `${LOCK_ICON_SVG}<span>@${escapeHtml(partnerLabel(_state?.session))} controls playback</span>`;
 }
 
+// ── Keep the "Listening with…" chip clear of the mini-player ────────────────
+// The chip floats above the tab bar; the mini-player (vinyl bubble / strip) lives in the same
+// corner and can be dragged anywhere. Whenever they would overlap, lift the chip just above it.
+let _dodgeInstalled = false;
+let _dodgeRaf = 0;
+
+function elementPaints(el) {
+  try {
+    const cs = getComputedStyle(el);
+    return cs.display !== "none" && cs.visibility !== "hidden" && Number(cs.opacity) > 0.05;
+  } catch {
+    return false;
+  }
+}
+
+function dodgeMiniPlayer() {
+  _dodgeRaf = 0;
+  const row = document.getElementById("liveListenChipRow");
+  if (!row || row.hidden) return;
+  row.style.removeProperty("bottom");
+  const np = document.getElementById("hubNowPlaying");
+  if (!np || !elementPaints(np)) return;
+  const parts = [np, ...np.querySelectorAll(".hubNowVinyl, .hubNowMeta, .hubNowToggle")]
+    .filter(elementPaints);
+  const glass = document.getElementById("hubNowStripGlass");
+  if (glass && elementPaints(glass)) parts.push(glass);
+  const rr = row.getBoundingClientRect();
+  if (!rr.width || !rr.height) return;
+  const pad = 8;
+  let top = Infinity;
+  for (const el of parts) {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    const hit = r.left < rr.right + pad && r.right > rr.left - pad
+      && r.top < rr.bottom + pad && r.bottom > rr.top - pad;
+    if (hit) top = Math.min(top, r.top);
+  }
+  if (!Number.isFinite(top)) return;
+  row.style.bottom = `${Math.max(0, Math.round(window.innerHeight - top + 10))}px`;
+}
+
+function scheduleDodgeMiniPlayer() {
+  if (_dodgeRaf) return;
+  _dodgeRaf = window.requestAnimationFrame(dodgeMiniPlayer);
+}
+
+function installDodgeMiniPlayerOnce() {
+  if (_dodgeInstalled) return;
+  _dodgeInstalled = true;
+  try {
+    const np = document.getElementById("hubNowPlaying");
+    if (np) {
+      new MutationObserver(scheduleDodgeMiniPlayer).observe(np, {
+        attributes: true,
+        attributeFilter: ["class", "style"],
+        subtree: true,
+      });
+    }
+  } catch {}
+  window.addEventListener("resize", scheduleDodgeMiniPlayer, { passive: true });
+  window.addEventListener("hashchange", () => window.setTimeout(scheduleDodgeMiniPlayer, 60), { passive: true });
+  window.addEventListener("orientationchange", () => window.setTimeout(scheduleDodgeMiniPlayer, 200), { passive: true });
+  window.setInterval(() => {
+    if (document.body?.classList.contains("liveListenSession")) scheduleDodgeMiniPlayer();
+  }, 900);
+}
+
 export function syncLiveListenChrome() {
   const chip = ensureChip();
   const row = document.getElementById("liveListenChipRow");
@@ -403,6 +472,8 @@ export function syncLiveListenChrome() {
   syncReactBar();
   syncShareChooserButton();
   try { bridge.refreshPresence?.(); } catch {}
+  installDodgeMiniPlayerOnce();
+  scheduleDodgeMiniPlayer();
 }
 
 // ── Reactions ────────────────────────────────────────────────────────────────
@@ -1936,6 +2007,11 @@ function renderInviteList(friends, track, opts = {}) {
  *  quietly); otherwise the sheet opens at once in a loading state and fills when the friends arrive. */
 async function showInviteSheet(track, opts = {}) {
   if (_inviteOpening) return;
+  // One listen at a time: nobody (guest or host) can start another while one is live.
+  if (isLiveListenActive()) {
+    toast("Leave the current listen first.");
+    return;
+  }
   const warm = bridge.peekMutualFriends?.();
   if (warm && warm.length) {
     renderInviteList(warm, track, opts);

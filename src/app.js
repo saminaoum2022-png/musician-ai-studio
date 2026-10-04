@@ -25411,7 +25411,7 @@ async function prepareSongEditFromFile(file, { audioUrl } = {}) {
       body: JSON.stringify(useRemote ? { audioUrl: remoteUrl } : { audio: prep.dataUrl }),
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d?.error || "Could not prepare this song for Edit.");
+    if (!r.ok) throw new Error(`${d?.error || "Could not prepare this song for Edit."}${d?.details ? ` (${String(d.details).slice(0, 80)})` : ""}`);
     const chunks = Array.isArray(d?.chunks) ? d.chunks : [];
     if (!d?.songId || !chunks.length) throw new Error("ElevenLabs did not return sections for this track.");
     let objectUrl = "";

@@ -71,6 +71,17 @@ function resolveEditAudioUrl(raw) {
   }
 }
 
+/** song_archive key from a raw storage URL or one of our `/api/songs/stream?key=…` links. */
+function archiveKeyFromEditUrl(url) {
+  const u = String(url || "").trim();
+  if (isArchivedStorageUrl(u)) return keyFromStorageUrl(u, "song_archive");
+  try {
+    const parsed = new URL(u);
+    if (/\/api\/songs\/stream$/i.test(parsed.pathname)) return parsed.searchParams.get("key") || "";
+  } catch {}
+  return "";
+}
+
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
   if (req.method === "OPTIONS") return res.status(204).end();
@@ -113,7 +124,7 @@ module.exports = async function handler(req, res) {
 
     if (audioUrl) {
       // Private song_archive file (library drafts): read it with the service role, only if this user may stream it.
-      const archiveKey = isArchivedStorageUrl(audioUrl) ? keyFromStorageUrl(audioUrl, "song_archive") : "";
+      const archiveKey = archiveKeyFromEditUrl(audioUrl);
       let fetched;
       if (archiveKey) {
         try {
@@ -134,7 +145,14 @@ module.exports = async function handler(req, res) {
         fetched = await fetchElevenReferenceBytesFromUrl(audioUrl);
       }
       if (!fetched.ok || !fetched.buffer?.length) {
-        return sendJson(res, 400, { error: "Could not load that song for Edit — try again." });
+        console.warn("[music/edit-prepare] source fetch failed", {
+          archive: Boolean(archiveKey),
+          reason: fetched?.error || "empty",
+        });
+        return sendJson(res, 400, {
+          error: "Could not load that song for Edit — try again.",
+          details: String(fetched?.error || "empty").slice(0, 120),
+        });
       }
       buffer = fetched.buffer;
       mimeType = fetched.mimeType || "audio/mpeg";

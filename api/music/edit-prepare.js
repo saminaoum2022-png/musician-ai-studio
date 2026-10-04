@@ -10,6 +10,14 @@ const { applyCors } = require("../_lib/cors");
 const { userIsAdmin } = require("../_lib/admin-auth");
 const { nabadSongEditEnabled } = require("../_lib/nabad-song-edit-lib");
 const {
+  cleanArchiveKey,
+  fetchStorageObjectBuffer,
+  isArchivedStorageUrl,
+  keyFromStorageUrl,
+  userCanStreamArchiveKey,
+  userIsAdmin: userIsAdminForArchive,
+} = require("../_lib/storage-private");
+const {
   decodeReferenceAudioPayload,
   elevenlabsUploadMusic,
   estimateReferenceDurationMs,
@@ -104,7 +112,27 @@ module.exports = async function handler(req, res) {
     let mimeType = "audio/mpeg";
 
     if (audioUrl) {
-      const fetched = await fetchElevenReferenceBytesFromUrl(audioUrl);
+      // Private song_archive file (library drafts): read it with the service role, only if this user may stream it.
+      const archiveKey = isArchivedStorageUrl(audioUrl) ? keyFromStorageUrl(audioUrl, "song_archive") : "";
+      let fetched;
+      if (archiveKey) {
+        try {
+          const admin = await userIsAdminForArchive(user);
+          const allowed = await userCanStreamArchiveKey({
+            userId: user.userId,
+            key: cleanArchiveKey(archiveKey),
+            songId: "",
+            isAdmin: admin,
+          });
+          if (!allowed) return sendJson(res, 403, { error: "You can only edit your own songs." });
+          const obj = await fetchStorageObjectBuffer("song_archive", cleanArchiveKey(archiveKey), MAX_AUDIO_BYTES + 1);
+          fetched = { ok: true, buffer: obj.buffer, mimeType: String(obj.contentType || "audio/mpeg").split(";")[0] };
+        } catch (e) {
+          fetched = { ok: false, error: e?.message || String(e) };
+        }
+      } else {
+        fetched = await fetchElevenReferenceBytesFromUrl(audioUrl);
+      }
       if (!fetched.ok || !fetched.buffer?.length) {
         return sendJson(res, 400, { error: "Could not load that song for Edit — try again." });
       }

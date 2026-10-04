@@ -18,6 +18,7 @@ const {
   pickSunoClipAudioUrl,
   DEFAULT_SUNO_MODEL,
 } = require("../_lib/suno-upstream");
+const { isArchivedStorageUrl, keyFromStorageUrl, mintArchiveStreamQuery } = require("../_lib/storage-private");
 
 const MASHUP_COST = 15;
 const DEFAULT_MODEL = DEFAULT_SUNO_MODEL;
@@ -111,8 +112,13 @@ module.exports = async function handler(req, res) {
       prompt = prompt.slice(0, 500);
     }
 
-    const uploadUrlList = [resolvedA.song.audioUrl, resolvedB.song.audioUrl];
     const { host, proto } = getHostProto(req);
+    // Archived songs live in the private song_archive bucket: Suno cannot fetch the raw storage URL,
+    // so hand it a short-lived signed stream link on our own API instead.
+    const originForSigned = `${proto}://${host}`;
+    const uploadUrlList = [resolvedA.song.audioUrl, resolvedB.song.audioUrl].map((u) =>
+      signedFetchableAudioUrl(u, originForSigned),
+    );
     const callBackUrl = `${proto}://${host}/api/suno/callback`;
 
     const payload = {
@@ -224,6 +230,16 @@ function cleanSongId(v) {
   const s = String(v || "").trim();
   if (!s || s.length > 80) return "";
   return s;
+}
+
+/** Private song_archive URL → signed `/api/songs/stream` URL (2h) that an outside provider can download. */
+function signedFetchableAudioUrl(url, origin) {
+  const u = String(url || "").trim();
+  if (!isArchivedStorageUrl(u)) return u;
+  const key = keyFromStorageUrl(u, "song_archive");
+  const tok = key ? mintArchiveStreamQuery(key, 7200) : null;
+  if (!tok) return u;
+  return `${origin}/api/songs/stream?key=${encodeURIComponent(tok.key)}&exp=${encodeURIComponent(String(tok.exp))}&sig=${encodeURIComponent(tok.sig)}`;
 }
 
 async function resolveMashupSource(callerUserId, source, apiKey) {

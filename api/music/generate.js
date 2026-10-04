@@ -10,6 +10,7 @@
  * - MINIMAX_API_KEY, MINIMAX_KEY_KIND, MINIMAX_MUSIC_MODEL, MINIMAX_GENERATE_ENABLED
  * - GEMINI_API_KEY / GOOGLE_API_KEY, LYRIA_MUSIC_MODEL, LYRIA_GENERATE_ENABLED
  * - CLIP_GEMINI_PRODUCER_ENABLED=1 — Gemini prompt enrichment for clips + ElevenLabs (staging preview)
+ * - LYRIA_PROMPT_V2=1 — minimal Lyria prompt (default ON on Vercel Preview); skips Gemini producer on Lyria
  * - CLIP_GEMINI_PRODUCER_MODEL — optional override; else tries 3.6 → 3.5 → 2.5 flash
  * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_FINETUNE_ID, ELEVENLABS_GENERATE_ENABLED
  * - MUREKA_API_KEY, MUREKA_MUSIC_MODEL, MUREKA_VOCAL_ID, MUREKA_GENERATE_ENABLED
@@ -46,6 +47,10 @@ const {
   extractLyriaDisplayLyrics,
   sanitizeLyriaLyricsForSinging,
 } = require("../_lib/lyria-upstream");
+const {
+  resolveLyriaPromptV2Enabled,
+  buildLyriaPromptV2,
+} = require("../_lib/lyria-prompt-v2");
 const { clipVocalProfileById } = require("../_lib/clip-vocal-profiles");
 const {
   applyElevenReferenceToCompositionPlan,
@@ -266,6 +271,22 @@ function resolveLyriaPhotosFromBody(body) {
 function buildLyriaPromptFromBody(body, extra = {}) {
   const photoImages = resolveLyriaPhotosFromBody(body);
   const lyrics = extra.lyrics ?? String(body?.prompt || "").trim();
+  const isAdmin = Boolean(extra.isAdmin);
+  if (resolveLyriaPromptV2Enabled(body, isAdmin)) {
+    return buildLyriaPromptV2({
+      body,
+      lyrics,
+      title: extra.title ?? String(body?.title || "").trim(),
+      instrumental: extra.instrumental ?? Boolean(body?.instrumental),
+      clip: extra.clip ?? false,
+      durationSec: resolveLyriaDurationSec(body),
+      dialectHint: mergeLyriaDialectHint(body),
+      scriptFormat: extra.scriptFormat ?? String(body?.scriptFormat || "").trim(),
+      vocalGender: String(body?.vocalGender || "").trim(),
+      songKey: String(body?.songKey || "").trim(),
+      photoMood: photoImages.length > 0,
+    });
+  }
   return buildLyriaPrompt({
     stylePrompt: extra.stylePrompt ?? buildMusicPrompt(body),
     lyrics,
@@ -394,12 +415,20 @@ function scheduleBackgroundWork(promise) {
   void promise;
 }
 
-function buildLyriaFullSongAdminExtra({ body, producerResult, model = "", lyriaPrompt = "" } = {}) {
+function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
+  if (resolveLyriaPromptV2Enabled(body, isAdmin)) {
+    return "pipeline: lyria_prompt_v2 (no gemini producer)";
+  }
+  return producerResult?.ok
+    ? "pipeline: gemini_producer → lyria"
+    : "pipeline: direct → lyria (gemini_producer off)";
+}
+
+function buildLyriaFullSongAdminExtra({ body, producerResult, model = "", lyriaPrompt = "", isAdmin = false } = {}) {
   const dialectHintLine = mergeLyriaDialectHint(body);
   const dialectLabel = resolveLyriaDialectLabel(body);
-  const producerUsed = Boolean(producerResult?.ok);
   return [
-    producerUsed ? "pipeline: gemini_producer → lyria" : "pipeline: direct → lyria (gemini_producer off)",
+    lyriaPipelineAdminLine(body, isAdmin, producerResult),
     ...(model ? [`lyria_model: ${model}`] : []),
     ...(dialectLabel ? [`dialect: ${dialectLabel}`] : []),
     ...(dialectHintLine ? [`dialect_hint: ${dialectHintLine.slice(0, 400)}`] : []),
@@ -447,40 +476,44 @@ async function runLyriaGenerationJob({
     let lyriaPrompt = fallbackLyriaPrompt;
     const dialectHint = mergeLyriaDialectHint(body);
     const durationSec = resolveLyriaDurationSec(body);
-    const producerResult = await enrichLyriaSongWithGeminiProducer({
-      apiKey,
-      enabled: resolveGeminiProducerEnabled(body, isAdmin),
-      input: buildSongProducerInput(
-        {
-          ...body,
-          style: stylePrompt || body?.style,
-          prompt: lyrics,
-          ...(durationSec > 0 ? { musicLengthMs: durationSec * 1000 } : {}),
-        },
-        "lyria_full_song",
-      ),
-    });
-
-    if (producerResult.ok) {
-      lyriaPrompt = buildLyriaPrompt({
-        stylePrompt,
-        lyrics,
-        title,
-        instrumental,
-        clip: false,
-        vocalGender: String(body?.vocalGender || "").trim(),
-        voiceTimbre: String(body?.voiceTimbre || "").trim(),
-        challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
-        dialectHint,
-        clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
-        enhancedStylePrompt: producerResult.enhanced_style_prompt,
-        structuredLyrics: producerResult.structured_lyrics,
-        arrangement: producerResult.arrangement || "",
-        photoMood: photoImages.length > 0,
-        durationSec,
-        scriptFormat: String(body?.scriptFormat || "").trim(),
-        nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
+    const useLyriaV2 = resolveLyriaPromptV2Enabled(body, isAdmin);
+    let producerResult = { ok: false };
+    if (!useLyriaV2) {
+      producerResult = await enrichLyriaSongWithGeminiProducer({
+        apiKey,
+        enabled: resolveGeminiProducerEnabled(body, isAdmin),
+        input: buildSongProducerInput(
+          {
+            ...body,
+            style: stylePrompt || body?.style,
+            prompt: lyrics,
+            ...(durationSec > 0 ? { musicLengthMs: durationSec * 1000 } : {}),
+          },
+          "lyria_full_song",
+        ),
       });
+
+      if (producerResult.ok) {
+        lyriaPrompt = buildLyriaPrompt({
+          stylePrompt,
+          lyrics,
+          title,
+          instrumental,
+          clip: false,
+          vocalGender: String(body?.vocalGender || "").trim(),
+          voiceTimbre: String(body?.voiceTimbre || "").trim(),
+          challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
+          dialectHint,
+          clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
+          enhancedStylePrompt: producerResult.enhanced_style_prompt,
+          structuredLyrics: producerResult.structured_lyrics,
+          arrangement: producerResult.arrangement || "",
+          photoMood: photoImages.length > 0,
+          durationSec,
+          scriptFormat: String(body?.scriptFormat || "").trim(),
+          nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
+        });
+      }
     }
 
     let requestDetail = buildLyriaRequestDetail({
@@ -488,7 +521,7 @@ async function runLyriaGenerationJob({
       model,
       lyriaPrompt,
       photoCount: photoImages.length,
-      extraLines: buildLyriaFullSongAdminExtra({ body, producerResult, model, lyriaPrompt }),
+      extraLines: buildLyriaFullSongAdminExtra({ body, producerResult, model, lyriaPrompt, isAdmin }),
     });
 
     await updateMusicGenerationByTaskId(taskId, {
@@ -588,33 +621,36 @@ async function runLyriaClipGenerationJob({
 
   try {
     let lyriaPrompt = fallbackLyriaPrompt;
-
-    const producerResult = await enrichClipWithGeminiProducer({
-      apiKey,
-      enabled: resolveGeminiProducerEnabled(body, isAdmin),
-      input: buildClipProducerInput(body, clipFlowLabel),
-    });
-
-    if (producerResult.ok) {
-      lyriaPrompt = buildLyriaPrompt({
-        stylePrompt,
-        lyrics,
-        title,
-        instrumental,
-        clip: true,
-        vocalGender: String(body?.vocalGender || "").trim(),
-        voiceTimbre: String(body?.voiceTimbre || "").trim(),
-        challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
-        dialectHint: mergeLyriaDialectHint(body),
-        clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
-        enhancedStylePrompt: producerResult.enhanced_style_prompt,
-        structuredLyrics: producerResult.structured_lyrics,
-        arrangement: producerResult.arrangement || "",
-        photoMood: photoImages.length > 0,
-        durationSec: resolveLyriaDurationSec(body),
-        scriptFormat: String(body?.scriptFormat || "").trim(),
-        nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
+    const useLyriaV2 = resolveLyriaPromptV2Enabled(body, isAdmin);
+    let producerResult = { ok: false };
+    if (!useLyriaV2) {
+      producerResult = await enrichClipWithGeminiProducer({
+        apiKey,
+        enabled: resolveGeminiProducerEnabled(body, isAdmin),
+        input: buildClipProducerInput(body, clipFlowLabel),
       });
+
+      if (producerResult.ok) {
+        lyriaPrompt = buildLyriaPrompt({
+          stylePrompt,
+          lyrics,
+          title,
+          instrumental,
+          clip: true,
+          vocalGender: String(body?.vocalGender || "").trim(),
+          voiceTimbre: String(body?.voiceTimbre || "").trim(),
+          challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
+          dialectHint: mergeLyriaDialectHint(body),
+          clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
+          enhancedStylePrompt: producerResult.enhanced_style_prompt,
+          structuredLyrics: producerResult.structured_lyrics,
+          arrangement: producerResult.arrangement || "",
+          photoMood: photoImages.length > 0,
+          durationSec: resolveLyriaDurationSec(body),
+          scriptFormat: String(body?.scriptFormat || "").trim(),
+          nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
+        });
+      }
     }
 
     let requestDetail = buildLyriaRequestDetail({
@@ -1237,7 +1273,13 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
-  const fallbackLyriaPrompt = buildLyriaPromptFromBody(body, { stylePrompt, lyrics, title, instrumental });
+  const fallbackLyriaPrompt = buildLyriaPromptFromBody(body, {
+    stylePrompt,
+    lyrics,
+    title,
+    instrumental,
+    isAdmin,
+  });
   const producerOn = resolveGeminiProducerEnabled(body, isAdmin);
   const adminDetailBase = buildLyriaRequestDetail({
     flow: LYRIA_FULL_SONG_FLOW,
@@ -1245,7 +1287,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     lyriaPrompt: fallbackLyriaPrompt,
     photoCount: photoImages.length,
     extraLines: [
-      producerOn ? "pipeline: gemini_producer → lyria" : "pipeline: direct → lyria (gemini_producer off)",
+      lyriaPipelineAdminLine(body, isAdmin, { ok: producerOn }),
       `lyria_model: ${model}`,
     ],
   });
@@ -1392,6 +1434,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     title,
     instrumental,
     clip: true,
+    isAdmin,
   });
 
   const clipFlowLabel = templateSpark

@@ -49,8 +49,14 @@ async function writeFluxScene(ctx, seed) {
           lyrics: ctx.lyrics,
           occasionLabel: ctx.occasionLabel,
           searchTemplateTitle: ctx.searchTemplateTitle,
+          regen: Boolean(ctx.regen),
         },
-        { bucketKey: "default", palette: "" },
+        {
+          bucketKey: "default",
+          palette: ctx.regen
+            ? "teal and violet brand grade with soft fill light and clear midtones, not underexposed"
+            : "",
+        },
       ),
       new Promise((resolve) => setTimeout(() => resolve({ ok: false, error: "timeout" }), 7000)),
     ]);
@@ -190,11 +196,23 @@ async function fetchAbstractCoverImage({
       fluxPrompt = built.prompt;
       console.info("[music/cover-art] flux prompt (scratch)", built.source, fluxPrompt.length);
     } else {
-      fluxPrompt = buildFluxCoverPrompt(prompt, { avoidTags, storyTheme, userArtwork, visualMode });
+      fluxPrompt = buildFluxCoverPrompt(prompt, {
+        avoidTags,
+        storyTheme,
+        userArtwork,
+        visualMode,
+        regen: Boolean(fluxContext?.regen),
+      });
     }
     let cf = await fetchCloudflareFluxCover({ prompt: fluxPrompt });
     if (!useScratch && !cf.ok && fluxPrompt.length > 1800) {
-      const retryPrompt = buildFluxCoverPrompt(prompt, { avoidTags: "", storyTheme: "", userArtwork: "", visualMode });
+      const retryPrompt = buildFluxCoverPrompt(prompt, {
+        avoidTags: "",
+        storyTheme: "",
+        userArtwork: "",
+        visualMode: "",
+        regen: Boolean(fluxContext?.regen),
+      });
       if (retryPrompt.length < fluxPrompt.length) {
         cf = await fetchCloudflareFluxCover({ prompt: retryPrompt });
       }
@@ -476,7 +494,12 @@ module.exports = async function handler(req, res) {
           userId: user.userId,
           lyrics: coverInput.lyrics,
           userArtwork: regenUserArt,
-          scene: String(body?.clientParams?.geminiScene || body?.clientParams?.directorSceneHint || "").slice(0, 400),
+          scene: String(
+            body?.clientParams?.fluxScratchScene
+            || body?.clientParams?.geminiScene
+            || body?.clientParams?.directorSceneHint
+            || "",
+          ).slice(0, 400),
           occasionLabel: coverInput.occasionLabel,
           searchTemplateTitle: coverInput.searchTemplateTitle,
           title: coverInput.title,

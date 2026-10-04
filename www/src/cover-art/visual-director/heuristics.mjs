@@ -35,6 +35,9 @@ function mainSubjectFromContext(ctx) {
   if (ctx.sourcePath === "instrumental") {
     return "premium abstract living light gradients with cinematic bloom, no people";
   }
+  if (ctx.regenBright) {
+    return "abstract sonic pulse rings and sound-wave haze in a premium music studio with soft fill light, teal-cyan and violet grade, no people";
+  }
   return "abstract sonic pulse rings and sound-wave haze in a dark music studio, teal-cyan and violet grade, no people";
 }
 
@@ -45,7 +48,11 @@ function settingFromContext(ctx) {
   if (ctx.sourcePath === "sound") return ctx.energy > 0.7 ? "dynamic neon atmospheric space" : "calm minimal atmospheric void";
   if (ctx.sourcePath === "mashup") return "layered depth planes with dual glow accents";
   if (/ocean|beach|sea|coast/i.test(ctx.storyScene)) return "coastal horizon at dusk";
-  if (/city|urban|street|skyline/i.test(ctx.storyScene)) return "cinematic urban night environment";
+  if (/city|urban|street|skyline/i.test(ctx.storyScene)) {
+    return ctx.regenBright
+      ? "cinematic urban street environment, natural daylight or warm storefront glow"
+      : "cinematic urban night environment";
+  }
   if (/mountain|peak|summit/i.test(ctx.storyScene)) return "grand mountain landscape at dusk";
   if (/wedding|ballroom|ceremony/i.test(ctx.storyScene)) return "elegant ceremony interior with warm golden light";
   return "cinematic atmospheric environment with soft depth";
@@ -131,6 +138,7 @@ export function resolveHeuristicVisualDirection(ctx) {
     energy: ctx.energy,
     visualMode,
     humTrack: ctx.humTrack,
+    regenBright: ctx.regenBright,
     concreteSubject: shouldUseLiteralSubjectMode(ctx.artworkHint || ctx.artworkStyle, {
       userArtworkOverride: ctx.artworkHint || ctx.artworkStyle,
     }),

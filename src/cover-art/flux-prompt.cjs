@@ -1,4 +1,11 @@
 "use strict";
+
+const {
+  userHintRequestsDaylight,
+  augmentArtworkHintForLighting,
+  FLUX_DAYLIGHT_LIGHT_LINE,
+} = require("./user-hint-lighting.cjs");
+
 /**
  * Cloudflare Flux Schnell cover prompts — written from scratch, Flux-only.
  * (Pollinations keeps using ./prompt.js untouched.)
@@ -111,6 +118,41 @@ const DEFAULT_SCENES = [
   "an empty theatre stage with a single spotlight and drifting haze",
 ];
 
+/** Regen taps — same brand grade but lit scenes (Flux scratch path ignores the long client prompt). */
+const REGEN_DEFAULT_SCENES = [
+  "a glossy vinyl record on a softly lit studio surface with teal-violet rim light and clear midtones",
+  "a crystal prism splitting teal and violet light on a bright matte surface, gentle daylight fill",
+  "fresh flowers and glassware on a sunlit table with soft window light and teal-violet color grade",
+  "a minimal studio still life with glass catching cyan light beams, airy premium album mood",
+];
+
+const REGEN_MOOD_SCENES = [
+  [/\b(?:sad|melanchol|heartbreak|lonely|sorrow|blues)|حزين|فراق/i, [
+    "a rain-streaked window with soft daylight and a single flower on the sill, gentle blue-teal grade",
+    "an empty chair beside a bright window with soft haze, quiet emotional mood",
+  ]],
+  [/\b(?:romantic|love|tender|romance)|حب|غرام/i, [
+    "rose petals and gold rings on ivory satin with warm rose-gold studio light",
+    "two glass goblets catching soft rose-gold daylight on cream linen",
+  ]],
+  [/\b(?:arabic|tarab|oud|khaleeji|shaabi|sha3bi|mahraganat|dabke)|عربي|طرب|شعبي|دبكة/i, [
+    "an ornate brass lantern on patterned fabric with warm glowing arabesque light, well-lit still life",
+    "a carved brass tray with tea glasses and steam on a sunlit wooden table",
+  ]],
+  [/\b(?:dance|club|edm|party|upbeat|house|techno|electro|pop|energetic|festive)/i, [
+    "a glossy vinyl record on a reflective floor with sweeping teal-violet light beams and bright bokeh",
+    "colorful confetti and balloons on a festive surface with warm string lights and cyan-violet grade",
+  ]],
+  [/\b(?:chill|lofi|lo-fi|calm|relax|ambient|acoustic|sleep|soft|peace)/i, [
+    "a ceramic cup beside a small green plant on a sunlit window ledge",
+    "smooth stones beside still water with soft mist and gentle daylight",
+  ]],
+  [/\b(?:rock|metal|drill|trap|hip ?hop|rap|dark|aggressive|angry)/i, [
+    "cracked glass with a teal-violet rim light on a wet street at dusk, neon reflections, not underexposed",
+    "a chrome chain on asphalt with vivid neon reflections and lifted midtones",
+  ]],
+];
+
 function pickBySeed(list, seed) {
   const n = Math.abs(Math.floor(Number(seed) || 0));
   return list[n % list.length];
@@ -136,7 +178,8 @@ function needsSceneWriter(ctx = {}) {
 }
 
 function resolveSubject(ctx) {
-  const userArt = String(ctx.userArtwork || "").trim();
+  const userArtRaw = String(ctx.userArtwork || "").trim();
+  const userArt = augmentArtworkHintForLighting(userArtRaw);
   const allowCandles = /\bcandle|birthday cake/i.test(userArt);
   if (userArt) {
     const cleaned = positiveOnly(userArt, { allowCandles });
@@ -156,14 +199,18 @@ function resolveSubject(ctx) {
   }
 
   const moodBlob = [ctx.mood, ctx.genre, ctx.style].filter(Boolean).join(" ");
-  for (const [re, scenes] of MOOD_SCENES) {
+  const moodTable = ctx.regen ? REGEN_MOOD_SCENES : MOOD_SCENES;
+  for (const [re, scenes] of moodTable) {
     if (re.test(moodBlob)) return { text: pickBySeed(scenes, ctx.seed), source: "mood", people: false };
   }
-  return { text: pickBySeed(DEFAULT_SCENES, ctx.seed), source: "default", people: false };
+  const defaults = ctx.regen ? REGEN_DEFAULT_SCENES : DEFAULT_SCENES;
+  return { text: pickBySeed(defaults, ctx.seed), source: "default", people: false };
 }
 
 const LIGHT_LINE =
   "Dark, moody atmosphere with deep black shadows, lit by teal and violet glow and a faint rose-gold highlight.";
+const REGEN_LIGHT_LINE =
+  "Premium album photograph with lighting that matches the scene (daylight, golden hour, studio fill, or justified night glow), teal and violet color grade, readable midtones, avoid default void-black underexposure unless the scene is clearly nocturnal";
 const FRAME_LINE =
   "Vertical 9:16 album cover, subject centred with wide margins, shallow depth of field, photorealistic, cinematic lighting.";
 const QUIET_LINE = "A quiet, wordless scene of objects and atmosphere only.";
@@ -177,9 +224,15 @@ const WORDLESS_LINE = "A wordless image.";
 function buildFluxScratchPrompt(ctx = {}) {
   const subject = resolveSubject(ctx);
   const lead = /photograph|photo\b/i.test(subject.text) ? "" : "Cinematic photograph: ";
+  const userArtForLight = String(ctx.userArtwork || "").trim();
+  const lightLine = userHintRequestsDaylight(userArtForLight)
+    ? FLUX_DAYLIGHT_LIGHT_LINE
+    : ctx.regen
+      ? REGEN_LIGHT_LINE
+      : LIGHT_LINE;
   const prompt = [
     `${lead}${subject.text}.`,
-    LIGHT_LINE,
+    lightLine,
     FRAME_LINE,
     subject.people ? WORDLESS_LINE : QUIET_LINE,
   ].join(" ").replace(/\s+/g, " ").trim();

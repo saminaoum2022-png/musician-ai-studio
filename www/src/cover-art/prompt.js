@@ -1,10 +1,43 @@
+/** Browser-safe (iOS WebView) — keep in sync with user-hint-lighting.cjs for Flux server path. */
+const USER_HINT_DAYLIGHT_RE =
+  /\b(daylight|day\s*time|daytime|in\s+day|in\s+the\s+day|during\s+the\s+day|sun\s*light|sunlit|sun\s+lit|sunny|bright\s+day|morning\s+light|afternoon\s+sun|midday|broad\s+daylight)\b/i;
+const USER_HINT_NIGHT_RE =
+  /\b(at\s+night|nighttime|night\s*time|midnight|noir|after\s+dark|in\s+the\s+dark|nocturnal|evening\s+only|after\s+sunset)\b/i;
+
+export function userHintRequestsDaylight(text) {
+  return USER_HINT_DAYLIGHT_RE.test(String(text || ""));
+}
+
+function userHintRequestsNight(text) {
+  return USER_HINT_NIGHT_RE.test(String(text || ""));
+}
+
+function augmentArtworkHintForLighting(raw) {
+  let s = String(raw || "").replace(/\s+/g, " ").trim();
+  if (!s || userHintRequestsNight(s)) return s;
+  if (!userHintRequestsDaylight(s)) return s;
+  s = s.replace(/\bin day\b/gi, "in bright daylight");
+  if (!/bright daylight|sunlit|sunlight|daytime scene|natural sunlight/i.test(s)) {
+    s = `${s}, bright natural daylight, sunlit scene`;
+  }
+  if (/\b(christmas|xmas|holiday)\b.*\b(tree|evergreen)\b|\b(tree|evergreen)\b.*\b(christmas|xmas|holiday)\b/i.test(s)) {
+    if (!/outdoor|blue sky|winter daylight|snow in sunlight/i.test(s)) {
+      s = `${s}, decorated evergreen tree outdoors in bright winter daylight, blue sky, sunlight on branches, not a dark night background`;
+    }
+  }
+  return s.slice(0, 280);
+}
+
+const USER_DAYLIGHT_PALETTE =
+  "natural daylight, warm sunlit highlights, clear sky tones, soft teal-violet grade accents only, no void black background, not underexposed";
+
 /**
  * Story-aware cover prompts — Flux Schnell primary, Pollinations fallback.
  * User never writes these. Same song id + same story → same seed + same scene.
  */
 
 /** Bump when cover prompt policy changes. */
-export const COVER_PROMPT_POLICY_VERSION = 23;
+export const COVER_PROMPT_POLICY_VERSION = 27;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -65,6 +98,15 @@ const NABAD_PULSE_SCENES = [
 
 const NABAD_COLOR_LOCK =
   "Nabad brand color grade required: deep void black, dominant teal and cyan lighting, rich violet and soft purple atmospheric haze, optional faint rose-gold accent only, no warm orange daylight, no generic stock colors, no brown amber candle warmth";
+
+const REGEN_COLOR_LOCK =
+  "Nabad brand color grade: teal and cyan lighting, rich violet atmospheric haze, soft rose-gold accent, natural exposure suited to the scene, readable midtones, avoid flat grey underexposure unless the scene is nocturnal";
+
+const REGEN_BRIGHTNESS_GUARD =
+  "balanced natural exposure with readable midtones, lighting fits the scene, avoid default void-black underexposure unless the art direction asks for dark or midnight";
+
+const REGEN_STYLE_CORE =
+  "premium cinematic photograph, elegant composition, rich color grading, high-end editorial look, natural lighting suited to the scene, teal and violet palette accents, physically plausible light, atmospheric depth, symbolic objects and environments, no human subjects";
 
 const MUSIC_FALLBACK_SCENES = FLUX_CINEMATIC_SCENES;
 
@@ -298,11 +340,19 @@ const STORY_THEMES = [
   },
 ];
 
-REGEN_VARIETY_POOL = [
-  ...NABAD_PULSE_SCENES,
-  ...FLUX_ABSTRACT_SCENES,
-  ...FLUX_CINEMATIC_SCENES,
+/** Regen without a user hint — prefer lit still lifes over void-black pulse scenes. */
+const REGEN_VARIETY_SCENES = [
+  "serene botanical still life, soft window light on dried flowers, calm natural mood, no people",
+  "elegant interior with chandelier bokeh and champagne gold warmth, celebration mood, no people",
+  "minimal studio still life, glass catching teal-cyan light beams on a softly lit surface, premium mood, no people",
+  "coastal horizon at golden hour, pearlescent sky glow and clear atmospheric depth, no people",
+  "symbolic still life on satin, vinyl record and glass catching rose-gold studio rim light, editorial photograph, no people, no candles",
+  "celebration still life, colorful balloons and warm string lights on a bright festive surface, confetti scatter, no people",
+  "fresh citrus and glassware on a sunlit table, soft daylight with teal-violet color grade, no people",
+  "abstract luminous sound aura in teal and violet with soft bloom on a bright gradient ground, premium music artwork",
 ];
+
+REGEN_VARIETY_POOL = REGEN_VARIETY_SCENES;
 
 const ABSTRACT_FALLBACKS = MUSIC_FALLBACK_SCENES;
 
@@ -619,7 +669,11 @@ function enrichUserArtworkHint(raw) {
   const moodTheme = resolveRegenMoodFromHint(s);
   const hasSceneSubject = isSceneEnvironmentHint(s);
   const hasObjectSubject = !hasSceneSubject && (isConcreteObjectArtworkHint(s) || isFoodArtworkHint(s) || Boolean(moodTheme));
-  if (moodTheme && !/still life|focal subject|no people|balloons|rings|candle|confetti|rose petals/i.test(s)) {
+  if (
+    moodTheme
+    && !userHintRequestsDaylight(s)
+    && !/still life|focal subject|no people|balloons|rings|candle|confetti|rose petals/i.test(s)
+  ) {
     s = `${s}, ${moodTheme.scene}`;
   }
   if (hasSceneSubject && !/cinematic|architectural|environment|focal subject|atmospheric|wide composition|no people/i.test(s)) {
@@ -683,6 +737,7 @@ function composeFrameForArtwork(userArtwork, { literalSubject = false, wildlifeS
 }
 
 function paletteForUserArtwork(userArtwork, bucketKey) {
+  if (userHintRequestsDaylight(userArtwork)) return USER_DAYLIGHT_PALETTE;
   if (isMonochromeArtworkHint(userArtwork)) return MONOCHROME_PALETTE;
   if (isSkyOrSpaceHint(userArtwork)) {
     return "deep midnight blue, soft starlight silver, subtle violet atmospheric haze";
@@ -690,8 +745,12 @@ function paletteForUserArtwork(userArtwork, bucketKey) {
   return moodPaletteForBucket(bucketKey);
 }
 
+const USER_DAYLIGHT_GUARD =
+  "bright natural daylight, sunlit scene, clear sky or bright windows visible, not a dark night background or void-black underexposure";
+
 function prepareExplicitUserArtworkHint(raw) {
-  return expandArtworkStyleTags(String(raw || "").trim()).replace(/\s+/g, " ").trim().slice(0, 280);
+  const expanded = expandArtworkStyleTags(String(raw || "").trim()).replace(/\s+/g, " ").trim();
+  return augmentArtworkHintForLighting(expanded).slice(0, 280);
 }
 
 function prepareDirectUserArtworkHint(raw, { allowHumans = false, creative = true } = {}) {
@@ -860,8 +919,15 @@ function tempoPhrase(tempo) {
 
 function brightnessPhrase(brightness) {
   if (brightness < 0.35) return "mostly dark with restrained highlights";
-  if (brightness > 0.7) return "brighter highlights against deep shadows";
-  return "balanced contrast";
+  if (brightness > 0.7) return "natural balanced lighting with clear midtones and soft shadows";
+  return "balanced contrast with readable midtones";
+}
+
+function moodLabelForRegen(phrase, regenSaltKey, bucketKey) {
+  if (!phrase || !regenSaltKey) return phrase;
+  if (bucketKey === "dark") return phrase;
+  if (/\bnight\b|noir|midnight|void black|deep black/i.test(phrase)) return "";
+  return phrase;
 }
 
 const STORY_MOOD_PHRASES = {
@@ -1092,12 +1158,12 @@ function compressPromptForFlux(prompt, maxLen) {
   return (lastComma > maxLen * 0.55 ? cut.slice(0, lastComma) : cut).trim();
 }
 
-export function buildFluxCoverPrompt(prompt, { avoidTags = "", visualMode = "", userArtwork = "" } = {}) {
+export function buildFluxCoverPrompt(prompt, { avoidTags = "", visualMode = "", userArtwork = "", regen = false } = {}) {
   const parsedAvoid = parseAvoidTagsList(avoidTags).slice(0, 4);
   const suffixBits = [MINIMAL_TEXT_GUARD];
   if (parsedAvoid.length) suffixBits.push(`avoid ${parsedAvoid.join(", ")}`);
   const suffix = `. ${suffixBits.join(", ")}`;
-  const colorLock = NABAD_COLOR_LOCK;
+  const colorLock = regen ? REGEN_COLOR_LOCK : NABAD_COLOR_LOCK;
   const baseBudget = Math.max(400, FLUX_PROMPT_MAX - suffix.length - colorLock.length - 4);
   let base = compressPromptForFlux(String(prompt || "").trim(), baseBudget);
   if (!/Nabad brand color grade/i.test(base)) {
@@ -1168,6 +1234,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const creativeMode = options.creativeMode !== false && !geminiImage;
   const regenVariety = Boolean(options.regenVariety && creativeMode);
   const regenSaltKey = String(options.regenSalt || "").trim();
+  const effectiveBrightness = regenSaltKey ? Math.max(brightness, 0.52) : brightness;
   const userArtworkOverride = String(options.userArtworkOverride || "").trim().slice(0, 280);
   const forceMusicFallback = Boolean(options.forceMusicFallback && !userArtworkOverride);
   const userArtworkRaw = userArtworkOverride || (forceMusicFallback ? "" : resolveUserArtworkPrompt(input));
@@ -1206,18 +1273,25 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     : sanitizeArtworkPrompt(String(options.nabadIdentityPhrases || "").trim(), { title });
   const storyScene = creativeMode ? String(scene || "").trim() : toVisualOnlyPrompt(scene, { title });
   const preferStoryScene = explicitCoverTheme && storyTheme !== "mood_fallback" && Boolean(storyScene);
+  const regenLitPool = Boolean(regenSaltKey) && !explicitUserHint && !forceMusicFallback;
+  const storySceneOkForRegen = preferStoryScene && storyScene
+    && !/\b(at night|nightclub|void black|deep black|stormy atmospheric sky over dark|wet urban street at night)\b/i.test(storyScene);
   let visualScene = explicitUserHint
     ? ""
+    : regenLitPool
+      ? (regenMood?.scene
+        || (storySceneOkForRegen ? storyScene : "")
+        || pickFrom(REGEN_VARIETY_POOL, songId, regenSaltKey || "regen-variety"))
     : forceMusicFallback || !explicitCoverTheme
-    ? pickFrom(NABAD_PULSE_SCENES, songId, regenSaltKey || "nabad-pulse")
-    : regenVariety
-      ? pickFrom(REGEN_VARIETY_POOL, songId, regenSaltKey || "regen-variety")
-      : preferStoryScene
-        ? storyScene
-        : directorSceneHint && !userArtwork
-          ? directorSceneHint
-          : storyScene || pickFrom(NABAD_PULSE_SCENES, songId, "flux-fallback");
-  const pulseDefault = !explicitCoverTheme && !explicitUserHint && !userArtwork;
+      ? pickFrom(NABAD_PULSE_SCENES, songId, regenSaltKey || "nabad-pulse")
+      : regenVariety
+        ? pickFrom(REGEN_VARIETY_POOL, songId, regenSaltKey || "regen-variety")
+        : preferStoryScene
+          ? storyScene
+          : directorSceneHint && !userArtwork
+            ? directorSceneHint
+            : storyScene || pickFrom(NABAD_PULSE_SCENES, songId, "flux-fallback");
+  const pulseDefault = !explicitCoverTheme && !explicitUserHint && !userArtwork && !regenSaltKey;
   const effectiveVisualMode = sceneOverride || userArtwork || userDirectedRegen
     ? "user_directed"
     : pulseDefault
@@ -1228,8 +1302,11 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     visualScene = enforceNoHumansScene(visualScene);
     userArtwork = userArtwork ? enforceNoHumansScene(userArtwork) : "";
   }
-  const palette = moodPaletteForBucket(bucketKey);
+  const palette = regenSaltKey && bucketKey === "default"
+    ? "soft teal and cyan fill light, rich violet atmospheric glow, rose-gold accent, lifted midtones, readable colors"
+    : moodPaletteForBucket(bucketKey);
   const compositionSalt = regenSaltKey || "";
+  const regenBrightness = regenSaltKey ? REGEN_BRIGHTNESS_GUARD : "";
   const composition = creativeMode
     ? COMPOSITIONS[fnv1a(`${songId}:comp:${compositionSalt}`) % COMPOSITIONS.length]
     : compositionPhraseForCover(
@@ -1257,7 +1334,11 @@ export function buildAbstractCoverPrompt(input, options = {}) {
           : "auto_story";
 
   const isHumTrack = Boolean(input?.humTrack);
-  const styleCore = isHumTrack ? HUM_TRACK_STYLE_CORE : STYLE_CORE;
+  const styleCore = isHumTrack
+    ? HUM_TRACK_STYLE_CORE
+    : regenSaltKey
+      ? REGEN_STYLE_CORE
+      : STYLE_CORE;
   const humGuard = isHumTrack ? HUM_TRACK_SCENE_GUARD : "";
   const autoFrame = composeFrameForCreativeMode(effectiveVisualMode);
   const photoLead = fluxPhotoLeadForMode(effectiveVisualMode);
@@ -1280,20 +1361,27 @@ export function buildAbstractCoverPrompt(input, options = {}) {
         nabadIdentityPhrases,
         palette,
         composition,
-        storyMoodPhrase(storyTheme),
-        bucketMoodPhrase(bucketKey),
+        moodLabelForRegen(storyMoodPhrase(storyTheme), regenSaltKey, bucketKey),
+        moodLabelForRegen(bucketMoodPhrase(bucketKey), regenSaltKey, bucketKey),
         tempoPhrase(tempo),
-        brightnessPhrase(brightness),
+        brightnessPhrase(effectiveBrightness),
         sonicPhrase(sonicProfile),
         humGuard,
+        regenBrightness,
         MINIMAL_TEXT_GUARD,
       ];
     } else if (userArtwork) {
       if (explicitUserHint && creativeMode) {
+        const userDaylight = userHintRequestsDaylight(userArtwork);
         parts = [
+          shouldUseLiteralSubjectMode(userArtworkOverride || userArtworkRaw, { userArtworkOverride: userArtworkOverride || userArtworkRaw })
+            ? OBJECT_COMPOSE_FRAME
+            : "",
           userArtwork,
-          nabadIdentityPhrases,
+          userDaylight ? USER_DAYLIGHT_GUARD : "",
+          userDaylight ? "" : nabadIdentityPhrases,
           paletteForUserArtwork(userArtwork, bucketKey),
+          userDaylight ? "" : regenBrightness,
           MINIMAL_TEXT_GUARD,
         ];
       } else {
@@ -1305,25 +1393,29 @@ export function buildAbstractCoverPrompt(input, options = {}) {
           USER_STYLE_CORE,
           composition,
           sonicPhrase(sonicProfile),
-          storyMoodPhrase(storyTheme),
-          bucketMoodPhrase(bucketKey),
+          moodLabelForRegen(storyMoodPhrase(storyTheme), regenSaltKey, bucketKey),
+          moodLabelForRegen(bucketMoodPhrase(bucketKey), regenSaltKey, bucketKey),
+          regenBrightness,
           MINIMAL_TEXT_GUARD,
         ];
       }
     } else {
       parts = [
-        NABAD_COLOR_LOCK,
-        nabadIdentityPhrases || "deep void black ground, teal-violet atmospheric haze, soft cyan fill",
+        regenSaltKey ? REGEN_COLOR_LOCK : NABAD_COLOR_LOCK,
+        nabadIdentityPhrases || (regenSaltKey
+          ? "soft charcoal ground with luminous depth, teal-violet atmospheric haze, lifted midtones"
+          : "deep void black ground, teal-violet atmospheric haze, soft cyan fill"),
         autoFrame,
         styleCore,
         `${photoLead}${visualScene}`.trim(),
         humGuard,
         palette,
         composition,
-        storyMoodPhrase(effectiveStoryTheme),
-        bucketMoodPhrase(bucketKey),
+        moodLabelForRegen(storyMoodPhrase(effectiveStoryTheme), regenSaltKey, bucketKey),
+        moodLabelForRegen(bucketMoodPhrase(bucketKey), regenSaltKey, bucketKey),
         effectiveVisualMode === "abstract" ? sonicPhrase(sonicProfile) : "",
         candleGuard,
+        regenBrightness,
         MINIMAL_TEXT_GUARD,
       ];
     }
@@ -1354,10 +1446,10 @@ export function buildAbstractCoverPrompt(input, options = {}) {
           humGuard,
           palette,
           composition,
-          storyMoodPhrase(storyTheme),
-          bucketMoodPhrase(bucketKey),
+          moodLabelForRegen(storyMoodPhrase(storyTheme), regenSaltKey, bucketKey),
+          moodLabelForRegen(bucketMoodPhrase(bucketKey), regenSaltKey, bucketKey),
           tempoPhrase(tempo),
-          brightnessPhrase(brightness),
+          brightnessPhrase(effectiveBrightness),
           sonicPhrase(sonicProfile),
           NO_TEXT_REINFORCE,
           humansGuard,
@@ -1415,9 +1507,14 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       sonicPhrase(sonicProfile),
       palette,
       composition,
-      ...(forceMusicFallback ? [] : [storyMoodPhrase(storyTheme), bucketMoodPhrase(bucketKey)]),
+      ...(forceMusicFallback
+        ? []
+        : [
+          moodLabelForRegen(storyMoodPhrase(storyTheme), regenSaltKey, bucketKey),
+          moodLabelForRegen(bucketMoodPhrase(bucketKey), regenSaltKey, bucketKey),
+        ]),
       tempoPhrase(tempo),
-      brightnessPhrase(brightness),
+      brightnessPhrase(effectiveBrightness),
       candleGuard,
       NO_TEXT_REINFORCE,
       humansGuard,
@@ -1451,6 +1548,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       geminiScene: sceneOverride || undefined,
       geminiModel: options.geminiModel || undefined,
       directorSceneHint: directorSceneHint || undefined,
+      /** Cloudflare Flux scratch path — must match lit regen scene, not night-biased director heuristics. */
+      fluxScratchScene: regenSaltKey && visualScene ? visualScene : undefined,
       nabadIdentityPhrases: nabadIdentityPhrases || undefined,
       visualDirection: options.visualDirection || undefined,
       coverWidth: geminiImage ? 720 : POLLINATIONS_COVER_WIDTH,

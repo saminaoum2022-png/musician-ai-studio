@@ -124,7 +124,8 @@ export function nabadIdentityPhrases(opts = {}) {
   const songId = String(opts.songId || "nabad-song").trim();
   const bucketKey = String(opts.bucketKey || "default").trim();
   const contextual = contextualRoots({ ...opts, bucketKey });
-  const pool = [...new Set([...CORE_ROOTS, ...contextual])];
+  const coreRoots = opts.userDaylight ? CORE_ROOTS.filter((r) => r !== "void") : CORE_ROOTS;
+  const pool = [...new Set([...coreRoots, ...contextual])];
   const seed = fnv1a(`${songId}|${bucketKey}|dna`);
 
   /** @type {NabadRootId[]} */
@@ -145,7 +146,16 @@ export function nabadIdentityPhrases(opts = {}) {
     ...CORE_ROOTS.filter((root) => picked.includes(root)),
     ...picked.filter((root) => !CORE_ROOTS.includes(root)),
   ];
-  const clauses = ordered.map((root) => NABAD_ROOT_PHRASES[root]).filter(Boolean);
+  const phraseFor = (root) => {
+    if (root === "void" && opts.userDaylight) {
+      return "bright open sky and soft natural sunlight, airy depth";
+    }
+    if (root === "void" && opts.regenBright) {
+      return "rich charcoal backdrop with soft fill light and luminous depth, lifted midtones";
+    }
+    return NABAD_ROOT_PHRASES[root];
+  };
+  const clauses = ordered.map(phraseFor).filter(Boolean);
   let text = clauses.join(", ");
   if (text.length > MAX_PHRASE_CHARS) {
     text = text.slice(0, MAX_PHRASE_CHARS).replace(/,\s*[^,]*$/, "").trim();

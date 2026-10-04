@@ -30,6 +30,7 @@
  * @property {string} storyThemeId
  * @property {string} storyScene
  * @property {string} visualModeHint
+ * @property {boolean} regenBright
  * @property {object|null} mashupOf
  * @property {string} mashupPrompt
  */
@@ -85,7 +86,7 @@ function inferSourcePath(input) {
 
 /**
  * @param {object} input — cover-art API body / params
- * @param {{ bucketKey?: string, storyThemeId?: string, storyScene?: string, visualModeHint?: string }} [hints]
+ * @param {{ bucketKey?: string, storyThemeId?: string, storyScene?: string, visualModeHint?: string, regenBright?: boolean }} [hints]
  * @returns {CoverDirectorContext}
  */
 export function buildCoverDirectorContext(input, hints = {}) {
@@ -120,6 +121,7 @@ export function buildCoverDirectorContext(input, hints = {}) {
     storyThemeId: String(hints.storyThemeId || input?.storyThemeId || "mood_fallback").trim(),
     storyScene: String(hints.storyScene || input?.storyScene || "").trim(),
     visualModeHint: String(hints.visualModeHint || input?.visualModeHint || "").trim(),
+    regenBright: Boolean(hints.regenBright),
     mashupOf: Array.isArray(input?.mashupOf) ? input.mashupOf : null,
     mashupPrompt: String(input?.mashupPrompt || "").trim(),
   };

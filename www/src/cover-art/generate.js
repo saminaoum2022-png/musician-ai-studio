@@ -2,7 +2,7 @@
  * Client-side abstract cover generation via /api/music/cover-art
  */
 import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, hasUserPhotoCoverMeta, isAbstractApiCoverSource, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
-import { buildAbstractCoverPrompt, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, resolveRegenMoodFromHint, shouldUseConcreteSubjectDna } from "./prompt.js";
+import { buildAbstractCoverPrompt, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, resolveRegenMoodFromHint, shouldUseConcreteSubjectDna, userHintRequestsDaylight } from "./prompt.js";
 import { resolveVisualDirection } from "./visual-director/director.mjs";
 import { nabadIdentityPhrases } from "./visual-director/nabad-identity.mjs";
 import { DEFAULT_SONG_COVER_URL, isDefaultSongCoverUrl } from "./placeholders.js";
@@ -99,6 +99,7 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
       storyThemeId: storyScore > 0 && theme?.id ? theme.id : undefined,
       storyScene: theme?.scene || "",
       visualModeHint: theme?.visualMode || "abstract",
+      regenBright: true,
     },
   });
 
@@ -108,21 +109,24 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
   const regenMood = hintOverride ? resolveRegenMoodFromHint(hintOverride) : null;
   const identityBucket = regenMood?.bucket || bucketKey;
   const concreteSubject = Boolean(hintOverride && shouldUseConcreteSubjectDna(hintOverride, { userArtworkOverride: hintOverride }));
-  const identityPhrases = concreteSubject
-    ? nabadIdentityPhrases({
-        songId: String(params?.songId || "").trim(),
-        bucketKey: identityBucket,
-        energy: params?.energy,
-        visualMode: vd.direction?.visualMode,
-        humTrack: params?.humTrack,
-        concreteSubject: true,
-      }).text
-    : (vd.identityPhrases || "");
+  const userDaylight = userHintRequestsDaylight(hintOverride);
+  const identityPhrases = userDaylight
+    ? ""
+    : nabadIdentityPhrases({
+      songId: String(params?.songId || "").trim(),
+      bucketKey: identityBucket,
+      energy: params?.energy,
+      visualMode: vd.direction?.visualMode,
+      humTrack: params?.humTrack,
+      concreteSubject,
+      regenBright: true,
+    }).text;
   /** No-hint regen: rotate atmospheric scenes via regenSalt; keep Nabad identity + mood palette. */
   const built = buildAbstractCoverPrompt(promptInput, {
     regenSalt,
     regenVariety: !hintOverride,
-    directorSceneHint: hintOverride ? "" : (vd.sceneHint || ""),
+    /** No-hint regen uses REGEN_VARIETY scenes in prompt.js — director heuristics skew night/dark and must not feed Flux scratch. */
+    directorSceneHint: hintOverride ? (vd.sceneHint || "") : "",
     nabadIdentityPhrases: identityPhrases,
     visualDirection: vd.direction || undefined,
     userArtworkOverride: hintOverride || undefined,

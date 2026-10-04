@@ -945,7 +945,9 @@ function syncUi() {
   const hasArt = Boolean(S.photo || S.bg);
   root.dataset.tab = S.tab;
   root.classList.toggle("csIsEmpty", !hasArt);
-  dom.empty.hidden = hasArt;
+  // The "give this song a cover" page is never shown: while the current cover loads the stage stays
+  // blank (loading), then the editor opens on it (or on a default gradient if there is none).
+  dom.empty.hidden = true;
   dom.stage.style.visibility = hasArt ? "visible" : "hidden";
   dom.stageActions.hidden = !(hasArt && S.tab === "cover");
   dom.reset.hidden = !(hasArt && S.tab !== "text");

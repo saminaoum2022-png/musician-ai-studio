@@ -1387,6 +1387,7 @@ const els = {
   btnAuthSignupPrimary: document.getElementById("btnAuthSignupPrimary"),
   btnAuthLoginReveal: document.getElementById("btnAuthLoginReveal"),
   btnAuthEmailBack: document.getElementById("btnAuthEmailBack"),
+  btnAuthForgot: document.getElementById("btnAuthForgot"),
   authGateChoices: document.getElementById("authGateChoices"),
   authEmailHeading: document.getElementById("authEmailHeading"),
   btnAuthGateGuest: document.getElementById("btnAuthGateGuest"),
@@ -5548,11 +5549,17 @@ function parseSharedTrackIdFromLocation() {
   } catch {}
 })();
 
+/** True while a password-reset email is open, so a saved login does not skip the new-password form. */
+let _passwordResetActive = false;
+try {
+  if (sessionStorage.getItem("nabad_password_reset_v1")) _passwordResetActive = true;
+} catch {}
+
 /** Keep splash up while route is still settling (session restore / OAuth). */
 function shouldHoldBootSplashForRoute(wanted) {
   if (!document.body.classList.contains("booting")) return false;
   if (parseSharedTrackIdFromLocation()) return false;
-  if (wanted === "auth" && (getSupabaseAuthToken() || isAppLoggedIn())) return true;
+  if (wanted === "auth" && !_passwordResetActive && (getSupabaseAuthToken() || isAppLoggedIn())) return true;
   return false;
 }
 
@@ -6113,7 +6120,7 @@ function applyRoute({ passGen } = {}) {
     try { history.replaceState(null, "", "#/settings"); } catch {}
     normalized = "settings";
   }
-  let wanted = allowedRoutes.has(normalized) ? normalized : "generate";
+  let wanted = _passwordResetActive ? "auth" : (allowedRoutes.has(normalized) ? normalized : "generate");
   const isLoggedIn = isAppLoggedIn();
   ensureAuthSessionUserFromToken();
   const hasAuthToken = Boolean(getSupabaseAuthToken());
@@ -6121,7 +6128,7 @@ function applyRoute({ passGen } = {}) {
     const uid = String(authSession?.user?.id || "").trim();
     const needsOnboarding = uid && shouldShowOnboardingForUser(uid);
     if (hasAuthToken || isLoggedIn) {
-      if (wanted === "auth" || wanted === "intro") {
+      if ((wanted === "auth" || wanted === "intro") && !_passwordResetActive) {
         wanted = needsOnboarding ? "onboarding" : DEFAULT_LOGGED_IN_ROUTE;
         try {
           history.replaceState(null, "", `#/${wanted}`);
@@ -6142,7 +6149,7 @@ function applyRoute({ passGen } = {}) {
     }
   }
   // Keychain/session often loads after first paint — never keep a signed-in user on #/auth.
-  if (wanted === "auth" && (isLoggedIn || hasAuthToken)) {
+  if (wanted === "auth" && (isLoggedIn || hasAuthToken) && !_passwordResetActive) {
     const uid = String(authSession?.user?.id || "").trim();
     wanted = uid && shouldShowOnboardingForUser(uid) ? "onboarding" : DEFAULT_LOGGED_IN_ROUTE;
     try {
@@ -8273,6 +8280,11 @@ function scheduleInitialHash() {
       await waitForNativeAuthHydration(3200);
       loadAuthSession();
       ensureAuthSessionUserFromToken();
+      if (_passwordResetActive) {
+        try { location.hash = "#/auth"; } catch {}
+        scheduleApplyRoute();
+        return;
+      }
       if (!location.hash) {
         try {
           location.hash = getInitialBootHash(() => authSession);
@@ -17585,6 +17597,82 @@ function publishReleaseTagCandidates(track, max = 12) {
   return trackStyleTagsList(track, max);
 }
 
+const PUBLISH_STYLE_HASHTAG_MAX = 5;
+
+/** "Levantine Dabke" → #LevantineDabke, "6/8" → #6_8. Empty when the tag has no letters or digits. */
+function styleTagToHashtag(tag) {
+  const parts = String(tag || "").trim().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  if (!parts.length) return "";
+  const body = parts.every((p) => /^\d+$/.test(p))
+    ? parts.join("_")
+    : parts.map((w, i) => (i === 0 ? w : w.charAt(0).toUpperCase() + w.slice(1))).join("");
+  const cleaned = body.replace(/[^\p{L}\p{N}_]/gu, "").slice(0, 48);
+  return cleaned ? `#${cleaned}` : "";
+}
+
+function escapePublishHashtagRe(hash) {
+  return String(hash || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function captionHasHashtag(text, hash) {
+  if (!hash) return false;
+  const re = new RegExp(`(^|[^\\p{L}\\p{N}_])${escapePublishHashtagRe(hash)}(?=$|[^\\p{L}\\p{N}_])`, "iu");
+  return re.test(String(text || ""));
+}
+
+function removeHashtagFromCaption(text, hash) {
+  if (!hash) return String(text || "");
+  const re = new RegExp(`(^|\\s)${escapePublishHashtagRe(hash)}(?=\\s|$)`, "giu");
+  return String(text || "")
+    .replace(re, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
+}
+
+/** Append style hashtags that are not already in the note, without passing the 160-character cap. */
+function appendStyleHashtagsToCaption(text, hashes) {
+  let next = String(text || "").trim();
+  const skipped = [];
+  for (const hash of hashes || []) {
+    if (!hash || captionHasHashtag(next, hash)) continue;
+    const trial = next ? `${next} ${hash}` : hash;
+    if (trial.length > 160) {
+      skipped.push(hash);
+      continue;
+    }
+    next = trial;
+  }
+  return { text: next, skipped };
+}
+
+function paintPublishReleaseTagPills(sheet) {
+  const row = sheet?.querySelector?.("#publishReleaseTagsRow");
+  if (!row) return;
+  const selected = readPublishReleaseSelectedTags(sheet);
+  row.querySelectorAll("[data-publish-tag]").forEach((btn) => {
+    const tag = decodeURIComponent(btn.getAttribute("data-publish-tag") || "");
+    const on = selected.some((t) => t.toLowerCase() === tag.toLowerCase());
+    btn.classList.toggle("is-selected", on);
+    btn.classList.toggle("is-off", !on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+}
+
+/** Drop a style pill when its hashtag is no longer in the note (the user deleted it). */
+function reconcilePublishTagsWithCaption(sheet) {
+  if (!sheet || sheet._publishCaptionSyncing) return;
+  const caption = String(sheet.querySelector("#publishReleaseCaption")?.value || "");
+  const selected = readPublishReleaseSelectedTags(sheet);
+  const still = selected.filter((tag) => {
+    const hash = styleTagToHashtag(tag);
+    return hash && captionHasHashtag(caption, hash);
+  });
+  if (still.length === selected.length) return;
+  sheet._publishSelectedTags = still;
+  paintPublishReleaseTagPills(sheet);
+}
+
 function renderPublishReleaseTags(sheet, track) {
   const section = sheet.querySelector("#publishReleaseTags");
   const row = sheet.querySelector("#publishReleaseTagsRow");
@@ -17601,7 +17689,9 @@ function renderPublishReleaseTags(sheet, track) {
     ? track.meta.styleTags.map((t) => String(t || "").trim()).filter(Boolean)
     : candidates;
   const selectedSet = new Set(existing.map((t) => t.toLowerCase()));
-  sheet._publishSelectedTags = candidates.filter((t) => selectedSet.has(t.toLowerCase()));
+  sheet._publishSelectedTags = candidates
+    .filter((t) => selectedSet.has(t.toLowerCase()))
+    .slice(0, PUBLISH_STYLE_HASHTAG_MAX);
   row.innerHTML = candidates
     .map((tag) => {
       const on = sheet._publishSelectedTags.some((t) => t.toLowerCase() === tag.toLowerCase());
@@ -17613,7 +17703,7 @@ function renderPublishReleaseTags(sheet, track) {
 
 function readPublishReleaseSelectedTags(sheet) {
   return Array.isArray(sheet?._publishSelectedTags)
-    ? sheet._publishSelectedTags.map((t) => String(t || "").trim()).filter(Boolean).slice(0, 6)
+    ? sheet._publishSelectedTags.map((t) => String(t || "").trim()).filter(Boolean).slice(0, PUBLISH_STYLE_HASHTAG_MAX)
     : [];
 }
 
@@ -17628,15 +17718,37 @@ function bindPublishReleaseTagsOnce(sheet) {
     const tag = decodeURIComponent(btn.getAttribute("data-publish-tag") || "");
     if (!tag) return;
     haptic("light");
-    const list = Array.isArray(sheet._publishSelectedTags) ? sheet._publishSelectedTags : [];
+    const captionEl = sheet.querySelector("#publishReleaseCaption");
+    const list = Array.isArray(sheet._publishSelectedTags) ? sheet._publishSelectedTags.slice() : [];
     const idx = list.findIndex((t) => t.toLowerCase() === tag.toLowerCase());
-    if (idx >= 0) list.splice(idx, 1);
-    else list.push(tag);
+    const hash = styleTagToHashtag(tag);
+    let note = String(captionEl?.value || "");
+    if (idx >= 0) {
+      list.splice(idx, 1);
+      note = removeHashtagFromCaption(note, hash);
+    } else {
+      if (list.length >= PUBLISH_STYLE_HASHTAG_MAX) {
+        showToast("Five styles max. They go in your note as hashtags.", { icon: "!", durationMs: 2800 });
+        return;
+      }
+      if (!hash) return;
+      const appended = appendStyleHashtagsToCaption(note, [hash]);
+      if (appended.skipped.length) {
+        showToast("Your note is full. Shorten it to add this style.", { icon: "!", durationMs: 2800 });
+        return;
+      }
+      list.push(tag);
+      note = appended.text;
+    }
     sheet._publishSelectedTags = list;
-    const on = idx < 0;
-    btn.classList.toggle("is-selected", on);
-    btn.classList.toggle("is-off", !on);
-    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    sheet._publishCaptionSyncing = true;
+    if (captionEl && captionEl.value !== note) {
+      captionEl.value = note;
+      applyUserTextInputDir(captionEl);
+    }
+    sheet._publishCaptionSyncing = false;
+    paintPublishReleaseTagPills(sheet);
+    refreshPublishPreview(sheet);
   });
 }
 
@@ -36183,26 +36295,31 @@ function maybePromptTermsUpdate() {
 }
 
 function setAuthEmailMode(mode) {
-  _authEmailMode = mode === "signup" ? "signup" : "signin";
+  _authEmailMode = mode === "signup" ? "signup" : mode === "reset" ? "reset" : "signin";
+  const isSignup = _authEmailMode === "signup";
+  const isReset = _authEmailMode === "reset";
   if (els.btnAuthEmailSubmit) {
-    els.btnAuthEmailSubmit.textContent = _authEmailMode === "signup" ? "Create account" : "Log in";
+    els.btnAuthEmailSubmit.textContent = isReset ? "Save password" : isSignup ? "Create account" : "Log in";
   }
   if (els.authEmailHeading) {
-    els.authEmailHeading.textContent = _authEmailMode === "signup" ? "Create your account" : "Welcome back";
+    els.authEmailHeading.textContent = isReset ? "Choose a new password" : isSignup ? "Create your account" : "Welcome back";
   }
   if (els.btnAuthToggleMode) {
-    els.btnAuthToggleMode.textContent =
-      _authEmailMode === "signup"
-        ? "Already have an account? Log in"
-        : "New here? Create account";
+    els.btnAuthToggleMode.hidden = isReset;
+    els.btnAuthToggleMode.textContent = isSignup
+      ? "Already have an account? Log in"
+      : "New here? Create account";
   }
+  if (els.btnAuthForgot) els.btnAuthForgot.hidden = _authEmailMode !== "signin";
   if (els.authPasswordInput) {
-    els.authPasswordInput.autocomplete =
-      _authEmailMode === "signup" ? "new-password" : "current-password";
-    els.authPasswordInput.placeholder =
-      _authEmailMode === "signup" ? "At least 8 characters" : "Your password";
+    els.authPasswordInput.autocomplete = isSignup || isReset ? "new-password" : "current-password";
+    els.authPasswordInput.placeholder = isSignup || isReset ? "At least 8 characters" : "Your password";
   }
-  const showConfirm = _authEmailMode === "signup";
+  if (els.authEmailInput) {
+    els.authEmailInput.readOnly = isReset;
+    els.authEmailInput.required = !isReset;
+  }
+  const showConfirm = isSignup || isReset;
   if (els.authConfirmField) {
     els.authConfirmField.hidden = !showConfirm;
     els.authConfirmField.setAttribute("aria-hidden", showConfirm ? "false" : "true");
@@ -36227,6 +36344,10 @@ function setAuthEmailMessage(text, { ok = false } = {}) {
   el.hidden = false;
   el.textContent = msg;
   el.classList.toggle("isOk", Boolean(ok));
+}
+
+function getPasswordResetRedirectTo() {
+  return "https://www.nabadai.com/app/?flow=reset";
 }
 
 function getAuthEmailRedirectTo() {
@@ -36385,6 +36506,7 @@ function setAuthEmailSubmitting(on) {
   if (els.btnAuthSignupPrimary) els.btnAuthSignupPrimary.disabled = busy;
   if (els.btnAuthLoginReveal) els.btnAuthLoginReveal.disabled = busy;
   if (els.btnAuthEmailBack) els.btnAuthEmailBack.disabled = busy;
+  if (els.btnAuthForgot) els.btnAuthForgot.disabled = busy;
 }
 
 function setAuthEmailPanelOpen(open) {
@@ -36981,6 +37103,239 @@ async function supabaseSendOtp(email) {
     throw new Error(`OTP send failed (${r.status}): ${txt.slice(0, 120)}`);
   }
 }
+const PASSWORD_RESET_STASH_KEY = "nabad_password_reset_v1";
+let _passwordResetPending = null;
+
+function readPasswordResetStash() {
+  try {
+    const raw = sessionStorage.getItem(PASSWORD_RESET_STASH_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== "object") return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function clearPasswordResetStash() {
+  try { sessionStorage.removeItem(PASSWORD_RESET_STASH_KEY); } catch {}
+}
+
+async function supabaseSendPasswordReset(email) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
+  const redirectTo = getPasswordResetRedirectTo();
+  const r = await nativeSafeFetch(
+    `${SUPABASE_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ email }),
+    },
+  );
+  const data = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, data };
+}
+
+async function supabaseVerifyRecoveryToken(tokenHash) {
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/auth/v1/verify`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ type: "recovery", token_hash: tokenHash }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data?.access_token) {
+    const msg = data?.error_description || data?.msg || data?.message || data?.error || "";
+    throw new Error(msg || "This reset link expired. Request a new one.");
+  }
+  return data;
+}
+
+async function supabaseUpdatePassword(accessToken, password) {
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/auth/v1/user`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ password }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const msg = data?.error_description || data?.msg || data?.message || data?.error || "";
+    throw new Error(msg || "Could not save password.");
+  }
+  return data;
+}
+
+function showPasswordResetForm(session) {
+  _passwordResetPending = session;
+  _passwordResetActive = true;
+  const email = String(session?.user?.email || "").trim();
+  if (els.authEmailInput) els.authEmailInput.value = email;
+  if (els.authPasswordInput) els.authPasswordInput.value = "";
+  if (els.authPasswordConfirmInput) els.authPasswordConfirmInput.value = "";
+  setAuthEmailMode("reset");
+  setAuthEmailMessage("");
+  setAuthEmailPanelOpen(true);
+  try { location.hash = "#/auth"; } catch {}
+  try { syncRoutePanelVisibility("auth"); } catch {}
+  try { scheduleApplyRoute(); } catch {}
+  try { dismissBootSplashOverlay({ destroyMotion: true }); } catch {}
+  try { els.authPasswordInput?.focus?.(); } catch {}
+}
+
+function cancelPasswordReset() {
+  _passwordResetPending = null;
+  _passwordResetActive = false;
+  clearPasswordResetStash();
+  if (els.authPasswordInput) els.authPasswordInput.value = "";
+  if (els.authPasswordConfirmInput) els.authPasswordConfirmInput.value = "";
+  if (els.authEmailInput) els.authEmailInput.readOnly = false;
+  setAuthEmailMode("signin");
+  setAuthEmailMessage("");
+  setAuthEmailPanelOpen(false);
+  if (isAppLoggedIn()) {
+    try { location.hash = "#/discover"; } catch {}
+    try { scheduleApplyRoute(); } catch {}
+  }
+}
+
+async function maybeOpenPasswordResetFromStash() {
+  const stash = readPasswordResetStash();
+  if (!stash) {
+    _passwordResetActive = false;
+    return false;
+  }
+  clearPasswordResetStash();
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    try { await loadPublicConfig(); } catch {}
+  }
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    _passwordResetActive = false;
+    setAuthEmailMessage("Could not open the reset link. Request a new one.");
+    try { location.hash = "#/auth"; } catch {}
+    try { scheduleApplyRoute(); } catch {}
+    try { dismissBootSplashOverlay({ destroyMotion: true }); } catch {}
+    return false;
+  }
+  try {
+    let session = null;
+    const tokenHash = String(stash.tokenHash || "").trim();
+    const accessToken = String(stash.accessToken || "").trim();
+    if (tokenHash) session = await supabaseVerifyRecoveryToken(tokenHash);
+    else if (accessToken) {
+      session = {
+        access_token: accessToken,
+        refresh_token: String(stash.refreshToken || ""),
+        expires_in: Number(stash.expiresIn || 3600),
+        user: { id: "", email: "" },
+      };
+    }
+    if (!session?.access_token) throw new Error("This reset link expired. Request a new one.");
+    showPasswordResetForm(session);
+    return true;
+  } catch (e) {
+    _passwordResetPending = null;
+    _passwordResetActive = false;
+    setAuthEmailMode("signin");
+    setAuthEmailPanelOpen(true);
+    setAuthEmailMessage(e?.message || "This reset link expired. Request a new one.");
+    try { location.hash = "#/auth"; } catch {}
+    try { scheduleApplyRoute(); } catch {}
+    try { dismissBootSplashOverlay({ destroyMotion: true }); } catch {}
+    return false;
+  }
+}
+
+async function runForgotPassword() {
+  if (_authEmailSubmitInFlight) return;
+  const email = String(els.authEmailInput?.value || "").trim().toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    setAuthEmailMessage("Enter your email, then tap Forgot password.");
+    try { els.authEmailInput?.focus?.(); } catch {}
+    return;
+  }
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    try { await loadPublicConfig(); } catch {}
+  }
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    setAuthEmailMessage("Could not load login settings.");
+    return;
+  }
+  setAuthEmailSubmitting(true);
+  setAuthEmailMessage("");
+  try {
+    const { ok, status, data } = await supabaseSendPasswordReset(email);
+    const raw = String(data?.msg || data?.error_description || data?.message || data?.error || "").toLowerCase();
+    if (!ok && (status === 429 || raw.includes("rate"))) {
+      setAuthEmailMessage("Too many attempts — wait a minute and try again.");
+      return;
+    }
+    if (!ok && status >= 500) {
+      setAuthEmailMessage("Could not send the reset email. Try again in a minute.");
+      return;
+    }
+    setAuthEmailMessage(
+      "Check your email for a link to choose a new password. If you usually sign in with Apple or Google, use that button instead.",
+      { ok: true },
+    );
+  } catch {
+    setAuthEmailMessage("Could not send the reset email. Check your connection and try again.");
+  } finally {
+    setAuthEmailSubmitting(false);
+  }
+}
+
+async function runPasswordResetSave() {
+  if (_authEmailSubmitInFlight) return;
+  const pending = _passwordResetPending;
+  if (!pending?.access_token) {
+    setAuthEmailMessage("This reset link expired. Request a new one.");
+    return;
+  }
+  const password = String(els.authPasswordInput?.value || "");
+  const confirmPassword = String(els.authPasswordConfirmInput?.value || "");
+  if (password.length < 8) {
+    setAuthEmailMessage("Password must be at least 8 characters.");
+    try { els.authPasswordInput?.focus?.(); } catch {}
+    return;
+  }
+  if (confirmPassword !== password) {
+    setAuthEmailMessage("Passwords do not match.");
+    try { els.authPasswordConfirmInput?.focus?.(); } catch {}
+    return;
+  }
+  setAuthEmailSubmitting(true);
+  setAuthEmailMessage("");
+  beginLoginSettling("Saving your password…");
+  try {
+    await supabaseUpdatePassword(pending.access_token, password);
+    const applied = await applySupabaseAuthTokenPayload({
+      ...pending,
+      user: pending.user || { id: "", email: String(els.authEmailInput?.value || "").trim() },
+    });
+    if (!applied) throw new Error("Could not save session");
+    _passwordResetPending = null;
+    _passwordResetActive = false;
+    clearPasswordResetStash();
+    notifyLoginFeedback("Password saved.");
+    await finishPostAuthNavigation();
+  } catch (e) {
+    endLoginSettling();
+    setAuthEmailMessage(e?.message || "Could not save password.");
+  } finally {
+    setAuthEmailSubmitting(false);
+  }
+}
+
 function maybeHandleMagicLinkFromHash() {
   try {
     const hash = String(window.location.hash || "");
@@ -36995,6 +37350,7 @@ function maybeHandleMagicLinkFromHash() {
     const raw = tokenPartHash || tokenPartSearch;
     if (!raw) return false;
     const qp = new URLSearchParams(raw);
+    if (qp.get("type") === "recovery") return false;
     const access_token = qp.get("access_token");
     const refresh_token = qp.get("refresh_token");
     const expires_in = Number(qp.get("expires_in") || 3600);
@@ -38021,9 +38377,8 @@ function dismissPublishReleaseKeyboard() {
   applyPublishReleaseKeyboardInset(0);
 }
 
-function publishPreviewSub(sheet) {
-  const tags = readPublishReleaseSelectedTags(sheet).slice(0, 3);
-  return tags.length ? tags.join(" · ") : "Your song";
+function publishPreviewSub(_sheet) {
+  return "";
 }
 
 /** The post as it will look in the feed: cover, title, tags line and your note. */
@@ -38036,7 +38391,11 @@ function refreshPublishPreview(sheet) {
     noteEl.classList.toggle("isPlaceholder", !text);
   }
   const sub = sheet.querySelector("#pubPvSub");
-  if (sub) sub.textContent = publishPreviewSub(sheet);
+  if (sub) {
+    const subText = publishPreviewSub(sheet);
+    sub.textContent = subText;
+    sub.hidden = !subText;
+  }
   const count = sheet.querySelector("#pubCapCount");
   if (count) count.textContent = `${text.length} / 160 · @ to mention a fan`;
 }
@@ -38164,8 +38523,8 @@ function ensurePublishReleaseSheet() {
           <small id="pubCapCount" class="pubCapCount">0 / 160 · @ to mention a fan</small>
         </div>
         <div id="publishReleaseTags" class="publishReleaseTags pubTags" hidden>
-          <div class="pubLb">Style tags</div>
-          <div id="publishReleaseTagsRow" class="followActStylePills publishReleaseTagsRow" role="group" aria-label="Style tags to publish"></div>
+          <div class="pubLb">Styles · up to 5, added as hashtags</div>
+          <div id="publishReleaseTagsRow" class="followActStylePills publishReleaseTagsRow" role="group" aria-label="Styles to add as hashtags"></div>
         </div>
         <div id="publishReleaseHookBlock" class="publishReleaseHook pubHook">
           <div class="pubHookHead"><b>Where the feed starts</b><span id="publishHookTimeLabel" class="pubHookTime">0:00</span></div>
@@ -38205,9 +38564,18 @@ function ensurePublishReleaseSheet() {
     </div>
   `;
   document.body.appendChild(sheet);
-  sheet.addEventListener("click", (e) => {
-    if (e.target?.getAttribute?.("data-publish-release-close") === "1") closePublishReleaseSheet();
-  });
+  const onPublishReleaseClose = (e) => {
+    const closer = e.target?.closest?.("[data-publish-release-close]");
+    if (!closer || !sheet.contains(closer) || closer.disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closePublishReleaseSheet();
+  };
+  // pointerdown, not click: a tap on the X glyph was hitting the inner SVG (so
+  // the button never saw it), and with the note focused the first tap only
+  // dismissed the keyboard and shifted the sheet before click could land.
+  sheet.addEventListener("pointerdown", onPublishReleaseClose, true);
+  sheet.addEventListener("click", onPublishReleaseClose);
   sheet.querySelector("#publishReleaseCaption")?.addEventListener("input", (e) => {
     applyUserTextInputDir(e.currentTarget);
   });
@@ -38215,7 +38583,10 @@ function ensurePublishReleaseSheet() {
   bindPublishReleaseTagsOnce(sheet);
   bindPublishReleasePostDesignOnce(sheet);
   wireBottomSheetKeyboardOnce();
-  sheet.querySelector("#publishReleaseCaption")?.addEventListener("input", () => refreshPublishPreview(sheet));
+  sheet.querySelector("#publishReleaseCaption")?.addEventListener("input", () => {
+    reconcilePublishTagsWithCaption(sheet);
+    refreshPublishPreview(sheet);
+  });
   sheet.querySelector("#publishReleaseTagsRow")?.addEventListener("click", () => window.setTimeout(() => refreshPublishPreview(sheet), 0));
   sheet.querySelector("#pubDoneShare")?.addEventListener("click", () => {
     const t = loadLibrary().find((x) => String(x.id) === String(sheet.dataset.trackId || ""));
@@ -38269,7 +38640,7 @@ function ensurePublishReleaseSheet() {
 
 function closePublishReleaseSheet() {
   const sheet = document.getElementById("publishReleaseSheet");
-  if (!sheet) return;
+  if (!sheet || sheet.hidden || !sheet.classList.contains("isOpen")) return;
   teardownPublishHookUi();
   dismissPublishReleaseKeyboard();
   sheet.classList.remove("isOpen");
@@ -38328,6 +38699,26 @@ function openPublishReleaseSheet(trackId, opts = {}) {
   if (remixToggle) remixToggle.checked = trackAllowsRemix(track);
   if (mashupToggle) mashupToggle.checked = trackAllowsMashup(track);
   renderPublishReleaseTags(sheet, track);
+  const captionEl = sheet.querySelector("#publishReleaseCaption");
+  if (captionEl) {
+    const seeded = appendStyleHashtagsToCaption(
+      captionEl.value,
+      readPublishReleaseSelectedTags(sheet).map(styleTagToHashtag),
+    );
+    sheet._publishCaptionSyncing = true;
+    captionEl.value = seeded.text;
+    applyUserTextInputDir(captionEl);
+    sheet._publishCaptionSyncing = false;
+    if (seeded.skipped.length) {
+      const skippedTags = readPublishReleaseSelectedTags(sheet).filter((tag) =>
+        seeded.skipped.includes(styleTagToHashtag(tag)),
+      );
+      sheet._publishSelectedTags = readPublishReleaseSelectedTags(sheet).filter(
+        (tag) => !skippedTags.some((s) => s.toLowerCase() === tag.toLowerCase()),
+      );
+      paintPublishReleaseTagPills(sheet);
+    }
+  }
   renderPublishReleasePostDesign(sheet, track, art);
   refreshPublishPreview(sheet);
   if (metaEl) {
@@ -82769,8 +83160,17 @@ if (els.btnAuthLoginReveal) {
 }
 if (els.btnAuthEmailBack) {
   els.btnAuthEmailBack.addEventListener("click", () => {
+    if (_authEmailMode === "reset") {
+      cancelPasswordReset();
+      return;
+    }
     setAuthEmailPanelOpen(false);
     setAuthEmailMessage("");
+  });
+}
+if (els.btnAuthForgot) {
+  els.btnAuthForgot.addEventListener("click", () => {
+    void runForgotPassword();
   });
 }
 // Password show/hide toggles (delegated; works for both password fields).
@@ -82795,6 +83195,10 @@ if (els.btnAuthToggleMode) {
 if (els.authEmailForm) {
   els.authEmailForm.addEventListener("submit", (e) => {
     e.preventDefault();
+    if (_authEmailMode === "reset") {
+      void runPasswordResetSave();
+      return;
+    }
     void runEmailPasswordAuth();
   });
 }
@@ -83938,6 +84342,13 @@ void (async () => {
   // throw or a hung fetch would leave it stuck on with @guest visible.
   try {
   await waitForNativeAuthHydration();
+  let usedResetFlow = false;
+  try {
+    usedResetFlow = await maybeOpenPasswordResetFromStash();
+  } catch (e) {
+    console.warn("[auth] password reset", e);
+    _passwordResetActive = false;
+  }
   let usedCodeFlow = false;
   if (_bootOAuthCodePending) {
     applyClientEnvBootstrap();
@@ -83953,7 +84364,7 @@ void (async () => {
   if (!usedCodeFlow) {
     usedCodeFlow = await maybeHandleAuthCodeFromQuery();
   }
-  const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();
+  const usedTokenFlow = !usedResetFlow && !usedCodeFlow && maybeHandleMagicLinkFromHash();
   if (usedCodeFlow || usedTokenFlow || !authSession?.user?.id) {
     await refreshAuthStateFromSupabase({ force: true });
   } else {
@@ -83965,13 +84376,13 @@ void (async () => {
 
   const bootUid = String(authSession?.user?.id || "").trim();
   const needsOnboardingBoot = bootUid && shouldShowOnboardingForUser(bootUid);
-  if (needsOnboardingBoot) {
+  if (needsOnboardingBoot && !_passwordResetActive) {
     redirectToOnboardingIfNeeded();
     scheduleApplyRoute();
   }
 
   const pendingPushAfterBoot = !needsOnboardingBoot ? consumePendingPushRoute() : null;
-  if (pendingPushAfterBoot && (isAppLoggedIn() || getSupabaseAuthToken())) {
+  if (!_passwordResetActive && pendingPushAfterBoot && (isAppLoggedIn() || getSupabaseAuthToken())) {
     try { location.hash = `#/${pendingPushAfterBoot}`; } catch {}
     void tryRecoverGenerationFromPushNotification();
   }

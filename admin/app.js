@@ -368,6 +368,24 @@ async function verifyRecoveryToken(tokenHash) {
   return data;
 }
 
+async function sendUserPasswordReset(email) {
+  const { supabaseUrl, supabaseAnonKey } = state.config;
+  const redirectTo = "https://www.nabadai.com/app/?flow=reset";
+  const r = await fetch(`${supabaseUrl}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, {
+    method: "POST",
+    headers: {
+      apikey: supabaseAnonKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const msg = data?.msg || data?.error_description || data?.message || data?.error || "";
+    throw new Error(typeof msg === "string" && msg ? msg : `Could not send reset link (${r.status})`);
+  }
+}
+
 async function updateUserPassword(accessToken, password) {
   const { supabaseUrl, supabaseAnonKey } = state.config;
   const r = await fetch(`${supabaseUrl}/auth/v1/user`, {
@@ -3027,6 +3045,9 @@ function renderUserDetail(data) {
     ? `<button type="button" class="btnPrimary" id="btnUserDetailGrant" data-grant-email="${escapeHtml(u.email)}">Grant credits</button>
        <button type="button" class="btnGhost" id="btnUserDetailAdjust" data-grant-email="${escapeHtml(u.email)}">Adjust credits</button>`
     : "";
+  const resetBtn = u.email
+    ? `<button type="button" class="btnGhost" id="btnUserDetailReset" data-reset-email="${escapeHtml(u.email)}">Send reset link</button>`
+    : "";
 
   // ---- History tabs ----
   const errorList = Array.isArray(data.errors) ? data.errors : [];
@@ -3190,7 +3211,7 @@ function renderUserDetail(data) {
     <div class="detailHero">
       <div class="userDetailToolbar">
         <button type="button" class="btnGhost" id="btnUserDetailBack">← Back</button>
-        <div class="userDetailActions">${grantBtn}</div>
+        <div class="userDetailActions">${grantBtn}${resetBtn}</div>
       </div>
       ${sandboxBanner}
       <div class="detailHeroMain">
@@ -8532,6 +8553,22 @@ document.body.addEventListener("click", (e) => {
     state.grantPrefillEmail = userDetailGrant.dataset.grantEmail || "";
     setView("credits");
     void loadView({ force: true });
+    return;
+  }
+
+  const userDetailReset = e.target.closest("#btnUserDetailReset");
+  if (userDetailReset) {
+    const email = String(userDetailReset.dataset.resetEmail || "").trim();
+    if (!email) return;
+    const ok = window.confirm(
+      `Send a password reset link to ${email}?\n\nThey choose a new password from that email. If they use Apple or Google, they should keep signing in that way.`,
+    );
+    if (!ok) return;
+    userDetailReset.disabled = true;
+    sendUserPasswordReset(email)
+      .then(() => window.alert(`Reset link sent to ${email}.`))
+      .catch((err) => window.alert(err?.message || "Could not send reset link"))
+      .finally(() => { userDetailReset.disabled = false; });
     return;
   }
 

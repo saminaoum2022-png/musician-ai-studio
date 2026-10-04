@@ -27641,6 +27641,7 @@ function teardownPublishHookUi() {
   if (ui.previewAudio) {
     try { ui.previewAudio.src = ""; } catch {}
   }
+  if (ui.blobUrl) { try { URL.revokeObjectURL(ui.blobUrl); } catch {} ui.blobUrl = ""; }
   if (ui.previewTimer) window.clearTimeout(ui.previewTimer);
   ui.sheet?.classList.remove("isFindingHook");
 }
@@ -27710,7 +27711,7 @@ async function initPublishHookUi(sheet, track) {
   sheet.querySelector("#pubWave")?.classList.add("isLoading");
 
   const previewAudio = new Audio();
-  previewAudio.preload = "auto";
+  previewAudio.preload = "metadata"; // the full song is downloaded separately below
   previewAudio.playsInline = true;
   try { previewAudio.setAttribute("playsinline", ""); } catch {}
   let url = normalizeAudioUrlForPlayback(String(track?.url || "").trim());
@@ -27744,6 +27745,22 @@ async function initPublishHookUi(sheet, track) {
   };
   _publishHookUi = ui;
   ui.waveBars = [...(sheet.querySelector("#pubWaveBars")?.children || [])];
+  // Download the song once and play the preview from that local copy. Streaming straight from the
+  // server can't jump to the chosen moment reliably (no range support), which made the preview
+  // sometimes start at the wrong place or not play at all.
+  ui.blobPromise = url ? fetchPublishAudioBlob(url) : Promise.resolve(null);
+  ui.blobPending = true;
+  void ui.blobPromise.then((blob) => {
+    if (_publishHookUi !== ui) return;
+    ui.blobPending = false;
+    if (!blob) return;
+    try {
+      ui.blobUrl = URL.createObjectURL(blob);
+      previewAudio.src = ui.blobUrl;
+      previewAudio.load();
+      ui.blobReady = true;
+    } catch {}
+  });
 
   const onRangeInput = () => {
     ui.userTouched = true;
@@ -27801,36 +27818,39 @@ async function initPublishHookUi(sheet, track) {
     previewBtn.addEventListener("click", () => {
       if (ui.previewing) { stopPreview(); return; }
       const sec = ui.fromStart ? 0 : normalizeHookStartSec(Number(range.value || 0), ui.durationSec);
+      const a = previewAudio;
+      // Local copy still downloading: say so instead of playing from the wrong spot.
+      if (!ui.blobReady && ui.blobPending !== false) {
+        showToast("Loading the song — try again in a second.", { durationMs: 1800 });
+        return;
+      }
       // Whatever was playing in the background stops so the preview is the only thing you hear.
       try { playerEl?.pause(); } catch {}
       try { document.querySelectorAll("audio, video").forEach((m) => { if (m !== previewAudio && !m.paused) m.pause(); }); } catch {}
       ui.previewing = true;
       previewBtn.classList.add("on");
-      const a = previewAudio;
-      let settled = false;
-      const reveal = () => {
-        if (settled || !ui.previewing) return;
-        settled = true;
-        try { a.muted = false; } catch {}
+      let started = false;
+      const armStop = () => {
+        if (started || !ui.previewing) return;
+        started = true;
         if (ui.previewTimer) window.clearTimeout(ui.previewTimer);
         ui.previewTimer = window.setTimeout(stopPreview, 4500);
       };
-      const seekThenReveal = () => {
-        if (!ui.previewing) return;
-        try {
-          if (Math.abs((a.currentTime || 0) - sec) < 0.25) { reveal(); return; }
-          a.addEventListener("seeked", reveal, { once: true });
-          a.currentTime = sec;
-        } catch { reveal(); }
-      };
       try { a.pause(); } catch {}
-      // Start inside the tap (iOS only allows that), muted, then jump to the chosen moment and unmute.
-      a.muted = true;
+      try { a.muted = false; } catch {}
+      a.addEventListener("playing", armStop, { once: true });
+      if (ui.blobReady) {
+        // Local file: seek and play inside the tap — instant and exact.
+        try { a.currentTime = sec; } catch {}
+      } else {
+        // Fallback (download failed): stream from the server and jump once it can seek.
+        a.muted = true;
+        const jump = () => { try { a.currentTime = sec; } catch {} try { a.muted = false; } catch {} };
+        if (a.readyState >= 1) jump(); else a.addEventListener("loadedmetadata", jump, { once: true });
+      }
       let playPromise;
       try { playPromise = a.play(); } catch (e) { playPromise = Promise.reject(e); }
-      if (a.readyState >= 1) seekThenReveal();
-      else a.addEventListener("loadedmetadata", seekThenReveal, { once: true });
-      window.setTimeout(() => { if (ui.previewing && !settled) reveal(); }, 5000);
+      window.setTimeout(armStop, 3000);
       if (playPromise && typeof playPromise.catch === "function") {
         playPromise.catch(() => {
           if (!ui.previewing) return;
@@ -27865,7 +27885,7 @@ async function initPublishHookUi(sheet, track) {
   range.step = "0.1";
 
   // the waveform loads in parallel with the chorus search; if it cannot be read the bar stays plain
-  void loadPublishWavePeaks(url).then((peaks) => {
+  void loadPublishWavePeaks(url, ui.blobPromise).then((peaks) => {
     if (_publishHookUi !== ui) return;
     renderPublishWaveBars(ui, peaks);
   });
@@ -38056,15 +38076,40 @@ function renderPublishWaveBars(ui, peaks) {
 }
 
 /** Read the song's loudness shape. Any failure (no CORS, too big, undecodable) returns null and the bar stays plain. */
-async function loadPublishWavePeaks(url) {
+async function fetchPublishAudioBlob(url) {
+  const ctrl = new AbortController();
+  const timer = window.setTimeout(() => ctrl.abort(), 25000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) return null;
+    if (Number(res.headers.get("content-length") || 0) > 40 * 1024 * 1024) return null;
+    const buf = await res.arrayBuffer();
+    let type = String(res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    if (!/^audio\//.test(type)) type = "audio/mpeg";
+    return new Blob([buf], { type });
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+async function loadPublishWavePeaks(url, blobPromise) {
   const n = PUBLISH_WAVE_BARS;
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), 9000);
   try {
-    const res = await fetch(url, { signal: ctrl.signal });
-    if (!res.ok) return null;
-    if (Number(res.headers.get("content-length") || 0) > 14 * 1024 * 1024) return null;
-    const buf = await res.arrayBuffer();
+    let buf;
+    const shared = blobPromise ? await blobPromise : null;
+    if (shared) {
+      if (shared.size > 14 * 1024 * 1024) return null;
+      buf = await shared.arrayBuffer();
+    } else {
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (!res.ok) return null;
+      if (Number(res.headers.get("content-length") || 0) > 14 * 1024 * 1024) return null;
+      buf = await res.arrayBuffer();
+    }
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return null;
     const ac = new Ctx();

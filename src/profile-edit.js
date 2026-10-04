@@ -142,6 +142,7 @@ export function hydrateProfileEditDraft(profile) {
     clearArtistAvatar: false,
     avatarRemoved: false,
   };
+  syncArtistAvatarDraftGalleryFromActive();
   try { _draft.goldStyle = readLocalGoldStyle(goldOwnUid()); } catch { _draft.goldStyle = null; }
   _dirty = false;
   _genresTouched = false;
@@ -1105,8 +1106,28 @@ let _aaConsent = false;
 let _aaErrorMessage = "";
 let _aaUseAsProfilePic = false; // pending checkbox state carried from "pick" into confirmArtistAvatarChoice
 
+function artistAvatarHasManageableState(draft = _draft) {
+  if (!draft) return false;
+  if (String(draft.artistAvatar || "").trim()) return true;
+  return Array.isArray(draft.artistAvatarGallery) && draft.artistAvatarGallery.length > 0;
+}
+
+/** Legacy rows often have `artist_avatar` set but an empty gallery — without this
+ *  the editor opens on "Replace…" (intro) instead of manage + Gold ring/crown. */
+function syncArtistAvatarDraftGalleryFromActive() {
+  if (!_draft) return;
+  const active = String(_draft.artistAvatar || "").trim();
+  let gallery = Array.isArray(_draft.artistAvatarGallery) ? _draft.artistAvatarGallery.slice() : [];
+  if (active && !gallery.includes(active)) gallery.push(active);
+  if (!active && gallery.length) {
+    _draft.artistAvatar = gallery[gallery.length - 1];
+  }
+  _draft.artistAvatarGallery = aaCapGallery(gallery);
+}
+
 function resetArtistAvatarState() {
-  _aaStep = (Array.isArray(_draft?.artistAvatarGallery) && _draft.artistAvatarGallery.length) ? "manage" : "intro";
+  syncArtistAvatarDraftGalleryFromActive();
+  _aaStep = artistAvatarHasManageableState() ? "manage" : "intro";
   _aaPhotos = [];
   _aaOptions = [];
   _aaChosenIndex = -1;
@@ -1365,6 +1386,7 @@ async function resetArtistAvatarCompletely() {
   resetArtistAvatarState();
   markDirty();
   await persistArtistAvatarNow();
+  _draft.clearArtistAvatar = false;
   closeProfileEditSheet();
   renderProfileEditPage();
   try { _deps?.haptic?.("medium"); } catch {}

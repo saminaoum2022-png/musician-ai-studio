@@ -133,11 +133,11 @@
 
 /* ========== Nabad Glass Control System ==========
  * Dark premium glass for utility/navigation controls only.
- * Reference: discovery refresh, back buttons, chooser close.
+ * Reference: discovery refresh, search close (when not icon-only back), chooser close.
+ * Back chevrons and ⋯ overflow use .nabadBackBtn / .nabadOverflowBtn (no pill).
  * Do NOT apply to feed cards, song cards, posts, tabs, or content shells.
  * Optional hook for future controls: .nabadGlassCtrl (+ --square | --round | --pill). */
 .nabadGlassCtrl,
-.nabadBackBtn,
 .discoveryRefreshBtn,
 .discoverySearchClose,
 .createChooserClose{
@@ -160,7 +160,6 @@
   transition: var(--nabad-glass-transition);
 }
 .nabadGlassCtrl:hover,
-.nabadBackBtn:hover,
 .discoveryRefreshBtn:hover,
 .discoverySearchClose:hover,
 .createChooserClose:hover{
@@ -173,14 +172,12 @@
     var(--nabad-glass-inset-bottom);
 }
 .nabadGlassCtrl:active,
-.nabadBackBtn:active,
 .discoveryRefreshBtn:active,
 .discoverySearchClose:active,
 .createChooserClose:active{
   transform: scale(var(--nabad-glass-active-scale));
 }
 .nabadGlassCtrl--square,
-.nabadBackBtn,
 .discoveryRefreshBtn,
 .discoverySearchClose{
   display: inline-flex;
@@ -191,6 +188,49 @@
   padding: 0;
   border-radius: var(--nabad-glass-radius-sm);
   flex: 0 0 auto;
+}
+/* Back / overflow nav — icon-only tap targets (no glass pill). */
+.nabadBackBtn,
+.nabadOverflowBtn,
+.playerMenuBtn,
+.discoverySearchClose.nabadBackBtn{
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--nabad-glass-size-md);
+  height: var(--nabad-glass-size-md);
+  padding: 0;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  box-shadow: none;
+  border-radius: 0;
+  color: var(--nabad-glass-color);
+  cursor: pointer;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 160ms ease, transform 120ms ease, opacity 160ms ease;
+}
+.nabadBackBtn:hover,
+.nabadOverflowBtn:hover,
+.playerMenuBtn:hover,
+.discoverySearchClose.nabadBackBtn:hover{
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--nabad-glass-color-hover);
+}
+.nabadBackBtn:active,
+.nabadOverflowBtn:active,
+.playerMenuBtn:active,
+.discoverySearchClose.nabadBackBtn:active{
+  transform: scale(var(--nabad-glass-active-scale));
 }
 .nabadGlassCtrl--round,
 .createChooserClose{
@@ -1042,14 +1082,10 @@ html[data-theme="light"] .playerArtWrap.isEmpty{
 }
 
 html[data-theme="light"] .playerMenuBtn{
-  border-color: var(--border);
-  background: rgba(255, 255, 255, 0.88);
   color: var(--text-secondary);
 }
 html[data-theme="light"] .playerMenuBtn:hover{
   color: var(--text-primary);
-  border-color: rgba(15, 23, 40, 0.14);
-  background: var(--card);
 }
 
 html[data-theme="light"] .playerTitle{
@@ -7510,30 +7546,8 @@ body.hubJumpingToTop #hubList .hubRow{
   display: none;
 }
 .playerMenuBtn{
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 34px;
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: transparent;
-  color: rgba(223, 231, 251, 0.62);
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.08em;
-  cursor: pointer;
-  transition: border-color 200ms ease, background 200ms ease, color 200ms ease;
-  -webkit-tap-highlight-color: transparent;
+  /* layout hook — icon-only via .nabadBackBtn + .nabadOverflowBtn */
 }
-.playerMenuBtn:hover{
-  color: rgba(248,250,255,0.92);
-  border-color: rgba(255,255,255,0.20);
-  background: rgba(255,255,255,0.05);
-}
-.playerMenuBtn:active{ transform: scale(0.97); }
 .playerBack{
   /* layout hook — visuals from .nabadBackBtn */
 }
@@ -21799,14 +21813,6 @@ body.trackSheetOpen .footer{
   .playerCard .playerHeader .nabadBackBtn,
   .playerCard .playerHeader .playerMenuBtn{
     pointer-events: auto;
-  }
-  body[data-route="player"] .playerHeader .nabadBackBtn,
-  body[data-route="player"] .playerHeader .playerMenuBtn{
-    border-color: rgba(255,255,255,0.14);
-    background: rgba(0,0,0,0.28);
-    -webkit-backdrop-filter: blur(12px);
-            backdrop-filter: blur(12px);
-    color: rgba(255,255,255,0.92);
   }
   body[data-route="player"] .playerHeader{
     display: grid;
@@ -39001,19 +39007,23 @@ button.activityRow--unavailable{
 /* Icon-only: drop the glass container (border / fill / blur / shadow) and keep
    just the chevron, while preserving the full-size tap target. Placed after the
    shared glass rules so it wins by source order without !important. */
-.nabadBackBtn{
+.messagesThreadHead .messagesThreadHeadBtn{
   border: 0;
   background: transparent;
   -webkit-backdrop-filter: none;
           backdrop-filter: none;
   box-shadow: none;
+  border-radius: 0;
 }
-.nabadBackBtn:hover{
+.messagesThreadHead .messagesThreadHeadBtn:hover{
   background: transparent;
   border-color: transparent;
   box-shadow: none;
 }
-.nabadBackBtn svg{
+.nabadBackBtn svg,
+.nabadOverflowBtn svg,
+.playerMenuBtn svg,
+.userPublicMore svg{
   width: 22px;
   height: 22px;
   flex-shrink: 0;
@@ -39023,13 +39033,22 @@ button.activityRow--unavailable{
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.nabadOverflowBtn svg circle[fill="currentColor"],
+.playerMenuBtn svg circle[fill="currentColor"]{
+  fill: currentColor;
+  stroke: none;
+}
 /* Player mode: bare icon over (often bright) cover art needs a touch of depth —
    a subtle dark halo keeps the chevron readable without a visible container. */
-body[data-route="player"] .nabadBackBtn{
-  color: #fff;
+body[data-route="player"] .nabadBackBtn,
+body[data-route="player"] .playerMenuBtn{
+  color: rgba(255, 255, 255, 0.94);
+}
+body[data-route="player"] .nabadBackBtn svg,
+body[data-route="player"] .playerMenuBtn svg{
+  filter: drop-shadow(0 1px 5px rgba(0, 0, 0, 0.6));
 }
 body[data-route="player"] .nabadBackBtn svg{
-  filter: drop-shadow(0 1px 5px rgba(0, 0, 0, 0.6));
   stroke-width: 2.2;
 }
 .userPublicBack.nabadBackBtn:not([hidden]){
@@ -40515,46 +40534,30 @@ body[data-route="messages-thread"] .coachSongPlanBar{
   height: 48px;
   margin: 0;
   padding: 0;
-  border-radius: var(--nabad-glass-radius-round);
-  border: 1px solid var(--nabad-glass-border);
-  background: var(--nabad-glass-bg);
-  -webkit-backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
-          backdrop-filter: blur(var(--nabad-glass-blur)) saturate(var(--nabad-glass-saturate));
   color: var(--nabad-glass-color);
   cursor: pointer;
-  box-shadow:
-    var(--nabad-glass-inset-top),
-    var(--nabad-glass-inset-bottom);
   -webkit-tap-highlight-color: transparent;
   transition:
-    background 160ms ease,
-    border-color 160ms ease,
     color 160ms ease,
-    box-shadow 160ms ease,
     opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .messagesThreadHead .messagesBackBtn.nabadBackBtn:hover,
 .messagesThreadHeadBtn:hover,
 .messagesThreadMoreBtn:hover{
-  background: var(--nabad-glass-bg-hover);
-  border-color: var(--nabad-glass-border-hover);
   color: var(--nabad-glass-color-hover);
-  box-shadow:
-    var(--nabad-glass-inset-top),
-    var(--nabad-glass-inset-bottom);
 }
 .messagesThreadHead .messagesBackBtn.nabadBackBtn:active,
 .messagesThreadHeadBtn:active,
 .messagesThreadMoreBtn:active{
   transform: scale(var(--nabad-glass-active-scale));
-  background: var(--nabad-glass-bg-hover);
-  border-color: var(--nabad-glass-border-hover);
 }
 .messagesThreadMoreBtn[hidden]{ display: none !important; }
 html[data-theme="light"] .messagesThreadHead .messagesBackBtn.nabadBackBtn,
 html[data-theme="light"] .messagesThreadHeadBtn,
-html[data-theme="light"] .messagesThreadMoreBtn,
+html[data-theme="light"] .messagesThreadMoreBtn{
+  color: var(--text-primary);
+}
 html[data-theme="light"] .messagesThreadHeadMeta{
   border-color: var(--nabad-glass-border);
   background: var(--nabad-glass-bg);
@@ -57015,11 +57018,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerHeader .nabadBackBtn,
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerHeader .playerMenuBtn{
     pointer-events: auto;
-    border-color: rgba(255,255,255,0.14);
-    background: rgba(0,0,0,0.28);
-    -webkit-backdrop-filter: blur(12px);
-            backdrop-filter: blur(12px);
-    color: rgba(255,255,255,0.92);
+    color: rgba(255, 255, 255, 0.94);
   }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerShell{
     flex: 1 1 auto;
@@ -69434,10 +69433,19 @@ body[data-route="user"] .userPublicMore{
   position: absolute !important;
   top: calc(env(safe-area-inset-top, 0px) + 6px) !important;
   z-index: 6;
-  background: rgba(10, 12, 20, 0.42) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  -webkit-backdrop-filter: blur(16px);
-          backdrop-filter: blur(16px);
+  background: transparent !important;
+  border: 0 !important;
+  -webkit-backdrop-filter: none !important;
+          backdrop-filter: none !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.94);
+}
+body[data-route="user"] .userPublicBack svg,
+body[data-route="user"] .userPublicMore svg{
+  filter: drop-shadow(0 1px 5px rgba(0, 0, 0, 0.55));
+}
+body[data-route="user"] .userPublicBack svg{
+  stroke-width: 2.2;
 }
 body[data-route="user"] .userPublicBack{ left: 0 !important; }
 body[data-route="user"] .userPublicMore{ right: 0 !important; }

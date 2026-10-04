@@ -33269,7 +33269,10 @@ function clearArtistAvatarSnap(id) {
 let _artistAvatarSnapWriteKey = "";
 async function persistArtistAvatarSnapshot(id, url) {
   const clean = String(url || "").trim();
-  if (!isRealUserAvatarUrl(clean)) return;
+  if (!isRealUserAvatarUrl(clean)) {
+    clearArtistAvatarSnap(id);
+    return;
+  }
   const writeKey = `${id}|aa|${clean.length}|${clean.slice(0, 64)}`;
   if (_artistAvatarSnapWriteKey === writeKey) return;
   _artistAvatarSnapWriteKey = writeKey;
@@ -33335,8 +33338,19 @@ function loadProfile() {
       if (uid && String(p.id) !== uid && key === PROFILE_KEY) continue;
       activeProfile = p;
       // Profile JSON often dropped a huge Artist Avatar data URL. Restore
-      // from the snap so the create-card does not flash on cold open.
-      if (!isRealUserAvatarUrl(String(activeProfile.artistAvatar || "").trim())) {
+      // from the snap so the create-card does not flash on cold open — but
+      // never resurrect a portrait the user cleared (empty row + no gallery).
+      const aaLive = String(activeProfile.artistAvatar || "").trim();
+      const galleryLen = Array.isArray(activeProfile.artistAvatarGallery)
+        ? activeProfile.artistAvatarGallery.length
+        : 0;
+      const artistAvatarWasCleared =
+        !aaLive &&
+        !galleryLen &&
+        !Number(activeProfile.artistAvatarConsentedAt || 0);
+      if (artistAvatarWasCleared) {
+        clearArtistAvatarSnap(activeProfile.id);
+      } else if (!isRealUserAvatarUrl(aaLive)) {
         const aa = cachedArtistAvatarUrl(activeProfile.id);
         if (aa) activeProfile = { ...activeProfile, artistAvatar: aa };
       }
@@ -33367,7 +33381,12 @@ function saveProfile(p) {
         slim.avatar = cachedProfileAvatarUrl(next.id) || "";
       }
       if (String(slim.artistAvatar || "").length > PROFILE_AVATAR_SNAP_MAX) {
-        slim.artistAvatar = cachedArtistAvatarUrl(next.id) || "";
+        const aaCleared =
+          next.clearArtistAvatar ||
+          (!String(next.artistAvatar || "").trim() &&
+            !(Array.isArray(next.artistAvatarGallery) && next.artistAvatarGallery.length) &&
+            !Number(next.artistAvatarConsentedAt || 0));
+        slim.artistAvatar = aaCleared ? "" : (cachedArtistAvatarUrl(next.id) || "");
       }
       localStorage.setItem(profileStorageKey(next.id), JSON.stringify(slim));
     } catch {}
@@ -38153,7 +38172,10 @@ async function supabaseUpsertProfile(profile) {
   let outgoingTiktok = String(profile.links?.tiktok || "").trim();
   let outgoingArtistAvatar = String(profile.artistAvatar || "").trim();
   const clearAvatar = Boolean(profile.clearAvatar);
-  const clearArtistAvatar = Boolean(profile.clearArtistAvatar);
+  let clearArtistAvatar = Boolean(profile.clearArtistAvatar);
+  const localArtistAvatarUpdatedAt = Number(
+    profile.artistAvatarUpdatedAt || activeProfile?.artistAvatarUpdatedAt || 0,
+  );
   // Never write a data: URL into profiles.avatar — that is what made the
   // photo bounce between devices. Host it first, or keep the cloud URL.
   if (!clearAvatar && (outgoingAvatar.startsWith("data:") || outgoingAvatar.startsWith("blob:"))) {
@@ -38210,7 +38232,15 @@ async function supabaseUpsertProfile(profile) {
           outgoingAvatar = String(existing.avatar).trim();
         }
         if (!clearArtistAvatar && !outgoingArtistAvatar && String(existing.artistAvatar || "").trim()) {
-          outgoingArtistAvatar = String(existing.artistAvatar).trim();
+          const cloudAa = String(existing.artistAvatar).trim();
+          const cloudAaTs = Number(existing.artistAvatarUpdatedAt || 0);
+          // Local cleared more recently than cloud — push the wipe, don't resurrect.
+          if (localArtistAvatarUpdatedAt && localArtistAvatarUpdatedAt >= cloudAaTs) {
+            clearArtistAvatar = true;
+            outgoingArtistAvatar = "";
+          } else {
+            outgoingArtistAvatar = cloudAa;
+          }
         }
         if (!outgoingBio && String(existing.bio || "").trim()) {
           outgoingBio = String(existing.bio).trim();

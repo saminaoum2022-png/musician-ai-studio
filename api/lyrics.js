@@ -2,8 +2,8 @@
  * POST /api/lyrics
  * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics"|"enhance"|"fix_singing"|"singability_check"|"to_arabizi", lyricsTarget?: "suno"|"lyria", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini"|"openai"|"chatgpt"|"suno", scriptFormat?: "arabic"|"arabizi"|"auto" }
  *
- * Provider: Gemini by default (GEMINI_API_KEY; rhyme/qafiya in buildPrompt).
- * OpenAI when lyricsProvider is openai/chatgpt and OPENAI_LYRICS is allowed (Preview or OPENAI_LYRICS_ENABLED=1).
+ * Provider: ChatGPT (OpenAI) for every request when OPENAI_API_KEY is set (kill switch OPENAI_LYRICS_ENABLED=0),
+ * Gemini (GEMINI_API_KEY; rhyme/qafiya in buildPrompt) as the automatic fallback or when there is no OpenAI key.
  * Suno only when lyricsProvider is explicitly "suno" (costs Suno credits).
  */
 const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
@@ -499,8 +499,9 @@ function resolvePrimaryLyricsProvider(lyricsProvider, { openaiKey, geminiKey } =
   return "";
 }
 
+/** Gemini rescues a failed ChatGPT call by default. Turn off with OPENAI_LYRICS_GEMINI_FALLBACK=0. */
 function allowOpenAiGeminiFallback() {
-  return /^(1|true|yes)$/i.test(String(process.env.OPENAI_LYRICS_GEMINI_FALLBACK || "").trim());
+  return !/^(0|false|no|off)$/i.test(String(process.env.OPENAI_LYRICS_GEMINI_FALLBACK || "").trim());
 }
 
 function makeRunLyrics({ primaryLyricsProvider, geminiKey, openaiKey, geminiPreferredModels }) {

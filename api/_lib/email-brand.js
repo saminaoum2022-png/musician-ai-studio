@@ -5,7 +5,8 @@
  */
 
 const SITE_ORIGIN = String(process.env.EMAIL_ASSET_ORIGIN || "https://www.nabadai.com").replace(/\/$/, "");
-const LOGO_URL = `${SITE_ORIGIN}/assets/email/nabad-email-logo.png`;
+// Header image has its own solid dark background so mail apps in dark mode cannot turn the logo text invisible.
+const LOGO_URL = `${SITE_ORIGIN}/assets/email/nabad-email-header.png`;
 const SUPPORT_ADDRESS = "support@nabadai.com";
 const NAME_FALLBACK = "music maker";
 
@@ -107,6 +108,7 @@ function renderBrandedEmail(opts) {
   }
   @media (prefers-color-scheme: dark) {
     .nbOuter { background-color:#05070d !important; }
+    .nbHeader { background-color:#05070d !important; }
     .nbCard { background-color:#11151f !important; }
     .nbTitle { color:#f2f5fb !important; }
     .nbText { color:#e3e8f3 !important; }
@@ -122,8 +124,8 @@ function renderBrandedEmail(opts) {
     <td align="center" style="padding:24px 12px;">
       <table role="presentation" class="nbWrap" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px;max-width:560px;">
         <tr>
-          <td align="center" bgcolor="#05070d" style="background-color:#05070d;padding:26px 24px;border-radius:16px 16px 0 0;">
-            <img src="${LOGO_URL}" width="170" alt="NabadAi" style="display:block;width:170px;max-width:100%;height:auto;margin:0 auto;">
+          <td class="nbHeader" align="center" bgcolor="#05070d" style="background-color:#05070d;padding:0;border-radius:16px 16px 0 0;">
+            <img src="${LOGO_URL}" width="560" alt="NabadAi" style="display:block;width:100%;max-width:560px;height:auto;border-radius:16px 16px 0 0;background-color:#05070d;">
           </td>
         </tr>
         <tr>

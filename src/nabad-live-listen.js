@@ -2009,7 +2009,7 @@ async function showInviteSheet(track, opts = {}) {
   if (_inviteOpening) return;
   // One listen at a time: nobody (guest or host) can start another while one is live.
   if (isLiveListenActive()) {
-    toast("Leave the current listen first.");
+    toast("You're already in a live listen — leave it to start a new one.");
     return;
   }
   const warm = bridge.peekMutualFriends?.();
@@ -2071,7 +2071,7 @@ export async function openLiveListenInviteFromChat(opts = {}) {
       toast("You're already listening with them.");
       return;
     }
-    toast("Leave the current listen first.");
+    toast("You're already in a live listen — leave it to start a new one.");
     return;
   }
   const prefer = opts.prefer === "partner" ? "partner" : "self";
@@ -2114,7 +2114,7 @@ export async function openLiveListenInviteWithFriend(friend, track) {
   if (!nabadLiveListenEnabled()) return;
   if (!friend?.userId) return;
   if (isLiveListenActive()) {
-    toast("Leave the current listen first.");
+    toast("You're already in a live listen — leave it to start a new one.");
     return;
   }
   if (!String(track?.url || "").trim()) {

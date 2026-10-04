@@ -41029,21 +41029,10 @@ body[data-route="player"] .liveListenChipRow{
 body[data-route="messages-thread"] .liveListenChipRow{
   bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
-/* One listen at a time: while a session is live, nobody (guest or host) sees a way to start another. */
-body.liveListenSession #playerSocialTogether,
-body.liveListenSession [data-player-together],
-body.liveListenSession .discoverTonightTogether,
-body.liveListenSession [data-discover-listen-together],
-body.liveListenSession [data-friends-listen-together],
-body.liveListenSession .followActAct--together,
-body.liveListenSession #btnUserPublicTogether,
-body.liveListenSession #shareChooserListenTogether,
-body.liveListenSession [data-track-sheet-action="library_listen"],
-body.liveListenSession [data-np-act="listen"],
-body.liveListenSession [data-dz-live-act="together"],
-body.liveListenSession .discoverLiveInvite,
-body.liveListenSession [data-messages-composer-action="listen"],
-body.liveListenSession #connectNewListenRow{
+/* The guest can't invite anyone to this song from the player (privacy). Everywhere else the
+   button stays and just explains that only one live listen can run at a time. */
+body.liveListenGuest #playerSocialTogether,
+body.liveListenGuest [data-player-together]{
   display: none !important;
 }
 body.liveListenGuest .playerSeekWrap,

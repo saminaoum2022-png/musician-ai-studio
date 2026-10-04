@@ -15609,7 +15609,7 @@ function wireDiscoverLiveClicksOnce() {
     const heroBtn = document.querySelector("[data-discover-listen-together]");
     const id = heroBtn?.getAttribute("data-discover-listen-together") || "";
     if (id && String(document.body.getAttribute("data-route") || "") === "discover") startDiscoverListenTogether(id);
-    else if (isLiveListenActive()) showToast("Leave the current listen first.");
+    else if (isLiveListenActive()) showToast("You're already in a live listen — leave it to start a new one.");
     else {
       // The "+": friends first, same sheet as everywhere else. The song is what you are playing (or your latest one), and can be changed.
       const def = discoverListenDefaultTrack();
@@ -43893,7 +43893,7 @@ function wireConnectNewSheetsOnce() {
       void openMessagesShareSheet({ mode: "publish", noPartner: true });
     } else if (which === "listen") {
       if (isLiveListenActive()) {
-        try { showToast("Leave the current listen first."); } catch {}
+        try { showToast("You're already in a live listen — leave it to start a new one."); } catch {}
         return;
       }
       void openMessagesShareSheet({ mode: "listen", noPartner: true });

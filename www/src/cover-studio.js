@@ -137,15 +137,19 @@ function ensureDom() {
           <canvas class="csStage" data-cs-stage></canvas>
           <div class="csStageActions" data-cs-stageactions>
             <button type="button" class="csPill csGlass" data-cs="photo">${ICON.image}<span>Photo</span></button>
-            <button type="button" class="csPill csGlass csPillMagic" data-cs="magic" hidden>${ICON.spark}<span>Magic</span></button>
+            <button type="button" class="csPill csGlass csPillMagic" data-cs="magic" hidden>${ICON.spark}<span>AI</span></button>
+            <button type="button" class="csPill csGlass" data-cs="gradient"><i class="csOptSwatch csOptSwatchMini" style="background:linear-gradient(160deg,${GRADIENTS[0][0]},${GRADIENTS[0][1]})"></i><span>Gradient</span></button>
           </div>
           <button type="button" class="csPill csGlass csReset" data-cs="reset">Reset</button>
           <div class="csEmpty" data-cs-empty hidden>
             <div class="csEmptyIco">${ICON.image}</div>
             <div class="csEmptyTitle">Give this song a cover</div>
-            <p class="csEmptySub">Pick a photo, add your title in style, and slide it into the thumbnail.</p>
-            <button type="button" class="csSave csSaveBig" data-cs="photo">Choose a photo</button>
-            <button type="button" class="csPill csGlass csPillWide" data-cs="magic" hidden>${ICON.spark}<span>Generate with AI</span></button>
+            <p class="csEmptySub">Pick one of 3 ways to make it</p>
+            <div class="csOpts">
+              <button type="button" class="csOpt csOptPrimary" data-cs="photo"><span class="csOptIco">${ICON.image}</span><span class="csOptTxt"><b>Upload a photo</b><small>From your gallery</small></span></button>
+              <button type="button" class="csOpt" data-cs="magic" hidden><span class="csOptIco">${ICON.spark}</span><span class="csOptTxt"><b>Generate with AI</b><small>We create it from your song</small></span></button>
+              <button type="button" class="csOpt" data-cs="gradient"><span class="csOptIco"><i class="csOptSwatch" style="background:linear-gradient(160deg,${GRADIENTS[0][0]},${GRADIENTS[0][1]})"></i></span><span class="csOptTxt"><b>Pick a gradient</b><small>A clean colour background</small></span></button>
+            </div>
           </div>
         </div>
       </div>
@@ -153,7 +157,7 @@ function ensureDom() {
         <p class="csHint" data-cs-hint>Drag to move · Pinch to zoom</p>
         <label class="csSlider">${ICON.small}<input type="range" min="100" max="400" step="1" value="100" data-cs-range="cover" aria-label="Zoom photo" />${ICON.large}</label>
         <div class="csGradRow" data-cs-gradrow hidden>
-          <span class="csLbl">Background</span>
+          <span class="csLbl">Gradient</span>
           <div class="csGrads">${GRADIENTS.map((g, i) => `<button type="button" class="csGrad" data-cs-grad="${i}" style="background:linear-gradient(160deg,${g[0]},${g[1]})" aria-label="Gradient ${i + 1}"></button>`).join("")}</div>
         </div>
       </section>
@@ -233,6 +237,7 @@ function wireDom() {
     if (a === "save") return void save();
     if (a === "photo") return dom.file.click();
     if (a === "magic") return magic();
+    if (a === "gradient") return setBackground(0);
     if (a === "reset") return resetFrame();
     if (a === "text-add") return addText("");
     if (a === "text-title") return addText(S.title || "Your title");
@@ -953,9 +958,12 @@ function syncUi() {
   root.querySelectorAll('[data-cs="magic"]').forEach((b) => { b.hidden = !S.canMagic; });
   dom.save.disabled = !hasArt;
   dom.save.classList.toggle("off", !hasArt);
-  dom.gradRow.hidden = !(S.bg || !S.photo);
+  dom.gradRow.hidden = !S.bg;
   dom.gradRow.querySelectorAll("[data-cs-grad]").forEach((b) => b.classList.toggle("on", S.bg && Number(b.dataset.csGrad) === S.bg.i));
-  dom.hint.textContent = S.photo ? "Drag to move · Pinch to zoom" : "Pick a background, or choose a photo";
+  dom.hint.hidden = !hasArt;
+  dom.hint.textContent = S.photo
+    ? "Drag to move · Pinch to zoom"
+    : "Gradient background · pick another colour, or switch to a photo or AI above";
   const L = selected();
   const cur = L || S.style;
   root.querySelectorAll("[data-cs-font]").forEach((b) => b.classList.toggle("on", b.dataset.csFont === cur.font));

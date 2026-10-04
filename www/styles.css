@@ -66258,7 +66258,33 @@ body.coverStudioOpen .toast{ z-index: 4400; }
 }
 .csEmptyIco svg{ width: 28px; height: 28px; }
 .csEmptyTitle{ font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
-.csEmptySub{ margin: 0; max-width: 200px; font-size: 13.5px; line-height: 1.4; font-weight: 600; color: rgba(255, 255, 255, 0.58); }
+.csEmptySub{ margin: 0; max-width: 240px; font-size: 13.5px; line-height: 1.4; font-weight: 600; color: rgba(255, 255, 255, 0.58); }
+.csOpts{ display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 270px; margin-top: 4px; }
+.csOpt{
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(20, 22, 32, 0.6);
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.csOpt[hidden]{ display: none !important; }
+.csOpt:active{ transform: scale(0.98); }
+.csOptPrimary{ background: linear-gradient(135deg, #23d5ab, #7c5cff); border-color: transparent; }
+.csOptIco{ flex: none; width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.12); }
+.csOptIco svg{ width: 18px; height: 18px; }
+.csOptSwatch{ display: block; width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid rgba(255, 255, 255, 0.5); }
+.csOptSwatchMini{ width: 15px; height: 15px; border-radius: 5px; border-width: 1px; }
+.csOptTxt{ display: flex; flex-direction: column; min-width: 0; }
+.csOptTxt b{ font-size: 14.5px; font-weight: 800; letter-spacing: -0.01em; }
+.csOptTxt small{ font-size: 11.5px; font-weight: 600; opacity: 0.72; }
 .csPanel{ flex: none; padding: 4px 0 0; }
 .csHint{ margin: 2px 0 8px; text-align: center; font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.6); }
 .csHintInline{ margin: 0; font-size: 12px; }

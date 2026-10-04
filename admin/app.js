@@ -4635,7 +4635,9 @@ function renderSupportSentDetail(sent) {
         <div><dt>Type</dt><dd>${escapeHtml(supportTemplateShortLabel(s.templateId))}</dd></div>
         ${s.sentByEmail ? `<div><dt>By</dt><dd>${escapeHtml(s.sentByEmail)}</dd></div>` : ""}
       </dl>
-      <p class="sectionNote mailDetailNote">Message body is not stored in the sent log — only subject and recipient metadata.</p>
+      ${s.textBody || s.htmlBody
+    ? `<pre class="supportInboxBody">${escapeHtml(s.textBody || stripHtml(s.htmlBody))}</pre>`
+    : `<p class="sectionNote mailDetailNote">${escapeHtml(s.bodyError || "Message body not available.")}</p>`}
     </section>
   `;
 }
@@ -4744,6 +4746,27 @@ function renderSupportSent(data) {
   `, { plain: true });
 }
 
+const COMPOSE_TEMPLATES = Object.freeze([
+  {
+    id: "pro_credits_update",
+    label: "Pro members — credits update",
+    subject: "🎶 A quick update about your credits",
+    text: `Dear music maker,
+
+We're always working to make NabadAi better for you, and we're so happy to have you with us as a Pro member. 💛
+
+A quick update about your credits: from 1 November 2026, the credits included with your plan refresh each billing period.
+
+And because you're one of our valued members, the credits you have today are yours to keep. We won't take them away.
+
+You can always see your balance on the Credits page in the app.
+
+Keep making music, and thank you for being part of NabadAi! 🎵
+
+— The NabadAi team`,
+  },
+]);
+
 function renderSupportCompose() {
   const panel = els.panels["support-compose"];
   const canSend = Boolean(state.adminSession?.canSendSupportEmail);
@@ -4770,6 +4793,13 @@ function renderSupportCompose() {
       </div>
       ${resendOk ? "" : `<p class="mailComposeWarn">Add <code>RESEND_API_KEY</code> on Vercel to enable sending.</p>`}
       <form id="supportComposeForm" class="mailComposeForm">
+        <div class="mailComposeRow">
+          <label class="mailComposeLabel" for="supportComposeTemplate">Template</label>
+          <select id="supportComposeTemplate" class="mailComposeInput">
+            <option value="">— Blank —</option>
+            ${COMPOSE_TEMPLATES.map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.label)}</option>`).join("")}
+          </select>
+        </div>
         <div class="mailComposeRow">
           <label class="mailComposeLabel" for="supportComposeTo">To</label>
           <input id="supportComposeTo" type="email" required placeholder="customer@example.com" autocomplete="off" class="mailComposeInput" value="${escapeHtml(prefill.to || "")}" />
@@ -8604,6 +8634,16 @@ document.body.addEventListener("click", (e) => {
 });
 
 document.body.addEventListener("change", (e) => {
+  if (e.target.id === "supportComposeTemplate") {
+    const tpl = COMPOSE_TEMPLATES.find((t) => t.id === e.target.value);
+    if (tpl) {
+      const subjectEl = document.getElementById("supportComposeSubject");
+      const bodyEl = document.getElementById("supportComposeBody");
+      if (subjectEl) subjectEl.value = tpl.subject;
+      if (bodyEl) bodyEl.value = tpl.text;
+    }
+    return;
+  }
   if (e.target.id === "supportEmailTemplate") {
     void reloadSupportEmailPreviewFromModal();
     return;

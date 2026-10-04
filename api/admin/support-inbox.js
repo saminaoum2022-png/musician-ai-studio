@@ -15,6 +15,7 @@ const {
 const {
   isResendInboundConfigured,
   listReceivedEmails,
+  fetchSentEmail,
   ingestReceivedEmail,
   mapDbRow,
 } = require("../_lib/resend-inbound");
@@ -99,10 +100,27 @@ async function fetchSentById(id) {
   const mid = String(id || "").trim();
   if (!mid) return null;
   const res = await serviceFetch(
-    `support_email_log?select=id,template_id,recipient_email,subject,sent_by_email,sent_by_user_id,user_id,created_at&id=eq.${encodeURIComponent(mid)}&limit=1`,
+    `support_email_log?select=id,template_id,recipient_email,subject,sent_by_email,sent_by_user_id,user_id,provider_message_id,created_at&id=eq.${encodeURIComponent(mid)}&limit=1`,
   );
   const row = Array.isArray(res.data) && res.data[0] ? res.data[0] : null;
   if (!row) return null;
+  // The log keeps only metadata; read the body back from the mail provider.
+  let textBody = "";
+  let htmlBody = "";
+  let bodyError = "";
+  const providerId = String(row.provider_message_id || "").trim();
+  if (!providerId) {
+    bodyError = "No message id was saved for this email.";
+  } else {
+    const got = await fetchSentEmail(providerId);
+    if (got.ok) {
+      textBody = String(got.data?.text || "");
+      htmlBody = String(got.data?.html || "");
+      if (!textBody && !htmlBody) bodyError = "The mail provider returned an empty body.";
+    } else {
+      bodyError = "Could not load the body from the mail provider.";
+    }
+  }
   return {
     id: row.id,
     templateId: row.template_id,
@@ -111,6 +129,9 @@ async function fetchSentById(id) {
     sentByEmail: row.sent_by_email,
     userId: row.user_id,
     sentAt: row.created_at,
+    textBody,
+    htmlBody,
+    bodyError,
   };
 }
 

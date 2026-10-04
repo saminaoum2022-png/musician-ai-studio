@@ -18,6 +18,7 @@ const {
   suggestSupportEmailTemplate,
 } = require("../_lib/support-email");
 const { isResendConfigured, sendSupportEmail } = require("../_lib/resend-mail");
+const { renderBrandedEmail, fillName } = require("../_lib/email-brand");
 const { fetchProSubscriptionForUser } = require("../_lib/pro-subscription");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
@@ -75,6 +76,16 @@ async function fetchAuthEmail(userId) {
   } catch {
     return "";
   }
+}
+
+async function fetchProfileName(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid) return "";
+  const res = await serviceFetch(
+    `profiles?select=display_name,username&user_id=eq.${encodeURIComponent(uid)}&limit=1`,
+  );
+  const row = Array.isArray(res.data) && res.data[0] ? res.data[0] : null;
+  return String(row?.display_name || row?.username || "").trim();
 }
 
 async function fetchSupportEmailLogs(userId, limit = 20) {
@@ -208,28 +219,74 @@ module.exports = async function handler(req, res) {
       const body = await readJsonBody(req);
       let userId = String(body?.userId || "").trim();
       const templateId = String(body?.templateId || "").trim();
-      const subject = String(body?.subject || "").trim();
-      const text = String(body?.text || body?.bodyText || "").trim();
-      const html = String(body?.html || body?.bodyHtml || "").trim();
+      const rawSubject = String(body?.subject || "").trim();
+      const rawText = String(body?.text || body?.bodyText || "").trim();
+      const ctaLabel = String(body?.ctaLabel || "").trim();
+      const ctaUrl = String(body?.ctaUrl || "").trim();
       const toDirect = String(body?.to || "").trim().toLowerCase();
+      const wantPreview = body?.preview === true;
+      const wantTest = body?.test === true;
       const isCompose = templateId === "custom_compose" || (!userId && toDirect);
 
-      if (isCompose) {
-        if (!toDirect || !subject || !text) {
+      if (wantPreview || wantTest) {
+        if (!rawSubject || !rawText) {
+          return sendJson(res, 400, { error: "subject and text are required" });
+        }
+      } else if (isCompose) {
+        if (!toDirect || !rawSubject || !rawText) {
           return sendJson(res, 400, {
             error: "to, subject, and text are required for compose",
           });
         }
-      } else if (!userId || !templateId || !subject || !text) {
+      } else if (!userId || !templateId || !rawSubject || !rawText) {
         return sendJson(res, 400, {
           error: "userId, templateId, subject, and text are required",
         });
       }
+      if (ctaUrl && !/^https?:\/\//i.test(ctaUrl)) {
+        return sendJson(res, 400, { error: "Button link must start with https://" });
+      }
+      if ((ctaLabel && !ctaUrl) || (ctaUrl && !ctaLabel)) {
+        return sendJson(res, 400, { error: "Button needs both a label and a link" });
+      }
 
       const effectiveTemplateId = isCompose ? "custom_compose" : templateId;
-      if (!templateMeta(effectiveTemplateId) && effectiveTemplateId !== "custom_compose") {
+      if (
+        !wantPreview && !wantTest
+        && !templateMeta(effectiveTemplateId) && effectiveTemplateId !== "custom_compose"
+      ) {
         return sendJson(res, 400, { error: "Unknown templateId" });
       }
+
+      // Who is this for? (used for {{name}})
+      let recipient = toDirect;
+      if (!isCompose && userId && !wantPreview && !wantTest) {
+        const ctx = await loadUserEmailContext(userId);
+        if (!ctx?.email) {
+          return sendJson(res, 404, { error: "User email not found" });
+        }
+        recipient = ctx.email;
+      } else if (!userId && toDirect) {
+        const { resolveUserIdByEmail } = require("../_lib/admin-auth");
+        userId = (await resolveUserIdByEmail(toDirect)) || "";
+      }
+      const profileName = userId ? await fetchProfileName(userId) : "";
+
+      const subject = fillName(rawSubject, profileName);
+      const text = fillName(rawText, profileName);
+      const built = renderBrandedEmail({ subject, text, ctaLabel, ctaUrl });
+
+      if (wantPreview) {
+        return sendJson(res, 200, {
+          ok: true,
+          preview: true,
+          subject,
+          html: built.html,
+          text: built.text,
+          nameUsed: fillName("{{name}}", profileName),
+        });
+      }
+
       if (!isResendConfigured()) {
         return sendJson(res, 503, {
           error: "Resend is not configured. Set RESEND_API_KEY and verify support@ domain.",
@@ -237,23 +294,29 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      let recipient = toDirect;
-      if (!isCompose) {
-        const ctx = await loadUserEmailContext(userId);
-        if (!ctx?.email) {
-          return sendJson(res, 404, { error: "User email not found" });
+      if (wantTest) {
+        const me = String(admin.email || "").trim().toLowerCase();
+        if (!me) return sendJson(res, 400, { error: "Your admin email is unknown" });
+        const testResult = await sendSupportEmail({
+          to: me,
+          subject: `[TEST] ${subject}`,
+          text: built.text,
+          html: built.html,
+        });
+        if (!testResult.ok) {
+          return sendJson(res, testResult.status || 502, {
+            error: testResult.error || "Could not send test email",
+            code: testResult.code || "send_failed",
+          });
         }
-        recipient = ctx.email;
-      } else if (!userId) {
-        const { resolveUserIdByEmail } = require("../_lib/admin-auth");
-        userId = (await resolveUserIdByEmail(toDirect)) || "";
+        return sendJson(res, 200, { ok: true, test: true, recipient: me });
       }
 
       const sendResult = await sendSupportEmail({
         to: recipient,
         subject,
-        text,
-        html: html || undefined,
+        text: built.text,
+        html: built.html,
       });
       if (!sendResult.ok) {
         return sendJson(res, sendResult.status || 502, {

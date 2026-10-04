@@ -676,7 +676,7 @@ async function fetchSupportEmailPreview(userId, templateId = "") {
   return data;
 }
 
-async function sendSupportEmailApi({ userId, templateId, subject, text, to }) {
+async function sendSupportEmailApi({ userId, templateId, subject, text, to, ctaLabel, ctaUrl, preview, test }) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
   if (!token) throw new Error("Not signed in");
@@ -692,6 +692,10 @@ async function sendSupportEmailApi({ userId, templateId, subject, text, to }) {
       subject,
       text,
       to,
+      ctaLabel,
+      ctaUrl,
+      preview: preview === true,
+      test: test === true,
     }),
   });
   const data = await r.json().catch(() => ({}));
@@ -4751,7 +4755,7 @@ const COMPOSE_TEMPLATES = Object.freeze([
     id: "pro_credits_update",
     label: "Pro members — credits update",
     subject: "🎶 A quick update about your credits",
-    text: `Dear music maker,
+    text: `Dear {{name}},
 
 We're always working to make NabadAi better for you, and we're so happy to have you with us as a Pro member. 💛
 
@@ -4789,7 +4793,11 @@ function renderSupportCompose() {
           <strong>support@nabadai.com</strong>
           <span class="mailComposeFromHint">Reply-To support@</span>
         </div>
-        <button type="submit" form="supportComposeForm" class="btnPrimary mailComposeSendBtn" id="btnSupportComposeSend"${resendOk ? "" : " disabled"}>Send</button>
+        <div class="mailComposeActions">
+          <button type="button" class="btnGhost" id="btnSupportComposePreview">Preview</button>
+          <button type="button" class="btnGhost" id="btnSupportComposeTest"${resendOk ? "" : " disabled"}>Send test to me</button>
+          <button type="submit" form="supportComposeForm" class="btnPrimary mailComposeSendBtn" id="btnSupportComposeSend"${resendOk ? "" : " disabled"}>Send</button>
+        </div>
       </div>
       ${resendOk ? "" : `<p class="mailComposeWarn">Add <code>RESEND_API_KEY</code> on Vercel to enable sending.</p>`}
       <form id="supportComposeForm" class="mailComposeForm">
@@ -4808,11 +4816,23 @@ function renderSupportCompose() {
           <label class="mailComposeLabel" for="supportComposeSubject">Subject</label>
           <input id="supportComposeSubject" type="text" required placeholder="Re: NabadAi Pro" class="mailComposeInput" value="${escapeHtml(prefill.subject || "")}" />
         </div>
+        <div class="mailComposeRow">
+          <label class="mailComposeLabel" for="supportComposeCtaLabel">Button</label>
+          <input id="supportComposeCtaLabel" type="text" placeholder="Optional button text (e.g. Open NabadAi)" class="mailComposeInput" maxlength="60" />
+        </div>
+        <div class="mailComposeRow">
+          <label class="mailComposeLabel" for="supportComposeCtaUrl">Link</label>
+          <input id="supportComposeCtaUrl" type="url" placeholder="Optional button link (https://…)" class="mailComposeInput" />
+        </div>
         <div class="mailComposeBodyWrap">
           <textarea id="supportComposeBody" required placeholder="Hi,&#10;&#10;…&#10;&#10;— NabadAi Support" class="mailComposeTextarea">${escapeHtml(prefill.text || "")}</textarea>
         </div>
+        <p class="sectionNote" style="margin:6px 0 0">Tip: write <code>{{name}}</code> to insert the person's name (falls back to "music maker"). Emails are sent with the NabadAi branded design.</p>
         <p id="supportComposeMsg" class="grantMsg mailComposeMsg" hidden></p>
       </form>
+      <div id="supportComposePreviewWrap" class="mailComposePreviewWrap" hidden>
+        <iframe id="supportComposePreviewFrame" class="mailComposePreviewFrame" title="Email preview" sandbox=""></iframe>
+      </div>
     </section>
   `, { plain: true });
   state.supportComposePrefill = null;
@@ -7391,6 +7411,8 @@ document.body.addEventListener("submit", (e) => {
           subject,
           text,
           templateId: "custom_compose",
+          ctaLabel: String(document.getElementById("supportComposeCtaLabel")?.value || "").trim(),
+          ctaUrl: String(document.getElementById("supportComposeCtaUrl")?.value || "").trim(),
         });
         if (msg) {
           msg.textContent = `Sent to ${to}`;
@@ -7398,6 +7420,10 @@ document.body.addEventListener("submit", (e) => {
         }
         document.getElementById("supportComposeSubject").value = "";
         document.getElementById("supportComposeBody").value = "";
+        document.getElementById("supportComposeCtaLabel").value = "";
+        document.getElementById("supportComposeCtaUrl").value = "";
+        const pw = document.getElementById("supportComposePreviewWrap");
+        if (pw) pw.hidden = true;
         showError("");
       } catch (err) {
         if (msg) {
@@ -7669,6 +7695,55 @@ document.body.addEventListener("click", (e) => {
   if (singerAppRow && !e.target.closest(".singerRowActions")) {
     e.preventDefault();
     openSingerApplicationDetail(String(singerAppRow.dataset.singerAppId || "").trim());
+    return;
+  }
+
+  const composePreviewBtn = e.target.closest("#btnSupportComposePreview, #btnSupportComposeTest");
+  if (composePreviewBtn) {
+    const isTest = composePreviewBtn.id === "btnSupportComposeTest";
+    void (async () => {
+      const to = String(document.getElementById("supportComposeTo")?.value || "").trim();
+      const subject = String(document.getElementById("supportComposeSubject")?.value || "").trim();
+      const text = String(document.getElementById("supportComposeBody")?.value || "").trim();
+      const msg = document.getElementById("supportComposeMsg");
+      const say = (t, tone) => {
+        if (!msg) return;
+        msg.hidden = false;
+        msg.textContent = t;
+        msg.dataset.tone = tone;
+      };
+      if (!subject || !text) {
+        say("Add a subject and a message first.", "warn");
+        return;
+      }
+      composePreviewBtn.disabled = true;
+      say(isTest ? "Sending test…" : "Building preview…", "warn");
+      try {
+        const data = await sendSupportEmailApi({
+          to,
+          subject,
+          text,
+          templateId: "custom_compose",
+          ctaLabel: String(document.getElementById("supportComposeCtaLabel")?.value || "").trim(),
+          ctaUrl: String(document.getElementById("supportComposeCtaUrl")?.value || "").trim(),
+          preview: !isTest,
+          test: isTest,
+        });
+        if (isTest) {
+          say(`Test sent to ${data.recipient}. Check your inbox.`, "ok");
+        } else {
+          const wrap = document.getElementById("supportComposePreviewWrap");
+          const frame = document.getElementById("supportComposePreviewFrame");
+          if (frame) frame.srcdoc = data.html || "";
+          if (wrap) wrap.hidden = false;
+          say(`Preview ready. {{name}} would show as "${data.nameUsed}".`, "ok");
+        }
+      } catch (err) {
+        say(err?.message || "Failed", "err");
+      } finally {
+        composePreviewBtn.disabled = false;
+      }
+    })();
     return;
   }
 

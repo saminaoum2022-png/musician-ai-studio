@@ -47414,6 +47414,13 @@ html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .fol
   opacity: 1;
 }
 .feedReplySheetCard{
+  --feed-reply-side: 18px;
+  --feed-reply-avatar-size: 36px;
+  --feed-reply-col-gap: 10px;
+  --feed-reply-thread-inset: calc(
+    var(--feed-reply-side) + var(--feed-reply-avatar-size) + var(--feed-reply-col-gap)
+  );
+  --feed-reply-thread-avatar-size: 28px;
   position: relative;
   width: 100%;
   max-width: 560px;
@@ -47524,6 +47531,57 @@ html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .fol
 }
 .feedReplySheetSub:empty{
   display: none;
+}
+.feedReplyThreadRoot[hidden]{
+  display: none !important;
+}
+.feedReplyThreadRoot{
+  flex: 0 0 auto;
+  padding: 0 var(--feed-reply-side) 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.feedReplyThreadRoot .feedReplyRow--pinned{
+  border-bottom: none;
+  padding: 6px 0 2px;
+}
+.feedReplyThreadRoot .feedReplyMeta{
+  margin-bottom: 1px;
+}
+.feedReplyThreadRoot .feedReplyActs{
+  margin-top: 2px;
+  gap: 10px;
+}
+.feedReplyList.feedReplyList--thread{
+  padding-top: 0;
+}
+.feedReplyList.feedReplyList--thread .feedReplyRow{
+  grid-template-columns: var(--feed-reply-thread-avatar-size) 1fr;
+  gap: 6px;
+  padding: 4px var(--feed-reply-side) 4px var(--feed-reply-thread-inset);
+  border-bottom-color: rgba(255, 255, 255, 0.03);
+}
+.feedReplyList.feedReplyList--thread .feedReplyMeta{
+  margin-bottom: 0;
+}
+.feedReplyList.feedReplyList--thread .feedReplyActs{
+  margin-top: 2px;
+  gap: 10px;
+}
+.feedReplyList.feedReplyList--thread .feedReplyAvatar{
+  width: var(--feed-reply-thread-avatar-size);
+  height: var(--feed-reply-thread-avatar-size);
+}
+.feedReplyList.feedReplyList--thread .feedReplyAvatar img{
+  width: 100%;
+  height: 100%;
+}
+.feedReplyList.feedReplyList--thread .feedReplyAvatarFallback{
+  font-size: 10px;
+}
+.feedReplyList.feedReplyList--thread .feedReplyEmpty{
+  padding: 8px var(--feed-reply-side) 4px var(--feed-reply-thread-inset);
+  text-align: left;
+  font-size: 12.5px;
 }
 
 .userPlaylistPickerSheet .feedReplySheetCard{
@@ -61203,6 +61261,9 @@ html[data-theme="light"] .feedReplySheetTitle{
 }
 html[data-theme="light"] .feedReplySheetSub{
   color: var(--text-secondary);
+}
+html[data-theme="light"] .feedReplyThreadRoot{
+  border-bottom-color: var(--border);
 }
 html[data-theme="light"] .feedReplyList:empty::before,
 html[data-theme="light"] .userPlaylistPickerList:empty::before{

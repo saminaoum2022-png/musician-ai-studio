@@ -22493,11 +22493,34 @@ function openFeedReplySheet({ targetKind, targetId, handle, sub }) {
   void loadFeedReplyList();
 }
 
+function clearFeedReplyThreadRoot() {
+  const root = document.getElementById("feedReplyThreadRoot");
+  if (root) {
+    root.hidden = true;
+    root.innerHTML = "";
+  }
+  document.getElementById("feedReplyList")?.classList.remove("feedReplyList--thread");
+}
+
+function paintFeedReplyThreadRoot(reply) {
+  const root = document.getElementById("feedReplyThreadRoot");
+  const list = document.getElementById("feedReplyList");
+  if (!root) return;
+  if (!reply) {
+    clearFeedReplyThreadRoot();
+    return;
+  }
+  root.hidden = false;
+  root.innerHTML = feedReplyRowHtml(reply, { isThreadRoot: true, pinned: true });
+  list?.classList.add("feedReplyList--thread");
+}
+
 function closeFeedReplySheet() {
   const sheet = document.getElementById("feedReplySheet");
   if (!sheet) return;
   closeAllFeedReplyMenus();
   dismissFeedReplyKeyboard();
+  clearFeedReplyThreadRoot();
   sheet.classList.remove("feedReplySheet--thread");
   const back = document.getElementById("feedReplyBack");
   if (back) back.hidden = true;
@@ -22540,13 +22563,25 @@ async function loadFeedReplyList() {
     const replies = Array.isArray(data?.replies) ? data.replies : [];
     const parent = data?.parent || null;
     const inThread = Boolean(ctx.thread);
-    const parts = [];
-    if (inThread && parent) parts.push(feedReplyRowHtml(parent, { isThreadRoot: true }));
-    parts.push(...replies.map((r) => feedReplyRowHtml(r, { inThread })));
+    if (inThread) {
+      const rootReply = parent || {
+        id: ctx.thread.replyId,
+        username: ctx.thread.handle,
+        body: ctx.thread.body,
+        userId: "",
+        avatar: "",
+        createdAt: "",
+        likeCount: 0,
+        liked: false,
+        replyCount: 0,
+      };
+      paintFeedReplyThreadRoot(rootReply);
+    } else {
+      clearFeedReplyThreadRoot();
+    }
+    const parts = replies.map((r) => feedReplyRowHtml(r, { inThread }));
     if (!parts.length) {
       list.innerHTML = `<div class="feedReplyEmpty">${inThread ? "No replies yet." : "No comments yet."}</div>`;
-    } else if (inThread && parts.length === 1) {
-      list.innerHTML = `${parts[0]}<div class="feedReplyEmpty">No replies yet.</div>`;
     } else {
       list.innerHTML = parts.join("");
     }
@@ -22617,8 +22652,9 @@ function feedReplyRowHtml(reply, opts = {}) {
   const menuHtml = feedReplyMoreMenuHtml({ replyId, isOwn, signedIn });
   const nameHtml = feedDisplayNameHtml(handle, replyProf, { className: "feedReplyNameText", fallback: "A musician" });
   const replyHandle = handle.replace(/^@/, "");
+  const pinned = Boolean(opts.pinned);
   return `
-    <article class="feedReplyRow" data-feed-reply-id="${replyId}" data-reply-handle="${escapeHtml(replyHandle)}">
+    <article class="feedReplyRow${pinned ? " feedReplyRow--pinned" : ""}" data-feed-reply-id="${replyId}" data-reply-handle="${escapeHtml(replyHandle)}">
       <a class="feedReplyAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="${escapeHtml(feedActorProfileLabel(handle, replyProf))}">
         ${avatarSrc
           ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="36" height="36" decoding="async" loading="lazy" />`
@@ -22653,9 +22689,9 @@ function paintFeedReplySheetChrome() {
   if (back) back.hidden = !thread;
   if (thread) {
     if (kicker) kicker.textContent = "Thread";
-    if (header) header.textContent = handle ? `Reply to @${handle}` : "Thread";
-    if (subEl) subEl.textContent = String(thread.body || "").trim().slice(0, 160);
-    if (input) input.placeholder = handle ? `Reply to @${handle}` : "Reply";
+    if (header) header.textContent = "Thread";
+    if (subEl) subEl.textContent = "";
+    if (input) input.placeholder = handle ? `Reply to @${handle}` : "Add a reply";
     return;
   }
   if (kicker) kicker.textContent = "Replies";
@@ -22677,6 +22713,17 @@ function openFeedReplyThread(replyId, { focus = false } = {}) {
   const body = String(row?.querySelector(".feedReplyBody")?.textContent || "").trim();
   ctx.thread = { replyId: id, handle, body };
   paintFeedReplySheetChrome();
+  paintFeedReplyThreadRoot({
+    id,
+    username: handle,
+    body,
+    userId: "",
+    avatar: "",
+    createdAt: "",
+    likeCount: 0,
+    liked: false,
+    replyCount: 0,
+  });
   const list = document.getElementById("feedReplyList");
   if (list) list.innerHTML = feedReplyListSkeletonHtml();
   void loadFeedReplyList().then(() => {

@@ -25,6 +25,12 @@ const MAX_ARTWORK = 280;
 const MAX_AVOID = 900;
 const MAX_CLIENT_PROMPT = 4500;
 let _promptMod = null;
+const { buildFluxScratchPrompt } = require("../../src/cover-art/flux-prompt.cjs");
+
+/** COVER_FLUX_PROMPT_MODE=legacy switches Cloudflare Flux back to the old long prompt (default: scratch). */
+function fluxLegacyPromptMode() {
+  return /^(legacy|old)$/i.test(String(process.env.COVER_FLUX_PROMPT_MODE || "").trim());
+}
 
 async function getPromptModule() {
   if (!_promptMod) {
@@ -124,13 +130,22 @@ async function fetchAbstractCoverImage({
   buildPollinationsUrl,
   buildFluxCoverPrompt,
   preferredProvider,
+  fluxContext = null,
 } = {}) {
   const provider = preferredProvider || resolveDefaultCoverImageProvider();
 
   if (provider === "cloudflare") {
-    const fluxPrompt = buildFluxCoverPrompt(prompt, { avoidTags, storyTheme, userArtwork, visualMode });
+    const useScratch = !fluxLegacyPromptMode() && fluxContext;
+    let fluxPrompt;
+    if (useScratch) {
+      const built = buildFluxScratchPrompt({ ...fluxContext, userArtwork: userArtwork || fluxContext.userArtwork || "", seed });
+      fluxPrompt = built.prompt;
+      console.info("[music/cover-art] flux prompt (scratch)", built.source, fluxPrompt.length);
+    } else {
+      fluxPrompt = buildFluxCoverPrompt(prompt, { avoidTags, storyTheme, userArtwork, visualMode });
+    }
     let cf = await fetchCloudflareFluxCover({ prompt: fluxPrompt });
-    if (!cf.ok && fluxPrompt.length > 1800) {
+    if (!useScratch && !cf.ok && fluxPrompt.length > 1800) {
       const retryPrompt = buildFluxCoverPrompt(prompt, { avoidTags: "", storyTheme: "", userArtwork: "", visualMode });
       if (retryPrompt.length < fluxPrompt.length) {
         cf = await fetchCloudflareFluxCover({ prompt: retryPrompt });
@@ -190,6 +205,7 @@ async function fetchRegenCoverImage({
   buildPollinationsUrl,
   buildFluxCoverPrompt,
   allowHumans = false,
+  fluxContext = null,
 }) {
   const pollOpts = { avoidTags, storyTheme: storyTheme || "", userArtwork: userArtwork || "" };
   const regenProvider = resolveCoverRegenImageProvider();
@@ -218,6 +234,7 @@ async function fetchRegenCoverImage({
       ...pollOpts,
       buildPollinationsUrl,
       buildFluxCoverPrompt,
+      fluxContext,
     });
     if (!rendered.ok) {
       return {
@@ -245,6 +262,7 @@ async function fetchRegenCoverImage({
     ...pollOpts,
     buildPollinationsUrl,
     buildFluxCoverPrompt,
+    fluxContext,
   });
   if (!rendered.ok) {
     return {
@@ -404,6 +422,16 @@ module.exports = async function handler(req, res) {
         buildPollinationsUrl,
         buildFluxCoverPrompt,
         allowHumans: Boolean(regenUserArt),
+        fluxContext: {
+          userArtwork: regenUserArt,
+          scene: String(body?.clientParams?.geminiScene || body?.clientParams?.directorSceneHint || "").slice(0, 400),
+          occasionLabel: coverInput.occasionLabel,
+          searchTemplateTitle: coverInput.searchTemplateTitle,
+          title: coverInput.title,
+          mood: coverInput.mood,
+          genre: coverInput.genre,
+          style: coverInput.styleInput,
+        },
       });
       if (!rendered.ok) {
         console.warn("[music/cover-art] regen failed (client prompt)", rendered.error);
@@ -476,6 +504,16 @@ module.exports = async function handler(req, res) {
       visualMode,
       buildPollinationsUrl,
       buildFluxCoverPrompt,
+      fluxContext: {
+        userArtwork: params?.userArtworkRaw || params?.userArtwork || artworkHint || "",
+        scene: String(params?.geminiScene || params?.directorSceneHint || "").slice(0, 400),
+        occasionLabel: promptInput.occasionLabel,
+        searchTemplateTitle: promptInput.searchTemplateTitle,
+        title: promptInput.title,
+        mood: promptInput.mood,
+        genre: promptInput.genre,
+        style: promptInput.styleInput,
+      },
     });
     if (!rendered.ok) {
       console.warn("[music/cover-art] abstract cover failed", rendered.error);

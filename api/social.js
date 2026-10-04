@@ -501,7 +501,10 @@ async function fetchFeedSocialStats({ songIds, statusIds, echoIds, viewerId }) {
 }
 
 function socialSchemaMissing(result) {
-  return /parent_reply_id|social_reply_likes|42703|42P01/i.test(String(result?.text || ""));
+  if (result?.ok) return false;
+  const t = String(result?.text || "");
+  if (/42703|42P01/.test(t)) return true;
+  return /parent_reply_id|social_reply_likes/i.test(t);
 }
 
 async function mapReplyRows(raw, viewerId) {

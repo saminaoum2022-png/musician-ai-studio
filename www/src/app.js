@@ -28647,7 +28647,14 @@ async function startHubRemix(post) {
   try {
     setStatus("Loading remix source…");
     let remixAudioUrl = String(post.url || "").trim();
+    // Archived songs (incl. your private drafts) are permanent in our own storage: never swap the
+    // good archive / signed stream link for a short-lived provider link that has already expired.
+    const remixLeafForRefresh = unwrapInnermostHttpAudioUrl(remixAudioUrl) || remixAudioUrl;
+    const remixIsOurArchive =
+      isArchivedSongStorageUrl(remixLeafForRefresh)
+      || /\/api\/songs\/stream\?/i.test(remixLeafForRefresh);
     try {
+      if (remixIsOurArchive) throw new Error("skip_refresh_archived");
       const refreshed = await tryRefreshLibraryTrackAudioFromSuno({
         taskId: post.taskId || post?.meta?.taskId || "",
         audioId: post.audioId || post?.meta?.audioId || "",

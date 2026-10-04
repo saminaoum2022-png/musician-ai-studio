@@ -62,6 +62,12 @@ async function resendApiGet(path) {
   return resendApiRequest(path);
 }
 
+async function fetchSentEmail(emailId) {
+  const id = String(emailId || "").trim();
+  if (!id) return { ok: false, error: "email_id_required" };
+  return resendApiGet(`/emails/${encodeURIComponent(id)}`);
+}
+
 async function fetchReceivedEmail(emailId) {
   const id = String(emailId || "").trim();
   if (!id) return { ok: false, error: "email_id_required" };
@@ -322,6 +328,7 @@ module.exports = {
   inboundForwardTargets,
   parseEmailAddress,
   fetchReceivedEmail,
+  fetchSentEmail,
   listReceivedEmails,
   ingestReceivedEmail,
   forwardInboundCopy,

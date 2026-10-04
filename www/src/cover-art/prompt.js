@@ -8,6 +8,16 @@ export function userHintRequestsDaylight(text) {
   return USER_HINT_DAYLIGHT_RE.test(String(text || ""));
 }
 
+const USER_HINT_TIGHT_COMPOSE_RE =
+  /\b(close[\s-]?up|closeup|macro|extreme close|tight crop|tight shot|tight framing|zoomed in|fill(?:ing)?\s+(?:the\s+)?frame|subject fills|hero fills|full[\s-]?frame subject|detail shot|micro shot)\b/i;
+
+export function userHintRequestsTightComposition(text) {
+  return USER_HINT_TIGHT_COMPOSE_RE.test(String(text || ""));
+}
+
+const PLAYER_WIDE_COMPOSE_GUARD =
+  "medium wide shot for music player cover, camera pulled back, subject at modest scale about 25-35% of frame, generous margins above and below, environment fully visible, sharp readable detail, natural depth of field";
+
 function userHintRequestsNight(text) {
   return USER_HINT_NIGHT_RE.test(String(text || ""));
 }
@@ -37,7 +47,7 @@ const USER_DAYLIGHT_PALETTE =
  */
 
 /** Bump when cover prompt policy changes. */
-export const COVER_PROMPT_POLICY_VERSION = 27;
+export const COVER_PROMPT_POLICY_VERSION = 28;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -48,7 +58,7 @@ const OBJECT_COMPOSE_FRAME =
 
 /** Native 9:16 Gemini — hero centered with safe margins so nothing clips in the reel editor. */
 const GEMINI_REEL_COMPOSE_FRAME =
-  "vertical 9:16 portrait album cover photograph, single hero subject centered in frame, generous safe margins on all four edges, subject scaled to fit fully inside the vertical reel viewport, nothing cropped off at frame edges, balanced centered composition, subject occupies roughly 40-55% of frame height, ample breathing room above and below, no elements touching or crossing the frame boundary";
+  "vertical 9:16 portrait album cover photograph, medium wide shot, camera pulled back, single hero subject centered in frame, generous safe margins on all four edges, subject scaled to fit fully inside the vertical reel viewport, nothing cropped off at frame edges, balanced centered composition, subject occupies roughly 25-35% of frame height, ample breathing room above and below, no elements touching or crossing the frame boundary";
 
 /** Music-leaning Gemini reel frame — environment still centered and fully in view. */
 const GEMINI_REEL_ENV_FRAME =
@@ -59,7 +69,7 @@ const STILL_LIFE_COMPOSE_FRAME = OBJECT_COMPOSE_FRAME;
 
 /** Vertical 9:16 reel frame — hero centered with safe margins (Flux + portrait crop). */
 const FLUX_REEL_PORTRAIT_FRAME =
-  "vertical 9:16 portrait album cover, main subject centered in frame with generous safe margins on all four edges, hero focal point fully inside the viewport, nothing important cropped at frame edges, balanced centered composition";
+  "vertical 9:16 portrait album cover, medium wide shot, camera pulled back, main subject at modest scale with generous safe margins on all four edges, hero focal point fully inside the viewport, environment visible, sharp clear detail, nothing important cropped at frame edges, balanced centered composition";
 
 /** Music-leaning frame — avoids plain square blocks when the theme is vague or user-directed. */
 const MUSIC_COVER_FRAME =
@@ -748,9 +758,16 @@ function paletteForUserArtwork(userArtwork, bucketKey) {
 const USER_DAYLIGHT_GUARD =
   "bright natural daylight, sunlit scene, clear sky or bright windows visible, not a dark night background or void-black underexposure";
 
+function appendWideCompositionHint(text) {
+  let s = String(text || "").trim();
+  if (!s || userHintRequestsTightComposition(s)) return s;
+  if (/medium wide|wide shot|medium shot|pulled back|modest scale|25.?35|one quarter to one third/i.test(s)) return s;
+  return `${s}, ${PLAYER_WIDE_COMPOSE_GUARD}`.slice(0, 280);
+}
+
 function prepareExplicitUserArtworkHint(raw) {
   const expanded = expandArtworkStyleTags(String(raw || "").trim()).replace(/\s+/g, " ").trim();
-  return augmentArtworkHintForLighting(expanded).slice(0, 280);
+  return appendWideCompositionHint(augmentArtworkHintForLighting(expanded)).slice(0, 280);
 }
 
 function prepareDirectUserArtworkHint(raw, { allowHumans = false, creative = true } = {}) {
@@ -1373,11 +1390,13 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     } else if (userArtwork) {
       if (explicitUserHint && creativeMode) {
         const userDaylight = userHintRequestsDaylight(userArtwork);
+        const userTight = userHintRequestsTightComposition(userArtworkOverride || userArtworkRaw);
         parts = [
           shouldUseLiteralSubjectMode(userArtworkOverride || userArtworkRaw, { userArtworkOverride: userArtworkOverride || userArtworkRaw })
             ? OBJECT_COMPOSE_FRAME
             : "",
           userArtwork,
+          userTight ? "" : PLAYER_WIDE_COMPOSE_GUARD,
           userDaylight ? USER_DAYLIGHT_GUARD : "",
           userDaylight ? "" : nabadIdentityPhrases,
           paletteForUserArtwork(userArtwork, bucketKey),
@@ -1406,6 +1425,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
           ? "soft charcoal ground with luminous depth, teal-violet atmospheric haze, lifted midtones"
           : "deep void black ground, teal-violet atmospheric haze, soft cyan fill"),
         autoFrame,
+        PLAYER_WIDE_COMPOSE_GUARD,
         styleCore,
         `${photoLead}${visualScene}`.trim(),
         humGuard,

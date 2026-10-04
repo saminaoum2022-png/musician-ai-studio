@@ -2,8 +2,12 @@
 
 const {
   userHintRequestsDaylight,
+  userHintRequestsTightComposition,
   augmentArtworkHintForLighting,
+  appendWideCompositionHint,
   FLUX_DAYLIGHT_LIGHT_LINE,
+  FLUX_WIDE_FRAME_LINE,
+  FLUX_TIGHT_FRAME_LINE,
 } = require("./user-hint-lighting.cjs");
 
 /**
@@ -179,7 +183,7 @@ function needsSceneWriter(ctx = {}) {
 
 function resolveSubject(ctx) {
   const userArtRaw = String(ctx.userArtwork || "").trim();
-  const userArt = augmentArtworkHintForLighting(userArtRaw);
+  const userArt = appendWideCompositionHint(augmentArtworkHintForLighting(userArtRaw));
   const allowCandles = /\bcandle|birthday cake/i.test(userArt);
   if (userArt) {
     const cleaned = positiveOnly(userArt, { allowCandles });
@@ -211,8 +215,6 @@ const LIGHT_LINE =
   "Dark, moody atmosphere with deep black shadows, lit by teal and violet glow and a faint rose-gold highlight.";
 const REGEN_LIGHT_LINE =
   "Premium album photograph with lighting that matches the scene (daylight, golden hour, studio fill, or justified night glow), teal and violet color grade, readable midtones, avoid default void-black underexposure unless the scene is clearly nocturnal";
-const FRAME_LINE =
-  "Vertical 9:16 album cover, subject centred with wide margins, shallow depth of field, photorealistic, cinematic lighting.";
 const QUIET_LINE = "A quiet, wordless scene of objects and atmosphere only.";
 const WORDLESS_LINE = "A wordless image.";
 
@@ -230,10 +232,14 @@ function buildFluxScratchPrompt(ctx = {}) {
     : ctx.regen
       ? REGEN_LIGHT_LINE
       : LIGHT_LINE;
+  const frameLine = userHintRequestsTightComposition(userArtForLight)
+    ? FLUX_TIGHT_FRAME_LINE
+    : FLUX_WIDE_FRAME_LINE;
   const prompt = [
     `${lead}${subject.text}.`,
     lightLine,
-    FRAME_LINE,
+    frameLine,
+    "Photorealistic cinematic album cover lighting.",
     subject.people ? WORDLESS_LINE : QUIET_LINE,
   ].join(" ").replace(/\s+/g, " ").trim();
   return { prompt, source: subject.source };

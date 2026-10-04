@@ -5,7 +5,7 @@
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const CACHE_MAX = 400;
 /** Keep in sync with src/cover-art/prompt.js COVER_PROMPT_POLICY_VERSION */
-const COVER_PROMPT_POLICY_VERSION = 27;
+const COVER_PROMPT_POLICY_VERSION = 28;
 const sceneCache = new Map();
 
 const PREFERRED_MODELS = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"];
@@ -87,6 +87,7 @@ function buildGeminiCoverBrief(input, { bucketKey, palette, artworkHint = "", oc
     "CRITICAL: absolutely no people, no humans, no faces, no hands, no fingers, no bodies, no silhouettes, no portraits — objects and environments only.",
     "For occasions, use symbolic props (e.g. wedding → diamond rings on satin; birthday → balloons and confetti on a dark surface (never candles); graduation → cap and diploma on table).",
     "The image model outputs a square frame — compose the hero object centered for square still life; the app crops to vertical 9:16 afterward.",
+    "Default composition: medium wide shot, camera pulled back, hero subject modest size (about 25-35% of frame) with generous margins — only use close-up, macro, or tight crop if art direction explicitly asks.",
     "Prefer one dominant object, one clear environment, realistic photography, simple composition, and minimal visual clutter.",
     input?.regen
       ? "Regenerated cover: choose lighting that fits the song mood and setting (day, dusk, golden hour, studio, or night when appropriate). Readable midtones — do not default to void black, underexposed grey, or generic midnight unless mood/genre/lyrics clearly call for dark or noir."

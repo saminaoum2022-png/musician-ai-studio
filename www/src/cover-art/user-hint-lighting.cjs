@@ -38,10 +38,35 @@ const USER_DAYLIGHT_PALETTE =
 const FLUX_DAYLIGHT_LIGHT_LINE =
   "Bright daytime photograph, natural sunlight, clear sky or bright window light, lifted midtones, readable festive colors, soft shadows, subtle teal-violet grade accent only, not a dark night scene";
 
+const TIGHT_COMPOSE_RE =
+  /\b(close[\s-]?up|closeup|macro|extreme close|tight crop|tight shot|tight framing|zoomed in|fill(?:ing)?\s+(?:the\s+)?frame|subject fills|hero fills|full[\s-]?frame subject|detail shot|micro shot)\b/i;
+
+function userHintRequestsTightComposition(text) {
+  return TIGHT_COMPOSE_RE.test(String(text || ""));
+}
+
+function appendWideCompositionHint(raw) {
+  let s = String(raw || "").replace(/\s+/g, " ").trim();
+  if (!s || userHintRequestsTightComposition(s)) return s;
+  if (/medium wide|wide shot|medium shot|pulled back|modest scale|one quarter|25.?35/i.test(s)) return s;
+  return `${s}, medium wide shot, camera pulled back, modest subject scale, generous environment visible`.slice(0, 280);
+}
+
+/** Default player cover — medium/wide so 9:16 crop keeps the scene readable. */
+const FLUX_WIDE_FRAME_LINE =
+  "Vertical 9:16 album cover, medium wide shot, camera pulled back, main subject at modest scale about one quarter to one third of frame height, generous sky and ground breathing room, full environment visible, sharp clear detail, natural depth of field";
+
+const FLUX_TIGHT_FRAME_LINE =
+  "Vertical 9:16 album cover, tighter close composition as directed, subject larger in frame, cinematic detail";
+
 module.exports = {
   userHintRequestsDaylight,
   userHintRequestsNight,
+  userHintRequestsTightComposition,
   augmentArtworkHintForLighting,
+  appendWideCompositionHint,
   USER_DAYLIGHT_PALETTE,
   FLUX_DAYLIGHT_LIGHT_LINE,
+  FLUX_WIDE_FRAME_LINE,
+  FLUX_TIGHT_FRAME_LINE,
 };

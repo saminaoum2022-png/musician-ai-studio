@@ -25,7 +25,43 @@ const MAX_ARTWORK = 280;
 const MAX_AVOID = 900;
 const MAX_CLIENT_PROMPT = 4500;
 let _promptMod = null;
-const { buildFluxScratchPrompt } = require("../../src/cover-art/flux-prompt.cjs");
+const { buildFluxScratchPrompt, needsSceneWriter } = require("../../src/cover-art/flux-prompt.cjs");
+const { tryGeminiCoverScene } = require("../_lib/gemini-cover-prompt");
+
+/** COVER_FLUX_AI_SCENE=0 turns off the one-line AI scene writer (keyword + mood scenes only). */
+function fluxAiSceneEnabled() {
+  return !/^(0|false|off|no)$/i.test(String(process.env.COVER_FLUX_AI_SCENE || "").trim());
+}
+
+/** Ask Gemini (text only, ~$0.002) for ONE wordless scene when no hint/occasion decides it. Never blocks the cover. */
+async function writeFluxScene(ctx, seed) {
+  if (!fluxAiSceneEnabled() || !needsSceneWriter(ctx)) return { scene: "", attempted: false };
+  const salt = ctx.regen ? `:${seed}` : "";
+  try {
+    const out = await Promise.race([
+      tryGeminiCoverScene(
+        {
+          songId: `${ctx.songId || ""}${salt}` || undefined,
+          title: ctx.title,
+          mood: ctx.mood,
+          genre: ctx.genre,
+          styleInput: ctx.style,
+          lyrics: ctx.lyrics,
+          occasionLabel: ctx.occasionLabel,
+          searchTemplateTitle: ctx.searchTemplateTitle,
+        },
+        { bucketKey: "default", palette: "" },
+      ),
+      new Promise((resolve) => setTimeout(() => resolve({ ok: false, error: "timeout" }), 7000)),
+    ]);
+    if (out?.ok && out.scene) return { scene: out.scene, attempted: true, cached: Boolean(out.cached) };
+    console.warn("[music/cover-art] flux scene writer skipped", out?.error);
+    return { scene: "", attempted: true, failed: true };
+  } catch (e) {
+    console.warn("[music/cover-art] flux scene writer failed", e?.message || e);
+    return { scene: "", attempted: true, failed: true };
+  }
+}
 
 /** COVER_FLUX_PROMPT_MODE=legacy switches Cloudflare Flux back to the old long prompt (default: scratch). */
 function fluxLegacyPromptMode() {
@@ -138,7 +174,19 @@ async function fetchAbstractCoverImage({
     const useScratch = !fluxLegacyPromptMode() && fluxContext;
     let fluxPrompt;
     if (useScratch) {
-      const built = buildFluxScratchPrompt({ ...fluxContext, userArtwork: fluxContext.userArtwork || userArtwork || "", seed });
+      const ctx = { ...fluxContext, userArtwork: fluxContext.userArtwork || userArtwork || "", seed };
+      const written = await writeFluxScene(ctx, seed);
+      if (written.scene) ctx.aiScene = written.scene;
+      if (written.attempted && !written.cached) {
+        await recordCoverUsage({
+          provider: "gemini",
+          kind: "cover_scene",
+          userId: ctx.userId || "",
+          ref: String(ctx.songId || "").slice(0, 120),
+          status: written.failed ? "failed" : "completed",
+        });
+      }
+      const built = buildFluxScratchPrompt(ctx);
       fluxPrompt = built.prompt;
       console.info("[music/cover-art] flux prompt (scratch)", built.source, fluxPrompt.length);
     } else {
@@ -423,6 +471,10 @@ module.exports = async function handler(req, res) {
         buildFluxCoverPrompt,
         allowHumans: Boolean(regenUserArt),
         fluxContext: {
+          regen: true,
+          songId,
+          userId: user.userId,
+          lyrics: coverInput.lyrics,
           userArtwork: regenUserArt,
           scene: String(body?.clientParams?.geminiScene || body?.clientParams?.directorSceneHint || "").slice(0, 400),
           occasionLabel: coverInput.occasionLabel,
@@ -505,6 +557,9 @@ module.exports = async function handler(req, res) {
       buildPollinationsUrl,
       buildFluxCoverPrompt,
       fluxContext: {
+        songId,
+        userId: user.userId,
+        lyrics: promptInput.lyrics,
         userArtwork: params?.userArtworkRaw || params?.userArtwork || artworkHint || "",
         scene: String(params?.geminiScene || params?.directorSceneHint || "").slice(0, 400),
         occasionLabel: promptInput.occasionLabel,

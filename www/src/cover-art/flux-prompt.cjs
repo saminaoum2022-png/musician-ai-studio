@@ -116,6 +116,25 @@ function pickBySeed(list, seed) {
   return list[n % list.length];
 }
 
+/** Generic filler scenes from the keyword director — treated as "nothing matched". */
+const GENERIC_SCENE_RE = /^\s*(?:abstract sonic pulse|premium abstract living light|layered luminous depth)/i;
+
+function occasionScene(ctx) {
+  const blob = [ctx.occasionLabel, ctx.searchTemplateTitle, ctx.title].filter(Boolean).join(" ");
+  if (!blob.trim()) return "";
+  for (const [re, scene] of OCCASIONS) {
+    if (re.test(blob)) return scene;
+  }
+  return "";
+}
+
+/** True when nothing explicit (user hint / occasion) decides the scene, so an AI scene writer should read the song. */
+function needsSceneWriter(ctx = {}) {
+  if (String(ctx.userArtwork || "").trim()) return false;
+  if (occasionScene(ctx)) return false;
+  return true;
+}
+
 function resolveSubject(ctx) {
   const userArt = String(ctx.userArtwork || "").trim();
   const allowCandles = /\bcandle|birthday cake/i.test(userArt);
@@ -124,15 +143,14 @@ function resolveSubject(ctx) {
     if (cleaned) return { text: clampAtComma(cleaned, 260), source: "user", people: HUMAN_RE.test(cleaned) };
   }
 
-  const occasionBlob = [ctx.occasionLabel, ctx.searchTemplateTitle, ctx.title].filter(Boolean).join(" ");
-  if (occasionBlob.trim()) {
-    for (const [re, scene] of OCCASIONS) {
-      if (re.test(occasionBlob)) return { text: scene, source: "occasion", people: false };
-    }
-  }
+  const occ = occasionScene(ctx);
+  if (occ) return { text: occ, source: "occasion", people: false };
+
+  const ai = stripHumans(positiveOnly(String(ctx.aiScene || "")));
+  if (ai.length >= 12) return { text: clampAtComma(ai, 240), source: "ai_scene", people: false };
 
   const sceneRaw = String(ctx.scene || "").trim();
-  if (sceneRaw) {
+  if (sceneRaw && !GENERIC_SCENE_RE.test(sceneRaw)) {
     const cleaned = stripHumans(positiveOnly(sceneRaw));
     if (cleaned.length >= 12) return { text: clampAtComma(cleaned, 240), source: "scene", people: false };
   }
@@ -168,4 +186,4 @@ function buildFluxScratchPrompt(ctx = {}) {
   return { prompt, source: subject.source };
 }
 
-module.exports = { buildFluxScratchPrompt, positiveOnly, stripHumans };
+module.exports = { buildFluxScratchPrompt, needsSceneWriter, positiveOnly, stripHumans };

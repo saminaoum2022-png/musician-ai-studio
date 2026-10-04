@@ -85,7 +85,7 @@ function buildGeminiCoverBrief(input, { bucketKey, palette, artworkHint = "", oc
     "No markdown, no quotes, no JSON.",
     "Describe symbolic objects, setting, lighting mood, and composition only.",
     "CRITICAL: absolutely no people, no humans, no faces, no hands, no fingers, no bodies, no silhouettes, no portraits — objects and environments only.",
-    "For occasions, use symbolic props (e.g. wedding → diamond rings on satin; birthday → balloons and candles; graduation → cap and diploma on table).",
+    "For occasions, use symbolic props (e.g. wedding → diamond rings on satin; birthday → balloons and confetti on a dark surface (never candles); graduation → cap and diploma on table).",
     "The image model outputs a square frame — compose the hero object centered for square still life; the app crops to vertical 9:16 afterward.",
     "Prefer one dominant object, one clear environment, realistic photography, simple composition, and minimal visual clutter.",
     "Avoid surreal or impossible combinations unless the mood, genre, or art direction below explicitly calls for them.",

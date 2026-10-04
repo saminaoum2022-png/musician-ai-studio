@@ -84,7 +84,7 @@ function inferSonicProfile(meta) {
 const OCCASION_COVER_HINTS = [
   {
     re: /birthday|bday|happy birthday|sana helwa|عيد ميلاد/i,
-    hint: "celebration still life, balloons and soft candle glow on dark surface, festive party atmosphere, no people, no writing",
+    hint: "celebration still life, balloons and warm string-light glow on dark surface, festive party atmosphere, no people, no writing",
   },
   {
     re: /wedding|bridal|bride|groom|زفاف|عرس|عروس/i,

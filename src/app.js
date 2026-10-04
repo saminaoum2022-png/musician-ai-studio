@@ -25349,7 +25349,7 @@ async function openSongEditFromLibraryTrack(track) {
   const title = String(track?.title || "").trim();
   setCreateEditAttachmentPreview("Loading this song…", title || "Song");
   try {
-    const blob = await fetchAudioForRemix(url);
+    const blob = await fetchAudioForRemix(url, { songId: trackCloudShareId(track) || "" });
     const safeName = `${(title || "song").replace(/[^\w\s.-]+/g, "").trim() || "song"}.mp3`;
     let file;
     try {
@@ -28493,11 +28493,31 @@ function renderRemixSourceBanner() {
  *
  *  Returns the Blob on success. Throws an Error with a useful message
  *  describing where the failure happened. */
-async function fetchAudioForRemix(rawUrl) {
-  const original = String(rawUrl || "").trim();
+async function fetchAudioForRemix(rawUrl, opts = {}) {
+  let original = String(rawUrl || "").trim();
   if (!original || original === "#") {
     throw new Error("This post has no audio URL");
   }
+  // Private drafts live in the locked song_archive bucket: this download carries no login, so
+  // it needs a short-lived signed link first (same step playback uses). Public songs skip it.
+  try {
+    const leaf = unwrapInnermostHttpAudioUrl(original) || original;
+    const needsSigning =
+      isArchivedSongStorageUrl(leaf)
+      || (/\/api\/songs\/stream\?/i.test(leaf) && !isSignedSongStreamPlaybackUrl(leaf));
+    if (needsSigning) {
+      let key = songArchiveKeyFromUrl(leaf);
+      if (!key) {
+        try {
+          key = new URL(leaf, "https://x.invalid").searchParams.get("key") || "";
+        } catch {}
+      }
+      if (key) {
+        const signed = await trySignArchiveStreamUrl(key, String(opts?.songId || ""));
+        if (signed) original = signed;
+      }
+    }
+  } catch {}
   // blob: URLs (a freshly-shared local placeholder) — fetch directly,
   // they live in the current document context.
   if (original.startsWith("blob:") || original.startsWith("data:")) {
@@ -28635,7 +28655,7 @@ async function startHubRemix(post) {
       });
       if (refreshed?.url) remixAudioUrl = String(refreshed.url).trim();
     } catch {}
-    const blob = await fetchAudioForRemix(remixAudioUrl);
+    const blob = await fetchAudioForRemix(remixAudioUrl, { songId: post.songId || post.id || "" });
     if (blob.size < 40 * 1024) {
       throw new Error("Source audio looks too short — pick a full song or try again");
     }
@@ -53873,8 +53893,15 @@ async function startLibraryRemixForLibraryTrack(t) {
       showToast("Could not resolve audio for remix.", { icon: "!", durationMs: 3400 });
       return;
     }
-    const remixUrl =
+    let remixUrl =
       normalizeAudioUrlForPlayback(toAudioProxyUrl(rawInner) || rawInner) || rawInner;
+    if (isArchivedSongStorageUrl(rawInner)) {
+      // Own draft in the private archive: use the signed link, like playback does.
+      try {
+        const signed = await resolveArchivePlaybackUrl({ ...track, url: rawInner });
+        if (signed) remixUrl = signed;
+      } catch {}
+    }
     const art =
       String((track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "").trim() ||
       "./assets/icons/splash-mark.png";

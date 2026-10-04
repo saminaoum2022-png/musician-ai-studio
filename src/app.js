@@ -27636,11 +27636,12 @@ function teardownPublishHookUi() {
   const ui = _publishHookUi;
   _publishHookUi = null;
   if (!ui) return;
+  ui.previewing = false;
   try { ui.previewAudio?.pause(); } catch {}
   if (ui.previewAudio) {
     try { ui.previewAudio.src = ""; } catch {}
   }
-  if (ui.previewTimer) window.clearInterval(ui.previewTimer);
+  if (ui.previewTimer) window.clearTimeout(ui.previewTimer);
   ui.sheet?.classList.remove("isFindingHook");
 }
 
@@ -27709,10 +27710,19 @@ async function initPublishHookUi(sheet, track) {
   sheet.querySelector("#pubWave")?.classList.add("isLoading");
 
   const previewAudio = new Audio();
-  previewAudio.preload = "metadata";
+  previewAudio.preload = "auto";
   previewAudio.playsInline = true;
-  try { previewAudio.crossOrigin = "anonymous"; } catch {}
-  const url = normalizeAudioUrlForPlayback(String(track?.url || "").trim());
+  try { previewAudio.setAttribute("playsinline", ""); } catch {}
+  let url = normalizeAudioUrlForPlayback(String(track?.url || "").trim());
+  // Private song_archive drafts need a signed link — the raw storage URL is refused now.
+  try {
+    const rawTrackUrl = String(track?.url || "").trim();
+    const leaf = unwrapInnermostHttpAudioUrl(rawTrackUrl) || rawTrackUrl;
+    if (isArchivedSongStorageUrl(leaf) || /\/api\/songs\/stream\?/i.test(leaf)) {
+      const signed = await resolveArchivePlaybackUrl({ ...track, url: leaf });
+      if (signed) url = normalizeAudioUrlForPlayback(signed);
+    }
+  } catch {}
   if (url) previewAudio.src = url;
 
   const ui = {
@@ -27780,15 +27790,54 @@ async function initPublishHookUi(sheet, track) {
   }
 
   if (previewBtn) {
-    previewBtn.addEventListener("click", () => {
-      const sec = ui.fromStart ? 0 : normalizeHookStartSec(Number(range.value || 0), ui.durationSec);
+    const stopPreview = () => {
+      if (ui.previewTimer) { window.clearTimeout(ui.previewTimer); ui.previewTimer = null; }
+      ui.previewing = false;
       try { previewAudio.pause(); } catch {}
-      if (ui.previewTimer) window.clearInterval(ui.previewTimer);
-      previewAudio.currentTime = sec;
-      void previewAudio.play().catch(() => {});
-      ui.previewTimer = window.setTimeout(() => {
-        try { previewAudio.pause(); } catch {}
-      }, 4500);
+      try { previewAudio.muted = false; } catch {}
+      previewBtn.classList.remove("on");
+    };
+    ui.stopPreview = stopPreview;
+    previewBtn.addEventListener("click", () => {
+      if (ui.previewing) { stopPreview(); return; }
+      const sec = ui.fromStart ? 0 : normalizeHookStartSec(Number(range.value || 0), ui.durationSec);
+      // Whatever was playing in the background stops so the preview is the only thing you hear.
+      try { playerEl?.pause(); } catch {}
+      try { document.querySelectorAll("audio, video").forEach((m) => { if (m !== previewAudio && !m.paused) m.pause(); }); } catch {}
+      ui.previewing = true;
+      previewBtn.classList.add("on");
+      const a = previewAudio;
+      let settled = false;
+      const reveal = () => {
+        if (settled || !ui.previewing) return;
+        settled = true;
+        try { a.muted = false; } catch {}
+        if (ui.previewTimer) window.clearTimeout(ui.previewTimer);
+        ui.previewTimer = window.setTimeout(stopPreview, 4500);
+      };
+      const seekThenReveal = () => {
+        if (!ui.previewing) return;
+        try {
+          if (Math.abs((a.currentTime || 0) - sec) < 0.25) { reveal(); return; }
+          a.addEventListener("seeked", reveal, { once: true });
+          a.currentTime = sec;
+        } catch { reveal(); }
+      };
+      try { a.pause(); } catch {}
+      // Start inside the tap (iOS only allows that), muted, then jump to the chosen moment and unmute.
+      a.muted = true;
+      let playPromise;
+      try { playPromise = a.play(); } catch (e) { playPromise = Promise.reject(e); }
+      if (a.readyState >= 1) seekThenReveal();
+      else a.addEventListener("loadedmetadata", seekThenReveal, { once: true });
+      window.setTimeout(() => { if (ui.previewing && !settled) reveal(); }, 5000);
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {
+          if (!ui.previewing) return;
+          stopPreview();
+          showToast("Couldn't play the preview — try again.", { durationMs: 2600 });
+        });
+      }
     });
   }
 

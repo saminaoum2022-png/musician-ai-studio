@@ -138,7 +138,7 @@ async function fetchAbstractCoverImage({
     const useScratch = !fluxLegacyPromptMode() && fluxContext;
     let fluxPrompt;
     if (useScratch) {
-      const built = buildFluxScratchPrompt({ ...fluxContext, userArtwork: userArtwork || fluxContext.userArtwork || "", seed });
+      const built = buildFluxScratchPrompt({ ...fluxContext, userArtwork: fluxContext.userArtwork || userArtwork || "", seed });
       fluxPrompt = built.prompt;
       console.info("[music/cover-art] flux prompt (scratch)", built.source, fluxPrompt.length);
     } else {

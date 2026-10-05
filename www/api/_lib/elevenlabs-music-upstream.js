@@ -2249,16 +2249,11 @@ async function elevenlabsGenerateMusicDetailed({
   const wantTimestamps = withTimestamps && !instrumental;
   const url = `${ELEVEN_MUSIC_DETAILED_URL}?output_format=mp3_48000_192`;
   const plan = compositionPlan && typeof compositionPlan === "object" ? compositionPlan : null;
-  const promptText = String(prompt || "").trim();
-  const instrumentalPlanPrompt =
-    promptText || "solo instrumental melody from reference, single lead instrument, no vocals";
   const body = plan
     ? {
         composition_plan: plan,
         model_id: resolvedModel,
-        ...(instrumental
-          ? { force_instrumental: true, prompt: instrumentalPlanPrompt.slice(0, 2000) }
-          : {}),
+        // Eleven: exactly one of prompt | composition_plan — instrumental is expressed in plan chunks, not force_instrumental.
         ...(resolvedFinetuneId ? { finetune_id: resolvedFinetuneId } : {}),
         ...(wantTimestamps ? { with_timestamps: true } : {}),
       }
@@ -2330,7 +2325,7 @@ async function elevenlabsGenerateMusicDetailedWithRetry(opts) {
       console.log("[elevenlabs] compose copyright retry with composition_plan_suggestion");
       return elevenlabsGenerateMusicDetailed({
         ...opts,
-        prompt: opts.instrumental ? opts.prompt : undefined,
+        prompt: undefined,
         compositionPlan: plan,
       });
     }

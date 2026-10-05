@@ -46,15 +46,15 @@ function buildLaSyllableLyrics(notes) {
 function buildMelodyLockBlockCompact(melody, opts = {}) {
   const tempoBpm = Number(melody?.tempoBpm) || 96;
   const meter = melody?.meter === "6/8" ? "6/8" : "4/4";
-  const notes = (Array.isArray(melody?.notes) ? melody.notes : []).slice(0, 24);
+  const notes = (Array.isArray(melody?.notes) ? melody.notes : []).slice(0, 16);
   const keyLine = melody?.inferredKey || melody?.key || inferSimpleKey(notes);
   const { head, lines } = formatNoteTimeline({ notes, tempoBpm, meter });
   const raw = [
-    "Melody Lock (exact):",
+    "Main melody guide:",
     head,
     keyLine ? `Key: ${keyLine}.` : "",
     ...lines,
-    "Play these pitches in this order for the full clip — no improvisation.",
+    "Keep the lead tune on these pitches in order through the clip.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -68,7 +68,7 @@ function buildMelodyIntervalSteps(notes) {
   const steps = [];
   for (let i = 1; i < midis.length; i++) steps.push(midis[i] - midis[i - 1]);
   const slice = steps.slice(0, 40);
-  return `Interval contour (semitones step-to-step, must match): ${slice.join(", ")}.`;
+  return `Interval shape (semitone steps): ${slice.join(", ")}.`;
 }
 
 function summarizeContour(notes) {
@@ -188,10 +188,46 @@ function insertMelodyBlockIntoV2Prompt(fullPrompt, melodyBlock) {
 /**
  * Full Lyria v2-shaped preview with Melody Lock block (no Lyria API call).
  */
+function resolveMelodyLockInstrumental(body, extra) {
+  const v = extra?.instrumental ?? body?.instrumental;
+  return v === true || v === 1 || v === "1";
+}
+
+function melodyLockBodyForLyria(body, melody) {
+  const tempo = Math.round(Number(melody?.tempoBpm) || 96);
+  const style = String(body?.style || "").trim();
+  const bpmInStyle = /\b\d+\s*bpm\b/i.test(style);
+  const safeStyle = bpmInStyle ? style : `${style ? `${style}, ` : ""}${tempo} BPM, sparse groove`.trim();
+  const title = String(body?.title || "").trim();
+  const safeTitle = title && !/\btest\b/i.test(title) ? title : "Original hum hook";
+  return { ...body, style: safeStyle.slice(0, 400), title: safeTitle };
+}
+
+function buildLyriaMelodyLockSafeFallbackPrompt(melody, body, sourceKind, extra = {}) {
+  const notes = (melody?.notes || []).slice(0, 8);
+  const shortMelody = { ...melody, notes };
+  const block = buildMelodyLockBlockCompact(shortMelody, { sourceKind });
+  const safeBody = melodyLockBodyForLyria(body, melody);
+  const base = buildLyriaPromptV2({
+    body: safeBody,
+    lyrics: "",
+    title: safeBody.title,
+    instrumental: true,
+    clip: true,
+    durationSec: resolveDurationSec(body, true),
+    dialectHint: extra.dialectHint ?? body?.dialectHint ?? "",
+    scriptFormat: extra.scriptFormat ?? body?.scriptFormat ?? "",
+    vocalGender: "",
+    songKey: body?.songKey || melody?.inferredKey || "",
+  });
+  return insertMelodyBlockIntoV2Prompt(base, block);
+}
+
 function buildLyriaPromptWithMelodyLock(body, extra = {}, melodyLock = {}) {
   const melody = melodyLock.melody;
   const sourceKind = melodyLock.sourceKind || "hum";
   const strengthen = Boolean(melodyLock.strengthen);
+  const safeMode = Boolean(melodyLock.safeMode);
   if (!melody?.notes?.length) {
     return buildLyriaPromptV2({
       body,
@@ -209,76 +245,33 @@ function buildLyriaPromptWithMelodyLock(body, extra = {}, melodyLock = {}) {
   const clip =
     extra.clip ??
     (Boolean(body?.clip) || Boolean(body?.nabadClip) || Boolean(body?.adminLyriaClip));
-  // Melody Lock clips: melody-first prompts (full v2 + Arabic style drowns the grid).
-  if (clip && melody.notes.length) {
-    if (strengthen) {
-      return buildLyriaMelodyLockMinimalClipPrompt(melody, body, sourceKind, extra);
-    }
-    return buildLyriaMelodyLockFirstClipPrompt(melody, body, sourceKind, extra);
+
+  if (safeMode && clip) {
+    return buildLyriaMelodyLockSafeFallbackPrompt(melody, body, sourceKind, extra);
   }
+
+  const safeBody = melodyLockBodyForLyria(body, melody);
   const melodyBlock = strengthen
     ? buildMelodyLockBlockStrengthened(melody, { sourceKind })
-    : buildMelodyLockBlock(melody, { sourceKind });
+    : clip
+      ? buildMelodyLockBlockCompact(melody, { sourceKind })
+      : buildMelodyLockBlock(melody, { sourceKind });
+  const intervalLine = clip ? buildMelodyIntervalSteps(melody.notes) : "";
+  const blockWithIntervals = intervalLine ? `${melodyBlock}\n${intervalLine}` : melodyBlock;
+
   const base = buildLyriaPromptV2({
-    body,
+    body: safeBody,
     lyrics: extra.lyrics ?? body?.prompt ?? "",
-    title: extra.title ?? body?.title ?? "",
-    instrumental: extra.instrumental ?? Boolean(body?.instrumental),
-    clip:
-      extra.clip ??
-      (Boolean(body?.clip) || Boolean(body?.nabadClip) || Boolean(body?.adminLyriaClip)),
-    durationSec: extra.durationSec ?? resolveDurationSec(body, extra.clip),
+    title: extra.title ?? safeBody.title ?? "",
+    instrumental: resolveMelodyLockInstrumental(body, extra),
+    clip,
+    durationSec: extra.durationSec ?? resolveDurationSec(body, clip),
     dialectHint: extra.dialectHint ?? body?.dialectHint ?? body?.dialect ?? "",
     scriptFormat: extra.scriptFormat ?? body?.scriptFormat ?? "",
     vocalGender: body?.vocalGender ?? "",
     songKey: body?.songKey || melody?.inferredKey || "",
   });
-  return insertMelodyBlockIntoV2Prompt(base, melodyBlock);
-}
-
-function buildLyriaMelodyLockFirstClipPrompt(melody, body, sourceKind, extra = {}) {
-  const tempo = Math.round(Number(melody?.tempoBpm) || 96);
-  const block = buildMelodyLockBlockCompact(melody, { sourceKind });
-  const intervalLine = buildMelodyIntervalSteps(melody?.notes || []);
-  const target = resolveDurationSec(body, true);
-  const instrumental = Boolean(extra.instrumental ?? body?.instrumental);
-  const noteLyrics = buildLaSyllableLyrics(melody?.notes || []);
-  const lines = [
-    `Create a ${target}-second clip. Tempo locked at ${tempo} BPM.`,
-    "This is a pitch-accuracy test: the lead line must match the written note timeline and semitone steps.",
-    block,
-    intervalLine,
-    "Arrangement:",
-    `[0:00-0:${String(Math.min(30, target)).padStart(2, "0")}] One dry monophonic lead (synth or hum-like tone) on the timeline; soft kick on quarter notes only; no chords, pads, or counter-melodies.`,
-    "",
-    "Lyrics:",
-    noteLyrics,
-    "",
-    instrumental
-      ? "Instrumental mix — no sung words; the lead instrument still follows the same pitch timeline as the la syllable map above."
-      : "Sing the la syllables on the written pitches only.",
-  ];
-  return rewriteMelodyLockPositive(lines.filter(Boolean).join("\n")).slice(0, 8000);
-}
-
-function buildLyriaMelodyLockMinimalClipPrompt(melody, body, sourceKind, extra = {}) {
-  const tempo = Math.round(Number(melody?.tempoBpm) || 96);
-  const block = buildMelodyLockBlockCompact(melody, { sourceKind });
-  const intervalLine = buildMelodyIntervalSteps(melody?.notes || []);
-  const noteLyrics = buildLaSyllableLyrics(melody?.notes || []);
-  const target = resolveDurationSec(body, true);
-  const lines = [
-    `Second pass — same ${tempo} BPM. Copy the pitch grid exactly; no new notes.`,
-    block,
-    intervalLine,
-    block,
-    "Arrangement:",
-    `[0:00-0:${String(Math.min(30, target)).padStart(2, "0")}] Monophonic lead only; repeat the same interval pattern; sparse kick.`,
-    "",
-    "Lyrics:",
-    noteLyrics,
-  ];
-  return rewriteMelodyLockPositive(lines.join("\n")).slice(0, 8000);
+  return insertMelodyBlockIntoV2Prompt(base, blockWithIntervals);
 }
 
 function resolveDurationSec(body, clip) {
@@ -310,8 +303,8 @@ module.exports = {
   buildMelodyLockBlockStrengthened,
   buildMelodyIntervalSteps,
   buildLyriaPromptWithMelodyLock,
-  buildLyriaMelodyLockFirstClipPrompt,
-  buildLyriaMelodyLockMinimalClipPrompt,
+  buildLyriaMelodyLockSafeFallbackPrompt,
+  resolveMelodyLockInstrumental,
   buildLyriaMelodyLockPreview,
   summarizeContour,
   inferSimpleKey,

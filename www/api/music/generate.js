@@ -1632,7 +1632,8 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
   const lyrics = String(body?.prompt || "").trim();
   const stylePrompt = buildMusicPrompt(body);
   const title = String(body?.title || "").trim();
-  const instrumental = Boolean(body?.instrumental);
+  const instrumental =
+    body?.instrumental === true || body?.instrumental === 1 || String(body?.instrumental || "") === "1";
   const taskId = newTaskId("lyria");
   const audioId = `${taskId}_a`;
   const model = resolveLyriaModel(body?.lyriaModel || "clip");

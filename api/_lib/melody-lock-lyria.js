@@ -22,12 +22,18 @@ async function extractMelodyFromAudioBuffer(buffer, contentType, sourceKind) {
   return { ok: true, melody: analyzed.melody, provider: analyzed.provider };
 }
 
-function buildMelodyLockLyriaPrompt({ body, extra, melodyLockCtx, strengthen }) {
+function buildMelodyLockLyriaPrompt({ body, extra, melodyLockCtx, strengthen, safeMode }) {
   return buildLyriaPromptWithMelodyLock(body, extra, {
     melody: melodyLockCtx.melody,
     sourceKind: melodyLockCtx.sourceKind,
     strengthen,
+    safeMode,
   });
+}
+
+function lyriaUpstreamWasBlocked(upstream) {
+  const m = String(upstream?.userMessage || JSON.stringify(upstream?.data || "")).toLowerCase();
+  return m.includes("blocked") || m.includes("blockreason") || m.includes("safety");
 }
 
 /**
@@ -47,18 +53,31 @@ async function runMelodyLockLyriaAttempts({
   /** @type {Array<object>} */
   const attempts = [];
   let best = null;
+  let useSafePrompt = false;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const strengthen = attempt > 1;
+    const strengthen = !useSafePrompt && attempt > 1;
     const lyriaPrompt = buildMelodyLockLyriaPrompt({
       body,
       extra: promptExtra,
       melodyLockCtx,
       strengthen,
+      safeMode: useSafePrompt,
     });
 
     const upstream = await lyriaGenerateMusic({ apiKey, model, prompt: lyriaPrompt, photoImages });
     if (!upstream.ok) {
+      if (lyriaUpstreamWasBlocked(upstream) && !useSafePrompt && attempt < MAX_ATTEMPTS) {
+        useSafePrompt = true;
+        attempts.push({
+          attempt,
+          lyriaPrompt,
+          blocked: true,
+          upstream,
+          similarity: { score: 0, pass: false, skipped: true },
+        });
+        continue;
+      }
       return {
         ok: false,
         error: upstream.userMessage || "Lyria generation failed.",

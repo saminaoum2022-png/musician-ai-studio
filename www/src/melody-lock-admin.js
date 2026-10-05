@@ -377,7 +377,7 @@ async function generateClip() {
       body: JSON.stringify({
         adminLyriaClip: "1",
         duration: 30,
-        title: "Melody Lock test",
+        title: "Original hum hook",
         style,
         prompt,
         instrumental: instrumental ? "1" : "0",
@@ -429,10 +429,19 @@ async function tickPoll() {
     if (status === "SUCCESS" || status === "FAILED") {
       stopPoll();
       await refreshRun();
-      toast(status === "SUCCESS" ? "Clip ready — check score" : "Generation failed", {
-        icon: status === "SUCCESS" ? "✓" : "!",
-        durationMs: 4500,
-      });
+      const errMsg = String(data?.data?.errorMessage || data?.error || "").trim();
+      if (status === "FAILED" && errMsg) {
+        state.lastStatus = { ...(state.lastStatus || {}), errorMessage: errMsg };
+      }
+      toast(
+        status === "SUCCESS"
+          ? "Clip ready — check score"
+          : errMsg.slice(0, 120) || "Generation failed",
+        {
+          icon: status === "SUCCESS" ? "✓" : "!",
+          durationMs: 5500,
+        },
+      );
     }
     render();
   } catch {

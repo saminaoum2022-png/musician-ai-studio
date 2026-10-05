@@ -411,10 +411,18 @@ function startHumTrackPolling(taskId, instrumentId, { provider = "suno" } = {}) 
           || state.status === "FAILURE"
           || (failure.kind && ["CREATE_TASK_FAILED", "GENERATE_AUDIO_FAILED", "CALLBACK_EXCEPTION", "FAILED", "ERROR", "SENSITIVE_WORD_ERROR"].includes(state.successFlag));
         if (failedByFlag && !state.hasAudio) {
+          const humFailureKind =
+            musicProvider === "elevenlabs" && failure.kind === "needsLyricsOrInstrumental"
+              ? "generic"
+              : failure.kind || "generic";
+          const humDetail =
+            String(state.errorMessage || "").trim() ||
+            failure.detail ||
+            "";
           failHumTrackGeneration(taskId, {
-            failureKind: failure.kind || "generic",
+            failureKind: humFailureKind,
             title: baseTitle,
-            detail: failure.detail,
+            detail: humDetail,
           });
           return "stop";
         }

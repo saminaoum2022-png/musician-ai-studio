@@ -93,6 +93,7 @@ const {
   saveMusicProviderTaskStatus,
   providerFolder,
 } = require("../_lib/music-provider-task-store");
+const { resolveHumTrackPreset } = require("../_lib/hum-track-presets");
 const { uploadObject } = require("../_lib/supabase-storage");
 const { queueCacheTimestampedLyrics } = require("../_lib/music-timestamped-lyrics-cache");
 const {
@@ -161,7 +162,21 @@ function newTaskId(provider) {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "")}`;
 }
 
+function applyHumTrackGenerateDefaults(body) {
+  if (!body?.humTrack) return;
+  const preset = resolveHumTrackPreset(body?.instrumentPreset);
+  body.humTrack = true;
+  body.instrumental = true;
+  if (!String(body?.style || "").trim()) body.style = preset.style;
+  if (!String(body?.negativeTags || "").trim()) body.negativeTags = preset.negativeTags;
+}
+
 function buildMusicPrompt(body) {
+  if (body?.humTrack) {
+    const preset = resolveHumTrackPreset(body?.instrumentPreset);
+    const style = String(body?.style || "").trim() || preset.style;
+    return style.slice(0, 2000);
+  }
   const style = String(body?.style || "").trim();
   const instruments = String(body?.instruments || "").trim();
   const songKey = String(body?.songKey || "").trim();
@@ -1597,6 +1612,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
 }
 
 async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
+  applyHumTrackGenerateDefaults(body);
   const apiKey = process.env.ELEVENLABS_API_KEY || "";
   if (!apiKey) return sendJson(res, 500, { error: "Missing ELEVENLABS_API_KEY on server" });
 

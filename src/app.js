@@ -26672,6 +26672,15 @@ function interpretSunoFailure(raw) {
   const looksEmptyLyrics531 =
     code === 531
     || (m.includes("extending lyrics") && (m.includes("empty") || m.includes("too short")));
+  const looksInstrumentalNeedsPrompt =
+    m.includes("instrumental") && m.includes("prompt") && !m.includes("extending lyrics");
+  if (looksInstrumentalNeedsPrompt) {
+    return {
+      kind: "generic",
+      headline: "Generation failed",
+      detail: msg || "The music API rejected this hum — try again or switch engine in Settings.",
+    };
+  }
   if (looksEmptyLyrics531) {
     return {
       kind: "needsLyricsOrInstrumental",

@@ -346,13 +346,22 @@ module.exports = async function handler(req, res) {
           && durationSec <= 360
             ? durationSec
             : null;
+        const coverInstrumentalPrompt = coverInstrumental
+          ? String(
+              humTrackPreset?.style ||
+                coverStyle ||
+                "solo instrumental melody from vocal reference, single lead instrument, no vocals",
+            )
+              .trim()
+              .slice(0, 500)
+          : "";
         const coverPayload = {
           uploadUrl,
           customMode: true,
           instrumental: coverInstrumental,
           model: safeModel,
           callBackUrl,
-          prompt: coverInstrumental ? "" : (prompt || ""),
+          prompt: coverInstrumental ? coverInstrumentalPrompt : (prompt || ""),
           style: coverStyle,
           ...(coverDuration != null ? { duration: coverDuration } : {}),
           title:

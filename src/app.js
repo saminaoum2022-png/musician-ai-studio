@@ -9013,6 +9013,7 @@ try {
     trackCreditsAround,
     addToLibrary,
     toAudioProxyUrl,
+    isArchivedSongStorageUrl,
     extractTaskIdLoose,
     pickRecorderMimeType,
     latestSunoModel: LATEST_SUNO_MODEL,
@@ -72457,13 +72458,30 @@ function isArchivedSongStorageUrl(url) {
 }
 
 function songArchiveKeyFromUrl(url) {
-  const m = String(url || "").match(/\/song_archive\/([^?#]+)/i);
-  if (!m) return "";
-  try {
-    return decodeURIComponent(m[1]);
-  } catch {
-    return m[1];
+  const s = String(url || "").trim();
+  if (!s) return "";
+  const m = s.match(/\/song_archive\/([^?#]+)/i);
+  if (m) {
+    try {
+      return decodeURIComponent(m[1]);
+    } catch {
+      return m[1];
+    }
   }
+  if (/\/api\/songs\/stream\b/i.test(s) || /^api\/songs\/stream\?/i.test(s)) {
+    try {
+      const abs = /^https?:\/\//i.test(s) ? s : apiUrl(s.startsWith("/") ? s : `/${s}`);
+      const key = new URL(abs).searchParams.get("key") || "";
+      if (key) {
+        try {
+          return decodeURIComponent(key);
+        } catch {
+          return key;
+        }
+      }
+    } catch {}
+  }
+  return "";
 }
 
 function songArchiveStreamPlaybackUrl(storedUrl, songId) {
@@ -72507,11 +72525,18 @@ async function trySignArchiveStreamUrl(key, songId) {
 async function resolveArchivePlaybackUrl(track) {
   const url = String(track?.url || track || "").trim();
   if (!url) return "";
-  if (!isArchivedSongStorageUrl(url)) {
+  const leaf = unwrapInnermostHttpAudioUrl(url) || url;
+  if (isSignedSongStreamPlaybackUrl(leaf)) {
+    return normalizeAudioUrlForPlayback(leaf);
+  }
+  const key = songArchiveKeyFromUrl(leaf);
+  const archiveLike =
+    isArchivedSongStorageUrl(leaf) ||
+    Boolean(key && /\/api\/songs\/stream\b/i.test(leaf));
+  if (!archiveLike || !key) {
     return playbackUrlForSource(url, track);
   }
   const sid = trackCloudShareId(track) || "";
-  const key = songArchiveKeyFromUrl(url);
   const uid = String(authSession?.user?.id || "").trim();
   const ownerId = String((key || "").split("/")[0] || "").trim();
   const isOwner = Boolean(uid && ownerId && uid === ownerId);
@@ -72523,10 +72548,10 @@ async function resolveArchivePlaybackUrl(track) {
   }
 
   if (isShareUuid(sid)) {
-    return songArchiveStreamPlaybackUrl(url, sid);
+    return songArchiveStreamPlaybackUrl(leaf, sid);
   }
 
-  return songArchiveStreamPlaybackUrl(url, "");
+  return songArchiveStreamPlaybackUrl(leaf, "");
 }
 
 const _songArchiveInflight = new Map();

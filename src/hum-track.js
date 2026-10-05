@@ -271,12 +271,18 @@ function finishHumTrackSuccess(taskId, instrumentId, tracks, { provider = "suno"
   tracks.slice(0, musicProvider === "suno" ? 2 : 1).forEach((t, i) => {
     const fallbackTitle = i === 0 ? baseTitle : `${baseTitle} B`;
     const title = String(t.title || "").trim() || fallbackTitle;
-    const proxyUrl = ctx.toAudioProxyUrl(t.audioUrl);
+    const rawAudio = String(t.audioUrl || "").trim();
+    const libraryUrl =
+      rawAudio &&
+      typeof ctx.isArchivedSongStorageUrl === "function" &&
+      ctx.isArchivedSongStorageUrl(rawAudio)
+        ? rawAudio
+        : ctx.toAudioProxyUrl(rawAudio) || rawAudio;
     savedEntries.push(
       ctx.addToLibrary({
         title,
         artUrl: t.imageUrl || "",
-        url: proxyUrl || t.audioUrl,
+        url: libraryUrl,
         taskId,
         audioId: t.audioId || "",
         kind: "instrumental",

@@ -29064,6 +29064,80 @@ html[data-theme="light"] .profileStatLabel{
   min-width: 0;
   max-width: 100%;
 }
+.rowTitleWithOrigins{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.rowTitleWithOrigins .libRowTitle{
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.songOriginBadges{
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+}
+.songOriginBadges--library{
+  opacity: 0.92;
+}
+.songOriginBadge{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(232,238,247,0.88);
+}
+.songOriginBadge--photo{ color: rgba(167,139,250,0.95); }
+.songOriginBadge--vibe{ color: rgba(45,212,191,0.95); }
+.songOriginBadge--hum{ color: rgba(56,189,248,0.95); }
+.songOriginBadge--lyrics{ color: rgba(250,204,21,0.92); }
+.songOriginBadge--spark{ color: rgba(250,204,21,0.88); }
+.songOriginBadge--remix{ color: rgba(167,139,250,0.9); }
+.songOriginBadge--mashup{ color: rgba(244,114,182,0.92); }
+.songOriginBadge--instrumental{ color: rgba(148,163,184,0.92); }
+.songOriginAboutRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0 2px;
+}
+.songOriginAboutChip{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(240,244,255,0.92);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.songOriginAboutLabel{
+  letter-spacing: 0.01em;
+}
+html[data-theme="light"] .songOriginBadge{
+  background: rgba(15,23,42,0.05);
+  border-color: rgba(15,23,42,0.1);
+  color: rgba(30,41,59,0.82);
+}
+html[data-theme="light"] .songOriginAboutChip{
+  background: rgba(15,23,42,0.04);
+  border-color: rgba(15,23,42,0.08);
+  color: rgba(30,41,59,0.88);
+}
 .rowTitleWithBadge .libRowTitle,
 .rowTitleWithBadge .discoveryRowTitle,
 .rowTitleWithBadge .discoveryFeedCardTitle,

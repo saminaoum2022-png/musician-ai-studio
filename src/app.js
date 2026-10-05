@@ -112,6 +112,7 @@ import {
 } from "./dm-voice-drop.js";
 import { prepareNativeRecordingSession } from "./studio/native-mic-probe.js";
 import { initHumTrack, bindHumTrackHomeCard, openHumTrackFlow, humTrackReadyForGenerate, humTrackIsGenerating, triggerHumTrackGenerate, kickHumTrackGenerationPoll } from "./hum-track.js";
+import { songOriginBadgesAboutHtml, songOriginBadgesHtml } from "./song-origin-badges.js";
 import { createAdaptivePollLoop, stopPollLoop } from "./generation-poll.js";
 import {
   publishTrackEligibleForVinylChoice,
@@ -32133,6 +32134,18 @@ function titleWithNabadBadgeHtml(track, safeTitle, titleClass = "libRowTitle", t
       : `<span class="${titleClass}">${safeTitle}</span>`;
   if (!badge) return titleEl;
   return `<span class="rowTitleWithBadge">${titleEl}${badge}</span>`;
+}
+
+/** Draft library row title + optional origin icons + Nabad verification badge. */
+function libraryDraftTitleHtml(track, safeTitle) {
+  const origins = songOriginBadgesHtml(track, { size: 13, wrapClass: "songOriginBadges songOriginBadges--library" });
+  const badge = nabadVerificationBadgeForTrack(track, { size: "sm" });
+  const titleEl = `<span class="libRowTitle">${safeTitle}</span>`;
+  const titleBlock = origins
+    ? `<span class="rowTitleWithOrigins">${titleEl}${origins}</span>`
+    : titleEl;
+  if (!badge) return titleBlock;
+  return `<span class="rowTitleWithBadge">${titleBlock}${badge}</span>`;
 }
 
 function syncPlayerNabadBadge(track) {
@@ -68421,7 +68434,7 @@ function renderLibrary() {
                 ${coverArtPlaybackOverlayHtml()}
               </span>
               <span class="libRowInfo">
-                ${titleWithNabadBadgeHtml(t, safeTitle, "libRowTitle")}
+                ${libraryDraftTitleHtml(t, safeTitle)}
                 <span class="libRowSub">${subBits.join("")}</span>
               </span>
             </button>
@@ -69233,7 +69246,10 @@ function renderAboutThisSong({ track, title, subtitle, lyrics, owner = false } =
     ? "Instrumental — no lyrics."
     : "No lyrics saved for this song yet.";
 
+  const originAboutHtml = track ? songOriginBadgesAboutHtml(track) : "";
+
   els.songDetailsContent.innerHTML = `
+    ${originAboutHtml}
     <div class="songDetailsFlatList">
       ${subtitle ? songDetailsFlatRow("Creator", subtitle) : ""}
       ${createdAt ? songDetailsFlatRow("Created", createdAt) : ""}
@@ -78498,6 +78514,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ...(currentRemixSource ? { remixOf: remixAttributionFromSource(currentRemixSource) } : {}),
         ...remixMeta,
         ...(photoCoverMeta || {}),
+        ...(vibeReadAppliedForNextGen ? { vibeReadApplied: true } : {}),
       };
       if (shouldGenerateInstrumental) {
         setStatus(

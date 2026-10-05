@@ -464,13 +464,17 @@ async function runLyriaMelodyLockGenerationJob({
   };
 
   try {
+    const durationSec = Math.round(Number(body?.duration) || 0);
+    const promptClipArrangement =
+      clip || (durationSec >= 10 && durationSec <= 45);
     const promptExtra = {
       stylePrompt,
       lyrics,
       title,
       instrumental,
       isAdmin,
-      clip,
+      clip: promptClipArrangement,
+      durationSec: durationSec || (clip ? 30 : undefined),
     };
 
     const result = await runMelodyLockLyriaAttempts({

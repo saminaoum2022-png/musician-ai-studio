@@ -72,6 +72,8 @@ const state = {
   recording: false,
   lastRun: null,
   lastStatus: null,
+  /** @type {30 | 60} */
+  targetSeconds: 60,
 };
 
 function render() {
@@ -92,8 +94,14 @@ function render() {
       <header class="melodyLockLabHead">
         <button type="button" class="ghost melodyLockBack" id="melodyLockBack">← Settings</button>
         <h1 class="melodyLockTitle">Melody Lock <span class="melodyLockBadge">Admin · staging</span></h1>
-        <p class="melodyLockSub">Hum → analyze → Lyria 30s clip → score. Ear-check is admin-only. Server needs <code>MELODY_LOCK_ENABLED=1</code>.</p>
+        <p class="melodyLockSub">Hum → analyze → <strong>Lyria 3.5</strong> (short song cap) → score. Admin-only R&amp;D — not public product yet.</p>
       </header>
+
+      <div class="melodyLockCard melodyLockExpect">
+        <h2>What to expect (honest)</h2>
+        <p class="melodyLockMuted">Your hum becomes a <strong>note timeline in the prompt</strong>, not audio Lyria listens to. We ask Lyria to use that contour as the <strong>main hook in every verse and chorus</strong> (same intervals, not note-perfect cloning).</p>
+        <p class="melodyLockMuted">It often feels like a <strong>new pop tune inspired by</strong> your hum — tempo/key closer, melody frequently drifts. Ear-check decides pass/fail. Real “lock my hum” needs a provider with <strong>audio/MIDI conditioning</strong> (e.g. Mureka) — future branch.</p>
+      </div>
 
       <div class="melodyLockCard">
         <h2>1 · Capture</h2>
@@ -116,7 +124,12 @@ function render() {
       </div>
 
       <div class="melodyLockCard">
-        <h2>3 · Generate (Lyria clip ~30s)</h2>
+        <h2>3 · Generate (Lyria 3.5)</h2>
+        <fieldset class="melodyLockDurationPick">
+          <legend class="label">Length cap (3.5 engine — not clip model)</legend>
+          <label class="melodyLockRadio"><input type="radio" name="melodyLockDuration" value="30" ${state.targetSeconds === 30 ? "checked" : ""} /> 30 seconds</label>
+          <label class="melodyLockRadio"><input type="radio" name="melodyLockDuration" value="60" ${state.targetSeconds === 60 ? "checked" : ""} /> 60 seconds</label>
+        </fieldset>
         <label class="field"><span class="label">Style (secondary — melody grid wins)</span>
           <input id="melodyLockStyle" type="text" value="${escapeHtml(defaultStyleValue())}" />
         </label>
@@ -156,7 +169,13 @@ La la la la</textarea>
   root.querySelector("#melodyLockBtnRecord")?.addEventListener("click", () => void recordAndAnalyze());
   root.querySelector("#melodyLockBtnPreviewCapture")?.addEventListener("click", () => void previewCapturedTune());
   root.querySelector("#melodyLockBtnFixture")?.addEventListener("click", () => void analyzeFixture());
-  root.querySelector("#melodyLockBtnGenerate")?.addEventListener("click", () => void generateClip());
+  root.querySelectorAll('input[name="melodyLockDuration"]').forEach((el) => {
+    el.addEventListener("change", () => {
+      const v = Number(el.value);
+      state.targetSeconds = v === 30 ? 30 : 60;
+    });
+  });
+  root.querySelector("#melodyLockBtnGenerate")?.addEventListener("click", () => void generateWithLyria35());
   root.querySelector("#melodyLockBtnRefreshRun")?.addEventListener("click", () => void refreshRun());
   root.querySelector("#melodyLockEarPass")?.addEventListener("click", () => void submitEar("pass"));
   root.querySelector("#melodyLockEarFail")?.addEventListener("click", () => void submitEar("fail"));
@@ -360,29 +379,34 @@ async function analyzeFixture() {
   render();
 }
 
-async function generateClip() {
+async function generateWithLyria35() {
   if (!state.melodyId) return;
   if (state.analyzeProvider === "fixture") {
     toast("Fixture melody — record your hum first (client_pitch).", { icon: "!", durationMs: 5500 });
     return;
   }
+  const duration =
+    Number(rootEl()?.querySelector('input[name="melodyLockDuration"]:checked')?.value) ||
+    state.targetSeconds ||
+    60;
+  state.targetSeconds = duration === 30 ? 30 : 60;
   const style = rootEl()?.querySelector("#melodyLockStyle")?.value?.trim() || defaultStyleValue();
   const prompt = rootEl()?.querySelector("#melodyLockLyrics")?.value?.trim() || "[Verse]\nLa la la\n[Chorus]\nLa la la la";
   const instrumental = Boolean(rootEl()?.querySelector("#melodyLockInstrumental")?.checked);
   try {
-    toast("Starting Lyria clip (melody-first prompt)…", { icon: "♪", durationMs: 2500 });
+    toast(`Starting Lyria 3.5 (~${duration}s cap)…`, { icon: "♪", durationMs: 2500 });
     const r = await apiFetch("/api/music/generate?provider=lyria", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        adminLyriaClip: "1",
-        duration: 30,
+        lyriaModel: "lyria-3.5",
+        duration,
         title: "Original hum hook",
         style,
         prompt,
         instrumental: instrumental ? "1" : "0",
         geminiProducer: "0",
-        melodyLock: { melodyId: state.melodyId, preferClip: true },
+        melodyLock: { melodyId: state.melodyId },
       }),
     });
     const data = await r.json().catch(() => ({}));

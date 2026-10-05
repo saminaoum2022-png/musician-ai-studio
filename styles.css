@@ -37336,6 +37336,20 @@ body[data-route="melody-lock"] .generateOrb{ display: none !important; }
   opacity: 0.9;
 }
 .melodyLockCheck input{ margin-top: 3px; }
+.melodyLockExpect{ border-color: rgba(120, 180, 255, 0.25); }
+.melodyLockDurationPick{
+  border: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.melodyLockDurationPick .label{ font-size: 0.85rem; margin-bottom: 6px; }
+.melodyLockRadio{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 14px;
+  font-size: 0.85rem;
+}
 .settingsLinkRow{ width: 100%; text-align: left; cursor: pointer; border: none; background: transparent; color: inherit; font: inherit; }
 
 #nabadProducerRoot{

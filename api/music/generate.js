@@ -53,9 +53,10 @@ const {
 } = require("../_lib/lyria-prompt-v2");
 const { clipVocalProfileById } = require("../_lib/clip-vocal-profiles");
 const {
-  applyElevenReferenceToCompositionPlan,
   buildElevenMusicPrompt,
   buildElevenReferenceCompositionPlan,
+  buildElevenAppLikeReferenceCompositionPlan,
+  buildElevenHumTrackCompositionPlan,
   buildElevenSongCompositionPlan,
   buildElevenEditCompositionPlan,
   elevenlabsComposeInpaint,
@@ -796,10 +797,15 @@ async function runElevenlabsGenerationJob({
     let finalCompositionPlan = null;
     let elevenPlanSource = null;
 
+    const humTrackInstrumental =
+      Boolean(body?.humTrack) && instrumental && referenceSongId && !editCompositionPlan;
+    const appLikeReference =
+      Boolean(referenceSongId) && !editCompositionPlan && !Boolean(body?.humTrack);
+
     if (editCompositionPlan) {
       finalCompositionPlan = editCompositionPlan;
       elevenPlanSource = "admin_song_edit";
-    } else if (geminiApiKey) {
+    } else if (geminiApiKey && !humTrackInstrumental && !appLikeReference) {
       producerResult = await enrichSongWithGeminiProducer({
         apiKey: geminiApiKey,
         enabled: resolveGeminiProducerEnabled(body, isAdmin),
@@ -825,7 +831,73 @@ async function runElevenlabsGenerationJob({
     const dialectHint = mergeLyriaDialectHint(body);
     const scriptFormat = String(body?.scriptFormat || "").trim();
     const isSongInpaint = Boolean(editCompositionPlan);
-    if (!isSongInpaint && !finalCompositionPlan?.chunks?.length) {
+    if (!isSongInpaint && appLikeReference) {
+      const planBuilt = await buildElevenAppLikeReferenceCompositionPlan({
+        apiKey,
+        stylePrompt,
+        title,
+        lyrics,
+        musicLengthMs,
+        model,
+        instrumental,
+        negativeTags: body?.negativeTags,
+        referenceSongId,
+        referenceRangeMs,
+        conditionStrength: referenceConditionStrength,
+        vocalGender,
+      });
+      if (planBuilt.ok && planBuilt.plan?.chunks?.length) {
+        finalCompositionPlan = planBuilt.plan;
+        elevenPlanSource = planBuilt.planSource || "reference_app_like";
+        console.log(
+          "[music/generate] elevenlabs app-like reference plan",
+          taskId,
+          finalCompositionPlan.chunks.length,
+          "chunks",
+          "ref_on_chunk_0",
+        );
+      } else {
+        console.warn(
+          "[music/generate] elevenlabs app-like reference fallback",
+          taskId,
+          planBuilt.userMessage || planBuilt.error || "unknown",
+        );
+        finalCompositionPlan = buildElevenReferenceCompositionPlan({
+          lyrics,
+          stylePrompt,
+          title,
+          musicLengthMs,
+          instrumental,
+          referenceSongId,
+          referenceRangeMs,
+          conditionStrength: referenceConditionStrength,
+          negativeTags: body?.negativeTags,
+          vocalGender,
+          voiceTimbre,
+          nabadVocalToggles,
+          dialectHint,
+          scriptFormat,
+          useNabadVocalIdentity: false,
+        });
+        elevenPlanSource = "reference_app_like_fallback";
+      }
+    } else if (!isSongInpaint && humTrackInstrumental) {
+      finalCompositionPlan = buildElevenHumTrackCompositionPlan({
+        stylePrompt,
+        musicLengthMs,
+        referenceSongId,
+        referenceRangeMs,
+        conditionStrength: referenceConditionStrength,
+        negativeTags: body?.negativeTags,
+      });
+      elevenPlanSource = "hum_track_instrument_reference";
+      console.log(
+        "[music/generate] elevenlabs hum track plan",
+        taskId,
+        finalCompositionPlan?.chunks?.length || 0,
+        "chunks",
+      );
+    } else if (!isSongInpaint && !finalCompositionPlan?.chunks?.length) {
     const planBuilt = await buildElevenSongCompositionPlan({
       apiKey,
       stylePrompt: effectiveStyle,
@@ -846,43 +918,6 @@ async function runElevenlabsGenerationJob({
     if (planBuilt.ok && planBuilt.plan?.chunks?.length) {
       finalCompositionPlan = planBuilt.plan;
       elevenPlanSource = planBuilt.planSource || "elevenlabs_plan_api";
-      if (referenceSongId) {
-        finalCompositionPlan = applyElevenReferenceToCompositionPlan(finalCompositionPlan, {
-          referenceSongId,
-          referenceRangeMs,
-          conditionStrength: referenceConditionStrength,
-          instrumental,
-        });
-        const refChunkCount = finalCompositionPlan.chunks.filter((c) => c.conditioning_ref).length;
-        if (!refChunkCount) {
-          // Multi-chunk plan had no attachable chunks — fall back to single-chunk reference.
-          finalCompositionPlan = buildElevenReferenceCompositionPlan({
-            lyrics: effectiveLyrics,
-            stylePrompt: effectiveStyle,
-            title,
-            musicLengthMs,
-            instrumental,
-            referenceSongId,
-            referenceRangeMs,
-            conditionStrength: referenceConditionStrength,
-            negativeTags: body?.negativeTags,
-            vocalGender,
-            voiceTimbre,
-            nabadVocalToggles,
-            dialectHint,
-            scriptFormat,
-          });
-          elevenPlanSource = "reference_fallback_empty_chunks";
-        } else {
-          elevenPlanSource = `${elevenPlanSource}_reference`;
-          console.log(
-            "[music/generate] elevenlabs multi-chunk reference",
-            taskId,
-            refChunkCount,
-            instrumental ? "instrumental chunks" : "vocal chunks",
-          );
-        }
-      }
       console.log(
         "[music/generate] elevenlabs composition plan",
         taskId,
@@ -1602,8 +1637,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   }
 
   const hasReference = !isSongEdit && Boolean(body?.hasReference || body?.referenceAudio || body?.referenceAudioUrl);
-  // Hum Track / instrumental-from-melody: allow reference + instrumental.
-  // conditioning_ref is attached to instrumental chunks in applyElevenReferenceToCompositionPlan.
+  // Hum Track uses its own plan; Create + reference uses app-like flow (ref on plan chunk 0).
 
   let balanceAfterDebit = null;
   if (!isAdmin) {

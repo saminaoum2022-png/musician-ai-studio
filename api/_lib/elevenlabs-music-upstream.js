@@ -1489,6 +1489,161 @@ async function buildElevenSongCompositionPlan({
   return { ok: true, plan, planSource: "elevenlabs_plan_api", chunkCount: plan.chunks.length };
 }
 
+/**
+ * Plan prompt aligned with Eleven Music app "Audio Reference" + text prompt (no Nabad/Gemini layers).
+ * @see https://elevenlabs.io/docs/overview/capabilities/music
+ */
+function buildElevenAppLikePlanCreatePrompt({
+  stylePrompt = "",
+  title = "",
+  lyrics = "",
+  instrumental = false,
+  vocalGender = "",
+} = {}) {
+  const bits = [];
+  const songTitle = String(title || "").trim();
+  const style = String(stylePrompt || "").trim();
+  const lyricText = String(lyrics || "").trim();
+  if (songTitle) bits.push(`Song title: ${songTitle}`);
+  if (style) {
+    bits.push(`Production and style (English tags, no artist names): ${style}`);
+  }
+  bits.push(
+    "An uploaded audio reference guides feel, groove, mood, and overall sound. The text prompt defines lyrics, vocals, and what should differ from the reference.",
+  );
+  if (instrumental) {
+    bits.push("Instrumental only — no vocals, no lyrics.");
+  } else {
+    const g = String(vocalGender || "").trim().toLowerCase();
+    if (g === "f" || g === "female") {
+      bits.push("Vocalist: female.");
+    } else if (g === "m" || g === "male") {
+      bits.push("Vocalist: male.");
+    }
+    if (lyricText) {
+      bits.push(
+        "User lyrics (preserve language exactly; assign to song sections):",
+        lyricText.slice(0, 3500),
+      );
+    }
+  }
+  bits.push("Professional studio production. English for style descriptors only.");
+  return bits.join("\n\n").slice(0, 4000);
+}
+
+/** Eleven docs: conditioning on the first chunk influences the entire song. */
+function applyElevenReferenceOnFirstChunk(
+  plan,
+  { referenceSongId, referenceRangeMs = 30000, conditionStrength = "high" } = {},
+) {
+  if (!plan?.chunks?.length || !referenceSongId) return plan;
+  const songId = String(referenceSongId || "").trim();
+  if (!songId) return plan;
+  const refEnd = Math.max(
+    3000,
+    Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)),
+  );
+  const strength = ["low", "medium", "high", "xhigh"].includes(String(conditionStrength))
+    ? String(conditionStrength)
+    : "high";
+  const chunks = plan.chunks.map((c, idx) => {
+    const { conditioning_ref: _r, condition_strength: _s, ...rest } = c;
+    if (idx !== 0) return rest;
+    return {
+      ...rest,
+      conditioning_ref: {
+        song_id: songId,
+        range: { start_ms: 0, end_ms: refEnd },
+      },
+      condition_strength: strength,
+    };
+  });
+  return { chunks };
+}
+
+/**
+ * Create + audio reference — Eleven app-like flow: plan API from user prompt, ref on chunk 0, no Gemini.
+ */
+async function buildElevenAppLikeReferenceCompositionPlan({
+  apiKey,
+  stylePrompt = "",
+  title = "",
+  lyrics = "",
+  musicLengthMs,
+  model,
+  instrumental = false,
+  negativeTags = "",
+  referenceSongId,
+  referenceRangeMs = 30000,
+  conditionStrength = "high",
+  vocalGender = "",
+} = {}) {
+  const songId = String(referenceSongId || "").trim();
+  if (!songId) {
+    return { ok: false, userMessage: "Missing reference song id." };
+  }
+  const lyricSource = String(lyrics || "").trim();
+  const planPrompt = buildElevenAppLikePlanCreatePrompt({
+    stylePrompt,
+    title,
+    lyrics: lyricSource,
+    instrumental,
+    vocalGender,
+  });
+
+  let created = await elevenlabsCreateCompositionPlan({
+    apiKey,
+    prompt: planPrompt,
+    musicLengthMs,
+    model,
+  });
+
+  if (!created.ok && created.copyrightRetry?.kind === "prompt") {
+    console.log("[elevenlabs] app-like reference plan copyright retry with prompt_suggestion");
+    created = await elevenlabsCreateCompositionPlan({
+      apiKey,
+      prompt: created.copyrightRetry.suggestion,
+      musicLengthMs,
+      model,
+    });
+  }
+  if (!created.ok && created.copyrightRetry?.kind === "composition_plan") {
+    const plan = normalizeElevenCompositionPlanResponse(created.copyrightRetry.plan);
+    if (plan?.chunks?.length) {
+      created = { ok: true, plan, data: created.data };
+    }
+  }
+  if (!created.ok || !created.plan?.chunks?.length) {
+    return created;
+  }
+
+  let plan = created.plan;
+  if (lyricSource && !instrumental) {
+    plan = injectLyricsIntoCompositionPlan(plan, lyricSource, { instrumental });
+  }
+  plan = finalizeElevenSongPlan(plan, {
+    stylePrompt,
+    negativeTags,
+    musicLengthMs,
+    instrumental,
+    vocalGender,
+    lyrics: lyricSource,
+    useNabadVocalIdentity: false,
+  });
+  plan = applyElevenReferenceOnFirstChunk(plan, {
+    referenceSongId: songId,
+    referenceRangeMs,
+    conditionStrength,
+  });
+
+  return {
+    ok: true,
+    plan,
+    planSource: "reference_app_like",
+    chunkCount: plan.chunks.length,
+  };
+}
+
 function isElevenVocalPlanChunk(text, { instrumental = false } = {}) {
   if (instrumental) return false;
   const t = String(text || "").trim();
@@ -1607,6 +1762,92 @@ function applyElevenReferenceToCompositionPlan(
 }
 
 /**
+ * Hum Track (instrumental): translate a hummed clip to one solo instrument.
+ * Avoids Gemini multi-chunk plans that re-attach the raw hum on most sections.
+ */
+function buildElevenHumTrackCompositionPlan({
+  stylePrompt = "",
+  musicLengthMs,
+  referenceSongId,
+  referenceRangeMs = 30000,
+  conditionStrength = "high",
+  negativeTags = "",
+} = {}) {
+  const lengthMs = resolveElevenMusicLengthMs(musicLengthMs);
+  const songId = String(referenceSongId || "").trim();
+  if (!songId) return null;
+  const refEnd = Math.max(
+    3000,
+    Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)),
+  );
+  const baseStrength = ["low", "medium", "high", "xhigh"].includes(String(conditionStrength))
+    ? String(conditionStrength)
+    : "high";
+  const mainStrength = baseStrength === "low" ? "medium" : baseStrength === "medium" ? "high" : "xhigh";
+  const introMs = Math.min(12000, Math.max(4000, Math.round(lengthMs * 0.07)));
+  const mainMs = Math.max(3000, lengthMs - introMs);
+  const styles = splitElevenStyleTags(String(stylePrompt || "").trim());
+  const negative_styles = splitElevenNegativeStyleTags(negativeTags, { instrumental: true });
+  for (const extra of [
+    "human voice",
+    "humming",
+    "speech",
+    "vocals",
+    "singing",
+    "a cappella",
+  ]) {
+    if (negative_styles.length >= 50) break;
+    if (!negative_styles.some((t) => t.toLowerCase() === extra)) negative_styles.push(extra);
+  }
+  const introPos = ensureMinPositiveStyles([
+    ...styles,
+    "solo instrument only",
+    "brief opening motif",
+    "studio instrumental",
+  ]).slice(0, 50);
+  const mainPos = ensureMinPositiveStyles([
+    ...styles,
+    "perform hummed melody on solo instrument",
+    "match reference hum pitch and rhythm",
+    "accurate intonation",
+    "no human voice",
+  ]).slice(0, 50);
+
+  return finalizeElevenSongPlan(
+    {
+      chunks: [
+        {
+          text: "[Intro]\n{instrumental — short solo instrument opening; do not replay the reference hum}",
+          duration_ms: introMs,
+          positive_styles: introPos,
+          negative_styles: negative_styles.slice(0, 50),
+          context_adherence: "medium",
+        },
+        {
+          text: "[Main]\n{instrumental — translate the reference hum into the solo instrument; melody only; no voice}",
+          duration_ms: mainMs,
+          positive_styles: mainPos,
+          negative_styles: negative_styles.slice(0, 50),
+          context_adherence: "high",
+          conditioning_ref: {
+            song_id: songId,
+            range: { start_ms: 0, end_ms: refEnd },
+          },
+          condition_strength: mainStrength,
+        },
+      ],
+    },
+    {
+      stylePrompt: String(stylePrompt || "").trim(),
+      negativeTags,
+      musicLengthMs: lengthMs,
+      instrumental: true,
+      useNabadVocalIdentity: false,
+    },
+  );
+}
+
+/**
  * Single-chunk fallback when plan API / Gemini chunks are unavailable.
  * Prefer applyElevenReferenceToCompositionPlan on a multi-chunk plan (Phase D).
  */
@@ -1639,7 +1880,14 @@ function buildElevenReferenceCompositionPlan({
     });
   }
   const styles = splitElevenStyleTags(effectiveStyle);
-  styles.push("match reference vocal timbre and melody");
+  if (instrumental) {
+    styles.push(
+      "translate hummed melody to solo instrument",
+      "match reference hum pitch and rhythm",
+    );
+  } else {
+    styles.push("match reference vocal timbre and melody");
+  }
   const negative_styles = splitElevenNegativeStyleTags(negativeTags, { instrumental });
 
   const lyricText = String(lyrics || "").trim();
@@ -2005,6 +2253,7 @@ async function elevenlabsGenerateMusicDetailed({
     ? {
         composition_plan: plan,
         model_id: resolvedModel,
+        ...(instrumental ? { force_instrumental: true } : {}),
         ...(resolvedFinetuneId ? { finetune_id: resolvedFinetuneId } : {}),
         ...(wantTimestamps ? { with_timestamps: true } : {}),
       }
@@ -2116,7 +2365,10 @@ module.exports = {
   buildElevenMusicPrompt,
   buildElevenPlanCreatePrompt,
   buildElevenReferenceCompositionPlan,
+  buildElevenAppLikeReferenceCompositionPlan,
+  buildElevenHumTrackCompositionPlan,
   buildElevenSongCompositionPlan,
+  applyElevenReferenceOnFirstChunk,
   buildElevenEditCompositionPlan,
   decodeReferenceAudioPayload,
   unwrapProxyAudioUrl,

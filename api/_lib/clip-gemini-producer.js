@@ -108,6 +108,11 @@ OUTPUT SCHEMA:
 - EVERY vocal chunk negative_styles MUST include only: "off-key vocals", "pitchy singing", "mumbled lyrics", "spoken word".
 - Arabic lyrics are fine — still use English tags for all styles. Lines can breathe; honor dialect ornamentation when dialect_hint suggests it.
 
+=== HUM TRACK (when hum_track is true) ===
+- User hummed a melody to be rendered as ONE solo instrument (instrumental is true). Do NOT treat the hum as vocals to sing or replay.
+- enhanced_style_prompt: solo instrument only, translate hum to pitch/rhythm on that instrument, no voice/humming in output.
+- composition_chunks: optional; server may bypass chunks for hum track. If you output chunks: 2–3 max, empty lines, negative_styles must include vocals, humming, voice, speech.
+
 === VOCAL REFERENCE (when has_vocal_reference is true) ===
 - User uploaded a hum/voice clip — match singer timbre and melodic shape; intro section should NOT mimic the reference pickup verbatim.
 - Still output full composition_chunks (4–8 sections); the server attaches the reference to vocal sections (intro often without reference).
@@ -430,7 +435,10 @@ function buildSongProducerInput(body, flow = "elevenlabs") {
     target: "full_length_song",
     target_length_seconds: targetSeconds,
     mood: String(body?.mood || "").trim(),
-    has_vocal_reference: Boolean(body?.hasReference || body?.referenceAudio),
+    hum_track: Boolean(body?.humTrack),
+    has_vocal_reference: Boolean(
+      (body?.hasReference || body?.referenceAudio) && !body?.humTrack,
+    ),
   };
 }
 

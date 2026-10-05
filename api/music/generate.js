@@ -1366,6 +1366,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
 
   const templateSpark = String(body?.templateSparkClip || "").trim() === "1";
   const nabadClip = String(body?.nabadClip || "").trim() === "1";
+  const adminLyriaClip = String(body?.adminLyriaClip || "").trim() === "1";
   const clipCost = resolveClipCreditCost(body);
   if (!isAdmin && templateSpark && !templateSparkClipEnabled()) {
     return sendJson(res, 403, {
@@ -1441,7 +1442,9 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     ? "template_spark_clip"
     : nabadClip
       ? "nabad_clip"
-      : "lyria_clip";
+      : adminLyriaClip
+        ? "admin_lyria_clip"
+        : "lyria_clip";
 
   const adminDetailBase = buildLyriaRequestDetail({
     flow: clipFlowLabel,
@@ -2184,6 +2187,7 @@ module.exports = async function handler(req, res) {
       const clipRequested =
         String(body?.lyriaModel || "").trim().toLowerCase() === "clip" ||
         String(body?.nabadClip || "").trim() === "1" ||
+        String(body?.adminLyriaClip || "").trim() === "1" ||
         String(body?.templateSparkClip || "").trim() === "1" ||
         clipModel === "lyria-3-clip-preview";
       if (clipRequested) {

@@ -8612,7 +8612,8 @@ function syncSettingsGeminiProducerRow() {
   const row = document.getElementById("settingsGeminiProducerRow");
   const root = document.getElementById("settingsGeminiProducerPicker");
   const sub = document.getElementById("settingsGeminiProducerSub");
-  const show = Boolean(creditsState.isAdmin);
+  const pref = getMusicProviderPref();
+  const show = Boolean(creditsState.isAdmin) && pref !== "lyria_clip";
   if (row) {
     row.hidden = !show;
     row.style.display = show ? "" : "none";
@@ -8677,6 +8678,7 @@ function syncSettingsNabadVocalChainRow(providerPref = getMusicProviderPref()) {
   const show =
     Boolean(creditsState.isAdmin)
     && (providerPref === "lyria" || providerPref === "elevenlabs" || providerPref === "mureka");
+  // lyria_clip uses Lyria v2 — no legacy Nabad FX chain on the prompt.
   if (block) {
     block.hidden = !show;
     block.style.display = show ? "" : "none";
@@ -8738,7 +8740,9 @@ function wireSettingsMusicProviderOnce() {
           pref === "minimax"
             ? "MiniMax engine enabled for your next songs."
             : pref === "lyria"
-              ? "Lyria engine enabled — Google Gemini music for your next songs."
+              ? "Lyria full song enabled for Create (~3 min)."
+              : pref === "lyria_clip"
+                ? "Lyria clip enabled — ~30s hooks from Create (clip model)."
               : pref === "elevenlabs"
                 ? getElevenlabsFinetunePref()
                   ? "ElevenLabs enabled — NabadAi DNA finetune on."
@@ -31123,7 +31127,7 @@ function deepFindTaskIdString(obj, depth = 0) {
 }
 
 const MUSIC_PROVIDER_LS_KEY = "nabadMusicProvider";
-const MUSIC_PROVIDER_PREFS = ["suno", "minimax", "lyria", "elevenlabs", "mureka"];
+const MUSIC_PROVIDER_PREFS = ["suno", "minimax", "lyria", "lyria_clip", "elevenlabs", "mureka"];
 
 function normalizeMusicProviderPref(raw) {
   const v = String(raw || "").trim().toLowerCase();
@@ -31163,7 +31167,8 @@ function formatElevenMusicModelLabel(raw) {
 
 function musicProviderSubline(pref) {
   if (pref === "minimax") return "MiniMax — English only, one variant (staging)";
-  if (pref === "lyria") return "Lyria — Google Gemini, one variant (~$0.08/song)";
+  if (pref === "lyria") return "Lyria full — ~3 min, one variant (~$0.08/song)";
+  if (pref === "lyria_clip") return "Lyria clip — ~30s hook, clip model, Lyria v2 on staging preview";
   if (pref === "elevenlabs") {
     return getElevenlabsFinetunePref()
       ? "ElevenLabs — NabadAi DNA finetune on v2.5 (~$0.45/song)"
@@ -31176,6 +31181,7 @@ function musicProviderSubline(pref) {
 function musicProviderShortLabel(pref = getMusicProviderPref()) {
   if (pref === "minimax") return "MiniMax";
   if (pref === "lyria") return "Lyria";
+  if (pref === "lyria_clip") return "Lyria clip";
   if (pref === "elevenlabs") return "ElevenLabs";
   if (pref === "mureka") return "Mureka";
   return "Suno";
@@ -31183,7 +31189,7 @@ function musicProviderShortLabel(pref = getMusicProviderPref()) {
 
 function useAltMusicProvider() {
   const pref = getMusicProviderPref();
-  return creditsState.isAdmin && (pref === "minimax" || pref === "lyria" || pref === "elevenlabs" || pref === "mureka");
+  return creditsState.isAdmin && (pref === "minimax" || pref === "lyria" || pref === "lyria_clip" || pref === "elevenlabs" || pref === "mureka");
 }
 
 function useMinimaxMusicProvider() {
@@ -31192,6 +31198,11 @@ function useMinimaxMusicProvider() {
 
 function useLyriaMusicProvider() {
   return creditsState.isAdmin && getMusicProviderPref() === "lyria";
+}
+
+/** Admin Settings → Lyria clip (~30s) on the clip model from normal Create. */
+function useLyriaClipMusicProvider() {
+  return creditsState.isAdmin && getMusicProviderPref() === "lyria_clip";
 }
 
 function useElevenlabsMusicProvider() {
@@ -31274,6 +31285,7 @@ function musicGenerateApiPath() {
   if (isTemplateSparkLyriaFullFlow()) return "/api/music/generate?provider=lyria";
   const pref = getMusicProviderPref();
   if (pref === "minimax") return "/api/music/generate?provider=minimax";
+  if (pref === "lyria_clip") return nabadClipGenerateApiPath();
   if (pref === "lyria") return "/api/music/generate?provider=lyria";
   if (pref === "elevenlabs") return "/api/music/generate?provider=elevenlabs";
   if (pref === "mureka") return "/api/music/generate?provider=mureka";
@@ -31297,7 +31309,8 @@ function templateSparkClipEnabled() {
 
 /** Admins keep Settings → engine for shelf flows. Public users always get Lyria 3.5 full. */
 function adminHonorsTemplateEnginePicker() {
-  return Boolean(creditsState.isAdmin) && getMusicProviderPref() !== "lyria";
+  const pref = getMusicProviderPref();
+  return Boolean(creditsState.isAdmin) && pref !== "lyria" && pref !== "lyria_clip";
 }
 
 function templateUsesLyriaClip() {
@@ -31360,7 +31373,7 @@ function useLyriaForThisGenerate() {
 }
 
 function isLyriaClipGenerateFlow() {
-  return isNabadClipFlow() || isTemplateSparkClipFlow();
+  return useLyriaClipMusicProvider() || isNabadClipFlow() || isTemplateSparkClipFlow();
 }
 
 function lyriaClipCreditCostForFlow() {
@@ -61658,7 +61671,11 @@ const SONG_DURATION_PRESET_SEC = Object.freeze({
 
 function resolveSongDurationForGeneration() {
   const preset = String(els.sunoSongDuration?.value || "").trim();
-  if (!preset) return undefined;
+  if (!preset) {
+    // Lyria full song: Auto should target ~3 min in prompts (not an open-ended short clip).
+    if (useLyriaForThisGenerate() && !isLyriaClipGenerateFlow()) return 180;
+    return undefined;
+  }
   const sec = SONG_DURATION_PRESET_SEC[preset];
   if (!Number.isFinite(sec)) return undefined;
   return Math.max(10, Math.min(360, Math.round(sec)));
@@ -77748,7 +77765,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         const clipTitle =
           String(els.sunoTitle?.value || "").trim() ||
           String(remixMeta?.searchTemplateTitle || remixMeta?.challenge?.title || "").trim() ||
-          (templateSparkClip ? "Template clip" : "Nabad Clip");
+          (templateSparkClip ? "Template clip" : useLyriaClipMusicProvider() ? "Lyria clip" : "Nabad Clip");
         const clipChallenge =
           remixMeta?.challenge ||
           loadCreateChallengeContext()?.challenge ||
@@ -77767,7 +77784,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           dialect,
           dialectHint: lyricDialectHint,
           lyriaModel: "clip",
-          nabadClip: templateSparkClip ? undefined : "1",
+          duration: useLyriaClipMusicProvider() ? 30 : undefined,
+          nabadClip: templateSparkClip || useLyriaClipMusicProvider() ? undefined : "1",
+          ...(useLyriaClipMusicProvider() ? { adminLyriaClip: "1" } : {}),
           ...(templateSparkClip ? { templateSparkClip: "1" } : {}),
           ...(remixMeta?.searchTemplateId ? { searchTemplateId: String(remixMeta.searchTemplateId).trim() } : {}),
           ...(remixMeta?.searchTemplateTitle ? { searchTemplateTitle: String(remixMeta.searchTemplateTitle).trim() } : {}),
@@ -77792,7 +77811,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         }
         lastGenerationMeta = {
           engine: "lyria_clip",
-          mode: templateSparkClip ? "Template clip" : "Nabad Clip",
+          mode: templateSparkClip ? "Template clip" : useLyriaClipMusicProvider() ? "Lyria clip (admin)" : "Nabad Clip",
           lyricsInput: userPrompt,
           ideaInput: ideaClip ? userPrompt : undefined,
           finalPrompt,

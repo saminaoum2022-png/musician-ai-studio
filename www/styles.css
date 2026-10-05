@@ -22425,9 +22425,6 @@ body.trackSheetOpen .footer{
   body[data-route="generate"] .createTabs{
     margin-bottom: 0;
   }
-  body[data-route="generate"] #advancedSheet:not([open]){
-    display: none;
-  }
   body[data-route="generate"] input:focus,
   body[data-route="generate"] textarea:focus,
   body[data-route="generate"] select:focus{
@@ -22495,6 +22492,26 @@ input::placeholder, textarea::placeholder{
     transform: translateY(100%);
     transition: transform 260ms ease;
     overflow: auto;
+  }
+  /* Create advanced options: inline accordion under Artwork (not a hidden fullscreen sheet). */
+  body[data-route="generate"] #advancedSheet.stepDetails.createOptionsSheet{
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+    transform: none;
+    transition: none;
+    overflow: visible;
+  }
+  body[data-route="generate"] #advancedSheet.createOptionsSheet .createOptionsClose{
+    display: none;
   }
   .miniMoreOptions .stepCard.compactOptions{
     gap: 10px;
@@ -24315,8 +24332,7 @@ body.trackSheetOpen .coachFab{
   body[data-route="generate"][data-create-flow="humtrack"] #createGenerateDock,
   body[data-route="generate"][data-create-flow="sounds"] #createGenerateDock,
   body[data-route="generate"][data-create-flow="persona"] #createGenerateDock,
-  body.createChooserSheetOpen #createGenerateDock,
-  body:has(#advancedSheet[open]) #createGenerateDock{
+  body.createChooserSheetOpen #createGenerateDock{
     display: none !important;
   }
   html.is-native-shell body[data-route="generate"] .card.wide[data-route="generate"]{

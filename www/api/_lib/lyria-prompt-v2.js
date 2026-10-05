@@ -80,6 +80,9 @@ const GENRE_PACKS = Object.freeze({
 const MIX_LINE =
   "Mix: lead vocal slightly forward and dry, drums and bass 2–3 dB under voice, sparse arrangement, leave headroom, tight kick-to-vocal pocket";
 
+/** Lyria clip model — target length in prompts and arrangement (not a hard API cap). */
+const LYRIA_CLIP_TARGET_SEC = 30;
+
 function envFlagEnabled(name, { defaultOn = false } = {}) {
   const v = String(process.env[name] || "").trim().toLowerCase();
   if (!v) return defaultOn;
@@ -137,7 +140,12 @@ function fmtTime(sec) {
 }
 
 function buildArrangementLines({ durationSec, clip, meter, bpm }) {
-  const total = clip ? 28 : Math.min(180, Math.max(60, Number(durationSec) || 180));
+  const clipSec = (() => {
+    const d = Number(durationSec);
+    if (Number.isFinite(d) && d >= 10 && d <= 45) return Math.round(d);
+    return LYRIA_CLIP_TARGET_SEC;
+  })();
+  const total = clip ? clipSec : Math.min(180, Math.max(60, Number(durationSec) || 180));
   const pct = (p) => Math.round((p / 100) * total);
   if (clip) {
     return normalizeLyriaArrangementLines(
@@ -245,9 +253,20 @@ function buildLyriaPromptV2(opts = {}) {
 
   const blocks = [];
   const opener = instrumental ? "Create an instrumental track." : "Create a song.";
-  const targetSec = clip ? 28 : Math.min(180, Math.max(60, durationSec || 180));
+  const clipTarget = (() => {
+    const d = Number(durationSec);
+    if (Number.isFinite(d) && d >= 10 && d <= 45) return Math.round(d);
+    return LYRIA_CLIP_TARGET_SEC;
+  })();
+  const targetSec = clip ? clipTarget : Math.min(180, Math.max(60, durationSec || 180));
+  const fullLengthHint =
+    !clip && targetSec >= 120
+      ? " Full-length performance — follow the arrangement timestamps through the final chorus; do not stop near one minute unless the target length is ~60 seconds."
+      : "";
   blocks.push(
-    `${opener} Target length about ${targetSec} seconds. One memorable chorus hook, steady tempo, vocal locked to the grid.`,
+    clip
+      ? `${opener} Target length about ${targetSec} seconds — one hook-focused clip, optional short verse plus one chorus, end on a complete phrase. Steady tempo, vocal locked to the grid.`
+      : `${opener} Target length about ${targetSec} seconds.${fullLengthHint} One memorable chorus hook, steady tempo, vocal locked to the grid.`,
   );
   if (title) blocks.push(`Title: ${title}`);
   if (photoMood) {
@@ -289,13 +308,16 @@ function buildLyriaPromptV2(opts = {}) {
 
   blocks.push("");
   blocks.push(
-    "Write and perform original compact lyrics: [Verse], [Chorus], [Verse], [Chorus], optional short [Bridge]. Short lines, 3–5 words each, one sticky chorus hook.",
+    targetSec >= 120
+      ? "Write and perform original lyrics for the full target length: [Verse], [Chorus], [Verse], [Chorus], [Bridge], [Final chorus]. Enough lines to fill the arrangement — one sticky chorus hook, short singable phrases."
+      : "Write and perform original compact lyrics: [Verse], [Chorus], [Verse], [Chorus], optional short [Bridge]. Short lines, 3–5 words each, one sticky chorus hook.",
   );
   return blocks.join("\n").slice(0, 8000);
 }
 
 module.exports = {
   GENRE_PACKS,
+  LYRIA_CLIP_TARGET_SEC,
   resolveLyriaPromptV2Enabled,
   buildLyriaPromptV2,
   inferGenrePack,

@@ -1478,9 +1478,6 @@
                 <input id="sunoArtworkStyle" type="text" placeholder="Neon desert, cinematic portrait…" />
                 <div id="artworkSuggestRow" class="styleSuggestRow artworkSuggestRow" role="group" aria-label="Artwork suggestions" hidden></div>
               </label>
-          </section>
-
-          <section class="createFlowStep createFlowStep--generate" aria-label="Generate">
 
           <details class="details stepDetails miniMoreOptions createOptionsSheet" id="advancedSheet">
             <summary class="createOptionsSummary">
@@ -1589,6 +1586,10 @@
 
           </div>
           </details>
+          </section>
+
+          <section class="createFlowStep createFlowStep--generate" aria-label="Generate">
+
 
           <div class="createGenerateDockSpacer" aria-hidden="true"></div>
           <div class="stepCard generateDock" id="createGenerateDock">
@@ -4386,6 +4387,7 @@
                     <button type="button" class="settingsThemeOpt" data-music-provider="suno" role="radio" aria-checked="true">Suno</button>
                     <button type="button" class="settingsThemeOpt" data-music-provider="minimax" role="radio" aria-checked="false">MiniMax</button>
                     <button type="button" class="settingsThemeOpt" data-music-provider="lyria" role="radio" aria-checked="false">Lyria</button>
+                    <button type="button" class="settingsThemeOpt" data-music-provider="lyria_clip" role="radio" aria-checked="false">Lyria clip</button>
                     <button type="button" class="settingsThemeOpt" data-music-provider="elevenlabs" role="radio" aria-checked="false">Eleven</button>
                     <button type="button" class="settingsThemeOpt" data-music-provider="mureka" role="radio" aria-checked="false">Mureka</button>
                   </div>
@@ -4456,7 +4458,7 @@
                     </label>
                   </div>
                 </div>
-                <p class="settingsOrbModeIntro">Admin test only. Suno is default (Arabic + two variants). MiniMax is English-only. Lyria and ElevenLabs share Nabad vocal identity + FX A/B toggles. Gemini producer can crowd Lyria 3.5 — toggle Off to send a direct prompt. Persona and reference uploads require Suno.</p>
+                <p class="settingsOrbModeIntro">Admin test only. Suno is default (Arabic + two variants). MiniMax is English-only. Lyria = full song (~3 min). Lyria clip = ~30s hook on the clip model (Lyria v2 prompt on staging). Gemini producer applies to Lyria full only when v1 is on. Persona and reference uploads require Suno.</p>
               </div>
             </section>
 

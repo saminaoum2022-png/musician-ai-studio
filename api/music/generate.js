@@ -89,6 +89,7 @@ const {
 } = require("../_lib/mureka-upstream");
 const {
   prepareMurekaPhoneticLyrics,
+  murekaPhoneticStyleNote,
 } = require("../_lib/mureka-phonetic-lyrics");
 const {
   saveMusicProviderTaskStatus,
@@ -1927,8 +1928,8 @@ async function runMurekaGenerationJob({
       return;
     }
     let lyricsForMureka = phoneticPrep.lyrics;
-    if (phoneticPrep.converted) {
-      effectiveStyle = [effectiveStyle, "Sing Franco-Arabic (Latin) as Arabic phonetics, not English."]
+    if (phoneticPrep.converted || phoneticPrep.normalized) {
+      effectiveStyle = [effectiveStyle, murekaPhoneticStyleNote({ dialect, dialectHint })]
         .filter(Boolean)
         .join(" ");
     }

@@ -94,6 +94,10 @@ const {
   providerFolder,
 } = require("../_lib/music-provider-task-store");
 const { resolveHumTrackPreset } = require("../_lib/hum-track-presets");
+const {
+  elevenLegacyPlansEnabled,
+  resolveBareElevenCompose,
+} = require("../_lib/elevenlabs-bare-passthrough");
 const { uploadObject } = require("../_lib/supabase-storage");
 const { queueCacheTimestampedLyrics } = require("../_lib/music-timestamped-lyrics-cache");
 const {
@@ -816,6 +820,20 @@ async function runElevenlabsGenerationJob({
     let finalCompositionPlan = null;
     let elevenPlanSource = null;
 
+    if (!editCompositionPlan && !elevenLegacyPlansEnabled()) {
+      const bare = resolveBareElevenCompose(body);
+      if (!bare.ok) {
+        await fail(bare.error);
+        return;
+      }
+      finalCompositionPlan = bare.compositionPlan || null;
+      finalPrompt = finalCompositionPlan ? undefined : bare.prompt;
+      elevenPlanSource = bare.planSource;
+      console.info("[music/generate] elevenlabs bare passthrough", taskId, elevenPlanSource, {
+        promptLen: finalPrompt ? finalPrompt.length : 0,
+        chunks: finalCompositionPlan?.chunks?.length || 0,
+      });
+    } else if (!editCompositionPlan) {
     const humTrackInstrumental =
       Boolean(body?.humTrack) && instrumental && referenceSongId && !editCompositionPlan;
     const appLikeReference =
@@ -989,6 +1007,7 @@ async function runElevenlabsGenerationJob({
         scriptFormat,
       });
       elevenPlanSource = "prompt_fallback";
+    }
     }
     }
 
@@ -1619,7 +1638,9 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
 }
 
 async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
-  applyHumTrackGenerateDefaults(body);
+  if (elevenLegacyPlansEnabled()) {
+    applyHumTrackGenerateDefaults(body);
+  }
   const apiKey = process.env.ELEVENLABS_API_KEY || "";
   if (!apiKey) return sendJson(res, 500, { error: "Missing ELEVENLABS_API_KEY on server" });
 
@@ -1696,7 +1717,11 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
         .filter(Boolean)
         .join("\n\n")
     : String(body?.prompt || "").trim();
-  const stylePrompt = isSongEdit ? "song edit" : buildMusicPrompt(body);
+  const stylePrompt = isSongEdit
+    ? "song edit"
+    : elevenLegacyPlansEnabled()
+      ? buildMusicPrompt(body)
+      : String(body?.style || "").trim();
   const title = String(body?.title || "").trim() || (isSongEdit ? "Edited song" : "");
   const instrumental = Boolean(body?.instrumental);
   const taskId = newTaskId("elevenlabs");
@@ -1787,7 +1812,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     referenceRangeMs = Number(body?.referenceDurationMs) > 0
       ? Number(body.referenceDurationMs)
       : estimateReferenceDurationMs(refResolved.buffer);
-    if (body?.humTrack) {
+    if (body?.humTrack && elevenLegacyPlansEnabled()) {
       const refMs = Math.max(3000, Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)));
       musicLengthMs = Math.max(
         35000,
@@ -1804,7 +1829,22 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     );
   }
 
-  if (!isSongEdit && !instrumental && !lyrics && !stylePrompt && !hasReference) {
+  if (!isSongEdit && !elevenLegacyPlansEnabled()) {
+    const bareCheck = resolveBareElevenCompose(body);
+    if (!bareCheck.ok && !hasReference) {
+      return sendJson(res, 400, {
+        error: bareCheck.error,
+        code: "elevenlabs_missing_prompt",
+      });
+    }
+    if (!bareCheck.ok && hasReference) {
+      return sendJson(res, 400, {
+        error:
+          "Reference uploaded, but bare Eleven mode still needs style, prompt, or elevenCompositionPlan in the request.",
+        code: "elevenlabs_missing_prompt",
+      });
+    }
+  } else if (!isSongEdit && !instrumental && !lyrics && !stylePrompt && !hasReference) {
     return sendJson(res, 400, {
       error: "Add lyrics, style, or enable instrumental mode for ElevenLabs.",
       code: "elevenlabs_missing_prompt",
@@ -1833,16 +1873,18 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     providerCostUsd: ELEVENLABS_PROVIDER_COST_USD,
   });
 
-  const elevenPrompt = buildElevenMusicPrompt({
-    stylePrompt,
-    lyrics,
-    title,
-    instrumental,
-    vocalGender: String(body?.vocalGender || "").trim(),
-    nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
-    dialectHint: mergeLyriaDialectHint(body),
-    scriptFormat: String(body?.scriptFormat || "").trim(),
-  });
+  const elevenPrompt = elevenLegacyPlansEnabled()
+    ? buildElevenMusicPrompt({
+        stylePrompt,
+        lyrics,
+        title,
+        instrumental,
+        vocalGender: String(body?.vocalGender || "").trim(),
+        nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
+        dialectHint: mergeLyriaDialectHint(body),
+        scriptFormat: String(body?.scriptFormat || "").trim(),
+      })
+    : "";
 
   const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
 

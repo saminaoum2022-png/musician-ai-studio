@@ -47,7 +47,7 @@ const USER_DAYLIGHT_PALETTE =
  */
 
 /** Bump when cover prompt policy changes. */
-export const COVER_PROMPT_POLICY_VERSION = 28;
+export const COVER_PROMPT_POLICY_VERSION = 29;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -107,7 +107,7 @@ const NABAD_PULSE_SCENES = [
 ];
 
 const NABAD_COLOR_LOCK =
-  "Nabad brand color grade required: deep void black, dominant teal and cyan lighting, rich violet and soft purple atmospheric haze, optional faint rose-gold accent only, no warm orange daylight, no generic stock colors, no brown amber candle warmth";
+  "Subtle Nabad color grade: teal and cyan accents, soft violet atmospheric tone, optional faint rose-gold highlight, natural photorealistic exposure";
 
 const REGEN_COLOR_LOCK =
   "Nabad brand color grade: teal and cyan lighting, rich violet atmospheric haze, soft rose-gold accent, natural exposure suited to the scene, readable midtones, avoid flat grey underexposure unless the scene is nocturnal";

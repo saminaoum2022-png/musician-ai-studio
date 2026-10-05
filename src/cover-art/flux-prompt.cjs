@@ -2,26 +2,17 @@
 
 const {
   userHintRequestsDaylight,
-  userHintRequestsTightComposition,
+  userHintRequestsNight,
   augmentArtworkHintForLighting,
-  appendWideCompositionHint,
-  FLUX_DAYLIGHT_LIGHT_LINE,
-  FLUX_WIDE_FRAME_LINE,
-  FLUX_TIGHT_FRAME_LINE,
+  FLUX_FRAME_LINE,
 } = require("./user-hint-lighting.cjs");
 
 /**
- * Cloudflare Flux Schnell cover prompts — written from scratch, Flux-only.
- * (Pollinations keeps using ./prompt.js untouched.)
+ * Cloudflare Flux Schnell — minimal scratch prompts (Pollinations still uses ./prompt.js).
  *
- * Why separate: Flux Schnell has no negative prompt and reads every word literally, so
- * "no people" / "no candles" / "no text" put people, candles and text in the picture.
- * Rules for this file:
- *   1. Positive wording only. Never mention what we don't want.
- *   2. Short: one subject, one light/colour line, one composition line (~400-550 chars).
- *   3. One source of truth for the scene, in priority order:
- *        user's own artwork hint > occasion > Visual Director / Gemini scene > mood/genre table.
- *   4. Plain CommonJS so the server can `require` it with no ESM loading questions.
+ * Flux has no negative prompt and reads negations literally — positive wording only, keep it short.
+ * Scene priority: user artwork hint > occasion > Gemini one-liner (aiScene) > mood/genre table > default pool.
+ * Visual Director / long client prompts are NOT fed here (they skew dark/night and overload the model).
  */
 
 const NEGATION_CLAUSE_RE = /^\s*(?:absolutely\s+|completely\s+|strictly\s+)?(?:no|not|without|avoid|never|zero|nothing|don'?t)\b/i;
@@ -31,7 +22,9 @@ const HUMAN_RE =
 
 const CANDLE_RE = /\bcandle(?:light|s|stick|sticks)?\b/gi;
 
-/** Split on commas / sentence breaks and drop every "no … / without … / avoid …" clause. */
+const NIGHT_SCENE_RE =
+  /\b(at night|midnight|nocturnal|void black|deep black|after dark|urban night|dark studio void|underexposed|pitch black)\b/i;
+
 function positiveOnly(text, { allowCandles = false } = {}) {
   const clauses = String(text || "")
     .split(/[,;.\n]+/)
@@ -40,11 +33,10 @@ function positiveOnly(text, { allowCandles = false } = {}) {
     .filter((c) => !NEGATION_CLAUSE_RE.test(c))
     .filter((c) => allowCandles || !/\bwax\b/i.test(c));
   let out = clauses.join(", ");
-  if (!allowCandles) out = out.replace(CANDLE_RE, "warm string-light bokeh");
+  if (!allowCandles) out = out.replace(CANDLE_RE, "soft bokeh light");
   return out;
 }
 
-/** Drop whole clauses that mention a person or body part (for AI-written scenes, never the user's own words). */
 function stripHumans(text) {
   return String(text || "")
     .split(",")
@@ -61,109 +53,71 @@ function clampAtComma(text, max) {
   return (i > max * 0.5 ? cut.slice(0, i) : cut).trim();
 }
 
-/** Explicit occasions beat everything except the user's own words. */
 const OCCASIONS = [
   [/\b(?:birthday|bday|sana helwa)|عيد ميلاد/i,
-    "floating teal and violet balloons, scattered confetti and a small wrapped gift on a dark glossy surface, soft string-light bokeh"],
+    "colorful balloons and confetti on a bright festive table, daylight party mood"],
   [/\b(?:wedding|bridal|bride|groom|engagement)|زفاف|عرس|عروس|خطوبة/i,
-    "two diamond rings resting on ivory satin beside soft white flowers"],
+    "two diamond rings on ivory satin with soft white flowers, gentle window light"],
   [/\b(?:christmas|xmas|noel|noël|holiday season)/i,
-    "a small evergreen tree with warm golden lights and a glowing star"],
+    "decorated evergreen tree outdoors in winter daylight, blue sky, sunlight on branches"],
   [/\beid\b|ramadan|عيد الفطر|عيد الأضحى|رمضان/i,
-    "an ornate brass lantern glowing beside a crescent moon ornament on a dark patterned carpet"],
+    "ornate brass lantern beside a crescent ornament on patterned fabric, warm glowing light"],
   [/\b(?:anniversary|valentine|romantic|love song)/i,
-    "intertwined gold rings and rose petals on dark silk"],
+    "intertwined gold rings and rose petals on cream silk, rose-gold daylight"],
   [/new year/i,
-    "golden fireworks bursting over dark still water, reflected lights"],
+    "golden fireworks over calm water at dusk, reflected lights, clear sky gradient"],
   [/\b(?:graduation|graduate|congrat|prom)|تخرج|مبروك/i,
-    "a graduation cap and a rolled scroll tied with ribbon, golden confetti in the air"],
+    "graduation cap and rolled scroll with ribbon on a wooden desk, sunny window light"],
   [/\bmom\b|\bmother'?s?\b|عيد الأم|ماما/i,
-    "a bouquet of soft pink roses in a glass vase on dark linen"],
+    "soft pink roses in a glass vase on linen, bright natural light"],
   [/\b(?:sorry|apology)|اعتذار/i,
-    "a single white flower and a folded paper note on dark wood"],
+    "a single white flower and folded paper note on light wood, soft daylight"],
   [/\b(?:thank you|thanks|gratitude)|شكر/i,
-    "a small bouquet tied with ribbon on dark linen"],
+    "small bouquet tied with ribbon on a sunlit table"],
   [/\b(?:miss you|missing you|long distance)|اشتق/i,
-    "a paper plane resting by a rain-streaked window, distant city glow"],
+    "paper plane by a rain-streaked window, soft grey daylight, distant city view"],
 ];
 
-/** Fallback when the song has no hint, occasion or scene: mood / genre decides, seed picks the variant. */
 const MOOD_SCENES = [
   [/\b(?:sad|melanchol|heartbreak|lonely|sorrow|blues)|حزين|فراق/i, [
-    "a rain-streaked window with blurred city lights and a single wilted flower on the sill",
-    "an empty chair beside a fogged window at blue hour",
+    "rain-streaked window with soft overcast daylight and a flower on the sill",
+    "empty chair beside a bright window, quiet emotional still life",
   ]],
   [/\b(?:romantic|love|tender|romance)|حب|غرام/i, [
-    "rose petals and a pair of gold rings on dark silk",
-    "two glass goblets catching soft rose-gold light on dark velvet",
+    "rose petals and gold rings on cream silk in warm afternoon light",
+    "two glass goblets catching soft rose-gold sunlight on linen",
   ]],
   [/\b(?:arabic|tarab|oud|khaleeji|shaabi|sha3bi|mahraganat|dabke)|عربي|طرب|شعبي|دبكة/i, [
-    "an ornate brass lantern on a dark patterned carpet, glowing arabesque light",
-    "a carved brass tray with small tea glasses and drifting steam on dark wood",
+    "ornate brass lantern on patterned fabric, warm arabesque light, sunlit still life",
+    "carved brass tray with tea glasses and steam on a sunlit wooden table",
   ]],
   [/\b(?:dance|club|edm|party|upbeat|house|techno|electro|pop|energetic|festive)/i, [
-    "a glossy vinyl record on a dark reflective floor with sweeping neon light beams and soft bokeh",
-    "a mirror ball throwing teal and violet light across a dark room",
+    "glossy vinyl record on a reflective floor with teal-violet light beams and festive bokeh",
+    "mirror ball throwing colorful light across a bright party room",
   ]],
   [/\b(?:chill|lofi|lo-fi|calm|relax|ambient|acoustic|sleep|soft|peace)/i, [
-    "a ceramic cup beside a small green plant on a window ledge at blue hour",
-    "smooth stones stacked beside still water, soft mist",
+    "ceramic cup beside a small green plant on a sunlit window ledge",
+    "smooth stones beside still water with soft mist and gentle daylight",
   ]],
   [/\b(?:rock|metal|drill|trap|hip ?hop|rap|dark|aggressive|angry)/i, [
-    "cracked dark glass with a teal-violet rim light and drifting smoke",
-    "a chrome chain coiled on wet black asphalt, neon reflections",
+    "cracked glass with teal-violet rim light on wet pavement at dusk, neon reflections",
+    "chrome chain on asphalt with vivid neon reflections, motivated street lighting",
   ]],
 ];
 
 const DEFAULT_SCENES = [
-  "a glossy vinyl record resting on dark velvet with a teal rim light",
-  "a crystal prism splitting teal and violet light on a dark surface",
-  "glass orbs floating in violet mist above a reflective black floor",
-  "an empty theatre stage with a single spotlight and drifting haze",
-];
-
-/** Regen taps — same brand grade but lit scenes (Flux scratch path ignores the long client prompt). */
-const REGEN_DEFAULT_SCENES = [
-  "a glossy vinyl record on a softly lit studio surface with teal-violet rim light and clear midtones",
-  "a crystal prism splitting teal and violet light on a bright matte surface, gentle daylight fill",
-  "fresh flowers and glassware on a sunlit table with soft window light and teal-violet color grade",
-  "a minimal studio still life with glass catching cyan light beams, airy premium album mood",
-];
-
-const REGEN_MOOD_SCENES = [
-  [/\b(?:sad|melanchol|heartbreak|lonely|sorrow|blues)|حزين|فراق/i, [
-    "a rain-streaked window with soft daylight and a single flower on the sill, gentle blue-teal grade",
-    "an empty chair beside a bright window with soft haze, quiet emotional mood",
-  ]],
-  [/\b(?:romantic|love|tender|romance)|حب|غرام/i, [
-    "rose petals and gold rings on ivory satin with warm rose-gold studio light",
-    "two glass goblets catching soft rose-gold daylight on cream linen",
-  ]],
-  [/\b(?:arabic|tarab|oud|khaleeji|shaabi|sha3bi|mahraganat|dabke)|عربي|طرب|شعبي|دبكة/i, [
-    "an ornate brass lantern on patterned fabric with warm glowing arabesque light, well-lit still life",
-    "a carved brass tray with tea glasses and steam on a sunlit wooden table",
-  ]],
-  [/\b(?:dance|club|edm|party|upbeat|house|techno|electro|pop|energetic|festive)/i, [
-    "a glossy vinyl record on a reflective floor with sweeping teal-violet light beams and bright bokeh",
-    "colorful confetti and balloons on a festive surface with warm string lights and cyan-violet grade",
-  ]],
-  [/\b(?:chill|lofi|lo-fi|calm|relax|ambient|acoustic|sleep|soft|peace)/i, [
-    "a ceramic cup beside a small green plant on a sunlit window ledge",
-    "smooth stones beside still water with soft mist and gentle daylight",
-  ]],
-  [/\b(?:rock|metal|drill|trap|hip ?hop|rap|dark|aggressive|angry)/i, [
-    "cracked glass with a teal-violet rim light on a wet street at dusk, neon reflections, not underexposed",
-    "a chrome chain on asphalt with vivid neon reflections and lifted midtones",
-  ]],
+  "glossy vinyl record on a sunlit wooden desk with soft teal accent light",
+  "crystal prism splitting light on a bright matte surface, gentle daylight fill",
+  "fresh flowers and glassware on a sunlit table, airy premium album mood",
+  "minimal studio still life with glass catching cyan light beams, clear exposure",
+  "coastal cliff path at golden hour, pearlescent sky and calm ocean haze",
+  "serene botanical still life, soft window light on dried flowers",
 ];
 
 function pickBySeed(list, seed) {
   const n = Math.abs(Math.floor(Number(seed) || 0));
   return list[n % list.length];
 }
-
-/** Generic filler scenes from the keyword director — treated as "nothing matched". */
-const GENERIC_SCENE_RE = /^\s*(?:abstract sonic pulse|premium abstract living light|layered luminous depth)/i;
 
 function occasionScene(ctx) {
   const blob = [ctx.occasionLabel, ctx.searchTemplateTitle, ctx.title].filter(Boolean).join(" ");
@@ -174,7 +128,6 @@ function occasionScene(ctx) {
   return "";
 }
 
-/** True when nothing explicit (user hint / occasion) decides the scene, so an AI scene writer should read the song. */
 function needsSceneWriter(ctx = {}) {
   if (String(ctx.userArtwork || "").trim()) return false;
   if (occasionScene(ctx)) return false;
@@ -183,65 +136,52 @@ function needsSceneWriter(ctx = {}) {
 
 function resolveSubject(ctx) {
   const userArtRaw = String(ctx.userArtwork || "").trim();
-  const userArt = appendWideCompositionHint(augmentArtworkHintForLighting(userArtRaw));
+  const userArt = augmentArtworkHintForLighting(userArtRaw);
   const allowCandles = /\bcandle|birthday cake/i.test(userArt);
   if (userArt) {
     const cleaned = positiveOnly(userArt, { allowCandles });
-    if (cleaned) return { text: clampAtComma(cleaned, 260), source: "user", people: HUMAN_RE.test(cleaned) };
+    if (cleaned) return { text: clampAtComma(cleaned, 280), source: "user", people: HUMAN_RE.test(cleaned) };
   }
 
   const occ = occasionScene(ctx);
   if (occ) return { text: occ, source: "occasion", people: false };
 
   const ai = stripHumans(positiveOnly(String(ctx.aiScene || "")));
-  if (ai.length >= 12) return { text: clampAtComma(ai, 240), source: "ai_scene", people: false };
-
-  const sceneRaw = String(ctx.scene || "").trim();
-  if (sceneRaw && !GENERIC_SCENE_RE.test(sceneRaw)) {
-    const cleaned = stripHumans(positiveOnly(sceneRaw));
-    if (cleaned.length >= 12) return { text: clampAtComma(cleaned, 240), source: "scene", people: false };
+  if (ai.length >= 12 && !NIGHT_SCENE_RE.test(ai)) {
+    return { text: clampAtComma(ai, 260), source: "ai_scene", people: false };
   }
 
   const moodBlob = [ctx.mood, ctx.genre, ctx.style].filter(Boolean).join(" ");
-  const moodTable = ctx.regen ? REGEN_MOOD_SCENES : MOOD_SCENES;
-  for (const [re, scenes] of moodTable) {
+  for (const [re, scenes] of MOOD_SCENES) {
     if (re.test(moodBlob)) return { text: pickBySeed(scenes, ctx.seed), source: "mood", people: false };
   }
-  const defaults = ctx.regen ? REGEN_DEFAULT_SCENES : DEFAULT_SCENES;
-  return { text: pickBySeed(defaults, ctx.seed), source: "default", people: false };
+  return { text: pickBySeed(DEFAULT_SCENES, ctx.seed), source: "default", people: false };
 }
 
-const LIGHT_LINE =
-  "Dark, moody atmosphere with deep black shadows, lit by teal and violet glow and a faint rose-gold highlight.";
-const REGEN_LIGHT_LINE =
-  "Premium album photograph with lighting that matches the scene (daylight, golden hour, studio fill, or justified night glow), teal and violet color grade, readable midtones, avoid default void-black underexposure unless the scene is clearly nocturnal";
-const QUIET_LINE = "A quiet, wordless scene of objects and atmosphere only.";
-const WORDLESS_LINE = "A wordless image.";
+const DEFAULT_LIGHT =
+  "Photorealistic photograph, natural lighting matched to the scene, clear readable exposure, soft teal-violet color grade";
+const DAYLIGHT_LIGHT =
+  "Bright daytime photograph, natural sunlight, clear sky or bright window light, lifted midtones, soft teal-violet accent grade";
+const NIGHT_LIGHT =
+  "Night photograph with motivated practical lights, readable midtones, soft teal-violet grade";
 
 /**
- * @param {{userArtwork?:string, scene?:string, occasionLabel?:string, searchTemplateTitle?:string,
+ * @param {{userArtwork?:string, aiScene?:string, occasionLabel?:string, searchTemplateTitle?:string,
  *          title?:string, mood?:string, genre?:string, style?:string, seed?:number}} ctx
  * @returns {{prompt:string, source:string}}
  */
 function buildFluxScratchPrompt(ctx = {}) {
   const subject = resolveSubject(ctx);
-  const lead = /photograph|photo\b/i.test(subject.text) ? "" : "Cinematic photograph: ";
+  const lead = /photograph|photo\b/i.test(subject.text) ? "" : "Photograph: ";
   const userArtForLight = String(ctx.userArtwork || "").trim();
-  const lightLine = userHintRequestsDaylight(userArtForLight)
-    ? FLUX_DAYLIGHT_LIGHT_LINE
-    : ctx.regen
-      ? REGEN_LIGHT_LINE
-      : LIGHT_LINE;
-  const frameLine = userHintRequestsTightComposition(userArtForLight)
-    ? FLUX_TIGHT_FRAME_LINE
-    : FLUX_WIDE_FRAME_LINE;
-  const prompt = [
-    `${lead}${subject.text}.`,
-    lightLine,
-    frameLine,
-    "Photorealistic cinematic album cover lighting.",
-    subject.people ? WORDLESS_LINE : QUIET_LINE,
-  ].join(" ").replace(/\s+/g, " ").trim();
+  let lightLine = DEFAULT_LIGHT;
+  if (userHintRequestsDaylight(userArtForLight)) lightLine = DAYLIGHT_LIGHT;
+  else if (userHintRequestsNight(userArtForLight)) lightLine = NIGHT_LIGHT;
+
+  const prompt = [`${lead}${subject.text}.`, `${FLUX_FRAME_LINE}.`, lightLine]
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
   return { prompt, source: subject.source };
 }
 

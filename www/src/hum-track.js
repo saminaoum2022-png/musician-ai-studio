@@ -343,6 +343,13 @@ function failHumTrackGeneration(taskId, { failureKind = "generic", title = "Hum 
     activityTitle: "Generation didn't finish",
     activityBody: detail || "Something went wrong. Try again.",
   };
+  const rawState = { errorMessage: String(detail || "").trim(), status: "FAILED" };
+  const toastMsg =
+    typeof ctx?.providerFailureToast === "function"
+      ? ctx.providerFailureToast({ kind: failureKind, detail }, rawState, taskId)
+      : String(detail || "").trim() ||
+        (failureKind && failureKind !== "generic" ? userCopy.toast : "") ||
+        userCopy.toast;
   try {
     ctx?.pushLocalGenerationFailedActivity?.({
       title,
@@ -351,7 +358,7 @@ function failHumTrackGeneration(taskId, { failureKind = "generic", title = "Hum 
       isRemix: false,
     });
   } catch {}
-  ctx?.showToast?.(userCopy.toast, { icon: "✗", durationMs: 9000 });
+  ctx?.showToast?.(toastMsg || "Could not finish Hum Track — try again.", { icon: "✗", durationMs: 9000 });
   try {
     ctx?.voidRefreshProfile?.();
   } catch {}
@@ -578,8 +585,17 @@ async function submitHumTrackGeneration() {
         };
         try {
           const refMs = await ctx?.estimateBlobDurationMs?.(sendFile);
-          if (refMs) payload.referenceDurationMs = refMs;
+          if (refMs) {
+            payload.referenceDurationMs = refMs;
+            const trackMs = Math.max(12000, Math.min(90000, Math.round(refMs) + 8000));
+            payload.musicLengthMs = trackMs;
+            payload.duration = Math.ceil(trackMs / 1000);
+          }
         } catch {}
+        if (!payload.musicLengthMs) {
+          payload.musicLengthMs = 45000;
+          payload.duration = 45;
+        }
         const fd = new FormData();
         fd.append("payload", JSON.stringify(payload));
         fd.append("referenceFile", sendFile, sendFile.name);

@@ -55,7 +55,7 @@ async function writeFluxScene(ctx, seed) {
           bucketKey: "default",
           palette: ctx.regen
             ? "teal and violet brand grade with soft fill light and clear midtones, not underexposed"
-            : "",
+            : "natural lighting variety with subtle teal-violet accents; prefer daylight, golden hour, or bright studio unless mood clearly calls for dark",
         },
       ),
       new Promise((resolve) => setTimeout(() => resolve({ ok: false, error: "timeout" }), 7000)),
@@ -494,12 +494,7 @@ module.exports = async function handler(req, res) {
           userId: user.userId,
           lyrics: coverInput.lyrics,
           userArtwork: regenUserArt,
-          scene: String(
-            body?.clientParams?.fluxScratchScene
-            || body?.clientParams?.geminiScene
-            || body?.clientParams?.directorSceneHint
-            || "",
-          ).slice(0, 400),
+          scene: "",
           occasionLabel: coverInput.occasionLabel,
           searchTemplateTitle: coverInput.searchTemplateTitle,
           title: coverInput.title,
@@ -584,7 +579,7 @@ module.exports = async function handler(req, res) {
         userId: user.userId,
         lyrics: promptInput.lyrics,
         userArtwork: params?.userArtworkRaw || params?.userArtwork || artworkHint || "",
-        scene: String(params?.geminiScene || params?.directorSceneHint || "").slice(0, 400),
+        scene: "",
         occasionLabel: promptInput.occasionLabel,
         searchTemplateTitle: promptInput.searchTemplateTitle,
         title: promptInput.title,

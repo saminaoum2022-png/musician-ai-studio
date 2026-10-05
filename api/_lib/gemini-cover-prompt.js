@@ -5,7 +5,7 @@
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const CACHE_MAX = 400;
 /** Keep in sync with src/cover-art/prompt.js COVER_PROMPT_POLICY_VERSION */
-const COVER_PROMPT_POLICY_VERSION = 28;
+const COVER_PROMPT_POLICY_VERSION = 29;
 const sceneCache = new Map();
 
 const PREFERRED_MODELS = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"];
@@ -91,7 +91,7 @@ function buildGeminiCoverBrief(input, { bucketKey, palette, artworkHint = "", oc
     "Prefer one dominant object, one clear environment, realistic photography, simple composition, and minimal visual clutter.",
     input?.regen
       ? "Regenerated cover: choose lighting that fits the song mood and setting (day, dusk, golden hour, studio, or night when appropriate). Readable midtones — do not default to void black, underexposed grey, or generic midnight unless mood/genre/lyrics clearly call for dark or noir."
-      : "",
+      : "First cover: pick lighting that fits the song (daylight, golden hour, soft studio, or dusk). Readable midtones — avoid default pitch-black void, generic midnight street, or muddy underexposure unless mood/genre/lyrics clearly call for dark or noir.",
     "Avoid surreal or impossible combinations unless the mood, genre, or art direction below explicitly calls for them.",
     "CRITICAL: absolutely no readable text, letters, numbers, logos, signage, posters, banners, captions, song titles, or watermarks anywhere in the scene.",
     "Do NOT name colors or color palettes — brand color grading is appended separately.",
@@ -100,7 +100,7 @@ function buildGeminiCoverBrief(input, { bucketKey, palette, artworkHint = "", oc
     directorSetting ? `Visual direction setting: ${directorSetting}` : "",
     "",
     `Mood bucket: ${bucketKey || "default"}`,
-    `Brand palette (for mood only — do not repeat in output): ${palette || "deep teal, rich violet, cinematic dark tones"}`,
+    `Brand palette (for mood only — do not repeat in output): ${palette || "subtle teal and violet accents, natural exposure"}`,
     humTrack && instrumentLabel
       ? `Instrument focus (must dominate the scene): solo ${instrumentLabel}`
       : "",

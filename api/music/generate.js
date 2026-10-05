@@ -894,6 +894,13 @@ async function runElevenlabsGenerationJob({
         finalCompositionPlan?.chunks?.length || 0,
         "chunks",
       );
+      if (!finalCompositionPlan?.chunks?.length) {
+        await fail("Hum Track plan failed — re-record a 15–30 second hum and try again.");
+        return;
+      }
+    } else if (Boolean(body?.humTrack) && instrumental && !humTrackInstrumental) {
+      await fail("Hum Track needs your hum recording — record or upload again, then retry.");
+      return;
     } else if (!isSongInpaint && !finalCompositionPlan?.chunks?.length) {
     const planBuilt = await buildElevenSongCompositionPlan({
       apiKey,
@@ -1672,7 +1679,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   const taskId = newTaskId("elevenlabs");
   const audioId = `${taskId}_a`;
   const model = resolveElevenMusicModel(isSongEdit ? "music_v2_5" : body?.elevenlabsModel);
-  const musicLengthMs = isSongEdit
+  let musicLengthMs = isSongEdit
     ? Math.max(
         3000,
         Number(editPlanInput.chunks[editPlanInput.chunks.length - 1]?.endMs)
@@ -1757,12 +1764,20 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     referenceRangeMs = Number(body?.referenceDurationMs) > 0
       ? Number(body.referenceDurationMs)
       : estimateReferenceDurationMs(refResolved.buffer);
+    if (body?.humTrack) {
+      const refMs = Math.max(3000, Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)));
+      musicLengthMs = Math.max(
+        12000,
+        Math.min(90000, Number(body?.musicLengthMs) || refMs + 8000),
+      );
+    }
     console.log(
       "[music/generate] elevenlabs reference uploaded",
       referenceSongId.slice(0, 12),
       refResolved.source || "payload",
       "rangeMs",
       referenceRangeMs,
+      body?.humTrack ? `humTrackMs ${musicLengthMs}` : "",
     );
   }
 

@@ -13840,6 +13840,11 @@ function coverArtEqualizerHtml() {
   return `<span class="coverArtEq" aria-hidden="true"><span></span><span></span><span></span></span>`;
 }
 
+/** Draft / library list rows — two-bar now-playing beside ⋯ (cover stays clean). */
+function libRowActionPlaybackBarsHtml(size = 18) {
+  return `<span class="libRowActionNowPlaying" aria-hidden="true"><span class="libRowActionNowPlayingPlay">${nbBarsHtml(size, "play")}</span><span class="libRowActionNowPlayingLoad">${nbBarsHtml(size, "load")}</span></span>`;
+}
+
 function discoverListPlayBtnHtml(extraClass = "") {
   const cls = extraClass ? `discoverListPlayBtn ${extraClass}` : "discoverListPlayBtn";
   return `<span class="${cls}" aria-hidden="true">${coverArtPlayStateIconsHtml(14)}</span>`;
@@ -68336,7 +68341,7 @@ function renderLibrary() {
     return;
   }
   els.libraryList.innerHTML = `
-    <ul class="libraryRows" role="list">
+    <ul class="libraryRows libraryRows--draftPlayback" role="list">
       ${generatingHtml}
       ${visibleItems.map((t, i) => {
         const art = libraryListCoverSrc(t, { width: 256 });
@@ -68372,11 +68377,11 @@ function renderLibrary() {
                 ${titleWithNabadBadgeHtml(t, safeTitle, "libRowTitle")}
                 <span class="libRowSub">${subBits.join("")}</span>
               </span>
-              <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
             </button>
             ${_librarySelectMode ? "" : `
             <div class="libRowActions">
               ${t.publishPending ? libRowPublishingChipHtml(t.publishPhase) : libRowProfileVisChipHtml(profilePublic)}
+              ${libRowActionPlaybackBarsHtml(18)}
               <button class="libRowMore" type="button" data-lib-menu="${t.id}" aria-label="More options for ${safeTitle}">⋯</button>
             </div>`}
           </li>

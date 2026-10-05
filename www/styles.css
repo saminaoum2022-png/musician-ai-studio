@@ -5261,6 +5261,48 @@ input.userTextBidi--rtl{
 .libRow.libRowPlaying .libRowEq{
   display: inline-flex;
 }
+/* Draft library rows: now-playing bars live beside ⋯, not on the cover. */
+.libraryRows--draftPlayback .libRowMain .libRowEq{
+  display: none !important;
+}
+.libraryRows--draftPlayback .libRowPlaying .libRowArt .coverArtPlayIco--pause,
+.libraryRows--draftPlayback .libRowPlaying .libRowArt .coverArtPlayIco--play{
+  display: none !important;
+}
+.libraryRows--draftPlayback .libRowPlaying .libRowArt .discoverCoverPlay,
+.libraryRows--draftPlayback .libRowLoading .libRowArt .discoverCoverPlay{
+  opacity: 0;
+  background: transparent;
+}
+.libraryRows--draftPlayback .libRowLoading .libRowArt .coverArtPlayIco--loading{
+  display: none !important;
+}
+.libraryRows--draftPlayback .libRowActionNowPlaying{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 28px;
+  margin-right: 2px;
+}
+.libraryRows--draftPlayback .libRowActionNowPlayingPlay,
+.libraryRows--draftPlayback .libRowActionNowPlayingLoad{
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.libraryRows--draftPlayback .libRowPlaying .libRowActionNowPlayingPlay{
+  display: inline-flex;
+}
+.libraryRows--draftPlayback .libRowLoading .libRowActionNowPlayingLoad{
+  display: inline-flex;
+}
+.libraryRows--draftPlayback .libRowActionNowPlaying .nbBars{
+  --nb-purple: #8f74ff;
+  --nb-teal: #22c5a9;
+  opacity: 0.95;
+}
 .libRowEq span{
   display: block;
   width: 3px;

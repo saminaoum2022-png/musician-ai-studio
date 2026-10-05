@@ -3,6 +3,7 @@
  */
 import { NABAD_MELODY_LOCK_PUBLIC_SHIPPED } from "./feature-flags.js";
 import { recordHumToMelody } from "./melody/extract.js";
+import { playMelodyPreview } from "./melody/preview.js";
 
 let bridge = {};
 
@@ -56,7 +57,7 @@ function escapeHtml(s) {
 
 function defaultStyleValue() {
   const bpm = state.tempoBpm > 0 ? state.tempoBpm : 96;
-  return `sparse pop groove, ${bpm} BPM, melody-forward`;
+  return `dry monophonic synth lead, ${bpm} BPM, no pads`;
 }
 
 const state = {
@@ -108,6 +109,10 @@ function render() {
         <h2>2 · Analyze result</h2>
         <p id="melodyLockAnalyzeMeta" class="melodyLockMeta">${state.melodyId ? `melodyId: <code>${escapeHtml(state.melodyId)}</code> · ${state.notes.length} notes · ${state.tempoBpm} BPM · ${escapeHtml(state.inferredKey || "—")}${state.analyzeProvider ? ` · analyze: ${escapeHtml(state.analyzeProvider)}` : ""}` : "Not analyzed yet."}</p>
         <div class="melodyLockNotes">${notesPreview || "—"}</div>
+        <p class="melodyLockMuted">Before Lyria: tap <strong>Play captured tune</strong>. If that beep melody is wrong, Lyria will be too (hum slower, one note at a time). If it matches your hum but Lyria doesn’t, that’s Lyria text-lock limits.</p>
+        <div class="melodyLockRow">
+          <button type="button" class="primary" id="melodyLockBtnPreviewCapture" ${state.notes?.length >= 2 ? "" : "disabled"}>Play captured tune</button>
+        </div>
       </div>
 
       <div class="melodyLockCard">
@@ -149,6 +154,7 @@ La la la la</textarea>
     bridge.scheduleApplyRoute?.();
   });
   root.querySelector("#melodyLockBtnRecord")?.addEventListener("click", () => void recordAndAnalyze());
+  root.querySelector("#melodyLockBtnPreviewCapture")?.addEventListener("click", () => void previewCapturedTune());
   root.querySelector("#melodyLockBtnFixture")?.addEventListener("click", () => void analyzeFixture());
   root.querySelector("#melodyLockBtnGenerate")?.addEventListener("click", () => void generateClip());
   root.querySelector("#melodyLockBtnRefreshRun")?.addEventListener("click", () => void refreshRun());
@@ -287,6 +293,8 @@ async function recordAndAnalyze() {
       maxSeconds: 12,
       bpm: 96,
       meter: "4/4",
+      captureProfile: "hum",
+      autoTempo: true,
       onDone: (m) => {
         captured = m;
       },
@@ -321,6 +329,22 @@ async function recordAndAnalyze() {
   } finally {
     state.recording = false;
     render();
+  }
+}
+
+async function previewCapturedTune() {
+  if (!state.notes?.length) {
+    toast("Record and analyze first.", { icon: "!", durationMs: 3000 });
+    return;
+  }
+  try {
+    toast("Playing captured notes…", { icon: "♪", durationMs: 2200 });
+    await playMelodyPreview({
+      tempoBpm: state.tempoBpm || 96,
+      notes: state.notes,
+    });
+  } catch (e) {
+    toast(e?.message || "Preview failed", { icon: "!", durationMs: 4500 });
   }
 }
 

@@ -65,7 +65,12 @@ export function recordHumToMelody(opts) {
       if (ctx) ctx.close();
     } catch {}
 
-    const melody = pitchPointsToMelody(points, { bpm, meter, maxSeconds });
+    const melody = pitchPointsToMelody(points, {
+      bpm,
+      meter,
+      maxSeconds,
+      autoTempo: opts.autoTempo !== false,
+    });
     if (opts.onDone) opts.onDone(melody);
   };
 
@@ -106,12 +111,19 @@ export function recordHumToMelody(opts) {
 
   void (async () => {
     try {
+      const humCapture = opts.captureProfile === "hum";
       stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: humCapture
+          ? {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            }
+          : {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
         video: false,
       });
 

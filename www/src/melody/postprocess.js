@@ -21,11 +21,52 @@
  * @param {{ bpm:number, meter: import("../types.js").Meter, maxSeconds:number }} opts
  * @returns {Melody}
  */
+/**
+ * Guess tempo from hum onsets so the grid matches how fast you sang.
+ * @param {PitchPoint[]} points
+ * @returns {number} BPM 72–132 or 96 fallback
+ */
+export function estimateTempoBpmFromPoints(points) {
+  const cleaned = (points || [])
+    .filter((p) => p && Number.isFinite(p.tSec) && Number.isFinite(p.f0Hz))
+    .filter((p) => p.f0Hz > 50 && p.f0Hz < 1200)
+    .sort((a, b) => a.tSec - b.tSec);
+  if (cleaned.length < 12) return 96;
+
+  const frames = cleaned.map((p) => ({ tSec: p.tSec, midi: hzToMidi(p.f0Hz) }));
+  const smoothed = medianSmooth(frames, 5);
+  const onsets = [smoothed[0].tSec];
+  const tol = 0.55;
+  for (let i = 1; i < smoothed.length; i++) {
+    const f = smoothed[i];
+    const prev = smoothed[i - 1];
+    const jump = Math.abs(f.midi - prev.midi);
+    const gap = f.tSec - prev.tSec > 0.14;
+    if (jump > tol || gap) onsets.push(f.tSec);
+  }
+  if (onsets.length < 3) return 96;
+
+  let bestBpm = 96;
+  let bestScore = Infinity;
+  for (let bpm = 72; bpm <= 132; bpm += 2) {
+    const secPerBeat = 60 / bpm;
+    let score = 0;
+    for (const t of onsets) {
+      const beat = t / secPerBeat;
+      const q = Math.round(beat * 4) / 4;
+      score += Math.abs(beat - q);
+    }
+    if (score < bestScore) {
+      bestScore = score;
+      bestBpm = bpm;
+    }
+  }
+  return bestBpm;
+}
+
 export function pitchPointsToMelody(points, opts) {
-  const bpm = clampNum(opts.bpm, 40, 220, 96);
   const meter = opts.meter === "6/8" ? "6/8" : "4/4";
   const maxSeconds = clampNum(opts.maxSeconds, 1, 120, 60);
-  const secPerBeat = 60 / bpm;
 
   // 1) Clean + trim
   const cleaned = (points || [])
@@ -33,7 +74,16 @@ export function pitchPointsToMelody(points, opts) {
     .filter((p) => p.tSec >= 0 && p.tSec <= maxSeconds && p.f0Hz > 50 && p.f0Hz < 1200)
     .sort((a, b) => a.tSec - b.tSec);
 
-  if (cleaned.length < 8) return { tempoBpm: bpm, meter, notes: [] };
+  if (cleaned.length < 8) {
+    const fallbackBpm = clampNum(opts.bpm, 40, 220, 96);
+    return { tempoBpm: fallbackBpm, meter, notes: [] };
+  }
+
+  let bpm = clampNum(opts.bpm, 40, 220, 96);
+  if (opts.autoTempo !== false) {
+    bpm = estimateTempoBpmFromPoints(cleaned);
+  }
+  const secPerBeat = 60 / bpm;
 
   // 2) Convert to midi per frame, with mild smoothing
   const frames = cleaned.map((p) => ({ tSec: p.tSec, midi: hzToMidi(p.f0Hz) }));

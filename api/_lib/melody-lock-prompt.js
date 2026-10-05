@@ -36,6 +36,31 @@ function beatToSec(beat, bpm) {
   return (Number(beat) || 0) * (60 / tempo);
 }
 
+function buildLaSyllableLyrics(notes) {
+  const n = Math.min(Array.isArray(notes) ? notes.length : 0, 32);
+  if (n < 2) return "[Verse]\nla la";
+  const line = Array.from({ length: n }, () => "la").join(" ");
+  return `[Verse]\n${line}\n[Chorus]\n${line}`;
+}
+
+function buildMelodyLockBlockCompact(melody, opts = {}) {
+  const tempoBpm = Number(melody?.tempoBpm) || 96;
+  const meter = melody?.meter === "6/8" ? "6/8" : "4/4";
+  const notes = (Array.isArray(melody?.notes) ? melody.notes : []).slice(0, 24);
+  const keyLine = melody?.inferredKey || melody?.key || inferSimpleKey(notes);
+  const { head, lines } = formatNoteTimeline({ notes, tempoBpm, meter });
+  const raw = [
+    "Melody Lock (exact):",
+    head,
+    keyLine ? `Key: ${keyLine}.` : "",
+    ...lines,
+    "Play these pitches in this order for the full clip — no improvisation.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return rewriteMelodyLockPositive(raw);
+}
+
 function buildMelodyIntervalSteps(notes) {
   const list = Array.isArray(notes) ? notes : [];
   const midis = list.map((n) => Math.round(Number(n.midi))).filter(Number.isFinite);
@@ -213,51 +238,45 @@ function buildLyriaPromptWithMelodyLock(body, extra = {}, melodyLock = {}) {
 
 function buildLyriaMelodyLockFirstClipPrompt(melody, body, sourceKind, extra = {}) {
   const tempo = Math.round(Number(melody?.tempoBpm) || 96);
-  const block = buildMelodyLockBlock(melody, { sourceKind });
+  const block = buildMelodyLockBlockCompact(melody, { sourceKind });
   const intervalLine = buildMelodyIntervalSteps(melody?.notes || []);
-  const styleHint = String(body?.style || "").trim().slice(0, 140);
   const target = resolveDurationSec(body, true);
   const instrumental = Boolean(extra.instrumental ?? body?.instrumental);
-  const lyrics = String(extra.lyrics ?? body?.prompt ?? "").trim();
+  const noteLyrics = buildLaSyllableLyrics(melody?.notes || []);
   const lines = [
     `Create a ${target}-second clip. Tempo locked at ${tempo} BPM.`,
-    "Priority order: (1) pitch timeline and interval steps, (2) sparse groove, (3) mood/style last.",
-    styleHint ? `Mood hint only: ${styleHint}.` : "",
+    "This is a pitch-accuracy test: the lead line must match the written note timeline and semitone steps.",
     block,
     intervalLine,
     "Arrangement:",
-    `[0:00-0:${String(Math.min(30, target)).padStart(2, "0")}] Lead ${
-      instrumental ? "instrument (no words)" : "vocal"
-    } follows every pitch in the timeline; quarter-note kick; bass roots only; no busy fills.`,
+    `[0:00-0:${String(Math.min(30, target)).padStart(2, "0")}] One dry monophonic lead (synth or hum-like tone) on the timeline; soft kick on quarter notes only; no chords, pads, or counter-melodies.`,
+    "",
+    "Lyrics:",
+    noteLyrics,
     "",
     instrumental
-      ? "Instrumental only — no vocals. The lead instrument must play the timeline pitches."
-      : "Sing only the lyrics below. Do not sing instruction text above.",
-    "",
+      ? "Instrumental mix — no sung words; the lead instrument still follows the same pitch timeline as the la syllable map above."
+      : "Sing the la syllables on the written pitches only.",
   ];
-  if (!instrumental) {
-    lines.push("Lyrics:", lyrics || "[Verse]\nLa la la\n[Chorus]\nLa la la la");
-  }
   return rewriteMelodyLockPositive(lines.filter(Boolean).join("\n")).slice(0, 8000);
 }
 
 function buildLyriaMelodyLockMinimalClipPrompt(melody, body, sourceKind, extra = {}) {
   const tempo = Math.round(Number(melody?.tempoBpm) || 96);
-  const block = buildMelodyLockBlockStrengthened(melody, { sourceKind });
+  const block = buildMelodyLockBlockCompact(melody, { sourceKind });
   const intervalLine = buildMelodyIntervalSteps(melody?.notes || []);
-  const lyrics = String(extra.lyrics ?? body?.prompt ?? "").trim();
+  const noteLyrics = buildLaSyllableLyrics(melody?.notes || []);
   const target = resolveDurationSec(body, true);
   const lines = [
-    `Second pass — same ${tempo} BPM clip. Match the pitch grid exactly; ignore earlier arrangement drift.`,
+    `Second pass — same ${tempo} BPM. Copy the pitch grid exactly; no new notes.`,
     block,
     intervalLine,
+    block,
     "Arrangement:",
-    `[0:00-0:${String(Math.min(30, target)).padStart(2, "0")}] Lead vocal or whistle on the written pitches only; repeat the same interval pattern every phrase; sparse kick.`,
-    "",
-    "Sing only the lyrics below. Do not sing any text above this line.",
+    `[0:00-0:${String(Math.min(30, target)).padStart(2, "0")}] Monophonic lead only; repeat the same interval pattern; sparse kick.`,
     "",
     "Lyrics:",
-    lyrics || "[Verse]\nHum tune\n[Chorus]\nSame hum tune",
+    noteLyrics,
   ];
   return rewriteMelodyLockPositive(lines.join("\n")).slice(0, 8000);
 }

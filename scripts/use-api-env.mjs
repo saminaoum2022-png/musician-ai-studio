@@ -88,11 +88,6 @@ async function main() {
     || String(process.env.NABAD_OPENAI_LYRICS_UI || "").trim() === "1"
     || /^(1|true|yes)$/i.test(String(process.env.NABAD_OPENAI_LYRICS_UI || "").trim());
 
-  const melodyLockUi =
-    envName === "staging"
-    || String(process.env.NABAD_MELODY_LOCK_UI || "").trim() === "1"
-    || /^(1|true|yes)$/i.test(String(process.env.NABAD_MELODY_LOCK_UI || "").trim());
-
   const payload = {
     supabaseUrl: String(d.supabaseUrl).trim().replace(/\/+$/, ""),
     supabaseAnonKey: String(d.supabaseAnonKey).trim(),
@@ -108,7 +103,6 @@ async function main() {
     nabadGoldUi: goldUi,
     nabadLiveListenUi: liveListenUi,
     nabadOpenaiLyricsUi: openaiLyricsUi,
-    nabadMelodyLockUi: melodyLockUi,
   };
 
   const body = `window.__NABAD_CLIENT_ENV__ = ${JSON.stringify(payload, null, 2)};\n`;

@@ -7,8 +7,6 @@ const GENERIC_TITLES = new Set([
   "lyria song",
   "nabad clip",
   "template clip",
-  "original hum hook",
-  "melody lock test",
   "your song",
 ]);
 

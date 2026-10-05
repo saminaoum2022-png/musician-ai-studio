@@ -31,13 +31,6 @@ import {
   handleProducerGenerationFailed,
 } from "./nabad-producer.js";
 import {
-  configureMelodyLockAdmin,
-  enterMelodyLockLab,
-  melodyLockAdminEnabled,
-  openMelodyLockFromSettings,
-  syncMelodyLockSettingsRow,
-} from "./melody-lock-admin.js";
-import {
   configureNabadVibe,
   syncNabadVibeCreateTab,
   nabadVibeEnabled,
@@ -4975,7 +4968,7 @@ function tabbarDockBlocked() {
   if (document.body.classList.contains("echoComposeOpen")) return true;
   if (document.body.classList.contains("isDiscoverReelPlayer")) return true;
   const route = String(document.body.getAttribute("data-route") || "").trim();
-  if (route === "player" || route === "studio" || route === "nabad-producer" || route === "melody-lock") return true;
+  if (route === "player" || route === "studio" || route === "nabad-producer") return true;
   try {
     if (typeof isCreateChooserOpen === "function" && isCreateChooserOpen()) return true;
   } catch {}
@@ -6062,7 +6055,7 @@ function applyRoute({ passGen } = {}) {
     "intro", "onboarding", "music-preferences", "first-song", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : []),
-    "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "nabad-producer", "melody-lock", "advanced", "user", "credits", "pro", "sounds", "singer-studio",
+    "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "nabad-producer", "advanced", "user", "credits", "pro", "sounds", "singer-studio",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "auth" : route);
@@ -6219,7 +6212,7 @@ function applyRoute({ passGen } = {}) {
   // visitors don't hit a wall before discovering the rest of the product.
   const sharedTrackId = parseSharedTrackIdFromLocation();
   wanted = demoteBareCreateHub(wanted);
-  const protectedRoutes = new Set(["generate", "profile", "profile-edit", "friends", "activity", "mashup", "player", "vocal", "stems", "studio", "nabad-producer", "melody-lock", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
+  const protectedRoutes = new Set(["generate", "profile", "profile-edit", "friends", "activity", "mashup", "player", "vocal", "stems", "studio", "nabad-producer", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
   if (!isLoggedIn && protectedRoutes.has(wanted)) {
     if (wanted === "player" && sharedTrackId) {
       // Listen-only share links — do not bounce guests to sign-in.
@@ -6511,35 +6504,6 @@ function applyRoute({ passGen } = {}) {
       blockProducer();
     }
   }
-  if (wanted === "melody-lock") {
-    const enterLab = () => {
-      try {
-        enterMelodyLockLab();
-      } catch (e) {
-        console.warn("[melody-lock] enter", e);
-      }
-    };
-    const blockLab = () => {
-      try {
-        location.hash = "#/settings";
-      } catch {}
-      if (creditsState.loaded && !melodyLockAdminEnabled()) {
-        try {
-          showToast("Melody Lock lab is admin + staging only.", { icon: "!", durationMs: 3200 });
-        } catch {}
-      }
-    };
-    if (melodyLockAdminEnabled()) {
-      enterLab();
-    } else if (!creditsState.loaded) {
-      void refreshMyCredits({ silent: true }).then(() => {
-        if (melodyLockAdminEnabled()) enterLab();
-        else blockLab();
-      });
-    } else {
-      blockLab();
-    }
-  }
   if (wanted === "settings") {
     renderPersonaSelect();
     try { refreshSettingsMusicPrefsRow(); } catch {}
@@ -6548,7 +6512,6 @@ function applyRoute({ passGen } = {}) {
     try { syncSettingsOrbMode(); } catch {}
     try { syncSettingsThemePicker(); } catch {}
     try { syncSettingsMusicProviderRow(); } catch {}
-    try { syncMelodyLockSettingsRow(); } catch {}
     try { syncSettingsProSingerRows(); } catch {}
     if (openSingerStudioAfterRoute) {
       window.setTimeout(() => { try { void openSingerStudioSheet(); } catch {} }, 120);
@@ -8647,10 +8610,6 @@ document.getElementById("btnSettingsPreviewFirstSong")?.addEventListener("click"
   trySignupCoachWelcomeAfterAuth(uid);
   try { location.hash = "#/generate"; } catch {}
   try { applyRoute(); } catch {}
-});
-document.getElementById("settingsMelodyLockRow")?.addEventListener("click", (e) => {
-  e.preventDefault();
-  openMelodyLockFromSettings();
 });
 const btnSettingsMusicPrefs = document.getElementById("btnSettingsMusicPrefs");
 if (btnSettingsMusicPrefs) {
@@ -35927,7 +35886,6 @@ async function refreshMyCredits({ silent = false } = {}) {
     try { syncCreateGenerateDock(); } catch {}
     try { syncNabadClipHomeCard(); } catch {}
     try { syncNabadProducerHomeCard(); } catch {}
-    try { syncMelodyLockSettingsRow(); } catch {}
     try { syncNabadVibeCreateTab(); } catch {}
     try { syncNabadSongEditCreateTab(); } catch {}
     try { syncLiveListenChrome(); } catch {}
@@ -85553,36 +85511,6 @@ try {
   syncNabadProducerHomeCard();
   resumeNabadProducerGenerationPollIfNeeded();
 } catch (e) { console.warn("[nabad-producer] init", e); }
-
-try {
-  configureMelodyLockAdmin({
-    apiFetch: (path, opts) => apiFetch(path, opts),
-    getAuthToken: () => getSupabaseAuthToken(),
-    showToast: (m, o) => {
-      try {
-        showToast(m, o);
-      } catch {}
-    },
-    scheduleApplyRoute,
-    isAdmin: () => Boolean(creditsState.isAdmin),
-    musicStatusPath: (taskId) => musicStatusApiPath(taskId),
-    normalizeAudioUrlForPlayback: (url, songId) => normalizeAudioUrlForPlayback(url, songId),
-    toAudioProxyUrl: (url) => toAudioProxyUrl(url),
-    resolvePlaybackUrl: (url) => {
-      const s = String(url || "").trim();
-      if (!s) return "";
-      const leaf = unwrapInnermostHttpAudioUrl(s) || s;
-      return (
-        libraryPlaybackUrl({ url: leaf }) ||
-        normalizeAudioUrlForPlayback(toAudioProxyUrl(leaf) || leaf)
-      );
-    },
-    playInline: (url, label, source) => playInline(url, label, source || { type: "melody_lock" }),
-  });
-  syncMelodyLockSettingsRow();
-} catch (e) {
-  console.warn("[melody-lock] init", e);
-}
 
 try {
   configureNabadVibe({

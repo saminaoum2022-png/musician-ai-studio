@@ -37,12 +37,6 @@ export const NABAD_STICKERS_PUBLIC_SHIPPED = false;
  */
 export const NABAD_LIVE_LISTEN_PUBLIC_SHIPPED = true;
 
-/**
- * When true: Melody Lock is live for users in Create.
- * Keep false — admin staging lab uses baked nabadMelodyLockUi + isAdmin.
- */
-export const NABAD_MELODY_LOCK_PUBLIC_SHIPPED = false;
-
 /** When false: hide play counts on Discover cards, charts, and challenge heroes (sorting unchanged). */
 export const DISCOVER_SHOW_PLAY_COUNTS = false;
 

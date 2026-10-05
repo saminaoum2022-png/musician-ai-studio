@@ -113,6 +113,10 @@ const {
   finalizeMelodyLockRun,
 } = require("../_lib/melody-lock-lyria");
 const { buildLyriaPromptWithMelodyLock } = require("../_lib/melody-lock-prompt");
+const {
+  resolveLyriaDisplayTitle,
+  resolveLyriaStoredDisplayTitle,
+} = require("../_lib/lyria-display-title");
 
 const LYRIA_FULL_SONG_FLOW = "lyria_full_song";
 const FULL_SONG_COST = 15;
@@ -543,9 +547,16 @@ async function runLyriaMelodyLockGenerationJob({
     const displayLyrics = sanitizeLyriaLyricsForSinging(
       String(lyrics || extractLyriaDisplayLyrics(upstream.data) || ""),
     );
+    const displayTitle = resolveLyriaDisplayTitle({
+      title,
+      lyrics: displayLyrics,
+      style: stylePrompt || body?.style,
+      clip,
+      instrumental,
+    });
     const statusPayload = buildSunoStatusPayload({
       taskId,
-      title,
+      title: displayTitle,
       lyrics: displayLyrics,
       audioUrl: archived.url,
       audioId,
@@ -736,9 +747,16 @@ async function runLyriaGenerationJob({
           "",
       ),
     );
+    const displayTitle = resolveLyriaStoredDisplayTitle(body, {
+      title,
+      lyrics: displayLyrics,
+      style: stylePrompt || body?.style,
+      clip: false,
+      instrumental,
+    });
     const statusPayload = buildSunoStatusPayload({
       taskId,
-      title,
+      title: displayTitle,
       lyrics: displayLyrics,
       audioUrl: archived.url,
       audioId,
@@ -903,9 +921,16 @@ async function runLyriaClipGenerationJob({
           "",
       ),
     );
+    const displayTitle = resolveLyriaStoredDisplayTitle(body, {
+      title,
+      lyrics: displayLyrics,
+      style: stylePrompt || body?.style,
+      clip: true,
+      instrumental,
+    });
     const statusPayload = buildSunoStatusPayload({
       taskId,
-      title,
+      title: displayTitle,
       lyrics: displayLyrics,
       audioUrl: archived.url,
       audioId,
@@ -1463,8 +1488,9 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
 
   const lyrics = String(body?.prompt || "").trim();
   const stylePrompt = buildLyriaDirectStylePrompt(body);
+  const instrumental =
+    body?.instrumental === true || body?.instrumental === 1 || String(body?.instrumental || "") === "1";
   const title = String(body?.title || "").trim();
-  const instrumental = Boolean(body?.instrumental);
   const taskId = newTaskId("lyria");
   const audioId = `${taskId}_a`;
   const model = resolveLyriaModel(
@@ -1635,9 +1661,9 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
 
   const lyrics = String(body?.prompt || "").trim();
   const stylePrompt = buildMusicPrompt(body);
-  const title = String(body?.title || "").trim();
   const instrumental =
     body?.instrumental === true || body?.instrumental === 1 || String(body?.instrumental || "") === "1";
+  const title = String(body?.title || "").trim();
   const taskId = newTaskId("lyria");
   const audioId = `${taskId}_a`;
   const model = resolveLyriaModel(body?.lyriaModel || "clip");

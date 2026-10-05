@@ -10,6 +10,7 @@ import { isArabiziLyricsLanguage } from "./arabizi.js";
 import { generateArrangement, randomizeParams } from "./arrangement.js";
 import { renderArrangementToWav } from "./render.js";
 import { recordHumToMelody } from "./melody/extract.js";
+import { resolveLyriaDisplayTitle } from "./lyria-display-title.js";
 import { mixStemsToWav } from "./studio/mixer.js";
 import { encodeWav16 } from "./wav.js";
 import { initMentor, resetMentorSession } from "./mentor.js";
@@ -8242,6 +8243,7 @@ function resetCreateAdvancedPanel() {
   try { syncCreateLyriaMaqamGroup(); } catch {}
   try { syncStyleUi(); } catch {}
   try { syncElevenSongLengthPanel(); } catch {}
+  try { syncCreateSongTitleField(); } catch {}
 }
 
 function resetAdvancedOptionsToDefaults() {
@@ -8709,6 +8711,7 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   syncSettingsGeminiProducerRow();
   syncSettingsNabadVocalChainRow(p);
   try { syncElevenSongLengthPanel(); } catch {}
+  try { syncCreateSongTitleField(); } catch {}
   try { syncCreateLyriaMaqamGroup(); } catch {}
 }
 
@@ -31305,6 +31308,7 @@ function setMusicProviderPref(pref) {
   try { syncCreateHintForSelectedEngine(); } catch {}
   try { syncCreateGenerateDock(); } catch {}
   try { syncElevenSongLengthPanel(); } catch {}
+  try { syncCreateSongTitleField(); } catch {}
 }
 
 function formatElevenMusicModelLabel(raw) {
@@ -31402,6 +31406,36 @@ function adminProviderCapabilityBlockReason({
     return `${label} doesn't support ${flow} yet — switch Settings → engine to Suno or ElevenLabs to test that flow.`;
   }
   return "";
+}
+
+/** Template / Spark / Occasion / Challenge — do not apply scratch Lyria title rules. */
+function isLyriaShelfCampaignCreateFlow() {
+  if (Boolean(activeTemplateSparkShelfMeta())) return true;
+  if (challengePromptContext()) return true;
+  const ctx = loadCreateChallengeContext();
+  if (ctx?.challenge) return true;
+  return false;
+}
+
+/** Admin Lyria clip/full or Nabad Clip hub — not from Discover shelf. */
+function isLyriaScratchCreateFlow() {
+  if (isLyriaShelfCampaignCreateFlow()) return false;
+  return Boolean(useLyriaClipMusicProvider() || isNabadClipFlow() || useLyriaMusicProvider());
+}
+
+/** Lyria clip / 3.5 from scratch: optional title (blank → first ~2 words of lyrics). */
+function createLyriaSongTitleUiVisible() {
+  return isLyriaScratchCreateFlow();
+}
+
+function syncCreateSongTitleField() {
+  const field = document.getElementById("createSongTitleField");
+  const show = createLyriaSongTitleUiVisible();
+  if (field) {
+    field.hidden = !show;
+    field.style.display = show ? "" : "none";
+    field.setAttribute("aria-hidden", show ? "false" : "true");
+  }
 }
 
 /** Admin ElevenLabs: surface song length on Create (maps to music_length_ms). */
@@ -77917,10 +77951,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           templateSparkClip && pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object"
             ? { ...pendingSearchRemixMeta }
             : null;
-        const clipTitle =
-          String(els.sunoTitle?.value || "").trim() ||
-          String(remixMeta?.searchTemplateTitle || remixMeta?.challenge?.title || "").trim() ||
-          (templateSparkClip ? "Template clip" : useLyriaClipMusicProvider() ? "Lyria clip" : "Nabad Clip");
+        const clipShelf =
+          templateSparkClip || isLyriaShelfCampaignCreateFlow();
+        const clipTitle = clipShelf
+          ? String(els.sunoTitle?.value || "").trim() || "Generated song"
+          : resolveLyriaDisplayTitle({
+              title: String(els.sunoTitle?.value || "").trim(),
+              lyrics: finalPrompt,
+              style: clipStyle,
+              clip: true,
+              instrumental: Boolean(ideaClip && !finalPrompt),
+            });
         const clipChallenge =
           remixMeta?.challenge ||
           loadCreateChallengeContext()?.challenge ||
@@ -78454,6 +78495,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (creditsState.isAdmin) {
         payload.geminiProducer = getGeminiProducerPref() ? "1" : "0";
       }
+      if (isLyriaScratchCreateFlow() && useLyriaMusicProvider()) {
+        payload.title = resolveLyriaDisplayTitle({
+          title: payload.title,
+          lyrics: payload.prompt,
+          style: payload.style,
+          clip: false,
+          instrumental: shouldGenerateInstrumental,
+        });
+      }
       restoreCreateChallengeContext();
       const remixMeta =
         pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object"
@@ -78835,11 +78885,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         data?._ready === true,
       );
       savePendingBackendTask(sunoTaskId || "");
+      const genPendingTitle =
+        String(
+          isLyriaScratchCreateFlow() && useLyriaMusicProvider()
+            ? payload.title || els.sunoTitle?.value
+            : els.sunoTitle?.value || payload.title,
+        ).trim() || "Generated song";
       if (sunoTaskId) {
-        saveRecoverableGenerationTask(sunoTaskId, String(els.sunoTitle?.value || "").trim());
+        saveRecoverableGenerationTask(sunoTaskId, genPendingTitle);
         setGenerationPending({
           taskId: sunoTaskId,
-          title: String(els.sunoTitle?.value || "").trim(),
+          title: genPendingTitle,
           source: imageMoodAppliedForNextGen ? "photo" : "",
           photoCoverDataUrl: resolvePendingPhotoCoverDataUrl(),
           photoCoverOnly: imageMoodCoverOnlyForNextGen,
@@ -78850,7 +78906,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           startParallelCoverForTask(
             sunoTaskId,
             buildParallelCoverVariants(sunoTaskId, {
-              title: String(els.sunoTitle?.value || "").trim() || "Generated song",
+              title: genPendingTitle,
               meta: lastGenerationMeta,
               variantCount: isSingleVariantTask ? 1 : GENERATION_VARIANT_COUNT,
             }),
@@ -78907,7 +78963,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         sunoAudioId = String(data?.data?.audioId || data?.data?.audio_id || `${sunoTaskId}_a`).trim() || null;
         lastSunoFullUrl = altImmediateUrl;
         lastSunoProxyUrl = toAudioProxyUrl(altImmediateUrl);
-        lastSunoTitle = String(els.sunoTitle?.value || "").trim() || "Generated song";
+        lastSunoTitle = genPendingTitle;
         if (els.sunoFullLink) setLink(els.sunoFullLink, lastSunoProxyUrl || altImmediateUrl);
         if (els.btnLoadFull) els.btnLoadFull.disabled = false;
         try { await cacheGeneratedAudio(lastSunoProxyUrl || altImmediateUrl); } catch {}
@@ -79451,10 +79507,12 @@ function bindOptionChipRow(rowId, selectEl) {
     selectEl.dispatchEvent(new Event("change", { bubbles: true }));
     sync();
     try { syncElevenSongLengthPanel(); } catch {}
+  try { syncCreateSongTitleField(); } catch {}
   });
   selectEl.addEventListener("change", () => {
     sync();
     try { syncElevenSongLengthPanel(); } catch {}
+  try { syncCreateSongTitleField(); } catch {}
   });
   _optionChipRowSyncs.push(sync);
   sync();

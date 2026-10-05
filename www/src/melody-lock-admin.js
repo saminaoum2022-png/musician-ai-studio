@@ -4,6 +4,7 @@
 import { NABAD_MELODY_LOCK_PUBLIC_SHIPPED } from "./feature-flags.js";
 import { recordHumToMelody } from "./melody/extract.js";
 import { playMelodyPreview } from "./melody/preview.js";
+import { resolveLyriaDisplayTitle } from "./lyria-display-title.js";
 
 let bridge = {};
 
@@ -130,6 +131,9 @@ function render() {
           <label class="melodyLockRadio"><input type="radio" name="melodyLockDuration" value="30" ${state.targetSeconds === 30 ? "checked" : ""} /> 30 seconds</label>
           <label class="melodyLockRadio"><input type="radio" name="melodyLockDuration" value="60" ${state.targetSeconds === 60 ? "checked" : ""} /> 60 seconds</label>
         </fieldset>
+        <label class="field"><span class="label">Song title</span>
+          <input id="melodyLockTitle" type="text" placeholder="Blank = first 2 words of lyrics" value="" />
+        </label>
         <label class="field"><span class="label">Style (secondary — melody grid wins)</span>
           <input id="melodyLockStyle" type="text" value="${escapeHtml(defaultStyleValue())}" />
         </label>
@@ -393,6 +397,14 @@ async function generateWithLyria35() {
   const style = rootEl()?.querySelector("#melodyLockStyle")?.value?.trim() || defaultStyleValue();
   const prompt = rootEl()?.querySelector("#melodyLockLyrics")?.value?.trim() || "[Verse]\nLa la la\n[Chorus]\nLa la la la";
   const instrumental = Boolean(rootEl()?.querySelector("#melodyLockInstrumental")?.checked);
+  const titleInput = rootEl()?.querySelector("#melodyLockTitle")?.value?.trim() || "";
+  const title = resolveLyriaDisplayTitle({
+    title: titleInput,
+    lyrics: prompt,
+    style,
+    clip: duration <= 45,
+    instrumental,
+  });
   try {
     toast(`Starting Lyria 3.5 (~${duration}s cap)…`, { icon: "♪", durationMs: 2500 });
     const r = await apiFetch("/api/music/generate?provider=lyria", {
@@ -401,7 +413,7 @@ async function generateWithLyria35() {
       body: JSON.stringify({
         lyriaModel: "lyria-3.5",
         duration,
-        title: "Original hum hook",
+        title,
         style,
         prompt,
         instrumental: instrumental ? "1" : "0",

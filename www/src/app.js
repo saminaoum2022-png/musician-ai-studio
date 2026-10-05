@@ -85508,6 +85508,18 @@ try {
     scheduleApplyRoute,
     isAdmin: () => Boolean(creditsState.isAdmin),
     musicStatusPath: (taskId) => musicStatusApiPath(taskId),
+    normalizeAudioUrlForPlayback: (url, songId) => normalizeAudioUrlForPlayback(url, songId),
+    toAudioProxyUrl: (url) => toAudioProxyUrl(url),
+    resolvePlaybackUrl: (url) => {
+      const s = String(url || "").trim();
+      if (!s) return "";
+      const leaf = unwrapInnermostHttpAudioUrl(s) || s;
+      return (
+        libraryPlaybackUrl({ url: leaf }) ||
+        normalizeAudioUrlForPlayback(toAudioProxyUrl(leaf) || leaf)
+      );
+    },
+    playInline: (url, label, source) => playInline(url, label, source || { type: "melody_lock" }),
   });
   syncMelodyLockSettingsRow();
 } catch (e) {

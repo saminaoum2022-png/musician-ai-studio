@@ -2,6 +2,7 @@
  * Melody Lock — admin-only lab UI (staging bake). Drop if we don't ship the feature.
  */
 import { NABAD_MELODY_LOCK_PUBLIC_SHIPPED } from "./feature-flags.js";
+import { recordHumToMelody } from "./melody/extract.js";
 
 let bridge = {};
 
@@ -53,12 +54,18 @@ function escapeHtml(s) {
     .replace(/>/g, "&gt;");
 }
 
+function defaultStyleValue() {
+  const bpm = state.tempoBpm > 0 ? state.tempoBpm : 96;
+  return `sparse pop groove, ${bpm} BPM, melody-forward`;
+}
+
 const state = {
   melodyId: "",
   notes: [],
   tempoBpm: 0,
   inferredKey: "",
   lyriaPreview: "",
+  analyzeProvider: "",
   taskId: "",
   pollTimer: 0,
   recording: false,
@@ -89,7 +96,8 @@ function render() {
 
       <div class="melodyLockCard">
         <h2>1 · Capture</h2>
-        <p class="melodyLockMuted">Record ~12s hum, or use fixture (no mic) when <code>MELODY_LOCK_USE_FIXTURE=1</code> on API.</p>
+        <p class="melodyLockMuted">Record ~12s hum — pitch → notes on device, sent as <code>clientMelody</code>. After analyze you should see <strong>analyze: client_pitch</strong> (not fixture).</p>
+        ${state.analyzeProvider === "fixture" ? '<p class="melodyLockWarn">⚠ Fixture tune — not your hum. Turn off <code>MELODY_LOCK_USE_FIXTURE</code> on staging and record again.</p>' : ""}
         <div class="melodyLockRow">
           <button type="button" class="primary" id="melodyLockBtnRecord" ${state.recording ? "disabled" : ""}>${state.recording ? "Recording…" : "Record hum"}</button>
           <button type="button" class="ghost" id="melodyLockBtnFixture">Analyze fixture</button>
@@ -98,20 +106,24 @@ function render() {
 
       <div class="melodyLockCard">
         <h2>2 · Analyze result</h2>
-        <p id="melodyLockAnalyzeMeta" class="melodyLockMeta">${state.melodyId ? `melodyId: <code>${escapeHtml(state.melodyId)}</code> · ${state.notes.length} notes · ${state.tempoBpm} BPM · ${escapeHtml(state.inferredKey || "—")}` : "Not analyzed yet."}</p>
+        <p id="melodyLockAnalyzeMeta" class="melodyLockMeta">${state.melodyId ? `melodyId: <code>${escapeHtml(state.melodyId)}</code> · ${state.notes.length} notes · ${state.tempoBpm} BPM · ${escapeHtml(state.inferredKey || "—")}${state.analyzeProvider ? ` · analyze: ${escapeHtml(state.analyzeProvider)}` : ""}` : "Not analyzed yet."}</p>
         <div class="melodyLockNotes">${notesPreview || "—"}</div>
       </div>
 
       <div class="melodyLockCard">
         <h2>3 · Generate (Lyria clip ~30s)</h2>
-        <label class="field"><span class="label">Style</span>
-          <input id="melodyLockStyle" type="text" value="Arabic pop, warm, 104 BPM" />
+        <label class="field"><span class="label">Style (secondary — melody grid wins)</span>
+          <input id="melodyLockStyle" type="text" value="${escapeHtml(defaultStyleValue())}" />
         </label>
-        <label class="field"><span class="label">Lyrics</span>
+        <label class="field melodyLockCheck">
+          <input id="melodyLockInstrumental" type="checkbox" checked />
+          <span>Instrumental clip (recommended — vocals often hide the tune)</span>
+        </label>
+        <label class="field"><span class="label">Lyrics (ignored when instrumental)</span>
           <textarea id="melodyLockLyrics" rows="3">[Verse]
-Test line
+La la la
 [Chorus]
-Hook hook</textarea>
+La la la la</textarea>
         </label>
         <button type="button" class="primary" id="melodyLockBtnGenerate" ${state.melodyId ? "" : "disabled"}>Generate with Melody Lock</button>
         <p id="melodyLockTaskMeta" class="melodyLockMeta">${state.taskId ? `taskId: <code>${escapeHtml(state.taskId)}</code>` : ""}</p>
@@ -142,16 +154,47 @@ Hook hook</textarea>
   root.querySelector("#melodyLockBtnRefreshRun")?.addEventListener("click", () => void refreshRun());
   root.querySelector("#melodyLockEarPass")?.addEventListener("click", () => void submitEar("pass"));
   root.querySelector("#melodyLockEarFail")?.addEventListener("click", () => void submitEar("fail"));
-  root.querySelector("#melodyLockBtnPlay")?.addEventListener("click", () => {
-    const url = state.lastStatus?.audioUrl;
-    if (!url) return;
-    try {
-      const a = new Audio(url);
-      void a.play();
-    } catch {
-      window.open(url, "_blank");
+  root.querySelector("#melodyLockBtnPlay")?.addEventListener("click", () => void playLastClip());
+}
+
+function resolveClipPlaybackUrl(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (typeof bridge.resolvePlaybackUrl === "function") {
+    return bridge.resolvePlaybackUrl(s) || "";
+  }
+  if (typeof bridge.normalizeAudioUrlForPlayback === "function") {
+    let u = s;
+    if (typeof bridge.toAudioProxyUrl === "function") {
+      u = bridge.toAudioProxyUrl(u) || u;
     }
-  });
+    return bridge.normalizeAudioUrlForPlayback(u) || u;
+  }
+  return s;
+}
+
+async function playLastClip() {
+  const raw = state.lastStatus?.audioUrl;
+  const url = resolveClipPlaybackUrl(raw);
+  if (!url) {
+    toast("No playable URL on this clip yet.", { icon: "!", durationMs: 3500 });
+    return;
+  }
+  try {
+    if (typeof bridge.playInline === "function") {
+      await bridge.playInline(url, "Melody Lock clip", {
+        type: "melody_lock",
+        taskId: state.taskId,
+      });
+      toast("Playing — check volume and the silent switch.", { icon: "♪", durationMs: 3500 });
+      return;
+    }
+    const a = new Audio(url);
+    a.volume = 1;
+    await a.play();
+  } catch (e) {
+    toast(e?.message || "Playback failed on this device.", { icon: "!", durationMs: 5000 });
+  }
 }
 
 function formatScoreBlock() {
@@ -212,11 +255,11 @@ async function recordHumSeconds(sec = 12) {
   });
 }
 
-async function postAnalyze(body) {
+async function postAnalyze(payload) {
   const r = await apiFetch("/api/music/melody-lock/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data?.error || `Analyze failed (${r.status})`);
@@ -229,6 +272,7 @@ function applyAnalyzeResult(data) {
   state.tempoBpm = Number(data.tempoBpm || data.inferredBpm || data.melody?.tempoBpm) || 0;
   state.inferredKey = String(data.inferredKey || data.melody?.inferredKey || "").trim();
   state.lyriaPreview = String(data.lyriaPromptPreview || "").trim();
+  state.analyzeProvider = String(data.analyzeProvider || "").trim();
 }
 
 async function recordAndAnalyze() {
@@ -236,12 +280,42 @@ async function recordAndAnalyze() {
   state.recording = true;
   render();
   try {
-    toast("Recording ~12s — hum your tune", { icon: "🎤", durationMs: 3200 });
-    const audio = await recordHumSeconds(12);
-    toast("Analyzing…", { icon: "⏳", durationMs: 2000 });
-    const data = await postAnalyze({ sourceKind: "hum", audio });
+    toast("Recording ~12s — hum one clear tune", { icon: "🎤", durationMs: 3200 });
+    /** @type {import("./melody/postprocess.js").Melody | null} */
+    let captured = null;
+    const session = await recordHumToMelody({
+      maxSeconds: 12,
+      bpm: 96,
+      meter: "4/4",
+      onDone: (m) => {
+        captured = m;
+      },
+      onMicDenied: (err) => {
+        throw err || new Error("Microphone permission denied.");
+      },
+    });
+    await new Promise((resolve) => {
+      setTimeout(() => {
+        try {
+          session.stop();
+        } catch {}
+        resolve();
+      }, 12200);
+    });
+    await new Promise((r) => setTimeout(r, 250));
+    if (!captured?.notes?.length) {
+      throw new Error("No pitch detected — hum louder, closer to the mic, one note at a time.");
+    }
+    toast("Analyzing your contour…", { icon: "⏳", durationMs: 2000 });
+    const data = await postAnalyze({ sourceKind: "hum", clientMelody: captured, audio: "" });
     applyAnalyzeResult(data);
-    toast(data.persisted === false ? "Analyzed (not saved — run Supabase SQL)" : "Melody analyzed", { icon: "✓" });
+    const prov = state.analyzeProvider || "unknown";
+    toast(
+      data.persisted === false
+        ? `Notes from ${prov} (not saved — run Supabase SQL)`
+        : `Melody analyzed (${prov})`,
+      { icon: "✓" },
+    );
   } catch (e) {
     toast(e?.message || "Record/analyze failed", { icon: "!", durationMs: 5000 });
   } finally {
@@ -264,10 +338,15 @@ async function analyzeFixture() {
 
 async function generateClip() {
   if (!state.melodyId) return;
-  const style = rootEl()?.querySelector("#melodyLockStyle")?.value?.trim() || "Arabic pop, warm";
-  const prompt = rootEl()?.querySelector("#melodyLockLyrics")?.value?.trim() || "[Verse]\nTest\n[Chorus]\nHook";
+  if (state.analyzeProvider === "fixture") {
+    toast("Fixture melody — record your hum first (client_pitch).", { icon: "!", durationMs: 5500 });
+    return;
+  }
+  const style = rootEl()?.querySelector("#melodyLockStyle")?.value?.trim() || defaultStyleValue();
+  const prompt = rootEl()?.querySelector("#melodyLockLyrics")?.value?.trim() || "[Verse]\nLa la la\n[Chorus]\nLa la la la";
+  const instrumental = Boolean(rootEl()?.querySelector("#melodyLockInstrumental")?.checked);
   try {
-    toast("Starting Lyria clip…", { icon: "♪", durationMs: 2500 });
+    toast("Starting Lyria clip (melody-first prompt)…", { icon: "♪", durationMs: 2500 });
     const r = await apiFetch("/api/music/generate?provider=lyria", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -277,6 +356,7 @@ async function generateClip() {
         title: "Melody Lock test",
         style,
         prompt,
+        instrumental: instrumental ? "1" : "0",
         geminiProducer: "0",
         melodyLock: { melodyId: state.melodyId, preferClip: true },
       }),

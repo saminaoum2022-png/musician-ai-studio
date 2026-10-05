@@ -21,11 +21,36 @@ const FIXTURE_MELODY = Object.freeze({
   ],
 });
 
+function hasBasicPitchWorker() {
+  return Boolean(String(process.env.MELODY_LOCK_BASIC_PITCH_URL || "").trim());
+}
+
 function useFixtureAnalyze() {
   const force = String(process.env.MELODY_LOCK_USE_FIXTURE || "").trim();
-  if (force === "1" || force.toLowerCase() === "true") return true;
-  const url = String(process.env.MELODY_LOCK_BASIC_PITCH_URL || "").trim();
-  return !url;
+  return force === "1" || force.toLowerCase() === "true";
+}
+
+function normalizeClientMelody(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const tempoBpm = Math.round(Number(raw.tempoBpm) || 96);
+  const meter = raw.meter === "6/8" ? "6/8" : "4/4";
+  const notes = (Array.isArray(raw.notes) ? raw.notes : [])
+    .map((n) => ({
+      startBeat: Number(n.startBeat) || 0,
+      durationBeats: Math.max(0.25, Number(n.durationBeats) || 0.25),
+      midi: Math.round(Number(n.midi)),
+    }))
+    .filter((n) => Number.isFinite(n.midi))
+    .slice(0, 64);
+  if (notes.length < 2) return null;
+  const inferredKey = String(raw.inferredKey || raw.key || "").trim() || inferSimpleKey(notes);
+  return {
+    tempoBpm,
+    meter,
+    notes,
+    inferredKey,
+    contourSummary: summarizeContour(notes),
+  };
 }
 
 function quantizeNoteEvents(events, tempoBpm) {
@@ -121,17 +146,41 @@ async function analyzeWithBasicPitchWorker({ audioBase64, mimeType, sourceKind }
   }
 }
 
-async function analyzeHumAudio({ audioBase64, mimeType, sourceKind }) {
-  if (useFixtureAnalyze()) {
+async function analyzeHumAudio({ audioBase64, mimeType, sourceKind, clientMelody }) {
+  const hasAudio = String(audioBase64 || "").length > 200;
+  const client = normalizeClientMelody(clientMelody);
+
+  if (hasBasicPitchWorker() && hasAudio && !useFixtureAnalyze()) {
+    const worker = await analyzeWithBasicPitchWorker({ audioBase64, mimeType, sourceKind });
+    if (worker.ok) return worker;
+    if (client) {
+      return { ok: true, provider: "client_pitch_fallback", melody: client };
+    }
+    return worker;
+  }
+
+  if (client) {
+    return { ok: true, provider: "client_pitch", melody: client };
+  }
+
+  if (!hasAudio && (useFixtureAnalyze() || !hasBasicPitchWorker())) {
     return analyzeWithFixture();
   }
-  return analyzeWithBasicPitchWorker({ audioBase64, mimeType, sourceKind });
+
+  return {
+    ok: false,
+    error: hasBasicPitchWorker()
+      ? "Could not analyze audio — hum again or send clientMelody from the app."
+      : "No Basic Pitch worker yet — the app should send your hum notes (clientMelody), or tap Analyze fixture to test wiring.",
+  };
 }
 
 module.exports = {
   analyzeHumAudio,
   analyzeWithFixture,
   buildMelodyFromWorkerPayload,
+  normalizeClientMelody,
+  hasBasicPitchWorker,
   FIXTURE_MELODY,
   useFixtureAnalyze,
 };

@@ -37318,6 +37318,24 @@ body[data-route="melody-lock"] .generateOrb{ display: none !important; }
   margin: 0 0 10px;
 }
 .melodyLockBack{ margin-bottom: 4px; }
+.melodyLockWarn{
+  font-size: 0.82rem;
+  color: #ffb4a2;
+  background: rgba(255, 120, 80, 0.12);
+  border: 1px solid rgba(255, 120, 80, 0.35);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  line-height: 1.4;
+}
+.melodyLockCheck{
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+.melodyLockCheck input{ margin-top: 3px; }
 .settingsLinkRow{ width: 100%; text-align: left; cursor: pointer; border: none; background: transparent; color: inherit; font: inherit; }
 
 #nabadProducerRoot{

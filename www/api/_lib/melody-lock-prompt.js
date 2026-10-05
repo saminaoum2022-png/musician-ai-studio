@@ -171,6 +171,12 @@ function buildLyriaPromptWithMelodyLock(body, extra = {}, melodyLock = {}) {
       songKey: body?.songKey || melody?.inferredKey || "",
     });
   }
+  const clip =
+    extra.clip ??
+    (Boolean(body?.clip) || Boolean(body?.nabadClip) || Boolean(body?.adminLyriaClip));
+  if (strengthen && clip) {
+    return buildLyriaMelodyLockMinimalClipPrompt(melody, body, sourceKind, extra);
+  }
   const melodyBlock = strengthen
     ? buildMelodyLockBlockStrengthened(melody, { sourceKind })
     : buildMelodyLockBlock(melody, { sourceKind });
@@ -189,6 +195,24 @@ function buildLyriaPromptWithMelodyLock(body, extra = {}, melodyLock = {}) {
     songKey: body?.songKey || melody?.inferredKey || "",
   });
   return insertMelodyBlockIntoV2Prompt(base, melodyBlock);
+}
+
+function buildLyriaMelodyLockMinimalClipPrompt(melody, body, sourceKind, extra = {}) {
+  const block = buildMelodyLockBlockStrengthened(melody, { sourceKind });
+  const lyrics = String(extra.lyrics ?? body?.prompt ?? "").trim();
+  const target = resolveDurationSec(body, true);
+  const lines = [
+    `Create a song. Target length about ${target} seconds — hook-focused clip.`,
+    block,
+    "Arrangement:",
+    `[0:00 - 0:${String(Math.min(30, target)).padStart(2, "0")}] Lead vocal and one instrument share the written pitch contour; sparse kick and bass; same intervals every phrase.`,
+    "",
+    "Sing only the lyrics below. Do not sing any text above this line.",
+    "",
+    "Lyrics:",
+    lyrics || "[Verse]\nHum tune\n[Chorus]\nSame hum tune",
+  ];
+  return lines.join("\n").slice(0, 8000);
 }
 
 function resolveDurationSec(body, clip) {
@@ -219,6 +243,7 @@ module.exports = {
   buildMelodyLockBlock,
   buildMelodyLockBlockStrengthened,
   buildLyriaPromptWithMelodyLock,
+  buildLyriaMelodyLockMinimalClipPrompt,
   buildLyriaMelodyLockPreview,
   summarizeContour,
   inferSimpleKey,

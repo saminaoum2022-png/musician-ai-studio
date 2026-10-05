@@ -28,8 +28,16 @@ module.exports = async function handler(req, res) {
     const sourceKind = normalizeSourceKind(body?.sourceKind ?? body?.source_kind);
     const dataUrl = String(body?.audio || "").trim();
     const hasAudio = dataUrl.startsWith("data:audio/") || dataUrl.startsWith("data:video/");
-    if (!hasAudio && !useFixtureAnalyze()) {
-      return sendJson(res, 400, { error: "Send audio as data:audio/… base64, or enable fixture mode." });
+    const clientMelodyRaw = body?.clientMelody ?? body?.melodyJson ?? null;
+    const hasClientMelody =
+      clientMelodyRaw &&
+      typeof clientMelodyRaw === "object" &&
+      Array.isArray(clientMelodyRaw.notes) &&
+      clientMelodyRaw.notes.length >= 2;
+    if (!hasAudio && !hasClientMelody && !useFixtureAnalyze()) {
+      return sendJson(res, 400, {
+        error: "Send hum notes (clientMelody) from the app, audio for Basic Pitch, or use Analyze fixture.",
+      });
     }
     if (dataUrl.length > MAX_AUDIO_CHARS) {
       return sendJson(res, 413, { error: "Recording too large — keep it under ~20 seconds." });
@@ -44,7 +52,8 @@ module.exports = async function handler(req, res) {
       audioBase64 = m[2];
     }
 
-    const analyzed = await analyzeHumAudio({ audioBase64, mimeType, sourceKind });
+    const clientMelody = body?.clientMelody ?? body?.melodyJson ?? null;
+    const analyzed = await analyzeHumAudio({ audioBase64, mimeType, sourceKind, clientMelody });
     if (!analyzed.ok) {
       return sendJson(res, 502, { error: analyzed.error || "Analyze failed." });
     }

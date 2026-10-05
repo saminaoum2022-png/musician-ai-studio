@@ -3,7 +3,7 @@
  */
 const { lyriaGenerateMusic } = require("./lyria-upstream");
 const { buildLyriaPromptWithMelodyLock } = require("./melody-lock-prompt");
-const { analyzeHumAudio } = require("./melody-lock-analyze");
+const { analyzeHumAudio, hasBasicPitchWorker } = require("./melody-lock-analyze");
 const { compareMelodySimilarity } = require("./melody-lock-similarity");
 const { upsertMelodyLockRun, formatMelodyLockDetailLines } = require("./melody-lock-runs");
 
@@ -13,7 +13,6 @@ async function extractMelodyFromAudioBuffer(buffer, contentType, sourceKind) {
   if (!buffer?.length) return { ok: false, error: "empty_audio" };
   const b64 = buffer.toString("base64");
   const mime = String(contentType || "audio/mpeg").split(";")[0];
-  const dataUrl = `data:${mime};base64,${b64}`;
   const analyzed = await analyzeHumAudio({
     audioBase64: b64,
     mimeType: mime,
@@ -86,8 +85,11 @@ async function runMelodyLockLyriaAttempts({
       components: {},
       pass: false,
       threshold: Number(process.env.MELODY_LOCK_SCORE_THRESHOLD || 0.7),
+      skipped: false,
     };
-    if (extracted.ok && extracted.melody?.notes?.length) {
+    if (!hasBasicPitchWorker()) {
+      similarity.skipped = true;
+    } else if (extracted.ok && extracted.melody?.notes?.length) {
       similarity = compareMelodySimilarity(melodyLockCtx.melody.notes, extracted.melody.notes, {
         tempoBpm: melodyLockCtx.melody.tempoBpm,
       });
@@ -148,8 +150,9 @@ async function finalizeMelodyLockRun({
       melodyScorePass: Boolean(similarity.pass),
       melodyEarPass: "pending",
       melodyLockAttempt: best?.attempt || 1,
-      melodyLockMessage:
-        similarity.pass
+      melodyLockMessage: similarity.skipped
+        ? "Numeric score skipped (no Basic Pitch worker on output) — use ear pass/fail."
+        : similarity.pass
           ? "Tune scored above threshold — admin ear check still required."
           : "Tune scored below threshold — listen in admin and retry a new hum if needed.",
     },

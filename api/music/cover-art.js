@@ -181,20 +181,9 @@ async function fetchAbstractCoverImage({
     let fluxPrompt;
     if (useScratch) {
       const ctx = { ...fluxContext, userArtwork: fluxContext.userArtwork || userArtwork || "", seed };
-      const written = await writeFluxScene(ctx, seed);
-      if (written.scene) ctx.aiScene = written.scene;
-      if (written.attempted && !written.cached) {
-        await recordCoverUsage({
-          provider: "gemini",
-          kind: "cover_scene",
-          userId: ctx.userId || "",
-          ref: String(ctx.songId || "").slice(0, 120),
-          status: written.failed ? "failed" : "completed",
-        });
-      }
       const built = buildFluxScratchPrompt(ctx);
       fluxPrompt = built.prompt;
-      console.info("[music/cover-art] flux prompt (scratch)", built.source, fluxPrompt.length);
+      console.info("[music/cover-art] flux prompt (zero baseline)", built.source, fluxPrompt.length, fluxPrompt);
     } else {
       fluxPrompt = buildFluxCoverPrompt(prompt, {
         avoidTags,
@@ -497,10 +486,11 @@ module.exports = async function handler(req, res) {
           scene: "",
           occasionLabel: coverInput.occasionLabel,
           searchTemplateTitle: coverInput.searchTemplateTitle,
-          title: coverInput.title,
           mood: coverInput.mood,
           genre: coverInput.genre,
           style: coverInput.styleInput,
+          instrument: coverInput.instrument,
+          instrumentLabel: coverInput.instrumentLabel,
         },
       });
       if (!rendered.ok) {
@@ -582,10 +572,11 @@ module.exports = async function handler(req, res) {
         scene: "",
         occasionLabel: promptInput.occasionLabel,
         searchTemplateTitle: promptInput.searchTemplateTitle,
-        title: promptInput.title,
         mood: promptInput.mood,
         genre: promptInput.genre,
         style: promptInput.styleInput,
+        instrument: promptInput.instrument,
+        instrumentLabel: promptInput.instrumentLabel,
       },
     });
     if (!rendered.ok) {

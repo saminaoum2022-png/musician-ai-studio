@@ -47,7 +47,7 @@ const USER_DAYLIGHT_PALETTE =
  */
 
 /** Bump when cover prompt policy changes. */
-export const COVER_PROMPT_POLICY_VERSION = 29;
+export const COVER_PROMPT_POLICY_VERSION = 32;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -1175,31 +1175,22 @@ function compressPromptForFlux(prompt, maxLen) {
   return (lastComma > maxLen * 0.55 ? cut.slice(0, lastComma) : cut).trim();
 }
 
-export function buildFluxCoverPrompt(prompt, { avoidTags = "", visualMode = "", userArtwork = "", regen = false } = {}) {
-  const parsedAvoid = parseAvoidTagsList(avoidTags).slice(0, 4);
-  const suffixBits = [MINIMAL_TEXT_GUARD];
-  if (parsedAvoid.length) suffixBits.push(`avoid ${parsedAvoid.join(", ")}`);
-  const suffix = `. ${suffixBits.join(", ")}`;
-  const colorLock = regen ? REGEN_COLOR_LOCK : NABAD_COLOR_LOCK;
-  const baseBudget = Math.max(400, FLUX_PROMPT_MAX - suffix.length - colorLock.length - 4);
-  let base = compressPromptForFlux(String(prompt || "").trim(), baseBudget);
-  if (!/Nabad brand color grade/i.test(base)) {
-    base = `${colorLock}, ${base}`;
-  }
-  if (!/\bsafe margin|centered in frame|inside the (vertical )?(reel )?frame|9:16|viewport\b/i.test(base)) {
-    base = `${FLUX_REEL_PORTRAIT_FRAME}, ${base}`;
-  }
-  const mode = String(visualMode || "").toLowerCase();
-  if (mode === "still_life" || mode === "landscape") {
-    const lead = "photorealistic, ";
-    if (!/^photorealistic/i.test(base) && !/\bequalizer\b|\bwaveform\b|\babstract\b/i.test(base)) {
-      base = `${lead}${base}`;
-    }
-  }
-  const merged = scrubCandlesForFlux(`${base}${suffix}`.replace(/\s+/g, " ").trim(), {
-    userRequestedCandles: wantsCandleScene(userArtwork),
-  });
-  return merged.length > FLUX_PROMPT_MAX ? merged.slice(0, FLUX_PROMPT_MAX) : merged;
+/** Legacy COVER_FLUX_PROMPT_MODE=legacy only — same bare baseline as flux-prompt.cjs. */
+export function buildFluxCoverPrompt(_prompt, { userArtwork = "" } = {}) {
+  const userArt = positiveOnlyFluxUserHint(String(userArtwork || "").trim());
+  return (userArt || "music").slice(0, FLUX_PROMPT_MAX);
+}
+
+function positiveOnlyFluxUserHint(text) {
+  const NEG = /^\s*(?:no|not|without|avoid|never)\b/i;
+  return String(text || "")
+    .split(/[,;.\n]+/)
+    .map((c) => c.trim())
+    .filter(Boolean)
+    .filter((c) => !NEG.test(c))
+    .join(", ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function moodPaletteForBucket(bucketKey) {

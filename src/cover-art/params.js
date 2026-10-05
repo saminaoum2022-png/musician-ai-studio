@@ -137,6 +137,23 @@ function resolveArtworkHint(meta) {
   return occasionArtworkHintFromMeta(meta);
 }
 
+/** True only when the user typed an artwork hint (not occasion auto-hints). */
+export function userExplicitArtworkHint(meta, opts = {}) {
+  const m = meta && typeof meta === "object" ? meta : {};
+  return Boolean(
+    String(opts.artworkHint || opts.artworkStyle || m.artworkHint || m.artworkStyle || "").trim(),
+  );
+}
+
+/** Random gradient + song title when no user artwork description. */
+export function shouldUseTitleGradientCover(track, opts = {}) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  if (hasUserPhotoCoverMeta(meta)) return false;
+  if (meta.photoMode || meta.imageOnlyInstrumental) return false;
+  if (userExplicitArtworkHint(meta, opts)) return false;
+  return true;
+}
+
 export function coverArtParamsFromTrack(track, opts = {}) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
   const hintOverride = String(opts.artworkHintOverride ?? opts.artworkHint ?? "").trim().slice(0, 280);
@@ -202,7 +219,7 @@ export function metaFlagIsTrue(val) {
 /** Pollinations or Cloudflare Flux abstract covers from the API. */
 export function isAbstractApiCoverSource(source) {
   const s = String(source || "").trim().toLowerCase();
-  return s === "pollinations" || s === "cloudflare";
+  return s === "pollinations" || s === "cloudflare" || s === "title_gradient";
 }
 
 /** User attached a real photo for cover — never replace with abstract API covers. */

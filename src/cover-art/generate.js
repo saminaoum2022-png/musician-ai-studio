@@ -1,7 +1,9 @@
 /**
  * Client-side abstract cover generation via /api/music/cover-art
  */
-import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, hasUserPhotoCoverMeta, isAbstractApiCoverSource, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
+import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, hasUserPhotoCoverMeta, isAbstractApiCoverSource, isPollinationsCoverEligible, shouldUseAbstractCover, shouldUseTitleGradientCover } from "./params.js";
+import { generateTitleGradientCoverDataUrl } from "./title-gradient-cover.js";
+import { fnv1a } from "./prompt.js";
 import { buildAbstractCoverPrompt, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, resolveRegenMoodFromHint, shouldUseConcreteSubjectDna, userHintRequestsDaylight } from "./prompt.js";
 import { resolveVisualDirection } from "./visual-director/director.mjs";
 import { nabadIdentityPhrases } from "./visual-director/nabad-identity.mjs";
@@ -266,6 +268,24 @@ function refreshPlayerIfTrack(track, opts = {}) {
   } catch {}
 }
 
+async function buildTitleGradientCoverResult(params, opts = {}) {
+  const regen = Boolean(opts.coverRegenerate);
+  const seed = regen
+    ? (Date.now() ^ fnv1a(String(params.songId || params.title || ""))) % 2147483646
+    : fnv1a(`title-gradient|${params.songId || ""}`) % 2147483646 || 1;
+  const dataUrl = await generateTitleGradientCoverDataUrl({
+    title: params.title || "Untitled",
+    seed,
+  });
+  return {
+    dataUrl,
+    seed,
+    bucket: "default",
+    params: { ...params, artworkSource: "title_gradient", storyTheme: "title_gradient" },
+    provider: "title_gradient",
+  };
+}
+
 async function runCoverJobForTrack(track, id, opts = {}) {
   const hint = String(opts.artworkHint || opts.artworkStyle || "").trim();
   const params = coverArtParamsFromTrack(track, {
@@ -273,6 +293,38 @@ async function runCoverJobForTrack(track, id, opts = {}) {
     regenAutoMusic: Boolean(opts.regenAutoMusic || (opts.coverRegenerate && !hint)),
   });
   if (!params.songId) return null;
+
+  if (shouldUseTitleGradientCover(track, opts)) {
+    try {
+      const result = await buildTitleGradientCoverResult(params, opts);
+      let thumbUrl = "";
+      try {
+        thumbUrl = await squareCoverThumbFromDataUrl(result.dataUrl);
+      } catch {}
+      const patched = await enqueueLibraryPatch(() =>
+        patchLibraryTrackCover(id, {
+          dataUrl: result.dataUrl,
+          thumbUrl,
+          seed: result.seed,
+          bucket: result.bucket,
+          params: result.params,
+          coverSource: "title_gradient",
+          coverImageProvider: "title_gradient",
+          clearCoverPending: true,
+          replacePhotoCover: Boolean(opts.coverRegenerate),
+        }),
+      );
+      if (!patched) return null;
+      const { persistTrackCoverIfNeeded } = d();
+      void persistTrackCoverIfNeeded?.(patched);
+      refreshPlayerIfTrack(patched, opts);
+      return patched;
+    } catch (e) {
+      try {
+        console.warn("[cover-art] title gradient failed, falling back to API", e?.message || e);
+      } catch {}
+    }
+  }
 
   let lastErr = null;
   for (let attempt = 0; attempt < COVER_CLIENT_ATTEMPTS; attempt += 1) {
@@ -563,6 +615,37 @@ export function buildParallelCoverVariants(taskId, { title, meta, variantCount =
 async function runParallelCoverJob(track, songId) {
   const params = coverArtParamsFromTrack(track);
   if (!params.songId) return null;
+
+  if (shouldUseTitleGradientCover(track)) {
+    try {
+      const result = await buildTitleGradientCoverResult(params);
+      let thumbUrl = "";
+      try {
+        thumbUrl = await squareCoverThumbFromDataUrl(result.dataUrl);
+      } catch {}
+      const patch = {
+        dataUrl: result.dataUrl,
+        thumbUrl,
+        seed: result.seed,
+        bucket: result.bucket,
+        params: result.params,
+        coverSource: "title_gradient",
+        coverImageProvider: "title_gradient",
+        clearCoverPending: true,
+      };
+      const patched = await enqueueLibraryPatch(() => patchLibraryTrackCover(songId, patch));
+      if (patched) {
+        const { persistTrackCoverIfNeeded } = d();
+        void persistTrackCoverIfNeeded?.(patched);
+        refreshPlayerIfTrack(patched);
+      }
+      return patch;
+    } catch (e) {
+      try {
+        console.warn("[cover-art] parallel title gradient failed", e?.message || e);
+      } catch {}
+    }
+  }
 
   let lastErr = null;
   for (let attempt = 0; attempt < COVER_CLIENT_ATTEMPTS; attempt += 1) {

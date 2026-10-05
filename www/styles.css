@@ -65496,10 +65496,6 @@ html[data-theme="light"] body[data-route="generate"] #advancedSheet.createAdvanc
 body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedPanels .styleSuggestRow{
   margin-top: 6px;
 }
-body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createLyriaMaqamHint{
-  margin: 8px 0 0;
-}
-
 /* Style chips scroll sideways — fade the right edge instead of a hard clip. */
 body[data-route="generate"] .styleSuggestRow{
   -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%);

@@ -83,58 +83,6 @@ const MIX_LINE =
 /** Lyria clip model — target length in prompts and arrangement (not a hard API cap). */
 const LYRIA_CLIP_TARGET_SEC = 30;
 
-/** Explicit user maqam only — never auto-inferred. Subordinate to Style / genre pack. */
-const LYRIA_MAQAM_IDS = Object.freeze([
-  "ajam",
-  "rast",
-  "nahawand",
-  "bayati",
-  "kurd",
-  "hijaz",
-  "saba",
-  "sikah",
-]);
-
-const LYRIA_MAQAM_PROMPT_LINE = Object.freeze({
-  ajam:
-    "Melodic color: maqam ‘Ajam (major-like color on the hook and lead); mood, tempo, and groove follow Style above.",
-  rast:
-    "Melodic color: maqam Rast (half-flat 3rd on hook and lead, balanced Levantine tone); mood, tempo, and groove follow Style above.",
-  nahawand:
-    "Melodic color: maqam Nahawand (minor color on hook and lead); mood, tempo, and groove follow Style above.",
-  bayati:
-    "Melodic color: maqam Bayati (half-flat 2nd, intimate Levantine line on hook and lead); mood, tempo, and groove follow Style above.",
-  kurd:
-    "Melodic color: maqam Kurd (Phrygian-flavored 2nd on hook and lead); mood, tempo, and groove follow Style above.",
-  hijaz:
-    "Melodic color: maqam Hijaz (Hijaz interval on hook and lead); mood, tempo, and groove follow Style above.",
-  saba:
-    "Melodic color: maqam Saba (dark, expressive Saba color on hook and lead); mood, tempo, and groove follow Style above.",
-  sikah:
-    "Melodic color: maqam Sikah (Sikah / neutral 3rd color on hook and lead); mood, tempo, and groove follow Style above.",
-});
-
-function normalizeLyriaMaqamId(raw) {
-  const id = String(raw || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_")
-    .replace(/[^a-z_]/g, "");
-  return LYRIA_MAQAM_IDS.includes(id) ? id : "";
-}
-
-function lyricsScriptAllowsLyriaMaqam(scriptFormat) {
-  const s = String(scriptFormat || "").trim().toLowerCase();
-  return s === "arabic" || s === "arabizi";
-}
-
-function buildLyriaMaqamPromptLine(body, scriptFormat) {
-  if (!lyricsScriptAllowsLyriaMaqam(scriptFormat)) return "";
-  const id = normalizeLyriaMaqamId(body?.maqam);
-  if (!id) return "";
-  return LYRIA_MAQAM_PROMPT_LINE[id] || "";
-}
-
 function envFlagEnabled(name, { defaultOn = false } = {}) {
   const v = String(process.env[name] || "").trim().toLowerCase();
   if (!v) return defaultOn;
@@ -325,8 +273,6 @@ function buildLyriaPromptV2(opts = {}) {
     blocks.push("Music inspired by the mood and colors in the attached image");
   }
   blocks.push(buildStyleBlockV2({ pack: resolvedPack, userStyle, songKey, moodHint: "" }));
-  const maqamLine = buildLyriaMaqamPromptLine(body, scriptFormat);
-  if (maqamLine) blocks.push(maqamLine);
   const vocal = buildVocalLineV2({ vocalGender, dialectHint, instrumental });
   if (vocal) blocks.push(vocal);
   if (ideaBrief && !lyricText) {
@@ -372,9 +318,7 @@ function buildLyriaPromptV2(opts = {}) {
 module.exports = {
   GENRE_PACKS,
   LYRIA_CLIP_TARGET_SEC,
-  LYRIA_MAQAM_IDS,
   resolveLyriaPromptV2Enabled,
   buildLyriaPromptV2,
-  buildLyriaMaqamPromptLine,
   inferGenrePack,
 };

@@ -870,7 +870,6 @@ const els = {
   btnArtworkSuggest: document.getElementById("btnArtworkSuggest"),
   artworkSuggestRow: document.getElementById("artworkSuggestRow"),
   sunoArtworkStyle: document.getElementById("sunoArtworkStyle"),
-  sunoMaqam: document.getElementById("sunoMaqam"),
   sunoTitle: document.getElementById("sunoTitle"),
   sunoTiming: document.getElementById("sunoTiming"),
   sunoGroovePace: document.getElementById("sunoGroovePace"),
@@ -7020,58 +7019,6 @@ function isArabicLyricsFlowActive() {
   return false;
 }
 
-/** Maqam UI: explicit Arabic or Arabizi language chip only (not Auto). */
-function isCreateLyriaMaqamLanguage() {
-  return lyricsLanguage === "arabic" || isArabiziLyricsLanguage(lyricsLanguage);
-}
-
-function isCreateLyriaMaqamEngine() {
-  try {
-    return Boolean(useLyriaForThisGenerate() || isLyriaClipGenerateFlow());
-  } catch {
-    return false;
-  }
-}
-
-function createLyriaMaqamUiVisible() {
-  return isCreateLyriaMaqamLanguage() && isCreateLyriaMaqamEngine();
-}
-
-function syncCreateLyriaMaqamGroup() {
-  const group = document.getElementById("createLyriaMaqamGroup");
-  const show = createLyriaMaqamUiVisible();
-  if (group) {
-    group.hidden = !show;
-    group.style.display = show ? "" : "none";
-    group.setAttribute("aria-hidden", show ? "false" : "true");
-  }
-  if (!show && els.sunoMaqam) {
-    if (String(els.sunoMaqam.value || "").trim()) {
-      els.sunoMaqam.value = "";
-      try { els.sunoMaqam.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
-    }
-    try { syncAllOptionChipRows(); } catch {}
-  }
-}
-
-/** Lyria-only: send maqam id in API body when user picked a chip — never merge into Style. */
-function resolveLyriaMaqamForPayload() {
-  if (!createLyriaMaqamUiVisible()) return undefined;
-  const id = normalizeMaqamValue(els.sunoMaqam?.value).toLowerCase().replace(/\s+/g, "_");
-  const allowed = new Set([
-    "ajam",
-    "rast",
-    "nahawand",
-    "bayati",
-    "kurd",
-    "hijaz",
-    "saba",
-    "sikah",
-  ]);
-  if (!id || !allowed.has(id)) return undefined;
-  return id;
-}
-
 function applyLyricsLanguageToDialect() {
   let val = "";
   let hint = "";
@@ -7119,7 +7066,6 @@ function syncLyricsLangPills() {
   revealExtraChipIfSelected(els.lyricsDialectRow, "[data-lyrics-dialect]");
   syncArabicLyricsControlsVisibility();
   try { syncPhotoSoloVocalSections(); } catch {}
-  try { syncCreateLyriaMaqamGroup(); } catch {}
 }
 
 /** Arabic dialect chips only when the user explicitly picks Arabic. */
@@ -8190,10 +8136,9 @@ function renderSingerPersonaRow() {
   syncSingerGenderPills();
 }
 
-/** Reset only the Create → Advanced accordion (length, maqam, vocal style, range). */
+/** Reset only the Create → Advanced accordion (length, vocal style, range). */
 function resetCreateAdvancedPanel() {
   if (els.sunoSongDuration) els.sunoSongDuration.value = "";
-  if (els.sunoMaqam) els.sunoMaqam.value = "";
   if (els.sunoVoiceProfile) els.sunoVoiceProfile.value = "";
   if (els.sunoGroovePace) els.sunoGroovePace.value = "";
   if (els.sunoProsody) els.sunoProsody.value = "";
@@ -8203,7 +8148,6 @@ function resetCreateAdvancedPanel() {
   try { clearVocalStyleTagsFromStyle(); } catch {}
   try { syncVoiceRangeChipRowForSingerGender(); } catch {}
   try { syncAllOptionChipRows(); } catch {}
-  try { syncCreateLyriaMaqamGroup(); } catch {}
   try { syncStyleUi(); } catch {}
   try { syncElevenSongLengthPanel(); } catch {}
   try { syncCreateSongTitleField(); } catch {}
@@ -8671,7 +8615,6 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   syncSettingsNabadVocalChainRow(p);
   try { syncElevenSongLengthPanel(); } catch {}
   try { syncCreateSongTitleField(); } catch {}
-  try { syncCreateLyriaMaqamGroup(); } catch {}
 }
 
 const ELEVENLABS_FINETUNE_LS_KEY = "nabadElevenFinetune";
@@ -24579,40 +24522,6 @@ function wireUserPublicFeedRowsOnce() {
 
 updateEnvironmentBadge();
 
-function normalizeMaqamValue(v) {
-  return String(v || "")
-    .replaceAll("_", " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function applyMaqamToStyleInput() {
-  if (!els.sunoMaqam || !els.sunoStyle) return;
-  if (createLyriaMaqamUiVisible()) return;
-  const maqam = normalizeMaqamValue(els.sunoMaqam.value);
-  const base = String(els.sunoStyle.value || "").trim();
-  // Remove any previous "maqam:" tag to avoid duplicates.
-  const cleaned = base
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .filter((t) => !/^maqam\s*:/i.test(t))
-    .join(", ");
-  const next = maqam ? [cleaned, `Maqam: ${maqam}`].filter(Boolean).join(", ") : cleaned;
-  els.sunoStyle.value = next;
-  if (els.sunoSongKey && els.sunoKeyHint) {
-    if (maqam) {
-      const current = String(els.sunoSongKey.value || "").trim();
-      const rootOnly = current.replace(/\s+(Major|Minor)$/i, "").trim();
-      if (rootOnly && rootOnly !== current) els.sunoSongKey.value = rootOnly;
-      els.sunoKeyHint.textContent = "Maqam active: Song key acts as tonic/root note only.";
-      els.sunoKeyHint.hidden = false;
-    } else {
-      els.sunoKeyHint.textContent = "";
-      els.sunoKeyHint.hidden = true;
-    }
-  }
-}
 function mapSolfegeToLetterKey(songKey) {
   const s = String(songKey || "");
   return s
@@ -77617,7 +77526,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const isDefault = String(selectEl.value || "").trim() === "";
     selectEl.classList.toggle("isDefaultOption", isDefault);
   }
-[els.sunoSongKey, els.sunoMaqam, els.sunoVoiceProfile, els.sunoDialect, els.sunoArabicAddress, els.sunoPersonaId, els.sunoGroovePace, els.sunoProsody, els.sunoBeatStability].forEach((sel) => {
+[els.sunoSongKey, els.sunoVoiceProfile, els.sunoDialect, els.sunoArabicAddress, els.sunoPersonaId, els.sunoGroovePace, els.sunoProsody, els.sunoBeatStability].forEach((sel) => {
     if (!sel) return;
     syncDefaultSelectVisual(sel);
     sel.addEventListener("change", () => syncDefaultSelectVisual(sel));
@@ -77846,7 +77755,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         els.btnSunoStems.disabled = true;
         if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
         setProgress(5);
-        applyMaqamToStyleInput();
         try { applyLyricsLanguageToDialect(); } catch {}
         try { apply80sYouArabicLyricsContext(); } catch {}
         const userPrompt = (els.sunoPrompt?.value || "").trim();
@@ -77931,7 +77839,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           || resolveClipSingerGenderForUi()
           || "";
         const photoImageForLyria = resolvePhotoImagePayloadForLyria();
-        const lyriaMaqamId = resolveLyriaMaqamForPayload();
         const payload = {
           prompt: ideaClip ? "" : finalPrompt,
           style: clipStyle,
@@ -77953,7 +77860,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
           ...(ideaClip ? { ideaPrompt: true, ideaBrief: userPrompt } : {}),
           ...(isLyriaClipGenerateFlow() ? { scriptFormat: resolveLyricsScriptFormat() } : {}),
-          ...(lyriaMaqamId ? { maqam: lyriaMaqamId } : {}),
           ...(creditsState.isAdmin
             ? {
                 geminiProducer: getGeminiProducerPref() ? "1" : "0",
@@ -78181,7 +78087,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setProgress(5);
       try { trackFirstGenerateOnce(modeLabel); } catch {}
 
-      applyMaqamToStyleInput();
       try { applyLyricsLanguageToDialect(); } catch {}
       const userPrompt = (els.sunoPrompt?.value || "").trim();
       const userStyle = resolveStyleInputForGeneration((els.sunoStyle?.value || "").trim());
@@ -78373,7 +78278,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`;
       const songDurationSec = resolveSongDurationForGeneration();
       const photoImageForLyria = useLyriaForThisGenerate() ? resolvePhotoImagePayloadForLyria() : "";
-      const lyriaMaqamId = resolveLyriaMaqamForPayload();
       const payload = {
         prompt: ideaPromptToSongAlt ? "" : finalPrompt,
         style: ideaSimpleMode ? "" : ideaPromptToSongAlt ? mergeIdeaIntoStyle(userPrompt, personaStyleBase) : personaStyleBase,
@@ -78385,7 +78289,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ...(dialect ? { dialect: String(dialect) } : {}),
         ...(lyricDialectHint ? { dialectHint: String(lyricDialectHint) } : {}),
         ...(useLyriaForThisGenerate() ? { scriptFormat: resolveLyricsScriptFormat() } : {}),
-        ...(lyriaMaqamId ? { maqam: lyriaMaqamId } : {}),
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
         ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
         ...(ideaPromptToSongAlt ? { ideaPrompt: true, ideaBrief: userPrompt } : {}),
@@ -78497,7 +78400,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         songKey: (els.sunoSongKey?.value || "").trim(),
         songDurationPreset: String(els.sunoSongDuration?.value || "").trim() || undefined,
         songDurationSec,
-        maqam: (els.sunoMaqam?.value || "").trim(),
         voiceProfile: (els.sunoVoiceProfile?.value || "").trim(),
         singerGender: (els.sunoSingerGender?.value || "").trim(),
         clipVocalProfileId: payload.clipVocalProfileId || undefined,
@@ -79487,10 +79389,8 @@ bindOptionChipRow("prosodyChipRow", els.sunoProsody);
 bindOptionChipRow("beatChipRow", els.sunoBeatStability);
 bindOptionChipRow("voiceRangeChipRow", els.sunoVoiceProfile);
 try { syncVoiceRangeChipRowForSingerGender(); } catch {}
-bindOptionChipRow("maqamChipRow", els.sunoMaqam);
 bindOptionChipRow("songDurationChipRow", els.sunoSongDuration);
 bindOptionChipRow("elevenSongDurationChipRow", els.sunoSongDuration);
-try { syncCreateLyriaMaqamGroup(); } catch {}
 bindOptionChipRow("personaStyleLeadChipRow", els.sunoPersonaStyleLead);
 bindOptionChipRow("personaAdventureChipRow", els.sunoPersonaAdventure);
 bindOptionChipRow("personaAudioInfluenceChipRow", els.sunoPersonaAudioInfluence);
@@ -82904,8 +82804,6 @@ function agentPromptForStep(step) {
     case 3:
       return "Do you want vocals? (yes/no) and gender (f/m/any). Example: yes f";
     case 4:
-      return "Optional: Maqam? (Rast/Bayati/Hijaz/Nahawand/Saba/Kurd/Ajam or 'none')";
-    case 5:
       return "Give it a short title (or type 'auto').";
     default:
       return "";
@@ -82918,7 +82816,6 @@ function agentApplyToForm() {
   const tags = [];
   if (a.vibe) tags.push(a.vibe);
   if (a.style) tags.push(a.style);
-  if (a.maqam && a.maqam !== "none") tags.push(`Maqam: ${a.maqam}`);
   if (els.sunoStyle && tags.length) {
     els.sunoStyle.value = tags.join(", ");
   }
@@ -82968,21 +82865,13 @@ function agentConsume(text) {
     const g = parts[1] || (yes ? "any" : "any");
     agentState.answers.vocalGender = g === "f" ? "f" : g === "m" ? "m" : "";
   } else if (step === 4) {
-    agentState.answers.maqam = t && low !== "none" ? t : "none";
-    if (els.sunoMaqam) {
-      // best-effort match
-      const opts = Array.from(els.sunoMaqam.options || []);
-      const match = opts.find((o) => normalizeWord(o.value) === normalizeWord(agentState.answers.maqam));
-      if (match) els.sunoMaqam.value = match.value;
-    }
-  } else if (step === 5) {
     agentState.answers.title = t || "auto";
   }
 
   agentApplyToForm();
   agentState.step = step + 1;
 
-  if (agentState.step <= 5) {
+  if (agentState.step <= 4) {
     addAgentMsg("bot", agentPromptForStep(agentState.step));
   } else {
     addAgentMsg("bot", "Done. I filled the settings. Switch to Simple to review, then press “Generate song”. Type /reset to start over.");
@@ -83029,9 +82918,6 @@ if (els.btnCreditRecovery) {
   });
 }
 
-if (els.sunoMaqam) {
-  els.sunoMaqam.addEventListener("change", () => applyMaqamToStyleInput());
-}
 if (els.sunoProMode) {
   const syncPro = () => document.body.classList.toggle("proMode", Boolean(els.sunoProMode.checked));
   els.sunoProMode.addEventListener("change", syncPro);

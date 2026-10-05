@@ -2,7 +2,8 @@
  * Client-side abstract cover generation via /api/music/cover-art
  */
 import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, hasUserPhotoCoverMeta, isAbstractApiCoverSource, isPollinationsCoverEligible, shouldUseAbstractCover, shouldUseTitleGradientCover } from "./params.js";
-import { generateTitleGradientCoverDataUrl } from "./title-gradient-cover.js";
+import { generateTitleGradientCoverDataUrl, generateTitleGradientThumbDataUrl, defaultThumbOffsetYForTitleY, TITLE_GRADIENT_PLAYER_Y } from "./title-gradient-cover.js";
+import { applyNabadColorWashToDataUrl } from "./nabad-color-wash.js";
 import { fnv1a } from "./prompt.js";
 import { buildAbstractCoverPrompt, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, resolveRegenMoodFromHint, shouldUseConcreteSubjectDna, userHintRequestsDaylight } from "./prompt.js";
 import { resolveVisualDirection } from "./visual-director/director.mjs";
@@ -202,6 +203,7 @@ function patchLibraryTrackCover(trackId, patch) {
   const {
     dataUrl,
     thumbUrl,
+    thumbFrame,
     seed,
     params,
     bucket,
@@ -213,9 +215,8 @@ function patchLibraryTrackCover(trackId, patch) {
     clearCoverPending = false,
     replacePhotoCover = false,
   } = patch;
-  const { thumbFrame: _dropThumbFrame, ...metaWithoutThumbFrame } = prevMeta;
   const nextMeta = {
-    ...metaWithoutThumbFrame,
+    ...(prevMeta && typeof prevMeta === "object" ? prevMeta : {}),
     imageUrl: dataUrl,
     imageThumb: thumbUrl || dataUrl,
     nabadAbstractCover,
@@ -231,6 +232,14 @@ function patchLibraryTrackCover(trackId, patch) {
     coverNabadMark: isAbstractApiCoverSource(coverSource),
     coverGenAttempted: coverGenAttempted || prev.meta?.coverGenAttempted || false,
     ...(clearCoverPending ? { pollinationsCoverPending: false } : {}),
+    ...(thumbFrame && typeof thumbFrame === "object"
+      ? {
+        thumbFrame: {
+          scale: Number(thumbFrame.scale) || 1,
+          offsetY: Number(thumbFrame.offsetY) || 0,
+        },
+      }
+      : {}),
   };
   const next = {
     ...prev,
@@ -277,8 +286,18 @@ async function buildTitleGradientCoverResult(params, opts = {}) {
     title: params.title || "Untitled",
     seed,
   });
+  let thumbUrl = "";
+  try {
+    thumbUrl = await generateTitleGradientThumbDataUrl({
+      title: params.title || "Untitled",
+      seed,
+    });
+  } catch {}
+  const thumbFrame = { scale: 1, offsetY: defaultThumbOffsetYForTitleY(TITLE_GRADIENT_PLAYER_Y) };
   return {
     dataUrl,
+    thumbUrl,
+    thumbFrame,
     seed,
     bucket: "default",
     params: { ...params, artworkSource: "title_gradient", storyTheme: "title_gradient" },
@@ -297,14 +316,11 @@ async function runCoverJobForTrack(track, id, opts = {}) {
   if (shouldUseTitleGradientCover(track, opts)) {
     try {
       const result = await buildTitleGradientCoverResult(params, opts);
-      let thumbUrl = "";
-      try {
-        thumbUrl = await squareCoverThumbFromDataUrl(result.dataUrl);
-      } catch {}
       const patched = await enqueueLibraryPatch(() =>
         patchLibraryTrackCover(id, {
           dataUrl: result.dataUrl,
-          thumbUrl,
+          thumbUrl: result.thumbUrl || "",
+          thumbFrame: result.thumbFrame,
           seed: result.seed,
           bucket: result.bucket,
           params: result.params,
@@ -335,7 +351,8 @@ async function runCoverJobForTrack(track, id, opts = {}) {
       const result = await fetchAbstractCoverArt(params, opts);
       const preferCenter = true;
       const normalizedUrl = await normalizePortraitCoverDataUrl(result.dataUrl, { preferCenter });
-      const stampedUrl = await stampCoverWithSplashMark(normalizedUrl);
+      const washedUrl = await applyNabadColorWashToDataUrl(normalizedUrl);
+      const stampedUrl = await stampCoverWithSplashMark(washedUrl);
       let thumbUrl = "";
       try {
         thumbUrl = await squareCoverThumbFromDataUrl(stampedUrl);
@@ -619,13 +636,10 @@ async function runParallelCoverJob(track, songId) {
   if (shouldUseTitleGradientCover(track)) {
     try {
       const result = await buildTitleGradientCoverResult(params);
-      let thumbUrl = "";
-      try {
-        thumbUrl = await squareCoverThumbFromDataUrl(result.dataUrl);
-      } catch {}
       const patch = {
         dataUrl: result.dataUrl,
-        thumbUrl,
+        thumbUrl: result.thumbUrl || "",
+        thumbFrame: result.thumbFrame,
         seed: result.seed,
         bucket: result.bucket,
         params: result.params,
@@ -656,7 +670,8 @@ async function runParallelCoverJob(track, songId) {
       const result = await fetchAbstractCoverArt(params);
       const preferCenter = true;
       const normalizedUrl = await normalizePortraitCoverDataUrl(result.dataUrl, { preferCenter });
-      const stampedUrl = await stampCoverWithSplashMark(normalizedUrl);
+      const washedUrl = await applyNabadColorWashToDataUrl(normalizedUrl);
+      const stampedUrl = await stampCoverWithSplashMark(washedUrl);
       const patch = {
         dataUrl: stampedUrl,
         seed: result.seed,

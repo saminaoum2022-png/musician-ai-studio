@@ -16,6 +16,8 @@ const H = 1920;
 const MAX_WORK_SIDE = 2400;
 const MAX_DATA_URL_CHARS = 1_900_000;
 const MAX_TEXTS = 5;
+/** Match title-gradient player hero (see cover-art/title-gradient-cover.js). */
+const DEFAULT_SONG_TITLE_Y = 0.36;
 
 export const STUDIO_FONTS = [
   { id: "nabad", label: "Nabad", family: "csNabad", weight: 900, style: "normal", mul: 1, sample: "Aa" },
@@ -390,6 +392,25 @@ function offsetFromSy(sy, side) {
   return def > 0 ? clamp((sy - def) / def, -1, 1) : 0;
 }
 
+/** Square thumb crop offset so title at `titleY` reads centered in feed/library. */
+function defaultThumbOffsetForTitleY(titleY = DEFAULT_SONG_TITLE_Y, scale = 1) {
+  const side = W / clamp(scale, 1, 2.5);
+  const def = (H - side) / 2;
+  const syTarget = clamp(titleY * H - side / 2, 0, H - side);
+  if (syTarget <= def) {
+    const travelUp = Math.max(1, def);
+    return clamp((syTarget - def) / travelUp, -1, 0);
+  }
+  const travelDown = Math.max(1, H - side - def);
+  return clamp((syTarget - def) / travelDown, 0, 1);
+}
+
+function syncThumbFrameToTitleY(titleY = DEFAULT_SONG_TITLE_Y) {
+  if (!S) return;
+  S.thumb.offsetY = defaultThumbOffsetForTitleY(titleY, S.thumb.scale);
+  S.dirtyThumb = true;
+}
+
 /* ───────────────────────────── Text layers ───────────────────────────── */
 
 const selected = () => (S ? S.texts.find((t) => t.id === S.sel) || null : null);
@@ -472,7 +493,7 @@ function addText(text) {
     fx: S.style.fx,
     align: S.style.align,
     x: 0.5,
-    y: 0.4 + (S.texts.length % 4) * 0.09,
+    y: text ? DEFAULT_SONG_TITLE_Y : 0.4 + (S.texts.length % 4) * 0.09,
     scale: 1,
     rot: 0,
   };
@@ -483,6 +504,7 @@ function addText(text) {
   S.texts.push(L);
   S.sel = L.id;
   S.dirtyMain = true;
+  if (text && S.texts.length === 1) syncThumbFrameToTitleY(L.y);
   haptic("light");
   syncUi();
   requestRender();
@@ -1165,6 +1187,9 @@ export async function openCoverStudio(opts = {}) {
     await loadSource(opts.sourceUrl);
     dom.root.classList.remove("csLoading");
     if (!S) return;
+    if (S.photo && !S.texts.length && opts.thumbFrame?.offsetY == null) {
+      syncThumbFrameToTitleY(DEFAULT_SONG_TITLE_Y);
+    }
   }
   // No cover yet: skip the "give this song a cover" page and open straight into the editor on a
   // default gradient. Photo / AI / Gradient are one tap away on the stage, so nothing is lost.

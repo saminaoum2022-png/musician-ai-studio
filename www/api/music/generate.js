@@ -88,9 +88,6 @@ const {
   MUREKA_PROMPT_MAX_CHARS,
 } = require("../_lib/mureka-upstream");
 const {
-  prepareMurekaPhoneticLyrics,
-} = require("../_lib/mureka-phonetic-lyrics");
-const {
   saveMusicProviderTaskStatus,
   providerFolder,
 } = require("../_lib/music-provider-task-store");
@@ -1905,35 +1902,10 @@ async function runMurekaGenerationJob({
       }
     }
 
-    const dialectHint = mergeLyriaDialectHint(body);
-    const scriptFormat = String(body?.scriptFormat || "").trim();
     // Mureka: plain style prompt only — Nabad vocal FX chain is Lyria/ElevenLabs-only.
 
     const displayLyrics = effectiveLyrics;
-    const dialect = String(body?.dialect || "").trim();
-    const lyricsSeed = prepareMurekaLyrics(effectiveLyrics).lyrics;
-    const phoneticPrep = await prepareMurekaPhoneticLyrics({
-      geminiApiKey,
-      lyrics: lyricsSeed,
-      dialect,
-      dialectHint,
-      scriptFormat,
-      style: effectiveStyle,
-    });
-    if (phoneticPrep.blockUpstream) {
-      await fail(
-        "Couldn't convert Arabic lyrics to phonetic text for Mureka — try shorter lyrics, Arabizi, or generate again.",
-      );
-      return;
-    }
-    let lyricsForMureka = phoneticPrep.lyrics;
-    if (phoneticPrep.converted) {
-      effectiveStyle = [effectiveStyle, "Sing Franco-Arabic (Latin) as Arabic phonetics, not English."]
-        .filter(Boolean)
-        .join(" ");
-    }
-
-    const murekaLyricsPrep = prepareMurekaLyrics(lyricsForMureka);
+    const murekaLyricsPrep = prepareMurekaLyrics(effectiveLyrics);
     const murekaPromptPrep = prepareMurekaPrompt(effectiveStyle);
     if (murekaPromptPrep.truncated) {
       console.warn(
@@ -1946,7 +1918,7 @@ async function runMurekaGenerationJob({
       console.warn(
         "[music/generate] mureka lyrics truncated",
         taskId,
-        `${murekaLyricsPrep.droppedFrom || lyricsForMureka.length} → ${murekaLyricsPrep.charCount}`,
+        `${murekaLyricsPrep.droppedFrom || effectiveLyrics.length} → ${murekaLyricsPrep.charCount}`,
       );
     }
 
@@ -2020,9 +1992,6 @@ async function runMurekaGenerationJob({
         vocalId ? `vocal_id: ${vocalId}` : "",
         producerResult.ok ? "geminiProducer: on (lyria compact)" : "geminiProducer: off",
         `mureka_lyrics: ${murekaLyricsPrep.charCount} chars, ${murekaLyricsPrep.byteCount || "?"} bytes / ${MUREKA_LYRICS_MAX_CHARS}${murekaLyricsPrep.truncated ? " truncated" : ""}`,
-        phoneticPrep.converted
-          ? `mureka_phonetic: converted${phoneticPrep.model ? ` (${phoneticPrep.model})` : ""}`
-          : `mureka_phonetic: ${phoneticPrep.skippedReason || "skipped"}${phoneticPrep.error ? ` (${phoneticPrep.error})` : ""}`,
         `mureka_prompt_chars: ${murekaPromptPrep.charCount}/${MUREKA_PROMPT_MAX_CHARS}${murekaPromptPrep.truncated ? " truncated" : ""}`,
         "nabadVocalChain: off (mureka)",
       ].filter(Boolean).join("\n"),

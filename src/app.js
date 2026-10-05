@@ -5212,26 +5212,14 @@ function singerVoiceStyleNote(gender) {
   return "";
 }
 
-function arabicAddressPronunciationNote(value, singerGender = "") {
+/** Who the lyrics talk to — singer gender is set separately on Create. */
+function arabicAddressPronunciationNote(value, _singerGender = "") {
   const v = String(value || "").trim().toLowerCase();
-  const singer = String(singerGender || "").trim().toLowerCase();
   if (v === "male") {
-    const singerClause =
-      singer === "f"
-        ? "Female lead vocalist; "
-        : singer === "m"
-        ? "Male lead vocalist; "
-        : "";
-    return `${singerClause}Arabic address: lyrics sung TO a man; keep masculine addressee words: إنتَ، حبيبي، غالي.`;
+    return "Arabic address: lyrics sung TO a man; keep masculine addressee words: إنتَ، حبيبي، غالي.";
   }
   if (v === "female") {
-    const singerClause =
-      singer === "m"
-        ? "Male lead vocalist; "
-        : singer === "f"
-        ? "Female lead vocalist; "
-        : "";
-    return `${singerClause}Arabic address: lyrics sung TO a woman; keep feminine addressee words: إنتِ، حبيبتي، غالية، كنتِ.`;
+    return "Arabic address: lyrics sung TO a woman; keep feminine addressee words: إنتِ، حبيبتي، غالية، كنتِ.";
   }
   if (v === "group") {
     return "Arabic address: lyrics sung TO a group; keep plural addressee words: إنتو، حبايبي، غاليين، كنتو.";

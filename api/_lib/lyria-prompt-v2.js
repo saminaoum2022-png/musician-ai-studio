@@ -1,7 +1,7 @@
 /**
  * Lyria Prompt v2 — minimal, deterministic prompt contract (no Gemini producer, no Nabad FX chain).
- * Enable: LYRIA_PROMPT_V2=1 (default ON on Vercel Preview / staging).
- * Admin override on request body: lyriaPromptV2 "1" | "0"
+ * Off by default — production uses buildLyriaPrompt + Gemini producer (Lyria 3.5 path).
+ * Enable: LYRIA_PROMPT_V2=1 on the server, or admin request body lyriaPromptV2 "1".
  */
 const {
   sanitizeLyriaLyricsForSinging,
@@ -91,17 +91,13 @@ function envFlagEnabled(name, { defaultOn = false } = {}) {
   return defaultOn;
 }
 
-function lyriaPromptV2PreviewDefault() {
-  return String(process.env.VERCEL_ENV || "").trim().toLowerCase() === "preview";
-}
-
 function resolveLyriaPromptV2Enabled(body, isAdmin = false) {
   if (isAdmin) {
     const raw = body?.lyriaPromptV2;
     if (raw === "0" || raw === 0 || raw === false || raw === "false") return false;
     if (raw === "1" || raw === 1 || raw === true || raw === "true") return true;
   }
-  return envFlagEnabled("LYRIA_PROMPT_V2", { defaultOn: lyriaPromptV2PreviewDefault() });
+  return envFlagEnabled("LYRIA_PROMPT_V2", { defaultOn: false });
 }
 
 function extractBpmFromText(text) {

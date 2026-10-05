@@ -5227,6 +5227,22 @@ function arabicAddressPronunciationNote(value, _singerGender = "") {
   return "";
 }
 
+/** Dialect + addressee chip for every /api/lyrics call (explicit arabicAddress, not only hint text). */
+function buildLyricApiArabicContext() {
+  try { applyLyricsLanguageToDialect(); } catch {}
+  try { apply80sYouArabicLyricsContext(); } catch {}
+  const dialect = String(els.sunoDialect?.value || "").trim();
+  const dialectHintBase = String(els.sunoDialectHint?.value || "").trim();
+  const arabicAddress = String(els.sunoArabicAddress?.value || "").trim();
+  const singerGender = resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) });
+  const addressNote = arabicAddressPronunciationNote(arabicAddress, singerGender);
+  const lyricDialectHint =
+    activePhotoSoloChallengeId() === "80s-you" && photoSoloShowsArabicDialect()
+      ? lyricDialectHintFor80sYou()
+      : [dialectHintBase, addressNote].filter(Boolean).join(" ");
+  return { dialect, dialectHint: lyricDialectHint, arabicAddress };
+}
+
 function setCreateTemplateLoadedHint(title) {
   if (!els.createChallengeHint) return;
   const t = String(title || "Template").trim();
@@ -6824,6 +6840,7 @@ function buildSunoIdeaPrompt({ idea, style, dialect, language, gender, address }
 }
 
 async function draftIdeaIntoLyricsForGenerate({ seed, style, dialect, dialectHint }) {
+  const arCtx = buildLyricApiArabicContext();
   const r = await fetch(apiUrl("/api/lyrics"), {
     method: "POST",
     headers: {
@@ -6834,8 +6851,9 @@ async function draftIdeaIntoLyricsForGenerate({ seed, style, dialect, dialectHin
       seed,
       style,
       mode: "full",
-      dialect,
-      dialectHint,
+      dialect: dialect || arCtx.dialect,
+      dialectHint: dialectHint || arCtx.dialectHint,
+      arabicAddress: arCtx.arabicAddress,
       lyricsProvider: resolveLyricsProviderForMode("full"),
       lyricsTarget: resolveLyricsTargetForMusicProvider(),
       scriptFormat: resolveLyricsScriptFormat(),
@@ -7553,15 +7571,8 @@ async function fetchLyricsSingabilityReport(text, { updateUi = true, reqId = nul
   }
 
   try {
-    try { applyLyricsLanguageToDialect(); } catch {}
+    const arCtx = buildLyricApiArabicContext();
     const style = String(els.sunoStyle?.value || "").trim();
-    const dialect = String(els.sunoDialect?.value || "").trim();
-    const dialectHint = String(els.sunoDialectHint?.value || "").trim();
-    const addressNote = arabicAddressPronunciationNote(
-      els.sunoArabicAddress?.value,
-      resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) }),
-    );
-    const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
     const r = await fetch(apiUrl("/api/lyrics"), {
       method: "POST",
       headers: {
@@ -7572,8 +7583,9 @@ async function fetchLyricsSingabilityReport(text, { updateUi = true, reqId = nul
         seed,
         style,
         mode: "singability_check",
-        dialect,
-        dialectHint: lyricDialectHint,
+        dialect: arCtx.dialect,
+        dialectHint: arCtx.dialectHint,
+        arabicAddress: arCtx.arabicAddress,
         lyricsProvider: "gemini",
         scriptFormat: resolveLyricsScriptFormat(),
       }),
@@ -19918,8 +19930,8 @@ function lyricDialectHintFor80sYou() {
   if (activePhotoSoloChallengeId() !== "80s-you") return base;
   if (!photoSoloShowsArabicDialect()) return base;
   const addressNote = arabicAddressPronunciationNote(
-    "male",
-    resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) })
+    String(els.sunoArabicAddress?.value || "male").trim() || "male",
+    resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) }),
   );
   return [base, addressNote].filter(Boolean).join(" ");
 }
@@ -75864,15 +75876,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { els.sunoPrompt?.focus({ preventScroll: true }); } catch {}
       return;
     }
-    try { applyLyricsLanguageToDialect(); } catch {}
+    const arCtx = buildLyricApiArabicContext();
     const style = String(els.sunoStyle?.value || "").trim();
-    const dialect = String(els.sunoDialect?.value || "").trim();
-    const dialectHint = String(els.sunoDialectHint?.value || "").trim();
-    const addressNote = arabicAddressPronunciationNote(
-      els.sunoArabicAddress?.value,
-      resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) })
-    );
-    const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
     let mode = challenge
       ? templateUsesLyriaClip() &&
         ["spark", "template"].includes(creationSourceKind(challenge) || "") &&
@@ -75942,8 +75947,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           seed: requestSeed,
           style,
           mode,
-          dialect,
-          dialectHint: lyricDialectHint,
+          dialect: arCtx.dialect,
+          dialectHint: arCtx.dialectHint,
+          arabicAddress: arCtx.arabicAddress,
           lyricsProvider,
           lyricsTarget: resolveLyricsTargetForMusicProvider(),
           scriptFormat: resolveLyricsScriptFormat(),
@@ -76057,16 +76063,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       showToast("Generate or paste lyrics first, then polish.", { icon: "!", durationMs: 3200 });
       return;
     }
-    try { applyLyricsLanguageToDialect(); } catch {}
+    const arCtx = buildLyricApiArabicContext();
     const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
     const style = String(els.sunoStyle?.value || "").trim();
-    const dialect = String(els.sunoDialect?.value || "").trim();
-    const dialectHint = String(els.sunoDialectHint?.value || "").trim();
-    const addressNote = arabicAddressPronunciationNote(
-      els.sunoArabicAddress?.value,
-      resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) })
-    );
-    const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
     const labelEl = els.btnLyricsPolish?.querySelector(".lyricsPolishLabel");
     const prevLabel = labelEl?.textContent || "Polish lyrics";
     let inkwellSettle = false;
@@ -76090,8 +76089,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           seed,
           style,
           mode: "enhance",
-          dialect,
-          dialectHint: lyricDialectHint,
+          dialect: arCtx.dialect,
+          dialectHint: arCtx.dialectHint,
+          arabicAddress: arCtx.arabicAddress,
           lyricsProvider: "gemini",
           scriptFormat: resolveLyricsScriptFormat(),
           includeSingability: wantsLyricsSingabilityWithGenerate(),
@@ -76142,16 +76142,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       showToast("Generate or paste lyrics first, then fix for singing.", { icon: "!", durationMs: 3200 });
       return;
     }
-    try { applyLyricsLanguageToDialect(); } catch {}
+    const arCtx = buildLyricApiArabicContext();
     const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
     const style = String(els.sunoStyle?.value || "").trim();
-    const dialect = String(els.sunoDialect?.value || "").trim();
-    const dialectHint = String(els.sunoDialectHint?.value || "").trim();
-    const addressNote = arabicAddressPronunciationNote(
-      els.sunoArabicAddress?.value,
-      resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) }),
-    );
-    const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
     const labelEl = els.btnLyricsFixSinging?.querySelector(".lyricsFixSingingLabel");
     const prevLabel = labelEl?.textContent || "Fix for singing";
     let inkwellSettle = false;
@@ -76176,8 +76169,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           seed,
           style,
           mode: "fix_singing",
-          dialect,
-          dialectHint: lyricDialectHint,
+          dialect: arCtx.dialect,
+          dialectHint: arCtx.dialectHint,
+          arabicAddress: arCtx.arabicAddress,
           lyricsProvider: "gemini",
           scriptFormat: resolveLyricsScriptFormat(),
           includeSingability: wantsLyricsSingabilityWithGenerate(),
@@ -76233,16 +76227,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       showToast("Section tags already present.", { icon: "♫", durationMs: 2800 });
       return;
     }
-    try { applyLyricsLanguageToDialect(); } catch {}
+    const arCtx = buildLyricApiArabicContext();
     const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
     const style = String(els.sunoStyle?.value || "").trim();
-    const dialect = String(els.sunoDialect?.value || "").trim();
-    const dialectHint = String(els.sunoDialectHint?.value || "").trim();
-    const addressNote = arabicAddressPronunciationNote(
-      els.sunoArabicAddress?.value,
-      resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) }),
-    );
-    const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
     let inkwellSettle = false;
     try {
       pushLyricsUndoSnapshot(seed);
@@ -76264,8 +76251,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           seed,
           style,
           mode: "arrange",
-          dialect,
-          dialectHint: lyricDialectHint,
+          dialect: arCtx.dialect,
+          dialectHint: arCtx.dialectHint,
+          arabicAddress: arCtx.arabicAddress,
           lyricsProvider: "gemini",
           scriptFormat: resolveLyricsScriptFormat(),
           includeSingability: wantsLyricsSingabilityWithGenerate(),
@@ -77916,6 +77904,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (!finalPrompt && !clipAllowImageOnly && !isTemplateSparkClipFlow() && !ideaClip) {
           try {
             setStatus("Drafting lyrics with Nabad AI…");
+            const arCtxClip = buildLyricApiArabicContext();
             const lyricRes = await apiFetch("/api/lyrics", {
               method: "POST",
               headers: {
@@ -77923,10 +77912,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 ...(getSupabaseAuthToken() ? { Authorization: `Bearer ${getSupabaseAuthToken()}` } : {}),
               },
               body: JSON.stringify({
-                prompt: userStyle || "Upbeat pop hook for a 30 second clip",
-                dialect,
-                dialectHint: lyricDialectHint,
+                seed: userStyle || "Upbeat pop hook for a 30 second clip",
+                mode: "challenge_clip",
+                dialect: arCtxClip.dialect,
+                dialectHint: arCtxClip.dialectHint,
+                arabicAddress: arCtxClip.arabicAddress,
                 lyricsProvider: "gemini",
+                lyricsTarget: "lyria",
+                scriptFormat: resolveLyricsScriptFormat(),
               }),
             });
             const lyricData = await lyricRes.json().catch(() => ({}));
@@ -78291,6 +78284,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (!finalPrompt && !shouldGenerateInstrumental && !ideaNotLyrics && !(voiceClipChallenge && hasReference)) {
         try {
           setStatus("Preparing prompt with Gemini… (Engine: Gemini assisted)");
+          const arCtxAuto = buildLyricApiArabicContext();
           const rr = await fetch(apiUrl("/api/lyrics"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -78298,10 +78292,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               seed: userPrompt,
               style: userStyle,
               mode: "arrange",
-              dialect,
-              dialectHint: lyricDialectHint,
+              dialect: arCtxAuto.dialect,
+              dialectHint: arCtxAuto.dialectHint,
+              arabicAddress: arCtxAuto.arabicAddress,
               lyricsProvider: resolveLyricsProviderForMode("arrange"),
               lyricsTarget: resolveLyricsTargetForMusicProvider(),
+              scriptFormat: resolveLyricsScriptFormat(),
             }),
           });
           const dd = await rr.json().catch(() => ({}));
@@ -78424,6 +78420,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         model: modelForRequest,
         ...(dialect ? { dialect: String(dialect) } : {}),
         ...(lyricDialectHint ? { dialectHint: String(lyricDialectHint) } : {}),
+        ...(arabicAddress ? { arabicAddress: String(arabicAddress) } : {}),
         ...(useLyriaForThisGenerate() ? { scriptFormat: resolveLyricsScriptFormat() } : {}),
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
         ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),

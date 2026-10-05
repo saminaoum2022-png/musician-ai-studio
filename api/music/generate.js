@@ -10,7 +10,7 @@
  * - MINIMAX_API_KEY, MINIMAX_KEY_KIND, MINIMAX_MUSIC_MODEL, MINIMAX_GENERATE_ENABLED
  * - GEMINI_API_KEY / GOOGLE_API_KEY, LYRIA_MUSIC_MODEL, LYRIA_GENERATE_ENABLED
  * - CLIP_GEMINI_PRODUCER_ENABLED=1 — Gemini prompt enrichment for clips + ElevenLabs (staging preview)
- * - LYRIA_PROMPT_V2=1 — minimal Lyria prompt (default ON on Vercel Preview); skips Gemini producer on Lyria
+ * - LYRIA_PROMPT_V2=1 — optional minimal Lyria prompt v2 (off by default); skips Gemini producer on Lyria
  * - CLIP_GEMINI_PRODUCER_MODEL — optional override; else tries 3.6 → 3.5 → 2.5 flash
  * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_FINETUNE_ID, ELEVENLABS_GENERATE_ENABLED
  * - MUREKA_API_KEY, MUREKA_MUSIC_MODEL, MUREKA_VOCAL_ID, MUREKA_GENERATE_ENABLED

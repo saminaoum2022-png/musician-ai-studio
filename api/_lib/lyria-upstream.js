@@ -29,6 +29,7 @@ const {
   buildLyriaEgyptianArabicNote,
   dialectFlags,
   hintRequestsFormalMsa,
+  normalizeArabicAddress,
 } = require("./arabic-dialect-lyrics");
 const { buildNabadVocalPrompt } = require("./nabad-vocal-identity");
 
@@ -192,22 +193,49 @@ function extractDialectFromStyleText(style = "") {
   return parts.filter(Boolean).join(" — ");
 }
 
+function arabicAddressNoteForLyriaHint(address = "") {
+  const addr = String(address || "").trim().toLowerCase();
+  if (addr === "female") {
+    return "Arabic address: lyrics sung TO a woman; keep feminine addressee words: إنتِ، حبيبتي، غالية، كنتِ.";
+  }
+  if (addr === "group") {
+    return "Arabic address: lyrics sung TO a group; keep plural addressee words: إنتو، حبايبي، غاليين، كنتو.";
+  }
+  if (addr === "male") {
+    return "Arabic address: lyrics sung TO a man; keep masculine addressee words: إنتَ، حبيبي، غالي.";
+  }
+  return "";
+}
+
 function mergeLyriaDialectHint(body = {}) {
   const direct = [String(body?.dialectHint || "").trim(), String(body?.dialect || "").trim()]
     .filter(Boolean)
     .join(" — ");
-  if (direct) return direct;
-  return extractDialectFromStyleText(body?.style || "");
+  const base = direct || extractDialectFromStyleText(body?.style || "");
+  const inferred = normalizeArabicAddress(String(body?.arabicAddress || body?.address || "").trim(), base);
+  const note = arabicAddressNoteForLyriaHint(inferred);
+  if (!note || /lyrics sung to a (man|woman|group)/i.test(base)) return base;
+  return [base, note].filter(Boolean).join(" ");
+}
+
+/** Addressee chip text belongs in lyrics, not the singer timbre line. */
+function stripArabicAddressClausesFromHint(hint = "") {
+  return String(hint || "")
+    .replace(/Arabic address:\s*lyrics sung TO[^.;]+[.;]?/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 /** Lyria may sing negation/meta clauses — strip known bad fragments before vocal lines. */
 function sanitizeDialectHintForLyriaPrompt(hint = "") {
-  return String(hint || "")
-    .replace(/\s*\(addressee only,\s*not singer gender\)/gi, "")
-    .replace(/,\s*not the singer's gender/gi, "")
-    .replace(/;\s*not singer gender/gi, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+  return stripArabicAddressClausesFromHint(
+    String(hint || "")
+      .replace(/\s*\(addressee only,\s*not singer gender\)/gi, "")
+      .replace(/,\s*not the singer's gender/gi, "")
+      .replace(/;\s*not singer gender/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim(),
+  );
 }
 
 function resolveLyriaDialectLabel(body = {}) {

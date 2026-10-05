@@ -936,6 +936,17 @@ function buildPrompt({
   const colloquialArabicLines = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed })
     ? buildColloquialArabicGenerationLines(flags)
     : [];
+  const resolvedAddress = normalizeArabicAddress(arabicAddress, dialectHint);
+  const generationAddressLines =
+    mode !== "diacritics" &&
+    mode !== "singability_check" &&
+    resolvedAddress &&
+    isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed })
+      ? [
+          ...buildDiacriticsAddressLinesEn(resolvedAddress, flags),
+          ...buildDiacriticsAddressLinesAr(resolvedAddress, flags),
+        ]
+      : [];
   if (mode === "to_arabizi") {
     return [
       ...buildToArabiziConversionLines({ dialect, dialectHint }),
@@ -1035,7 +1046,9 @@ function buildPrompt({
       ...(forLyria ? LYRIA_SHORT_LINE_RULES : []),
       "Keep the same language, dialect, story, and emotional meaning.",
       "Preserve colloquial/dialect words — do NOT upgrade to formal MSA or change the accent flavor.",
+      "Keep the same addressee gender (إنتَ/إنتِ/إنتو) — do NOT flip who the lyrics talk to.",
       "Keep the same section tags and overall structure; only lightly adjust wording, line breaks, or endings for flow.",
+      ...generationAddressLines,
       ...POP_RHYME_METER_LINES_LIGHT,
       ...(useArabizi ? scriptLines : ["Do NOT add heavy vowel marks (tashkeel) — that is a separate step."]),
       "Output lyrics only with section tags. No explanations or metadata.",
@@ -1179,6 +1192,7 @@ function buildPrompt({
       ...POP_RHYME_METER_LINES_LIGHT,
       `Variation token: ${nonce}`,
       ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
+      ...generationAddressLines,
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
       "",
@@ -1196,6 +1210,7 @@ function buildPrompt({
       ...(useArabizi ? scriptLines : []),
       ...POP_RHYME_METER_LINES_CONTINUE,
       ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
+      ...generationAddressLines,
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
       "",
@@ -1225,6 +1240,7 @@ function buildPrompt({
         : []),
       `Variation token: ${nonce}`,
       ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
+      ...generationAddressLines,
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
       "",
@@ -1252,6 +1268,7 @@ function buildPrompt({
         : []),
       `Variation token: ${nonce}`,
       ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
+      ...generationAddressLines,
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
       "",
@@ -1284,6 +1301,7 @@ function buildPrompt({
     ...POP_RHYME_METER_LINES,
     `Variation token: ${nonce}`,
     ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
+    ...generationAddressLines,
     ...(dialectLines ? [dialectLines] : []),
     style ? `Style/Tags: ${style}` : "Style/Tags: none",
     seed ? `Use this seed idea:\n${seed}` : "No seed provided; create a coherent theme.",

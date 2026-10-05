@@ -62435,6 +62435,29 @@ function applyAudioDurationHint(sec) {
   if (d > audioDurationHint.sec) audioDurationHint.sec = d;
 }
 
+/** Shrink hint when a full play proves the file is shorter than a byte-size estimate. */
+function clampAudioDurationHintTo(sec) {
+  const d = normalizeAudioDurationSec(sec);
+  if (d <= 0) return;
+  if (audioDurationHint.sec <= 0 || d < audioDurationHint.sec) audioDurationHint.sec = d;
+}
+
+function recordAuthoritativePlaybackDuration(a) {
+  if (!a) return;
+  const cur = normalizeAudioDurationSec(a.currentTime);
+  if (cur <= 0) return;
+  clampAudioDurationHintTo(cur);
+  const track = resolvePlayerLibraryTrack() || currentPlayerTrackRef;
+  const id = String(track?.id || "").trim();
+  if (!id) return;
+  const existing = discoverTrackDurationSec(track);
+  if (existing > 0 && Math.abs(existing - cur) < 0.75) return;
+  const meta = track?.meta && typeof track.meta === "object" ? { ...track.meta } : {};
+  const rounded = Math.round(cur * 10) / 10;
+  meta.durationSec = rounded;
+  patchLibraryTrack(id, { meta, durationSec: rounded }, "playback-duration");
+}
+
 function refreshAudioDurationHintFromElement(a) {
   if (!a || !audioDurationHint.url) return;
   const src = getActiveAudioSrc(a);
@@ -62445,13 +62468,27 @@ function refreshAudioDurationHintFromElement(a) {
 function getAudioDuration(a) {
   if (!a) return 0;
   refreshAudioDurationHintFromElement(a);
+  const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  if (a.ended && cur > 0.25) return cur;
+
   let dur = readAudioElementDurationSec(a);
   const src = getActiveAudioSrc(a);
   const hinted = normalizeAudioDurationSec(audioDurationHint.sec);
-  if (src && audioDurationHint.url && audioUrlsEquivalent(src, audioDurationHint.url) && hinted > 0) {
-    dur = Math.max(dur, hinted);
+  const metaDur = discoverTrackDurationSec(resolvePlayerLibraryTrack() || currentPlayerTrackRef);
+
+  if (metaDur > 0 && (dur <= 0 || (hinted > metaDur + 2 && metaDur < hinted))) {
+    dur = dur > 0 ? Math.min(dur, metaDur) : metaDur;
   }
-  const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+
+  if (src && audioDurationHint.url && audioUrlsEquivalent(src, audioDurationHint.url) && hinted > 0) {
+    if (dur > 0) {
+      // File-size probes often overshoot; never show longer than decoded media once known.
+      if (hinted <= dur + 1.5) dur = Math.max(dur, hinted);
+    } else {
+      dur = hinted;
+    }
+  }
+
   if (cur > 0.5 && dur > 0 && cur > dur - 0.25) {
     dur = Math.max(dur, cur);
   }
@@ -62517,11 +62554,10 @@ async function measureAudioDurationSec(rawUrl) {
   if (!s || s === "#") return null;
   const url = hubAbsoluteUrl(s);
 
-  // Best: full file size from proxy (Content-Range / Content-Length) → real length.
+  let fromSize = 0;
   try {
     const bytes = await fetchAudioByteLength(url);
-    const fromSize = estimateMp3DurationFromByteLength(bytes);
-    if (fromSize > 0) return fromSize;
+    fromSize = estimateMp3DurationFromByteLength(bytes);
   } catch {}
 
   // Fast path: same src already decoded on the shared player element.
@@ -62531,11 +62567,15 @@ async function measureAudioDurationSec(rawUrl) {
       audioUrlsEquivalent(getActiveAudioSrc(playerEl), url)
     ) {
       const d = readAudioElementDurationSec(playerEl);
-      if (d > 0) return d;
+      if (d > 0) {
+        if (fromSize > 0 && fromSize > d + 3) return d;
+        if (fromSize > 0) return Math.min(fromSize, d);
+        return d;
+      }
     }
   } catch {}
 
-  return new Promise((resolve) => {
+  const probed = await new Promise((resolve) => {
     const a = new Audio();
     let settled = false;
     let best = 0;
@@ -62573,6 +62613,13 @@ async function measureAudioDurationSec(rawUrl) {
       finish(null);
     }
   });
+
+  if (probed > 0 && fromSize > 0) {
+    if (fromSize > probed + 3) return probed;
+    if (probed > fromSize + 3) return fromSize;
+    return Math.min(fromSize, probed);
+  }
+  return probed || fromSize || null;
 }
 
 /** Suno's persona endpoint requires the analysis segment to be 10–30s
@@ -70175,6 +70222,7 @@ function ensurePlayer() {
   playerEl.addEventListener("ended", () => {
     const elSeq = Number(playerEl?.dataset?.playerSeq || 0);
     if (elSeq !== _playerPlaybackSeq) return;
+    try { recordAuthoritativePlaybackDuration(playerEl); } catch {}
     hidePlayerKaraokeStrip();
     if (isLiveListenTransportLocked()) {
       try { syncPlayerUI(); } catch {}

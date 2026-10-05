@@ -1765,6 +1765,16 @@ function applyElevenReferenceToCompositionPlan(
  * Hum Track (instrumental): translate a hummed clip to one solo instrument.
  * Avoids Gemini multi-chunk plans that re-attach the raw hum on most sections.
  */
+function filterHumTrackNegativeStyles(tags) {
+  const drop = new Set(["humming", "hum", "a cappella"]);
+  return String(tags || "")
+    .split(/[,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((t) => !drop.has(t.toLowerCase()))
+    .join(", ");
+}
+
 function buildElevenHumTrackCompositionPlan({
   stylePrompt = "",
   musicLengthMs,
@@ -1773,73 +1783,57 @@ function buildElevenHumTrackCompositionPlan({
   conditionStrength = "high",
   negativeTags = "",
 } = {}) {
-  const lengthMs = resolveElevenMusicLengthMs(musicLengthMs);
+  const lengthMs = Math.min(
+    120000,
+    Math.max(35000, resolveElevenMusicLengthMs(musicLengthMs)),
+  );
   const songId = String(referenceSongId || "").trim();
   if (!songId) return null;
   const refEnd = Math.max(
     3000,
     Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)),
   );
-  const baseStrength = ["low", "medium", "high", "xhigh"].includes(String(conditionStrength))
+  const strength = ["low", "medium", "high", "xhigh"].includes(String(conditionStrength))
     ? String(conditionStrength)
     : "high";
-  const mainStrength = baseStrength === "low" ? "medium" : baseStrength === "medium" ? "high" : "xhigh";
-  const introMs = Math.min(12000, Math.max(4000, Math.round(lengthMs * 0.07)));
-  const mainMs = Math.max(3000, lengthMs - introMs);
   const styles = splitElevenStyleTags(String(stylePrompt || "").trim());
-  const negative_styles = splitElevenNegativeStyleTags(negativeTags, { instrumental: true });
-  for (const extra of [
-    "human voice",
-    "humming",
-    "speech",
-    "vocals",
-    "singing",
-    "a cappella",
-  ]) {
+  const filteredNegInput = filterHumTrackNegativeStyles(negativeTags);
+  const negative_styles = splitElevenNegativeStyleTags(filteredNegInput, { instrumental: true }).filter(
+    (t) => !/^(humming|hum)$/i.test(String(t || "").trim()),
+  );
+  for (const extra of ["human voice", "speech", "vocals", "singing"]) {
     if (negative_styles.length >= 50) break;
     if (!negative_styles.some((t) => t.toLowerCase() === extra)) negative_styles.push(extra);
   }
-  const introPos = ensureMinPositiveStyles([
+  const positive_styles = ensureMinPositiveStyles([
     ...styles,
     "solo instrument only",
-    "brief opening motif",
-    "studio instrumental",
-  ]).slice(0, 50);
-  const mainPos = ensureMinPositiveStyles([
-    ...styles,
     "perform hummed melody on solo instrument",
     "match reference hum pitch and rhythm",
-    "accurate intonation",
-    "no human voice",
+    "clear melodic lead",
+    "studio instrumental",
   ]).slice(0, 50);
 
   return finalizeElevenSongPlan(
     {
       chunks: [
         {
-          text: "[Intro]\n{instrumental — short solo instrument opening; do not replay the reference hum}",
-          duration_ms: introMs,
-          positive_styles: introPos,
-          negative_styles: negative_styles.slice(0, 50),
-          context_adherence: "medium",
-        },
-        {
-          text: "[Main]\n{instrumental — translate the reference hum into the solo instrument; melody only; no voice}",
-          duration_ms: mainMs,
-          positive_styles: mainPos,
+          text: "[Main]\n{instrumental — translate the reference hum into the solo instrument; sustained melodic performance; no human voice in the output}",
+          duration_ms: lengthMs,
+          positive_styles,
           negative_styles: negative_styles.slice(0, 50),
           context_adherence: "high",
           conditioning_ref: {
             song_id: songId,
             range: { start_ms: 0, end_ms: refEnd },
           },
-          condition_strength: mainStrength,
+          condition_strength: strength,
         },
       ],
     },
     {
       stylePrompt: String(stylePrompt || "").trim(),
-      negativeTags,
+      negativeTags: filteredNegInput,
       musicLengthMs: lengthMs,
       instrumental: true,
       useNabadVocalIdentity: false,

@@ -595,7 +595,7 @@ async function submitHumTrackGeneration() {
           const refMs = await ctx?.estimateBlobDurationMs?.(sendFile);
           if (refMs) {
             payload.referenceDurationMs = refMs;
-            const trackMs = Math.max(12000, Math.min(90000, Math.round(refMs) + 8000));
+            const trackMs = Math.max(35000, Math.min(90000, Math.round(refMs) + 15000));
             payload.musicLengthMs = trackMs;
             payload.duration = Math.ceil(trackMs / 1000);
           }

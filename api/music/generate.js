@@ -168,7 +168,14 @@ function applyHumTrackGenerateDefaults(body) {
   body.humTrack = true;
   body.instrumental = true;
   if (!String(body?.style || "").trim()) body.style = preset.style;
-  if (!String(body?.negativeTags || "").trim()) body.negativeTags = preset.negativeTags;
+  if (!String(body?.negativeTags || "").trim()) {
+    body.negativeTags = String(preset.negativeTags || "")
+      .split(/[,|]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .filter((t) => !/^(humming|hum)$/i.test(t))
+      .join(", ");
+  }
 }
 
 function buildMusicPrompt(body) {
@@ -1783,8 +1790,8 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     if (body?.humTrack) {
       const refMs = Math.max(3000, Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)));
       musicLengthMs = Math.max(
-        12000,
-        Math.min(90000, Number(body?.musicLengthMs) || refMs + 8000),
+        35000,
+        Math.min(90000, Number(body?.musicLengthMs) || refMs + 15000),
       );
     }
     console.log(

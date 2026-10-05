@@ -7019,6 +7019,58 @@ function isArabicLyricsFlowActive() {
   return false;
 }
 
+/** Maqam UI: explicit Arabic or Arabizi language chip only (not Auto). */
+function isCreateLyriaMaqamLanguage() {
+  return lyricsLanguage === "arabic" || isArabiziLyricsLanguage(lyricsLanguage);
+}
+
+function isCreateLyriaMaqamEngine() {
+  try {
+    return Boolean(useLyriaForThisGenerate() || isLyriaClipGenerateFlow());
+  } catch {
+    return false;
+  }
+}
+
+function createLyriaMaqamUiVisible() {
+  return isCreateLyriaMaqamLanguage() && isCreateLyriaMaqamEngine();
+}
+
+function syncCreateLyriaMaqamGroup() {
+  const group = document.getElementById("createLyriaMaqamGroup");
+  const show = createLyriaMaqamUiVisible();
+  if (group) {
+    group.hidden = !show;
+    group.style.display = show ? "" : "none";
+    group.setAttribute("aria-hidden", show ? "false" : "true");
+  }
+  if (!show && els.sunoMaqam) {
+    if (String(els.sunoMaqam.value || "").trim()) {
+      els.sunoMaqam.value = "";
+      try { els.sunoMaqam.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
+    }
+    try { syncAllOptionChipRows(); } catch {}
+  }
+}
+
+/** Lyria-only: send maqam id in API body when user picked a chip — never merge into Style. */
+function resolveLyriaMaqamForPayload() {
+  if (!createLyriaMaqamUiVisible()) return undefined;
+  const id = normalizeMaqamValue(els.sunoMaqam?.value).toLowerCase().replace(/\s+/g, "_");
+  const allowed = new Set([
+    "ajam",
+    "rast",
+    "nahawand",
+    "bayati",
+    "kurd",
+    "hijaz",
+    "saba",
+    "sikah",
+  ]);
+  if (!id || !allowed.has(id)) return undefined;
+  return id;
+}
+
 function applyLyricsLanguageToDialect() {
   let val = "";
   let hint = "";
@@ -7066,6 +7118,7 @@ function syncLyricsLangPills() {
   revealExtraChipIfSelected(els.lyricsDialectRow, "[data-lyrics-dialect]");
   syncArabicLyricsControlsVisibility();
   try { syncPhotoSoloVocalSections(); } catch {}
+  try { syncCreateLyriaMaqamGroup(); } catch {}
 }
 
 /** Arabic dialect chips only when the user explicitly picks Arabic. */
@@ -7988,6 +8041,49 @@ function syncLyricsPolishVisibility() {
   try { syncLyricsSingabilityCheckVisibility(); } catch {}
 }
 
+/** Advanced Range chips follow Singer gender (Male / Female / Duo). */
+function syncVoiceRangeChipRowForSingerGender() {
+  const row = document.getElementById("voiceRangeChipRow");
+  const select = els.sunoVoiceProfile;
+  if (!row || !select) return;
+  const sg = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
+  /** @type {"all"|"m"|"f"|"duo"} */
+  let mode = "all";
+  if (sg === "m") mode = "m";
+  else if (sg === "f") mode = "f";
+  else if (sg === "duo") mode = "duo";
+
+  const chipVisible = (val) => {
+    if (!val) return true;
+    if (mode === "duo") return false;
+    if (mode === "m") return val.startsWith("m|");
+    if (mode === "f") return val.startsWith("f|");
+    return true;
+  };
+
+  row.querySelectorAll("[data-opt-value]").forEach((btn) => {
+    const val = String(btn.getAttribute("data-opt-value") || "");
+    const show = chipVisible(val);
+    btn.hidden = !show;
+    btn.style.display = show ? "" : "none";
+  });
+
+  select.querySelectorAll("option").forEach((opt) => {
+    const val = String(opt.value || "");
+    if (!val) return;
+    const show = chipVisible(val);
+    opt.hidden = !show;
+    opt.disabled = !show;
+  });
+
+  const current = String(select.value || "").trim();
+  if (current && !chipVisible(current)) {
+    select.value = "";
+    try { select.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
+  }
+  try { syncAllOptionChipRows(); } catch {}
+}
+
 /** Mirror the hidden #sunoSingerGender input onto the Singer pills, and dim
  *  them when a saved voice persona is active (the persona owns the voice). */
 function syncSingerGenderPills() {
@@ -8003,6 +8099,7 @@ function syncSingerGenderPills() {
   try { overridden = Boolean(getActivePersonaId()); } catch {}
   const wrap = document.getElementById("singerGenderPills");
   if (wrap) wrap.classList.toggle("isOverridden", overridden);
+  try { syncVoiceRangeChipRowForSingerGender(); } catch {}
 }
 
 /** Line "+" used on Create chips — replaces the fullwidth "＋" text glyph so it matches the other 12px line icons. */
@@ -8092,16 +8189,27 @@ function renderSingerPersonaRow() {
   syncSingerGenderPills();
 }
 
-function resetAdvancedOptionsToDefaults() {
-  if (els.sunoGroovePace) els.sunoGroovePace.value = "";
-  if (els.sunoProsody) els.sunoProsody.value = "";
-  if (els.sunoBeatStability) els.sunoBeatStability.value = "";
-  if (els.sunoProMode) els.sunoProMode.checked = false;
-  if (els.sunoTiming) els.sunoTiming.value = "";
-  if (els.sunoSongKey) els.sunoSongKey.value = "";
+/** Reset only the Create → Advanced accordion (length, maqam, vocal style, range). */
+function resetCreateAdvancedPanel() {
   if (els.sunoSongDuration) els.sunoSongDuration.value = "";
   if (els.sunoMaqam) els.sunoMaqam.value = "";
   if (els.sunoVoiceProfile) els.sunoVoiceProfile.value = "";
+  if (els.sunoGroovePace) els.sunoGroovePace.value = "";
+  if (els.sunoProsody) els.sunoProsody.value = "";
+  if (els.sunoBeatStability) els.sunoBeatStability.value = "";
+  if (els.sunoTiming) els.sunoTiming.value = "";
+  if (els.sunoSongKey) els.sunoSongKey.value = "";
+  try { clearVocalStyleTagsFromStyle(); } catch {}
+  try { syncVoiceRangeChipRowForSingerGender(); } catch {}
+  try { syncAllOptionChipRows(); } catch {}
+  try { syncCreateLyriaMaqamGroup(); } catch {}
+  try { syncStyleUi(); } catch {}
+  try { syncElevenSongLengthPanel(); } catch {}
+}
+
+function resetAdvancedOptionsToDefaults() {
+  resetCreateAdvancedPanel();
+  if (els.sunoProMode) els.sunoProMode.checked = false;
   if (els.sunoSingerGender) els.sunoSingerGender.value = "";
   try { syncSingerGenderPills(); } catch {}
   if (els.sunoDialect) els.sunoDialect.value = "";
@@ -8117,7 +8225,6 @@ function resetAdvancedOptionsToDefaults() {
   if (els.sunoPersonaId) els.sunoPersonaId.value = "";
   savePersonaSelection("");
   document.body.classList.remove("proMode");
-  try { syncAllOptionChipRows(); } catch {}
   try { clearMoodPresetSelection(); } catch {}
   if (els.advancedSheet) els.advancedSheet.open = false;
   updateProfilePersonaRow();
@@ -8561,6 +8668,7 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   syncSettingsGeminiProducerRow();
   syncSettingsNabadVocalChainRow(p);
   try { syncElevenSongLengthPanel(); } catch {}
+  try { syncCreateLyriaMaqamGroup(); } catch {}
 }
 
 const ELEVENLABS_FINETUNE_LS_KEY = "nabadElevenFinetune";
@@ -24477,6 +24585,7 @@ function normalizeMaqamValue(v) {
 
 function applyMaqamToStyleInput() {
   if (!els.sunoMaqam || !els.sunoStyle) return;
+  if (createLyriaMaqamUiVisible()) return;
   const maqam = normalizeMaqamValue(els.sunoMaqam.value);
   const base = String(els.sunoStyle.value || "").trim();
   // Remove any previous "maqam:" tag to avoid duplicates.
@@ -77515,7 +77624,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         // A conflicting Range pick in Options (e.g. Soprano while choosing
         // Male) would fight this — reset the range to Auto.
         const vp = String(els.sunoVoiceProfile?.value || "").trim();
-        if (v && vp.includes("|") && !vp.startsWith(`${v}|`)) {
+        if (v && v !== "duo" && vp.includes("|") && !vp.startsWith(`${v}|`)) {
+          els.sunoVoiceProfile.value = "";
+          try { els.sunoVoiceProfile.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
+        }
+        if (v === "duo" && vp) {
           els.sunoVoiceProfile.value = "";
           try { els.sunoVoiceProfile.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
         }
@@ -77777,6 +77890,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           || resolveClipSingerGenderForUi()
           || "";
         const photoImageForLyria = resolvePhotoImagePayloadForLyria();
+        const lyriaMaqamId = resolveLyriaMaqamForPayload();
         const payload = {
           prompt: ideaClip ? "" : finalPrompt,
           style: clipStyle,
@@ -77797,6 +77911,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           watchKind: clipAllowImageOnly ? "photo" : "clip",
           ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
           ...(ideaClip ? { ideaPrompt: true, ideaBrief: userPrompt } : {}),
+          ...(isLyriaClipGenerateFlow() ? { scriptFormat: resolveLyricsScriptFormat() } : {}),
+          ...(lyriaMaqamId ? { maqam: lyriaMaqamId } : {}),
           ...(creditsState.isAdmin
             ? {
                 geminiProducer: getGeminiProducerPref() ? "1" : "0",
@@ -78216,6 +78332,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`;
       const songDurationSec = resolveSongDurationForGeneration();
       const photoImageForLyria = useLyriaForThisGenerate() ? resolvePhotoImagePayloadForLyria() : "";
+      const lyriaMaqamId = resolveLyriaMaqamForPayload();
       const payload = {
         prompt: ideaPromptToSongAlt ? "" : finalPrompt,
         style: ideaSimpleMode ? "" : ideaPromptToSongAlt ? mergeIdeaIntoStyle(userPrompt, personaStyleBase) : personaStyleBase,
@@ -78227,6 +78344,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ...(dialect ? { dialect: String(dialect) } : {}),
         ...(lyricDialectHint ? { dialectHint: String(lyricDialectHint) } : {}),
         ...(useLyriaForThisGenerate() ? { scriptFormat: resolveLyricsScriptFormat() } : {}),
+        ...(lyriaMaqamId ? { maqam: lyriaMaqamId } : {}),
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
         ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
         ...(ideaPromptToSongAlt ? { ideaPrompt: true, ideaBrief: userPrompt } : {}),
@@ -79310,8 +79428,11 @@ bindOptionChipRow("grooveChipRow", els.sunoGroovePace);
 bindOptionChipRow("prosodyChipRow", els.sunoProsody);
 bindOptionChipRow("beatChipRow", els.sunoBeatStability);
 bindOptionChipRow("voiceRangeChipRow", els.sunoVoiceProfile);
+try { syncVoiceRangeChipRowForSingerGender(); } catch {}
+bindOptionChipRow("maqamChipRow", els.sunoMaqam);
 bindOptionChipRow("songDurationChipRow", els.sunoSongDuration);
 bindOptionChipRow("elevenSongDurationChipRow", els.sunoSongDuration);
+try { syncCreateLyriaMaqamGroup(); } catch {}
 bindOptionChipRow("personaStyleLeadChipRow", els.sunoPersonaStyleLead);
 bindOptionChipRow("personaAdventureChipRow", els.sunoPersonaAdventure);
 bindOptionChipRow("personaAudioInfluenceChipRow", els.sunoPersonaAudioInfluence);
@@ -79584,8 +79705,21 @@ function renderStyleSelectedChips() {
   row.innerHTML = "";
 }
 
-// Vocal-style chips (Advanced → Voice) toggle the same tags into the Style
-// field, so they stay in sync with everything else the Style field drives.
+/** All vocal-style chip values (exclusive: at most one in Style at a time). */
+function vocalStyleTagsList() {
+  const row = els.vocalStyleRow;
+  if (!row) return [];
+  return [...row.querySelectorAll("[data-vocal-style]")]
+    .map((b) => String(b.getAttribute("data-vocal-style") || "").trim())
+    .filter(Boolean);
+}
+
+function clearVocalStyleTagsFromStyle() {
+  const tags = vocalStyleTagsList();
+  if (tags.length) removeStyleTags(tags);
+}
+
+// Vocal-style chips (Advanced → Voice) mirror tags in the Style field (one at a time).
 function renderVocalStyleRow() {
   const row = els.vocalStyleRow;
   if (!row) return;
@@ -79988,8 +80122,12 @@ function closeStyleLibrary() {
       if (!btn || !vocalRow.contains(btn)) return;
       haptic("light");
       const tag = btn.getAttribute("data-vocal-style");
-      if (styleTagsSelectedSet().has(tag.toLowerCase())) removeStyleTags([tag]);
-      else addStyleTags([tag]);
+      if (styleTagsSelectedSet().has(String(tag).toLowerCase())) {
+        removeStyleTags([tag]);
+      } else {
+        removeStyleTags(vocalStyleTagsList());
+        addStyleTags([tag]);
+      }
       syncStyleUi();
       try { syncGenerateOrbVisibility(); } catch {}
     });
@@ -80115,8 +80253,10 @@ function clearMoodPresetSelection() {
 }
 if (els.btnAdvancedReset) {
   els.btnAdvancedReset.addEventListener("click", () => {
-    resetAdvancedOptionsToDefaults();
-    setStatus("More options reset to defaults.");
+    haptic("light");
+    resetCreateAdvancedPanel();
+    setStatus("Advanced options reset.");
+    showToast("Advanced options reset", { icon: "↺", durationMs: 2000 });
   });
 }
 if (els.btnAdvancedApply) {

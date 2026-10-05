@@ -22513,6 +22513,90 @@ input::placeholder, textarea::placeholder{
   body[data-route="generate"] #advancedSheet.createOptionsSheet .createOptionsClose{
     display: none;
   }
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedPanels{
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedPanels > .inputPanel--style{
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: none;
+  }
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion > summary.createAdvancedToggle{
+    display: grid !important;
+    grid-template-columns: 40px 1fr 40px;
+    align-items: center;
+    column-gap: 4px;
+    list-style: none;
+    cursor: pointer;
+    margin: 0;
+    box-shadow: none;
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 6px 8px 10px;
+    flex-direction: row;
+  }
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion > summary.createAdvancedToggle::-webkit-details-marker{
+    display: none;
+  }
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedToggleIcon{
+    grid-column: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    align-self: center;
+    padding-right: 6px;
+    color: rgba(183, 168, 255, 0.88);
+  }
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedToggleIcon svg{
+    display: block;
+  }
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedToggleLabel{
+    grid-column: 2;
+    margin: 0;
+    text-align: center;
+    justify-self: center;
+    align-self: center;
+    width: 100%;
+    line-height: 1.2;
+  }
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedToggleChev{
+    grid-column: 3;
+    justify-self: start;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    padding-left: 2px;
+    margin-right: 6px;
+    color: rgba(223, 231, 251, 0.45);
+    transition: transform 200ms ease;
+  }
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion[open] .createAdvancedToggleChev{
+    transform: rotate(180deg);
+    color: rgba(183, 168, 255, 0.85);
+  }
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion .stylePanelHead .createOptionsFieldHint{
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: rgba(244, 243, 255, 0.36);
+  }
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedActions{
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 2px;
+  }
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedResetBtn{
+    min-height: 36px;
+    font-size: 13px;
+    font-weight: 700;
+    opacity: 0.85;
+  }
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createOptionsFooter{
+    display: none !important;
+  }
   .miniMoreOptions .stepCard.compactOptions{
     gap: 10px;
   }
@@ -65351,10 +65435,67 @@ body[data-route="generate"] .stylePanelHead > span{
   /* Lyrics leads; Singer + Artwork are supporting cards — the same Create glass (blur, border,
      bloom pick-up all inherited from the panel rule), just a lower fill alpha (.075 → .05). */
   body[data-route="generate"] #singerVoicePanel,
-  body[data-route="generate"] .inputPanel--style:has(#sunoArtworkStyle){
+  body[data-route="generate"] .inputPanel--style:has(#sunoArtworkStyle),
+  body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedPanels > .inputPanel--style{
     background: rgba(255, 255, 255, 0.05);
     box-shadow: none;
   }
+}
+
+/* Create — Advanced accordion matches Style / Artwork glass (not legacy purple sheet). */
+body[data-route="generate"] #advancedSheet.createAdvancedAccordion{
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+body[data-route="generate"] #advancedSheet.createAdvancedAccordion > summary.createAdvancedToggle{
+  display: grid !important;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  column-gap: 4px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.075);
+  box-shadow: none;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 6px 8px 10px;
+}
+body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedToggleIcon{
+  grid-column: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: center;
+  padding-right: 6px;
+  color: rgba(183, 168, 255, 0.88);
+}
+body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedToggleLabel{
+  grid-column: 2;
+  margin: 0;
+  text-align: center;
+  align-self: center;
+  line-height: 1.2;
+}
+body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedToggleChev{
+  grid-column: 3;
+  justify-self: start;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  padding-left: 2px;
+  margin-right: 6px;
+}
+html[data-theme="light"] body[data-route="generate"] #advancedSheet.createAdvancedAccordion > summary.createAdvancedToggle,
+html[data-theme="light"] body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedPanels > .inputPanel--style{
+  background: var(--card);
+  border-color: var(--border);
+}
+body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvancedPanels .styleSuggestRow{
+  margin-top: 6px;
+}
+body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createLyriaMaqamHint{
+  margin: 8px 0 0;
 }
 
 /* Style chips scroll sideways — fade the right edge instead of a hard clip. */

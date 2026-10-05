@@ -14,8 +14,10 @@ const DEFAULT_BASE = "https://api.mureka.ai";
 const DEFAULT_MODEL = "auto";
 const POLL_INTERVAL_MS = 2500;
 const POLL_TIMEOUT_MS = 8 * 60 * 1000;
-/** Mureka API rejects lyrics longer than ~1020 (documented as chars; enforce UTF-8 bytes). */
-const MUREKA_LYRICS_MAX_BYTES = 1000;
+/** Mureka song/generate: lyrics up to ~3000 chars (third-party docs); stay under with margin. */
+const MUREKA_LYRICS_MAX_BYTES = 2800;
+/** Style `prompt` field — platform limit ~1024 chars (1020 errors are often prompt, not lyrics). */
+const MUREKA_PROMPT_MAX_CHARS = 1000;
 /** @deprecated use byte cap — kept for logs / UI hints */
 const MUREKA_LYRICS_MAX_CHARS = MUREKA_LYRICS_MAX_BYTES;
 
@@ -82,6 +84,15 @@ function prepareMurekaLyrics(raw, maxBytes = MUREKA_LYRICS_MAX_BYTES) {
     byteCount: murekaLyricsByteLength(lyrics),
     droppedFrom: s.length,
   };
+}
+
+function prepareMurekaPrompt(raw, maxChars = MUREKA_PROMPT_MAX_CHARS) {
+  const max = Math.max(80, Math.min(1024, Number(maxChars) || MUREKA_PROMPT_MAX_CHARS));
+  const s = String(raw || "").replace(/\s+/g, " ").trim();
+  if (!s) return { prompt: "", truncated: false, charCount: 0 };
+  if (s.length <= max) return { prompt: s, truncated: false, charCount: s.length };
+  const prompt = s.slice(0, max).trim();
+  return { prompt, truncated: true, charCount: prompt.length, droppedFrom: s.length };
 }
 
 function murekaGenerateEnabled() {
@@ -200,8 +211,8 @@ async function murekaGenerateSong({
     n: Math.max(1, Math.min(3, Number(n) || 1)),
     stream: Boolean(stream),
   };
-  const style = String(prompt || "").trim().slice(0, 2000);
-  if (style) body.prompt = style;
+  const stylePrep = prepareMurekaPrompt(prompt);
+  if (stylePrep.prompt) body.prompt = stylePrep.prompt;
   const g = mapMurekaGender(gender) || String(gender || "").trim();
   if (g) body.gender = g;
   const vid = resolveMurekaVocalId(vocalId);
@@ -335,8 +346,14 @@ function murekaUserMessage(err) {
   if (/lyrics/i.test(raw) && /required|empty/i.test(raw)) {
     return "Mureka needs lyrics — add lyrics and try again.";
   }
-  if (/character|1020|exceed|too long/i.test(raw)) {
-    return "Lyrics were too long for Mureka (max ~1020 characters) — use shorter lines or fewer sections.";
+  if (/character|1020|1024|exceed|too long/i.test(raw)) {
+    if (/prompt|style|parameter|1024/i.test(raw)) {
+      return "Style was too long for Mureka (max ~1024 characters) — shorten Style/Tags and try again.";
+    }
+    if (/lyrics/i.test(raw)) {
+      return "Lyrics were too long for Mureka — use shorter lines or fewer sections.";
+    }
+    return "Request was too long for Mureka — shorten Style/Tags first (max ~1024), then lyrics if needed.";
   }
   return raw.slice(0, 280);
 }
@@ -344,9 +361,11 @@ function murekaUserMessage(err) {
 module.exports = {
   MUREKA_LYRICS_MAX_BYTES,
   MUREKA_LYRICS_MAX_CHARS,
+  MUREKA_PROMPT_MAX_CHARS,
   murekaLyricsByteLength,
   murekaLyricsWithinLimit,
   prepareMurekaLyrics,
+  prepareMurekaPrompt,
   murekaGenerateEnabled,
   murekaApiBase,
   resolveMurekaModel,

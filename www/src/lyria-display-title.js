@@ -26,7 +26,14 @@ export function shortenDisplayTitle(raw, { maxWords = 2 } = {}) {
   return head.charAt(0).toUpperCase() + head.slice(1);
 }
 
-export function resolveLyriaDisplayTitle({ title, lyrics, prompt, style, clip, instrumental }) {
+function defaultScratchTitle({ clip, provider } = {}) {
+  const p = String(provider || "lyria").trim().toLowerCase();
+  if (clip) return p === "lyria" || p === "lyria_clip" ? "Lyria clip" : "Clip";
+  if (p === "elevenlabs" || p === "mureka") return "Generated song";
+  return "Lyria song";
+}
+
+export function resolveLyriaDisplayTitle({ title, lyrics, prompt, style, clip, instrumental, provider }) {
   const user = String(title || "").trim();
   if (user && !GENERIC_TITLES.has(user.toLowerCase())) return user.slice(0, 80);
 
@@ -39,7 +46,7 @@ export function resolveLyriaDisplayTitle({ title, lyrics, prompt, style, clip, i
   const fromStyle = shortenDisplayTitle(String(style || "").trim());
   if (fromStyle) return fromStyle;
 
-  return clip ? "Lyria clip" : "Lyria song";
+  return defaultScratchTitle({ clip, provider });
 }
 
 export function isLyriaShelfCampaignPayload(meta = {}) {

@@ -8731,7 +8731,7 @@ function syncSettingsNabadVocalChainRow(providerPref = getMusicProviderPref()) {
   const block = document.getElementById("settingsNabadVocalChainBlock");
   const show =
     Boolean(creditsState.isAdmin)
-    && (providerPref === "lyria" || providerPref === "elevenlabs" || providerPref === "mureka");
+    && (providerPref === "lyria" || providerPref === "elevenlabs");
   // lyria_clip uses Lyria v2 — no legacy Nabad FX chain on the prompt.
   if (block) {
     block.hidden = !show;
@@ -31291,9 +31291,41 @@ function isLyriaScratchCreateFlow() {
   return Boolean(useLyriaClipMusicProvider() || isNabadClipFlow() || useLyriaMusicProvider());
 }
 
-/** Lyria clip / 3.5 from scratch: optional title (blank → first ~2 words of lyrics). */
+/** Scratch admin providers (not template/challenge shelf): optional Song title field. */
+function isProviderScratchTitleFlow() {
+  if (isLyriaShelfCampaignCreateFlow()) return false;
+  return Boolean(
+    useLyriaClipMusicProvider()
+    || isNabadClipFlow()
+    || useLyriaMusicProvider()
+    || useElevenlabsMusicProvider()
+    || useMurekaMusicProvider(),
+  );
+}
+
+function scratchTitleProviderId() {
+  if (useLyriaClipMusicProvider() || isNabadClipFlow()) return "lyria_clip";
+  if (useLyriaMusicProvider()) return "lyria";
+  if (useElevenlabsMusicProvider()) return "elevenlabs";
+  if (useMurekaMusicProvider()) return "mureka";
+  return "lyria";
+}
+
+/** Lyria / ElevenLabs / Mureka scratch create: optional title (blank → first ~2 words of lyrics). */
 function createLyriaSongTitleUiVisible() {
-  return isLyriaScratchCreateFlow();
+  return isProviderScratchTitleFlow();
+}
+
+function applyScratchDisplayTitleToPayload(payload, { instrumental, clip = false } = {}) {
+  if (!isProviderScratchTitleFlow()) return;
+  payload.title = resolveLyriaDisplayTitle({
+    title: payload.title,
+    lyrics: payload.prompt,
+    style: payload.style,
+    clip,
+    instrumental,
+    provider: scratchTitleProviderId(),
+  });
 }
 
 function syncCreateSongTitleField() {
@@ -78345,9 +78377,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (useElevenlabsMusicProvider() && !shouldGenerateInstrumental && creditsState.isAdmin) {
         payload.nabadVocalChain = getNabadVocalChainPrefs();
       }
-      if (useMurekaMusicProvider() && !shouldGenerateInstrumental && creditsState.isAdmin) {
-        payload.nabadVocalChain = getNabadVocalChainPrefs();
-      }
       if (userAvoidTags) payload.negativeTags = userAvoidTags;
       payload.style = compactStyleForProvider(payload.style, 980);
       if (useElevenlabsMusicProvider()) {
@@ -78356,15 +78385,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (creditsState.isAdmin) {
         payload.geminiProducer = getGeminiProducerPref() ? "1" : "0";
       }
-      if (isLyriaScratchCreateFlow() && useLyriaMusicProvider()) {
-        payload.title = resolveLyriaDisplayTitle({
-          title: payload.title,
-          lyrics: payload.prompt,
-          style: payload.style,
-          clip: false,
-          instrumental: shouldGenerateInstrumental,
-        });
-      }
+      applyScratchDisplayTitleToPayload(payload, {
+        instrumental: shouldGenerateInstrumental,
+        clip: false,
+      });
       restoreCreateChallengeContext();
       const remixMeta =
         pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object"
@@ -78747,7 +78771,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       savePendingBackendTask(sunoTaskId || "");
       const genPendingTitle =
         String(
-          isLyriaScratchCreateFlow() && useLyriaMusicProvider()
+          isProviderScratchTitleFlow()
             ? payload.title || els.sunoTitle?.value
             : els.sunoTitle?.value || payload.title,
         ).trim() || "Generated song";

@@ -359,7 +359,7 @@ function buildDiacriticsAddressLinesEn(address = "", flags = {}) {
         ? "Levantine feminine: mark إنتِ only. Write قلبك / معك / كيفك with NO mark on kaf — sung al-bik, never قلبكِ (albaki)."
         : "Feminine: إنتِ only. Do not mark kaf on قلبك / معك.";
     return [
-      "REQUIRED address: lyrics are sung TO a woman (addressee), not the singer's gender.",
+      "REQUIRED address: lyrics are sung TO a woman (addressee).",
       ending,
       "Feminine vocatives: إنتِ، حبيبتي، غالية، كنتِ.",
       "If a word is a clear addressee form (حبيب / غالي / إنت / kaf), align it to feminine. Do not rewrite the rest of the song.",
@@ -372,7 +372,7 @@ function buildDiacriticsAddressLinesEn(address = "", flags = {}) {
         ? "Levantine masculine: mark إنتَ only. Write قلبك / معك with NO fatha on kaf — sung al-bak, never قلبكَ (albaka)."
         : "Masculine: إنتَ only. Do not mark kaf on قلبك / معك.";
     return [
-      "REQUIRED address: lyrics are sung TO a man (addressee), not the singer's gender.",
+      "REQUIRED address: lyrics are sung TO a man (addressee).",
       ending,
       "Masculine vocatives: إنتَ، حبيبي، غالي، كنتَ.",
       "If a word is a clear addressee form (حبيب / غالي / إنت / kaf), align it to masculine. Do not rewrite the rest of the song.",

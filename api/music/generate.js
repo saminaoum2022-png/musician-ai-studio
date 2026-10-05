@@ -40,6 +40,7 @@ const {
   resolveLyriaModel,
   resolveLyriaPhotoImages,
   mergeLyriaDialectHint,
+  sanitizeDialectHintForLyriaPrompt,
   resolveLyriaDialectLabel,
   buildLyriaDirectStylePrompt,
   buildLyriaArabicPronunciationLine,
@@ -436,7 +437,7 @@ function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
 }
 
 function buildLyriaFullSongAdminExtra({ body, producerResult, model = "", lyriaPrompt = "", isAdmin = false } = {}) {
-  const dialectHintLine = mergeLyriaDialectHint(body);
+  const dialectHintLine = sanitizeDialectHintForLyriaPrompt(mergeLyriaDialectHint(body));
   const dialectLabel = resolveLyriaDialectLabel(body);
   return [
     lyriaPipelineAdminLine(body, isAdmin, producerResult),

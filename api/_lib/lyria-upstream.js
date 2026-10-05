@@ -200,6 +200,16 @@ function mergeLyriaDialectHint(body = {}) {
   return extractDialectFromStyleText(body?.style || "");
 }
 
+/** Lyria may sing negation/meta clauses — strip known bad fragments before vocal lines. */
+function sanitizeDialectHintForLyriaPrompt(hint = "") {
+  return String(hint || "")
+    .replace(/\s*\(addressee only,\s*not singer gender\)/gi, "")
+    .replace(/,\s*not the singer's gender/gi, "")
+    .replace(/;\s*not singer gender/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function resolveLyriaDialectLabel(body = {}) {
   const direct = String(body?.dialect || "").trim();
   if (direct) return direct;
@@ -1030,6 +1040,7 @@ module.exports = {
   buildLyriaPrompt,
   buildLyriaVocalProfile,
   mergeLyriaDialectHint,
+  sanitizeDialectHintForLyriaPrompt,
   resolveLyriaDialectLabel,
   resolveLyriaArabicPronunciationMode,
   buildLyriaArabicPronunciationLine,

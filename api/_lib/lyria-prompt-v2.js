@@ -169,10 +169,12 @@ function buildArrangementLines({ durationSec, clip, meter, bpm }) {
   );
 }
 
+const { sanitizeDialectHintForLyriaPrompt } = require("./lyria-upstream");
+
 function buildVocalLineV2({ vocalGender, dialectHint, instrumental }) {
   if (instrumental) return "";
   const g = String(vocalGender || "").trim().toLowerCase();
-  const dialect = String(dialectHint || "").trim();
+  const dialect = sanitizeDialectHintForLyriaPrompt(dialectHint);
   const dialectBit = dialect ? `${dialect}. ` : "";
   if (g === "f" || g === "female") {
     return `${dialectBit}Female lead: warm chest voice, close dry mic, controlled vibrato, mid register, no airy whistle tone`;

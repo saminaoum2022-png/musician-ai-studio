@@ -336,10 +336,34 @@ async function runCoverJobForTrack(track, id, opts = {}) {
 }
 
 /** Generate Pollinations abstract cover for a library track (if applicable). */
+async function awaitParallelPrefetchForTrack(track) {
+  const id = String(track?.id || "").trim();
+  const prefetchId = resolveParallelCoverSongId(track) || id;
+  const job =
+    (id && _parallelCoverJobBySongId.get(id)) ||
+    (prefetchId && _parallelCoverJobBySongId.get(prefetchId)) ||
+    null;
+  if (!job) return null;
+  try {
+    return await job;
+  } catch {
+    return null;
+  }
+}
+
 export async function ensureAbstractCoverForTrack(track) {
   const id = String(track?.id || "").trim();
   if (!id || !shouldUseAbstractCover(track)) return null;
   if (_inflight.has(id)) return _inflight.get(id);
+
+  const prefetch = await awaitParallelPrefetchForTrack(track);
+  if (prefetch?.dataUrl) {
+    const { loadLibrary } = d();
+    const fresh = loadLibrary().find((x) => String(x?.id || "") === id);
+    if (fresh && !shouldUseAbstractCover(fresh)) return fresh;
+    if (fresh) track = fresh;
+    if (!shouldUseAbstractCover(track)) return track;
+  }
 
   watchPendingCoverArt();
 
@@ -434,6 +458,8 @@ let _backfillQueued = new Set();
 
 /** In-flight Pollinations jobs keyed by Suno taskId → variant key → entry. */
 const _parallelCoverByTask = new Map();
+/** Prefetch jobs keyed by stable cover song id — survives cancelParallelCoverForTask (plan map only). */
+const _parallelCoverJobBySongId = new Map();
 
 /** Stable cover song id shared between parallel prefetch and addToLibrary. */
 export function parallelCoverSongId(taskId, variantKey = "A") {
@@ -491,9 +517,16 @@ export function startParallelCoverForTask(taskId, variants) {
       job: Promise.resolve(null),
     };
 
-    entry.job = runParallelCoverJob(pseudoTrack, songId).then((result) => {
+    const job = runParallelCoverJob(pseudoTrack, songId).then((result) => {
       entry.result = result;
       return result;
+    });
+    entry.job = job;
+    _parallelCoverJobBySongId.set(songId, job);
+    void job.finally(() => {
+      if (_parallelCoverJobBySongId.get(songId) === job) {
+        _parallelCoverJobBySongId.delete(songId);
+      }
     });
     plan.set(key, entry);
   }
@@ -574,44 +607,54 @@ async function runParallelCoverJob(track, songId) {
   return null;
 }
 
+async function applyParallelCoverPatch(trackId, result) {
+  const id = String(trackId || "").trim();
+  if (!id || !result?.dataUrl) return false;
+  const patched = await enqueueLibraryPatch(() =>
+    patchLibraryTrackCover(id, { ...result, clearCoverPending: true }),
+  );
+  if (patched) {
+    const { persistTrackCoverIfNeeded } = d();
+    void persistTrackCoverIfNeeded?.(patched);
+    refreshPlayerIfTrack(patched);
+    return true;
+  }
+  const { loadLibrary } = d();
+  const fresh = loadLibrary().find((x) => String(x?.id || "") === id);
+  if (fresh && !shouldUseAbstractCover(fresh)) return true;
+  return false;
+}
+
 /** Apply a prefetched cover when the library row lands (or return true if already patched). */
 export async function applyParallelCoverForTrack(track) {
   const tid = String(track?.taskId || "").trim();
   const key = parallelVariantKeyFromTrack(track);
-  if (!tid) return false;
-
-  const plan = _parallelCoverByTask.get(tid);
-  const entry = plan?.get(key);
-  if (!entry) return false;
-
-  const id = String(track?.id || entry.songId || "").trim();
+  const id = String(track?.id || "").trim();
   if (!id) return false;
 
-  if (entry.result?.dataUrl) {
-    const patched = await enqueueLibraryPatch(() =>
-      patchLibraryTrackCover(id, { ...entry.result, clearCoverPending: true }),
-    );
-    if (patched) {
-      const { persistTrackCoverIfNeeded } = d();
-      void persistTrackCoverIfNeeded?.(patched);
-      refreshPlayerIfTrack(patched);
-      return true;
-    }
+  const { loadLibrary } = d();
+  const existing = loadLibrary().find((x) => String(x?.id || "") === id);
+  if (existing && !shouldUseAbstractCover(existing)) return true;
+
+  const plan = tid ? _parallelCoverByTask.get(tid) : null;
+  const entry = plan?.get(key);
+
+  if (entry?.result?.dataUrl) {
+    if (await applyParallelCoverPatch(id, entry.result)) return true;
   }
 
-  if (entry.job) {
+  if (entry?.job) {
     const result = await entry.job;
-    if (result?.dataUrl) {
-      const patched = await enqueueLibraryPatch(() =>
-        patchLibraryTrackCover(id, { ...result, clearCoverPending: true }),
-      );
-      if (patched) {
-        const { persistTrackCoverIfNeeded } = d();
-        void persistTrackCoverIfNeeded?.(patched);
-        refreshPlayerIfTrack(patched);
-        return true;
-      }
-    }
+    if (await applyParallelCoverPatch(id, result)) return true;
+  }
+
+  const prefetchId = resolveParallelCoverSongId(track) || id;
+  const inflight =
+    _parallelCoverJobBySongId.get(id) ||
+    (prefetchId !== id ? _parallelCoverJobBySongId.get(prefetchId) : null);
+  if (inflight) {
+    const result = await inflight;
+    if (await applyParallelCoverPatch(id, result)) return true;
   }
 
   return false;

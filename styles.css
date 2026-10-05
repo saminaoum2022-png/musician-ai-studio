@@ -5064,6 +5064,36 @@ body[data-route="profile-edit"] main.grid > [data-route="profile-edit"]{
   display: block;
   transition: filter 200ms ease;
 }
+.libRowArtVisBadge{
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgba(6, 8, 14, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.libRowArtVisBadge .libRowVisIco{
+  width: 11px;
+  height: 11px;
+  opacity: 0.95;
+  color: rgba(232, 238, 247, 0.95);
+}
+html[data-theme="light"] .libRowArtVisBadge{
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(15, 23, 42, 0.12);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+html[data-theme="light"] .libRowArtVisBadge .libRowVisIco{
+  color: rgba(51, 65, 85, 0.88);
+}
 .libRowArtBadge{
   position: absolute;
   inset: 0;
@@ -5303,6 +5333,47 @@ input.userTextBidi--rtl{
   --nb-teal: #22c5a9;
   opacity: 0.95;
 }
+/* Profile Music › Trending now — same as draft library rows. */
+.upmList--rowPlayback .upmRow.isPlaying .upmOv,
+.upmList--rowPlayback .upmRow.isLoading .upmOv{
+  opacity: 0 !important;
+}
+.upmRowActions{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 0 2px 0 0;
+}
+.upmList--rowPlayback .libRowActionNowPlaying{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 28px;
+}
+.upmList--rowPlayback .libRowActionNowPlayingPlay,
+.upmList--rowPlayback .libRowActionNowPlayingLoad{
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.upmList--rowPlayback .upmRow.isPlaying .libRowActionNowPlayingPlay{
+  display: inline-flex;
+}
+.upmList--rowPlayback .upmRow.isLoading .libRowActionNowPlayingLoad{
+  display: inline-flex;
+}
+.upmList--rowPlayback .libRowActionNowPlaying .nbBars{
+  --nb-purple: #8f74ff;
+  --nb-teal: #22c5a9;
+  opacity: 0.95;
+}
+.upmList--rowPlayback .upmMenu{
+  flex: 0 0 auto;
+}
 .libRowEq span{
   display: block;
   width: 3px;
@@ -5352,9 +5423,9 @@ input.userTextBidi--rtl{
 }
 .libRowSkeleton .libRowActions .libRowMore.libSkelMore{
   margin-right: 0;
-  width: 36px;
+  width: 28px;
   height: 28px;
-  min-width: 36px;
+  min-width: 28px;
   min-height: 28px;
   border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.08);
@@ -5362,7 +5433,7 @@ input.userTextBidi--rtl{
 .libRowMore{
   flex: 0 0 auto;
   width: auto;
-  min-width: 40px;
+  min-width: 28px;
   min-height: 40px;
   margin-right: 0;
   border-radius: 0;
@@ -5377,9 +5448,13 @@ input.userTextBidi--rtl{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 4px;
+  padding: 8px 0;
   box-sizing: border-box;
   transition: color 0.18s ease, opacity 0.18s ease;
+}
+.libRowMoreIco{
+  display: block;
+  flex: 0 0 auto;
 }
 .libRowMore:hover{
   background: transparent;
@@ -29067,13 +29142,17 @@ html[data-theme="light"] .profileStatLabel{
 .rowTitleWithOrigins{
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
   max-width: 100%;
 }
+.libRowInfo .rowTitleWithBadge .rowTitleWithOrigins{
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .rowTitleWithOrigins .libRowTitle{
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -29085,8 +29164,33 @@ html[data-theme="light"] .profileStatLabel{
   gap: 3px;
 }
 .songOriginBadges--library{
-  opacity: 0.92;
+  gap: 2px;
+  align-items: center;
 }
+.songOriginInlineIco{
+  display: block;
+  flex: 0 0 auto;
+  opacity: 0.9;
+}
+.songOriginInlineIco--photo{ color: rgba(167,139,250,0.95); }
+.songOriginInlineIco--vibe{ color: rgba(45,212,191,0.95); }
+.songOriginInlineIco--hum{ color: rgba(56,189,248,0.95); }
+.songOriginInlineIco--lyrics{ color: rgba(250,204,21,0.92); }
+.songOriginInlineIco--spark{ color: rgba(250,204,21,0.88); }
+.songOriginInlineIco--remix{ color: rgba(167,139,250,0.9); }
+.songOriginInlineIco--mashup{ color: rgba(244,114,182,0.92); }
+.songOriginInlineIco--instrumental{ color: rgba(148,163,184,0.92); }
+html[data-theme="light"] .songOriginInlineIco{
+  opacity: 0.82;
+}
+html[data-theme="light"] .songOriginInlineIco--photo,
+html[data-theme="light"] .songOriginInlineIco--remix{ color: rgba(109,40,217,0.88); }
+html[data-theme="light"] .songOriginInlineIco--vibe{ color: rgba(13,148,136,0.9); }
+html[data-theme="light"] .songOriginInlineIco--hum{ color: rgba(2,132,199,0.88); }
+html[data-theme="light"] .songOriginInlineIco--lyrics,
+html[data-theme="light"] .songOriginInlineIco--spark{ color: rgba(180,130,0,0.92); }
+html[data-theme="light"] .songOriginInlineIco--mashup{ color: rgba(219,39,119,0.88); }
+html[data-theme="light"] .songOriginInlineIco--instrumental{ color: rgba(71,85,105,0.82); }
 .songOriginBadge{
   display: inline-flex;
   align-items: center;
@@ -31398,7 +31502,7 @@ html[data-theme="light"] .homeBrandWordmark img{
 }
 .discoverySpotMenuBtn{
   width: auto;
-  min-width: 40px;
+  min-width: 28px;
   min-height: 40px;
   border-radius: 0;
   border: 0;
@@ -35215,8 +35319,8 @@ html[data-theme="light"] .discoverySearchBarWrap .searchBar{
     right: max(56px, calc(14px + env(safe-area-inset-right, 0px)));
   }
   body[data-route="profile"] .libRowMore{
-    min-width: 36px;
-    padding: 8px 2px 8px 4px;
+    min-width: 28px;
+    padding: 8px 0;
   }
   .libRowInfo .challengeAttributionLine,
   .libRowInfo .mashupAttributionLine,

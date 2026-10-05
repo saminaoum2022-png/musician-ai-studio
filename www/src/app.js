@@ -13846,6 +13846,17 @@ function libRowActionPlaybackBarsHtml(size = 18) {
   return `<span class="libRowActionNowPlaying" aria-hidden="true"><span class="libRowActionNowPlayingPlay">${nbBarsHtml(size, "play")}</span><span class="libRowActionNowPlayingLoad">${nbBarsHtml(size, "load")}</span></span>`;
 }
 
+/** Vertical ⋮ kebab — narrower than horizontal ⋯ on crowded draft rows. */
+function libRowMoreKebabHtml(size = 18) {
+  const s = Math.max(14, Math.min(22, Number(size) || 18));
+  return `<svg class="libRowMoreIco" width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="5" r="1.85" fill="currentColor"/><circle cx="12" cy="12" r="1.85" fill="currentColor"/><circle cx="12" cy="19" r="1.85" fill="currentColor"/></svg>`;
+}
+
+/** Profile Music trending rows — now-playing bars beside ⋮, not on cover. */
+function upmRowTrailingActionsHtml(menuHtml) {
+  return `<div class="upmRowActions">${libRowActionPlaybackBarsHtml(18)}${menuHtml}</div>`;
+}
+
 function discoverListPlayBtnHtml(extraClass = "") {
   const cls = extraClass ? `discoverListPlayBtn ${extraClass}` : "discoverListPlayBtn";
   return `<span class="${cls}" aria-hidden="true">${coverArtPlayStateIconsHtml(14)}</span>`;
@@ -13891,7 +13902,7 @@ function discoverSheetMenuBtnHtml(source, profMap, opts = {}) {
     opts.hideProfile ? ' data-dp-hide-profile="1"' : "",
     opts.publicShuffle ? ' data-dp-use-public-shuffle="1"' : "",
   ].join("");
-  return `<button type="button" class="${escapeHtml(cls)}" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"${extra} aria-label="Song options for ${safeTitle}">⋯</button>`;
+  return `<button type="button" class="${escapeHtml(cls)}" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}"${extra} aria-label="Song options for ${safeTitle}">${libRowMoreKebabHtml()}</button>`;
 }
 
 function discoverUserLibPlayAttrs(t, profMap, opts = {}) {
@@ -28548,7 +28559,7 @@ function profileFeaturedTrackCardHtml(track, opts = {}) {
   const creator = escapeHtml(profileFeaturedCreatorLine(track, opts.creatorFallback || activeProfile?.username || ""));
   const playAttr = mode === "own" ? "data-profile-featured-play" : "data-public-featured-play";
   const menuBtn = mode === "own"
-    ? `<button type="button" class="profileFeaturedTrackMenu" data-profile-featured-menu="${sid}" aria-label="Featured track options">⋯</button>`
+    ? `<button type="button" class="profileFeaturedTrackMenu" data-profile-featured-menu="${sid}" aria-label="Featured track options">${libRowMoreKebabHtml()}</button>`
     : "";
   return `
     <section class="profileFeaturedCreation" data-featured-song="${sid}">
@@ -32138,7 +32149,11 @@ function titleWithNabadBadgeHtml(track, safeTitle, titleClass = "libRowTitle", t
 
 /** Draft library row title + optional origin icons + Nabad verification badge. */
 function libraryDraftTitleHtml(track, safeTitle) {
-  const origins = songOriginBadgesHtml(track, { size: 13, wrapClass: "songOriginBadges songOriginBadges--library" });
+  const origins = songOriginBadgesHtml(track, {
+    size: 12,
+    wrapClass: "songOriginBadges songOriginBadges--library",
+    inline: true,
+  });
   const badge = nabadVerificationBadgeForTrack(track, { size: "sm" });
   const titleEl = `<span class="libRowTitle">${safeTitle}</span>`;
   const titleBlock = origins
@@ -40086,7 +40101,7 @@ function paintUserPublicMusic(cache) {
           <span class="upmArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />${UPM_OVERLAY_HTML}</span>
           <span class="upmMeta">${upmTrendingRowTitleHtml(t.title)}${hasCounts ? `<small>${plays ? `${escapeHtml(formatStatCount(plays))} plays` : "New"}</small>` : ""}</span>
         </button>
-        ${discoverSheetMenuBtnHtml(t, cache.profMap, { className: "upmMenu" })}
+        ${upmRowTrailingActionsHtml(discoverSheetMenuBtnHtml(t, cache.profMap, { className: "upmMenu" }))}
       </div>`;
   }).join("");
   const releaseCards = tracks.slice(0, 16).map((t) => {
@@ -40102,7 +40117,7 @@ function paintUserPublicMusic(cache) {
   host.innerHTML = `
     ${playsKnown ? `<section class="upmSection" aria-label="Trending now">
       <h3 class="upmH">Trending now</h3>
-      <div class="upmList" role="list">${trendingRows}</div>
+      <div class="upmList upmList--rowPlayback" role="list">${trendingRows}</div>
     </section>` : trendingSkeletonSection()}
     <section class="upmSection" aria-label="Releases">
       <h3 class="upmH">Releases<span class="upmCount">${tracks.length}</span></h3>
@@ -58520,7 +58535,7 @@ function renderUserPlaylist() {
               <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
             </button>
             <div class="libRowActions">
-              <button class="libRowMore" type="button" data-pl-menu="${escapeHtml(item.id)}" data-pl-playlist-id="${escapeHtml(playlistId)}" aria-label="More options for ${safeTitle}">⋯</button>
+              <button class="libRowMore" type="button" data-pl-menu="${escapeHtml(item.id)}" data-pl-playlist-id="${escapeHtml(playlistId)}" aria-label="More options for ${safeTitle}">${libRowMoreKebabHtml()}</button>
             </div>
           </li>`;
         })
@@ -58816,7 +58831,7 @@ function discoverPlaylistLibRowHtml(t, profMap, idx) {
         <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
       </button>
       <div class="libRowActions">
-        <button type="button" class="libRowMore" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">⋯</button>
+        <button type="button" class="libRowMore" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" ${sheetData} aria-label="Options for ${safeTitle}">${libRowMoreKebabHtml()}</button>
       </div>
     </li>`;
 }
@@ -58909,7 +58924,7 @@ function discoveryFeedCardHtml(t, profMap, idx) {
         <span class="discoverySpotCardEq" aria-hidden="true"><span></span><span></span><span></span></span>
         </button>
         <span class="discoverySpotMenuOuter">
-          <button type="button" class="discoverySpotMenuBtn" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}" aria-label="Song options for ${safeTitle}">⋯</button>
+          <button type="button" class="discoverySpotMenuBtn" data-discovery-open-sheet="1" data-dp-url="${encUrl}" data-dp-title="${encTitle}" data-dp-art="${encArt}" data-dp-by="${encBy}" data-dp-handle="${encHandle}" data-dp-song-id="${encSongId}" data-dp-owner-id="${encOwnerId}" data-dp-task-id="${encTaskId}" data-dp-audio-id="${encAudioId}" aria-label="Song options for ${safeTitle}">${libRowMoreKebabHtml()}</button>
         </span>
       </div>`;
 }
@@ -64545,7 +64560,7 @@ function paintProfileMusicNow() {
           <span class="upmArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />${UPM_OVERLAY_HTML}</span>
           <span class="upmMeta">${upmTrendingRowTitleHtml(t.title)}${hasCounts ? `<small>${plays ? `${escapeHtml(formatStatCount(plays))} plays` : "New"}</small>` : ""}</span>
         </button>
-        ${discoverSheetMenuBtnHtml(t, profMap, { className: "upmMenu" })}
+        ${upmRowTrailingActionsHtml(discoverSheetMenuBtnHtml(t, profMap, { className: "upmMenu" }))}
       </div>`;
   }).join("");
   const cards = tracks.slice(0, 16).map((t) => {
@@ -64560,7 +64575,7 @@ function paintProfileMusicNow() {
   setProfileMusicHtml(host, `
     ${playsKnown ? `<section class="upmSection" aria-label="Trending now">
       <h3 class="upmH">Trending now</h3>
-      <div class="upmList" role="list">${rows}</div>
+      <div class="upmList upmList--rowPlayback" role="list">${rows}</div>
     </section>` : trendingSkeletonSection()}
     ${draftsHtml}
     <section class="upmSection" aria-label="Releases">
@@ -64982,7 +64997,7 @@ function renderMyVocals() {
               <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
             </button>
             <div class="libRowActions">
-              <button class="libRowMore" type="button" data-vocal-menu="${escapeHtml(v.id)}" aria-label="More options for ${safeTitle}">⋯</button>
+              <button class="libRowMore" type="button" data-vocal-menu="${escapeHtml(v.id)}" aria-label="More options for ${safeTitle}">${libRowMoreKebabHtml()}</button>
             </div>
           </li>`;
       }).join("")}
@@ -65247,7 +65262,7 @@ function renderProfileLibraryPublicOnLinkSection() {
             </button>
             <div class="libRowActions">
               ${libRowProfileVisChipHtml(true)}
-              <button class="libRowMore" type="button" data-profile-lib-menu="${tid}" aria-label="More for ${safeTitle}">⋯</button>
+              <button class="libRowMore" type="button" data-profile-lib-menu="${tid}" aria-label="More for ${safeTitle}">${libRowMoreKebabHtml()}</button>
             </div>
           </li>`;
         })
@@ -65415,7 +65430,7 @@ function renderProfileHubShared() {
             </button>
             <div class="libRowActions">
               ${libRowProfileVisChipHtml(profilePublic)}
-              <button class="libRowMore" type="button" data-profile-hub-menu="${sid}" aria-label="More options for ${safeTitle}">⋯</button>
+              <button class="libRowMore" type="button" data-profile-hub-menu="${sid}" aria-label="More options for ${safeTitle}">${libRowMoreKebabHtml()}</button>
             </div>
           </li>
         `;
@@ -66689,6 +66704,7 @@ function addToLibrary(track) {
     if (!parallelApplied && shouldUseAbstractCover(newTrack)) {
       void ensureAbstractCoverForTrack(newTrack);
     }
+    if (newTrack.taskId) cancelParallelCoverForTask(newTrack.taskId);
     try { backfillPendingAbstractCovers(loadLibrary()); } catch {}
     try { watchPendingCoverArt(); } catch {}
   })();
@@ -67728,18 +67744,24 @@ async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {
   }
 }
 
+function libRowPrivateLockSvg() {
+  return '<svg class="libRowVisIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>';
+}
+
+/** Private draft — lock on cover (top-right), not in the actions column. */
+function libRowArtPrivateLockBadgeHtml() {
+  const label = "Private — not on profile link";
+  const safeLabel = escapeHtml(label);
+  return `<span class="libRowArtVisBadge libRowArtVisBadge--private" role="img" title="${safeLabel}" aria-label="${safeLabel}">${libRowPrivateLockSvg()}</span>`;
+}
+
 /** Globe / lock chip for profile link visibility on library-style rows. */
 function libRowProfileVisChipHtml(isPublic) {
   const pub = Boolean(isPublic);
-  const cls = pub ? "public" : "private";
-  const label = pub ? "Public on your profile link" : "Private — not on profile link";
+  if (!pub) return "";
+  const label = "Public on your profile link";
   const safeLabel = escapeHtml(label);
-  const lock =
-    '<svg class="libRowVisIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>';
-  if (pub) {
-    return `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--public" role="img" title="${safeLabel}" aria-label="${safeLabel}">Public</span>`;
-  }
-  return `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--${cls}" role="img" title="${safeLabel}" aria-label="${safeLabel}">${lock}</span>`;
+  return `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--public" role="img" title="${safeLabel}" aria-label="${safeLabel}">Public</span>`;
 }
 
 /** Owner-only "Publishing…" chip shown while a song is being saved permanently
@@ -68432,6 +68454,7 @@ function renderLibrary() {
               <span class="libRowArt">
                 <img src="${escapeHtml(art)}" alt="" width="56" height="56" decoding="async" ${loadingAttr} />
                 ${coverArtPlaybackOverlayHtml()}
+                ${!profilePublic && !t.publishPending ? libRowArtPrivateLockBadgeHtml() : ""}
               </span>
               <span class="libRowInfo">
                 ${libraryDraftTitleHtml(t, safeTitle)}
@@ -68442,7 +68465,7 @@ function renderLibrary() {
             <div class="libRowActions">
               ${t.publishPending ? libRowPublishingChipHtml(t.publishPhase) : libRowProfileVisChipHtml(profilePublic)}
               ${libRowActionPlaybackBarsHtml(18)}
-              <button class="libRowMore" type="button" data-lib-menu="${t.id}" aria-label="More options for ${safeTitle}">⋯</button>
+              <button class="libRowMore" type="button" data-lib-menu="${t.id}" aria-label="More options for ${safeTitle}">${libRowMoreKebabHtml()}</button>
             </div>`}
           </li>
         `;
@@ -77365,7 +77388,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 }));
               }
             }
-            cancelParallelCoverForTask(sunoTaskId || "");
             const genTaskId = sunoTaskId || "";
             clearGenerationPending(genTaskId);
             try {
@@ -78931,7 +78953,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           kind: "full",
           meta: { ...genMeta, variant: "A" },
         });
-        cancelParallelCoverForTask(sunoTaskId || "");
         clearGenerationPending(sunoTaskId || "");
         try {
           pushLocalGenerationReadyActivity([variantAEntry].filter(Boolean), { taskId: sunoTaskId || "" });

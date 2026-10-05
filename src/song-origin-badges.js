@@ -135,11 +135,24 @@ export function songOriginIconHtml(key, { size = 14, className = "songOriginBadg
   return `<svg class="${className}" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${inner}</svg>`;
 }
 
-export function songOriginBadgesHtml(track, { size = 14, wrapClass = "songOriginBadges" } = {}) {
+export function songOriginBadgesHtml(
+  track,
+  { size = 14, wrapClass = "songOriginBadges", inline = false } = {},
+) {
   const keys = collectSongOriginKeys(track);
   if (!keys.length) return "";
   const label = keys.map((k) => ORIGIN_LABELS[k] || k).join(", ");
-  const icons = keys.map((k) => `<span class="songOriginBadge songOriginBadge--${k}">${songOriginIconHtml(k, { size })}</span>`).join("");
+  const icons = keys
+    .map((k) => {
+      if (inline) {
+        return songOriginIconHtml(k, {
+          size,
+          className: `songOriginInlineIco songOriginInlineIco--${k}`,
+        });
+      }
+      return `<span class="songOriginBadge songOriginBadge--${k}">${songOriginIconHtml(k, { size })}</span>`;
+    })
+    .join("");
   return `<span class="${wrapClass}" role="img" aria-label="Made with: ${label}">${icons}</span>`;
 }
 

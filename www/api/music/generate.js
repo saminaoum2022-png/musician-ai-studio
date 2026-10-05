@@ -86,6 +86,10 @@ const {
   MUREKA_LYRICS_MAX_CHARS,
 } = require("../_lib/mureka-upstream");
 const {
+  prepareMurekaPhoneticLyrics,
+  murekaPhoneticStyleNote,
+} = require("../_lib/mureka-phonetic-lyrics");
+const {
   saveMusicProviderTaskStatus,
   providerFolder,
 } = require("../_lib/music-provider-task-store");
@@ -1903,12 +1907,29 @@ async function runMurekaGenerationJob({
       adminToggles: nabadVocalToggles,
     });
 
-    const murekaLyricsPrep = prepareMurekaLyrics(effectiveLyrics);
+    const displayLyrics = effectiveLyrics;
+    const dialect = String(body?.dialect || "").trim();
+    const phoneticPrep = await prepareMurekaPhoneticLyrics({
+      geminiApiKey,
+      lyrics: effectiveLyrics,
+      dialect,
+      dialectHint,
+      scriptFormat,
+      style: effectiveStyle,
+    });
+    let lyricsForMureka = phoneticPrep.lyrics;
+    if (phoneticPrep.converted) {
+      effectiveStyle = [effectiveStyle, murekaPhoneticStyleNote({ dialect, dialectHint })]
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    const murekaLyricsPrep = prepareMurekaLyrics(lyricsForMureka);
     if (murekaLyricsPrep.truncated) {
       console.warn(
         "[music/generate] mureka lyrics truncated",
         taskId,
-        `${murekaLyricsPrep.droppedFrom || effectiveLyrics.length} → ${murekaLyricsPrep.charCount}`,
+        `${murekaLyricsPrep.droppedFrom || lyricsForMureka.length} → ${murekaLyricsPrep.charCount}`,
       );
     }
 
@@ -1951,7 +1972,7 @@ async function runMurekaGenerationJob({
     const statusPayload = buildSunoStatusPayload({
       taskId,
       title,
-      lyrics: effectiveLyrics,
+      lyrics: displayLyrics,
       audioUrl: archived.url,
       audioId,
       provider: "mureka",
@@ -1974,6 +1995,9 @@ async function runMurekaGenerationJob({
         vocalId ? `vocal_id: ${vocalId}` : "",
         producerResult.ok ? "geminiProducer: on (lyria compact)" : "geminiProducer: off",
         `mureka_lyrics_chars: ${murekaLyricsPrep.charCount}/${MUREKA_LYRICS_MAX_CHARS}${murekaLyricsPrep.truncated ? " truncated" : ""}`,
+        phoneticPrep.converted
+          ? `mureka_phonetic: converted${phoneticPrep.model ? ` (${phoneticPrep.model})` : ""}`
+          : `mureka_phonetic: ${phoneticPrep.skippedReason || "skipped"}${phoneticPrep.error ? ` (${phoneticPrep.error})` : ""}`,
         `mureka_prompt_chars: ${Math.min(2000, String(effectiveStyle || "").trim().length)}`,
         nabadVocalToggles ? "nabadVocalChain: on" : "",
       ].filter(Boolean).join("\n"),

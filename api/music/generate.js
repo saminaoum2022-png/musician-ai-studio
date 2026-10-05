@@ -1041,7 +1041,11 @@ async function runElevenlabsGenerationJob({
         })
       : await elevenlabsGenerateMusicDetailedWithRetry({
           apiKey,
-          prompt: finalCompositionPlan ? undefined : finalPrompt,
+          prompt: finalCompositionPlan
+            ? instrumental
+              ? String(stylePrompt || finalPrompt || "solo instrumental, no vocals").trim().slice(0, 2000)
+              : undefined
+            : finalPrompt,
           compositionPlan: finalCompositionPlan || undefined,
           model,
           musicLengthMs,

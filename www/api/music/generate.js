@@ -1887,11 +1887,11 @@ async function runMurekaGenerationJob({
         input: buildSongProducerInput(body, "mureka"),
       });
       if (producerResult.ok) {
-        if (producerResult.structured_lyrics) {
-          effectiveLyrics = producerResult.structured_lyrics;
-        }
         if (producerResult.enhanced_style_prompt) {
           effectiveStyle = producerResult.enhanced_style_prompt;
+        }
+        if (producerResult.structured_lyrics && body?.murekaUseProducerLyrics === "1") {
+          effectiveLyrics = producerResult.structured_lyrics;
         }
       }
     }
@@ -1909,14 +1909,21 @@ async function runMurekaGenerationJob({
 
     const displayLyrics = effectiveLyrics;
     const dialect = String(body?.dialect || "").trim();
+    const lyricsSeed = prepareMurekaLyrics(effectiveLyrics).lyrics;
     const phoneticPrep = await prepareMurekaPhoneticLyrics({
       geminiApiKey,
-      lyrics: effectiveLyrics,
+      lyrics: lyricsSeed,
       dialect,
       dialectHint,
       scriptFormat,
       style: effectiveStyle,
     });
+    if (phoneticPrep.blockUpstream) {
+      await fail(
+        "Couldn't convert Arabic lyrics to phonetic text for Mureka — try shorter lyrics, Arabizi, or generate again.",
+      );
+      return;
+    }
     let lyricsForMureka = phoneticPrep.lyrics;
     if (phoneticPrep.converted) {
       effectiveStyle = [effectiveStyle, murekaPhoneticStyleNote({ dialect, dialectHint })]
@@ -1994,7 +2001,7 @@ async function runMurekaGenerationJob({
         waited.model || started.model ? `model: ${waited.model || started.model}` : "",
         vocalId ? `vocal_id: ${vocalId}` : "",
         producerResult.ok ? "geminiProducer: on (lyria compact)" : "geminiProducer: off",
-        `mureka_lyrics_chars: ${murekaLyricsPrep.charCount}/${MUREKA_LYRICS_MAX_CHARS}${murekaLyricsPrep.truncated ? " truncated" : ""}`,
+        `mureka_lyrics: ${murekaLyricsPrep.charCount} chars, ${murekaLyricsPrep.byteCount || "?"} bytes / ${MUREKA_LYRICS_MAX_CHARS}${murekaLyricsPrep.truncated ? " truncated" : ""}`,
         phoneticPrep.converted
           ? `mureka_phonetic: converted${phoneticPrep.model ? ` (${phoneticPrep.model})` : ""}`
           : `mureka_phonetic: ${phoneticPrep.skippedReason || "skipped"}${phoneticPrep.error ? ` (${phoneticPrep.error})` : ""}`,

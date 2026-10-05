@@ -126,12 +126,14 @@ async function prepareMurekaPhoneticLyrics({
   const prompt = buildMurekaArabiziPrompt({ lyrics: original, dialect, dialectHint, style });
   const result = await tryGeminiPhoneticConversion({ apiKey: geminiApiKey, prompt });
   if (!result.ok || !result.lyrics) {
-    console.warn("[mureka-phonetic] conversion failed — sending original lyrics", result.error);
+    console.warn("[mureka-phonetic] conversion failed", result.error);
     return {
       lyrics: original,
       converted: false,
       skippedReason: "conversion_failed",
       error: result.error,
+      /** Do not send Arabic script to Mureka when phonetic was required. */
+      blockUpstream: true,
     };
   }
   return { lyrics: result.lyrics, converted: true, model: result.model };

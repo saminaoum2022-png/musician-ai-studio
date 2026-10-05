@@ -37232,6 +37232,94 @@ body[data-route="nabad-producer"] .footer{ display: none !important; }
 body[data-route="nabad-producer"] .appBuildStamp{ display: none !important; }
 body[data-route="nabad-producer"] .generateOrb{ display: none !important; }
 
+.melodyLockRoute{ display: none; flex: 1 1 auto; min-height: 0; overflow: auto; padding: 0; }
+body[data-route="melody-lock"]{
+  background:
+    radial-gradient(130% 90% at 0% -30%, rgba(35,211,171,0.18), transparent 58%),
+    radial-gradient(110% 80% at 100% -20%, rgba(120,180,255,0.16), transparent 52%),
+    var(--bg);
+  overflow: hidden;
+  height: 100dvh;
+  height: 100svh;
+}
+body[data-route="melody-lock"] > .app{
+  padding: 0 !important;
+  margin: 0;
+  height: 100%;
+  min-height: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+body[data-route="melody-lock"] .app,
+body[data-route="melody-lock"] main.grid{
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+  display: flex !important;
+  flex-direction: column;
+  padding-bottom: 0;
+  margin: 0;
+  gap: 0;
+}
+body[data-route="melody-lock"] .melodyLockRoute{
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+body[data-route="melody-lock"] .mobileTabbar{ display: none !important; }
+body[data-route="melody-lock"] .header{ display: none !important; }
+body[data-route="melody-lock"] .footer{ display: none !important; }
+body[data-route="melody-lock"] .appBuildStamp{ display: none !important; }
+body[data-route="melody-lock"] .generateOrb{ display: none !important; }
+
+.melodyLockLab{
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  max-width: 520px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+.melodyLockLabHead{ margin-bottom: 16px; }
+.melodyLockTitle{ font-size: 1.35rem; margin: 8px 0 6px; font-weight: 700; }
+.melodyLockBadge{
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  vertical-align: middle;
+}
+.melodyLockSub, .melodyLockMuted{ font-size: 0.85rem; opacity: 0.78; line-height: 1.45; margin: 0 0 8px; }
+.melodyLockCard{
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 14px 14px 16px;
+  margin-bottom: 12px;
+}
+.melodyLockCard h2{ font-size: 0.95rem; margin: 0 0 8px; font-weight: 650; }
+.melodyLockRow{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.melodyLockMeta{ font-size: 0.8rem; opacity: 0.85; word-break: break-all; }
+.melodyLockNotes{ font-size: 0.75rem; opacity: 0.7; line-height: 1.5; margin-top: 6px; }
+.melodyLockPre{
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow: auto;
+  background: rgba(0,0,0,0.25);
+  border-radius: 8px;
+  padding: 10px;
+  margin: 0 0 10px;
+}
+.melodyLockBack{ margin-bottom: 4px; }
+.settingsLinkRow{ width: 100%; text-align: left; cursor: pointer; border: none; background: transparent; color: inherit; font: inherit; }
+
 #nabadProducerRoot{
   flex: 1 1 auto;
   min-height: 0;

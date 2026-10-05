@@ -1,16 +1,19 @@
 /**
- * Provider-neutral full song generation — MiniMax + Lyria + ElevenLabs admin spikes.
+ * Provider-neutral full song generation — MiniMax + Lyria + ElevenLabs + Mureka admin spikes.
  *
- * POST /api/music/generate?provider=minimax|lyria|elevenlabs
+ * POST /api/music/generate?provider=minimax|lyria|elevenlabs|mureka
  *   Same auth/credits shell as /api/suno/generate; admin-only unless
- *   MINIMAX_GENERATE_ENABLED=1, LYRIA_GENERATE_ENABLED=1, or ELEVENLABS_GENERATE_ENABLED=1.
+ *   MINIMAX_GENERATE_ENABLED=1, LYRIA_GENERATE_ENABLED=1, ELEVENLABS_GENERATE_ENABLED=1,
+ *   or MUREKA_GENERATE_ENABLED=1.
  *
  * Env:
  * - MINIMAX_API_KEY, MINIMAX_KEY_KIND, MINIMAX_MUSIC_MODEL, MINIMAX_GENERATE_ENABLED
  * - GEMINI_API_KEY / GOOGLE_API_KEY, LYRIA_MUSIC_MODEL, LYRIA_GENERATE_ENABLED
  * - CLIP_GEMINI_PRODUCER_ENABLED=1 — Gemini prompt enrichment for clips + ElevenLabs (staging preview)
+ * - LYRIA_PROMPT_V2=1 — minimal Lyria prompt (default ON on Vercel Preview); skips Gemini producer on Lyria
  * - CLIP_GEMINI_PRODUCER_MODEL — optional override; else tries 3.6 → 3.5 → 2.5 flash
  * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_FINETUNE_ID, ELEVENLABS_GENERATE_ENABLED
+ * - MUREKA_API_KEY, MUREKA_MUSIC_MODEL, MUREKA_VOCAL_ID, MUREKA_GENERATE_ENABLED
  */
 const crypto = require("crypto");
 const Busboy = require("busboy");
@@ -41,16 +44,28 @@ const {
   buildLyriaDirectStylePrompt,
   buildLyriaArabicPronunciationLine,
   resolveLyriaArabicPronunciationMode,
+  extractLyriaDisplayLyrics,
+  sanitizeLyriaLyricsForSinging,
 } = require("../_lib/lyria-upstream");
+const {
+  resolveLyriaPromptV2Enabled,
+  buildLyriaPromptV2,
+} = require("../_lib/lyria-prompt-v2");
 const { clipVocalProfileById } = require("../_lib/clip-vocal-profiles");
 const {
   applyElevenReferenceToCompositionPlan,
   buildElevenMusicPrompt,
   buildElevenReferenceCompositionPlan,
   buildElevenSongCompositionPlan,
+  buildElevenEditCompositionPlan,
+  elevenlabsComposeInpaint,
   elevenlabsGenerateEnabled,
   elevenlabsGenerateMusicDetailedWithRetry,
   elevenlabsUploadMusic,
+  estimateMpegAudioDurationMs,
+  expectedInpaintDurationMs,
+  isElevenInpaintPlan,
+  summarizeElevenInpaintPlan,
   estimateReferenceDurationMs,
   resolveElevenReferenceAudio,
   resolveElevenMusicLengthMs,
@@ -59,6 +74,17 @@ const {
   resolveElevenFinetuneId,
   verifyElevenFinetuneAccess,
 } = require("../_lib/elevenlabs-music-upstream");
+const {
+  murekaGenerateEnabled,
+  murekaGenerateSong,
+  murekaWaitForSong,
+  murekaUserMessage,
+  resolveMurekaModel,
+  resolveMurekaVocalId,
+  mapMurekaGender,
+  prepareMurekaLyrics,
+  MUREKA_LYRICS_MAX_CHARS,
+} = require("../_lib/mureka-upstream");
 const {
   saveMusicProviderTaskStatus,
   providerFolder,
@@ -77,10 +103,19 @@ const {
   enrichClipWithGeminiProducer,
   enrichLyriaSongWithGeminiProducer,
   enrichSongWithGeminiProducer,
+  resolveGeminiProducerEnabled,
 } = require("../_lib/clip-gemini-producer");
+const { nabadSongEditEnabled } = require("../_lib/nabad-song-edit-lib");
+const { mergeNabadVocalIntoStylePrompt } = require("../_lib/nabad-vocal-identity");
+const { resolveMelodyLockForGenerate, parseMelodyLockBody } = require("../_lib/melody-lock-resolve");
+const {
+  runMelodyLockLyriaAttempts,
+  finalizeMelodyLockRun,
+} = require("../_lib/melody-lock-lyria");
+const { buildLyriaPromptWithMelodyLock } = require("../_lib/melody-lock-prompt");
 
 const LYRIA_FULL_SONG_FLOW = "lyria_full_song";
-const FULL_SONG_COST = 12;
+const FULL_SONG_COST = 15;
 const LYRIA_CLIP_CREDIT_COST = Math.max(
   1,
   Number(process.env.LYRIA_CLIP_CREDIT_COST || process.env.TEMPLATE_SPARK_CLIP_COST || 10),
@@ -92,6 +127,7 @@ const MINIMAX_PROVIDER_COST_USD = Number(process.env.MINIMAX_USD_PER_TRACK || "0
 const LYRIA_PROVIDER_COST_USD = Number(process.env.LYRIA_USD_PER_TRACK || "0.08");
 const LYRIA_CLIP_COST_USD = Number(process.env.LYRIA_CLIP_USD || "0.04");
 const ELEVENLABS_PROVIDER_COST_USD = Number(process.env.ELEVENLABS_USD_PER_TRACK || "0.45");
+const MUREKA_PROVIDER_COST_USD = Number(process.env.MUREKA_USD_PER_TRACK || "0.045");
 
 function minimaxGenerateEnabled() {
   const v = String(process.env.MINIMAX_GENERATE_ENABLED || "").trim().toLowerCase();
@@ -104,6 +140,7 @@ function resolveProvider(req) {
     const p = String(url.searchParams.get("provider") || "minimax").trim().toLowerCase();
     if (p === "lyria") return "lyria";
     if (p === "elevenlabs" || p === "eleven") return "elevenlabs";
+    if (p === "mureka" || p === "mur") return "mureka";
     return "minimax";
   } catch {
     return "minimax";
@@ -112,7 +149,13 @@ function resolveProvider(req) {
 
 function newTaskId(provider) {
   const prefix =
-    provider === "lyria" ? "lyr" : provider === "elevenlabs" ? "elv" : "mmx";
+    provider === "lyria"
+      ? "lyr"
+      : provider === "elevenlabs"
+        ? "elv"
+        : provider === "mureka"
+          ? "mur"
+          : "mmx";
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "")}`;
 }
 
@@ -132,18 +175,22 @@ function buildMusicPrompt(body) {
 
 function buildLyriaClipMetaLines(body, lyriaPrompt) {
   const vocalGender = String(body?.vocalGender || "").trim();
-  const clipVocalProfileId = String(body?.clipVocalProfileId || "").trim();
-  const catalog = clipVocalProfileById(clipVocalProfileId);
   const lines = [];
   if (vocalGender === "m" || vocalGender === "f") {
     lines.push(`Singer: ${vocalGender === "f" ? "Female" : "Male"}`);
   } else if (vocalGender === "duo") {
     lines.push("Singer: Duo");
   }
-  if (clipVocalProfileId) lines.push(`clipVocalProfileId: ${clipVocalProfileId}`);
-  if (catalog) lines.push(`Character: ${catalog.label} (${catalog.labelAr})`);
-  const vocalMatch = /Vocal profile: ([^\n]+)/.exec(String(lyriaPrompt || ""));
-  if (vocalMatch?.[1]) lines.push(`Vocal profile: ${vocalMatch[1].trim()}`);
+  const chain = body?.nabadVocalChain || body?.nabadVocalToggles;
+  if (chain && typeof chain === "object") {
+    const on = Object.keys(chain).filter((k) => chain[k]).join(",") || "none";
+    lines.push(`nabadVocalChain: ${on}`);
+  } else {
+    lines.push("nabadVocalChain: defaults");
+  }
+  if (/Nabad identity/i.test(String(lyriaPrompt || ""))) {
+    lines.push("vocalIdentity: nabad_signature");
+  }
   return lines.filter(Boolean);
 }
 
@@ -230,6 +277,22 @@ function resolveLyriaPhotosFromBody(body) {
 function buildLyriaPromptFromBody(body, extra = {}) {
   const photoImages = resolveLyriaPhotosFromBody(body);
   const lyrics = extra.lyrics ?? String(body?.prompt || "").trim();
+  const isAdmin = Boolean(extra.isAdmin);
+  if (resolveLyriaPromptV2Enabled(body, isAdmin)) {
+    return buildLyriaPromptV2({
+      body,
+      lyrics,
+      title: extra.title ?? String(body?.title || "").trim(),
+      instrumental: extra.instrumental ?? Boolean(body?.instrumental),
+      clip: extra.clip ?? false,
+      durationSec: resolveLyriaDurationSec(body),
+      dialectHint: mergeLyriaDialectHint(body),
+      scriptFormat: extra.scriptFormat ?? String(body?.scriptFormat || "").trim(),
+      vocalGender: String(body?.vocalGender || "").trim(),
+      songKey: String(body?.songKey || "").trim(),
+      photoMood: photoImages.length > 0,
+    });
+  }
   return buildLyriaPrompt({
     stylePrompt: extra.stylePrompt ?? buildMusicPrompt(body),
     lyrics,
@@ -243,9 +306,12 @@ function buildLyriaPromptFromBody(body, extra = {}) {
     clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
     enhancedStylePrompt: extra.enhancedStylePrompt || "",
     structuredLyrics: extra.structuredLyrics || "",
+    arrangement: extra.arrangement || "",
     photoMood: photoImages.length > 0,
     durationSec: resolveLyriaDurationSec(body),
     scriptFormat: extra.scriptFormat ?? String(body?.scriptFormat || "").trim(),
+    nabadVocalToggles: extra.nabadVocalToggles ?? body?.nabadVocalChain ?? body?.nabadVocalToggles ?? null,
+    useNabadVocalIdentity: extra.useNabadVocalIdentity !== false,
   });
 }
 
@@ -253,14 +319,16 @@ async function persistAudioBuffer({ userId, taskId, buffer, contentType = "audio
   if (!buffer || !Buffer.isBuffer(buffer) || buffer.length < 128) {
     return { ok: false, error: "missing_audio_bytes" };
   }
-  const ext = String(contentType).includes("wav") ? "wav" : "mp3";
+  const ext = /wav|wave|lpcm|pcm/i.test(String(contentType)) ? "wav" : "mp3";
   const folder = providerFolder(taskId);
   const key = `${userId}/${folder}/${taskId}.${ext}`;
   const up = await uploadObject({
     bucket: BUCKET,
     key,
     body: buffer,
-    contentType: String(contentType).includes("audio") ? contentType : "audio/mpeg",
+    contentType: String(contentType).includes("audio")
+      ? contentType
+      : (ext === "wav" ? "audio/wav" : "audio/mpeg"),
   });
   if (!up.ok) return { ok: false, error: up.error || "upload_failed" };
   return { ok: true, url: up.url };
@@ -293,7 +361,7 @@ async function persistRemoteAudio({ userId, taskId, remoteUrl }) {
   }
 }
 
-function buildSunoStatusPayload({ taskId, title, lyrics, audioUrl, audioId, provider }) {
+function buildSunoStatusPayload({ taskId, title, lyrics, audioUrl, audioId, provider, melodyLock }) {
   const clip = {
     id: audioId,
     audioId,
@@ -302,7 +370,7 @@ function buildSunoStatusPayload({ taskId, title, lyrics, audioUrl, audioId, prov
     title: String(title || "").trim() || "Generated song",
     prompt: String(lyrics || "").trim(),
   };
-  return {
+  const out = {
     code: 200,
     data: {
       taskId,
@@ -314,6 +382,10 @@ function buildSunoStatusPayload({ taskId, title, lyrics, audioUrl, audioId, prov
     },
     _provider: provider,
   };
+  if (melodyLock && typeof melodyLock === "object") {
+    out._melodyLock = melodyLock;
+  }
+  return out;
 }
 
 function buildPendingStatusPayload({ taskId, provider }) {
@@ -353,11 +425,160 @@ function scheduleBackgroundWork(promise) {
   void promise;
 }
 
-function buildLyriaFullSongAdminExtra({ body, producerResult, model = "", lyriaPrompt = "" } = {}) {
+async function runLyriaMelodyLockGenerationJob({
+  userId,
+  isAdmin,
+  taskId,
+  audioId,
+  apiKey,
+  model,
+  title,
+  lyrics,
+  instrumental = false,
+  photoImages = [],
+  adminDetailBase = "",
+  body = {},
+  stylePrompt = "",
+  melodyLockCtx,
+  clip = false,
+  clipFlowLabel = LYRIA_FULL_SONG_FLOW,
+  clipCost = FULL_SONG_COST,
+  refundReason = "refund_full_song",
+  refundRef = "lyria_upstream",
+  providerCostUsd = LYRIA_PROVIDER_COST_USD,
+}) {
+  const fail = async (msg) => {
+    if (!isAdmin) {
+      await refund(userId, clip ? clipCost : FULL_SONG_COST, refundReason, refundRef).catch(() => null);
+    }
+    const statusPayload = buildFailedStatusPayload({
+      taskId,
+      provider: "lyria",
+      errorMessage: msg,
+    });
+    await saveMusicProviderTaskStatus({ userId, taskId, statusPayload }).catch(() => null);
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: isAdmin ? "failed" : "refunded",
+      error_message: msg,
+    });
+  };
+
+  try {
+    const promptExtra = {
+      stylePrompt,
+      lyrics,
+      title,
+      instrumental,
+      isAdmin,
+      clip,
+    };
+
+    const result = await runMelodyLockLyriaAttempts({
+      apiKey,
+      model,
+      photoImages,
+      body,
+      promptExtra,
+      melodyLockCtx,
+      persistAudioBuffer,
+      userId,
+      taskId,
+    });
+
+    if (!result.ok) {
+      await fail(result.error || "Melody Lock generation failed.");
+      return;
+    }
+
+    const best = result.best;
+    const upstream = best.upstream;
+    const archived = best.archived;
+    if (!archived?.ok || !archived.url) {
+      await fail("Couldn't save the audio — try again.");
+      return;
+    }
+
+    const { detailLines, melodyLockPublic } = await finalizeMelodyLockRun({
+      userId,
+      taskId,
+      melodyLockCtx,
+      best,
+      attempts: result.attempts,
+    });
+
+    let requestDetail = buildLyriaRequestDetail({
+      flow: clip ? clipFlowLabel : LYRIA_FULL_SONG_FLOW,
+      model,
+      lyriaPrompt: best.lyriaPrompt,
+      photoCount: photoImages.length,
+      extraLines: [
+        "pipeline: lyria_prompt_v2 + melody_lock",
+        ...detailLines,
+        ...(clip
+          ? buildLyriaClipMetaLines(body, best.lyriaPrompt)
+          : buildLyriaFullSongAdminExtra({
+              body,
+              producerResult: { ok: false },
+              model,
+              lyriaPrompt: best.lyriaPrompt,
+              isAdmin,
+            })),
+      ],
+    });
+    requestDetail = mergeLyriaUpstreamAdminDetail(requestDetail, upstream);
+
+    if (!instrumental && Array.isArray(upstream.alignedWords) && upstream.alignedWords.length) {
+      queueCacheTimestampedLyrics({
+        audioId,
+        taskId,
+        provider: "lyria",
+        alignedWords: upstream.alignedWords,
+      });
+    }
+
+    const displayLyrics = sanitizeLyriaLyricsForSinging(
+      String(lyrics || extractLyriaDisplayLyrics(upstream.data) || ""),
+    );
+    const statusPayload = buildSunoStatusPayload({
+      taskId,
+      title,
+      lyrics: displayLyrics,
+      audioUrl: archived.url,
+      audioId,
+      provider: "lyria",
+      melodyLock: melodyLockPublic,
+    });
+    if (clip) statusPayload._clip = true;
+
+    const stored = await saveMusicProviderTaskStatus({ userId, taskId, statusPayload });
+    if (!stored.ok) {
+      console.warn("[music/generate] melody lock lyria task store failed (audio ok)", stored.error);
+    }
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: "completed",
+      provider_cost_usd: providerCostUsd,
+      request_detail: requestDetail || adminDetailBase || undefined,
+    });
+  } catch (e) {
+    console.error("[music/generate] melody lock lyria job failed", taskId, e);
+    await fail(e?.message || "Melody Lock generation failed.");
+  }
+}
+
+function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
+  if (resolveLyriaPromptV2Enabled(body, isAdmin)) {
+    return "pipeline: lyria_prompt_v2 (no gemini producer)";
+  }
+  return producerResult?.ok
+    ? "pipeline: gemini_producer → lyria"
+    : "pipeline: direct → lyria (gemini_producer off)";
+}
+
+function buildLyriaFullSongAdminExtra({ body, producerResult, model = "", lyriaPrompt = "", isAdmin = false } = {}) {
   const dialectHintLine = mergeLyriaDialectHint(body);
   const dialectLabel = resolveLyriaDialectLabel(body);
   return [
-    "pipeline: gemini_producer → lyria",
+    lyriaPipelineAdminLine(body, isAdmin, producerResult),
     ...(model ? [`lyria_model: ${model}`] : []),
     ...(dialectLabel ? [`dialect: ${dialectLabel}`] : []),
     ...(dialectHintLine ? [`dialect_hint: ${dialectHintLine.slice(0, 400)}`] : []),
@@ -383,7 +604,29 @@ async function runLyriaGenerationJob({
   body = {},
   stylePrompt = "",
   fallbackLyriaPrompt = "",
+  melodyLockCtx = null,
 }) {
+  if (melodyLockCtx) {
+    return runLyriaMelodyLockGenerationJob({
+      userId,
+      isAdmin,
+      taskId,
+      audioId,
+      apiKey,
+      model,
+      title,
+      lyrics,
+      instrumental,
+      photoImages,
+      adminDetailBase,
+      body,
+      stylePrompt,
+      melodyLockCtx,
+      clip: false,
+      clipFlowLabel: LYRIA_FULL_SONG_FLOW,
+      providerCostUsd: LYRIA_PROVIDER_COST_USD,
+    });
+  }
   const fail = async (msg) => {
     if (!isAdmin) {
       await refund(userId, FULL_SONG_COST, "refund_full_song", "lyria_upstream").catch(() => null);
@@ -405,37 +648,44 @@ async function runLyriaGenerationJob({
     let lyriaPrompt = fallbackLyriaPrompt;
     const dialectHint = mergeLyriaDialectHint(body);
     const durationSec = resolveLyriaDurationSec(body);
-    const producerResult = await enrichLyriaSongWithGeminiProducer({
-      apiKey,
-      input: buildSongProducerInput(
-        {
-          ...body,
-          style: stylePrompt || body?.style,
-          prompt: lyrics,
-          ...(durationSec > 0 ? { musicLengthMs: durationSec * 1000 } : {}),
-        },
-        "lyria_full_song",
-      ),
-    });
-
-    if (producerResult.ok) {
-      lyriaPrompt = buildLyriaPrompt({
-        stylePrompt,
-        lyrics,
-        title,
-        instrumental,
-        clip: false,
-        vocalGender: String(body?.vocalGender || "").trim(),
-        voiceTimbre: String(body?.voiceTimbre || "").trim(),
-        challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
-        dialectHint,
-        clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
-        enhancedStylePrompt: producerResult.enhanced_style_prompt,
-        structuredLyrics: producerResult.structured_lyrics,
-        photoMood: photoImages.length > 0,
-        durationSec,
-        scriptFormat: String(body?.scriptFormat || "").trim(),
+    const useLyriaV2 = resolveLyriaPromptV2Enabled(body, isAdmin);
+    let producerResult = { ok: false };
+    if (!useLyriaV2) {
+      producerResult = await enrichLyriaSongWithGeminiProducer({
+        apiKey,
+        enabled: resolveGeminiProducerEnabled(body, isAdmin),
+        input: buildSongProducerInput(
+          {
+            ...body,
+            style: stylePrompt || body?.style,
+            prompt: lyrics,
+            ...(durationSec > 0 ? { musicLengthMs: durationSec * 1000 } : {}),
+          },
+          "lyria_full_song",
+        ),
       });
+
+      if (producerResult.ok) {
+        lyriaPrompt = buildLyriaPrompt({
+          stylePrompt,
+          lyrics,
+          title,
+          instrumental,
+          clip: false,
+          vocalGender: String(body?.vocalGender || "").trim(),
+          voiceTimbre: String(body?.voiceTimbre || "").trim(),
+          challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
+          dialectHint,
+          clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
+          enhancedStylePrompt: producerResult.enhanced_style_prompt,
+          structuredLyrics: producerResult.structured_lyrics,
+          arrangement: producerResult.arrangement || "",
+          photoMood: photoImages.length > 0,
+          durationSec,
+          scriptFormat: String(body?.scriptFormat || "").trim(),
+          nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
+        });
+      }
     }
 
     let requestDetail = buildLyriaRequestDetail({
@@ -443,7 +693,7 @@ async function runLyriaGenerationJob({
       model,
       lyriaPrompt,
       photoCount: photoImages.length,
-      extraLines: buildLyriaFullSongAdminExtra({ body, producerResult, model, lyriaPrompt }),
+      extraLines: buildLyriaFullSongAdminExtra({ body, producerResult, model, lyriaPrompt, isAdmin }),
     });
 
     await updateMusicGenerationByTaskId(taskId, {
@@ -474,9 +724,14 @@ async function runLyriaGenerationJob({
         alignedWords: upstream.alignedWords,
       });
     }
-    const displayLyrics = producerResult.ok && producerResult.structured_lyrics
-      ? producerResult.structured_lyrics
-      : lyrics;
+    const displayLyrics = sanitizeLyriaLyricsForSinging(
+      String(
+        (producerResult.ok && producerResult.structured_lyrics) ||
+          lyrics ||
+          extractLyriaDisplayLyrics(upstream.data) ||
+          "",
+      ),
+    );
     const statusPayload = buildSunoStatusPayload({
       taskId,
       title,
@@ -519,7 +774,32 @@ async function runLyriaClipGenerationJob({
   adminDetailBase,
   fallbackLyriaPrompt,
   photoImages = [],
+  melodyLockCtx = null,
 }) {
+  if (melodyLockCtx) {
+    return runLyriaMelodyLockGenerationJob({
+      userId,
+      isAdmin,
+      taskId,
+      audioId,
+      apiKey,
+      model,
+      title,
+      lyrics,
+      instrumental,
+      photoImages,
+      adminDetailBase,
+      body,
+      stylePrompt,
+      melodyLockCtx,
+      clip: true,
+      clipFlowLabel,
+      clipCost,
+      refundReason,
+      refundRef,
+      providerCostUsd: LYRIA_CLIP_COST_USD,
+    });
+  }
   const fail = async (msg) => {
     if (!isAdmin) {
       await refund(userId, clipCost, refundReason, refundRef).catch(() => null);
@@ -538,30 +818,36 @@ async function runLyriaClipGenerationJob({
 
   try {
     let lyriaPrompt = fallbackLyriaPrompt;
-
-    const producerResult = await enrichClipWithGeminiProducer({
-      apiKey,
-      input: buildClipProducerInput(body, clipFlowLabel),
-    });
-
-    if (producerResult.ok) {
-      lyriaPrompt = buildLyriaPrompt({
-        stylePrompt,
-        lyrics,
-        title,
-        instrumental,
-        clip: true,
-        vocalGender: String(body?.vocalGender || "").trim(),
-        voiceTimbre: String(body?.voiceTimbre || "").trim(),
-        challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
-        dialectHint: mergeLyriaDialectHint(body),
-        clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
-        enhancedStylePrompt: producerResult.enhanced_style_prompt,
-        structuredLyrics: producerResult.structured_lyrics,
-        photoMood: photoImages.length > 0,
-        durationSec: resolveLyriaDurationSec(body),
-        scriptFormat: String(body?.scriptFormat || "").trim(),
+    const useLyriaV2 = resolveLyriaPromptV2Enabled(body, isAdmin);
+    let producerResult = { ok: false };
+    if (!useLyriaV2) {
+      producerResult = await enrichClipWithGeminiProducer({
+        apiKey,
+        enabled: resolveGeminiProducerEnabled(body, isAdmin),
+        input: buildClipProducerInput(body, clipFlowLabel),
       });
+
+      if (producerResult.ok) {
+        lyriaPrompt = buildLyriaPrompt({
+          stylePrompt,
+          lyrics,
+          title,
+          instrumental,
+          clip: true,
+          vocalGender: String(body?.vocalGender || "").trim(),
+          voiceTimbre: String(body?.voiceTimbre || "").trim(),
+          challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
+          dialectHint: mergeLyriaDialectHint(body),
+          clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
+          enhancedStylePrompt: producerResult.enhanced_style_prompt,
+          structuredLyrics: producerResult.structured_lyrics,
+          arrangement: producerResult.arrangement || "",
+          photoMood: photoImages.length > 0,
+          durationSec: resolveLyriaDurationSec(body),
+          scriptFormat: String(body?.scriptFormat || "").trim(),
+          nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
+        });
+      }
     }
 
     let requestDetail = buildLyriaRequestDetail({
@@ -605,9 +891,14 @@ async function runLyriaClipGenerationJob({
         alignedWords: upstream.alignedWords,
       });
     }
-    const displayLyrics = producerResult.ok && producerResult.structured_lyrics
-      ? producerResult.structured_lyrics
-      : lyrics;
+    const displayLyrics = sanitizeLyriaLyricsForSinging(
+      String(
+        (producerResult.ok && producerResult.structured_lyrics) ||
+          lyrics ||
+          extractLyriaDisplayLyrics(upstream.data) ||
+          "",
+      ),
+    );
     const statusPayload = buildSunoStatusPayload({
       taskId,
       title,
@@ -652,6 +943,7 @@ async function runElevenlabsGenerationJob({
   referenceSongId,
   referenceRangeMs,
   referenceConditionStrength,
+  editCompositionPlan = null,
 }) {
   const fail = async (msg) => {
     if (!isAdmin) {
@@ -673,10 +965,17 @@ async function runElevenlabsGenerationJob({
     let effectiveLyrics = lyrics;
     let effectiveStyle = stylePrompt;
     let producerResult = { ok: false, used: false, fallback: true };
+    let finalPrompt = elevenPrompt;
+    let finalCompositionPlan = null;
+    let elevenPlanSource = null;
 
-    if (geminiApiKey) {
+    if (editCompositionPlan) {
+      finalCompositionPlan = editCompositionPlan;
+      elevenPlanSource = "admin_song_edit";
+    } else if (geminiApiKey) {
       producerResult = await enrichSongWithGeminiProducer({
         apiKey: geminiApiKey,
+        enabled: resolveGeminiProducerEnabled(body, isAdmin),
         input: buildSongProducerInput({ ...body, musicLengthMs }, "elevenlabs"),
       });
       if (producerResult.ok) {
@@ -689,15 +988,17 @@ async function runElevenlabsGenerationJob({
       }
     }
 
-    let finalPrompt = elevenPrompt;
-    let finalCompositionPlan = null;
-    let elevenPlanSource = null;
     const producerChunks =
       producerResult.ok && Array.isArray(producerResult.composition_chunks)
         ? producerResult.composition_chunks
         : null;
     const vocalGender = String(body?.vocalGender || "").trim();
     const voiceTimbre = String(body?.voiceTimbre || "").trim();
+    const nabadVocalToggles = body?.nabadVocalChain || body?.nabadVocalToggles || null;
+    const dialectHint = mergeLyriaDialectHint(body);
+    const scriptFormat = String(body?.scriptFormat || "").trim();
+    const isSongInpaint = Boolean(editCompositionPlan);
+    if (!isSongInpaint && !finalCompositionPlan?.chunks?.length) {
     const planBuilt = await buildElevenSongCompositionPlan({
       apiKey,
       stylePrompt: effectiveStyle,
@@ -711,6 +1012,9 @@ async function runElevenlabsGenerationJob({
       producerChunks,
       vocalGender,
       voiceTimbre,
+      nabadVocalToggles,
+      dialectHint,
+      scriptFormat,
     });
     if (planBuilt.ok && planBuilt.plan?.chunks?.length) {
       finalCompositionPlan = planBuilt.plan;
@@ -723,13 +1027,34 @@ async function runElevenlabsGenerationJob({
           instrumental,
         });
         const refChunkCount = finalCompositionPlan.chunks.filter((c) => c.conditioning_ref).length;
-        elevenPlanSource = `${elevenPlanSource}_reference`;
-        console.log(
-          "[music/generate] elevenlabs multi-chunk reference",
-          taskId,
-          refChunkCount,
-          "vocal chunks",
-        );
+        if (!refChunkCount) {
+          // Multi-chunk plan had no attachable chunks — fall back to single-chunk reference.
+          finalCompositionPlan = buildElevenReferenceCompositionPlan({
+            lyrics: effectiveLyrics,
+            stylePrompt: effectiveStyle,
+            title,
+            musicLengthMs,
+            instrumental,
+            referenceSongId,
+            referenceRangeMs,
+            conditionStrength: referenceConditionStrength,
+            negativeTags: body?.negativeTags,
+            vocalGender,
+            voiceTimbre,
+            nabadVocalToggles,
+            dialectHint,
+            scriptFormat,
+          });
+          elevenPlanSource = "reference_fallback_empty_chunks";
+        } else {
+          elevenPlanSource = `${elevenPlanSource}_reference`;
+          console.log(
+            "[music/generate] elevenlabs multi-chunk reference",
+            taskId,
+            refChunkCount,
+            instrumental ? "instrumental chunks" : "vocal chunks",
+          );
+        }
       }
       console.log(
         "[music/generate] elevenlabs composition plan",
@@ -754,6 +1079,9 @@ async function runElevenlabsGenerationJob({
         negativeTags: body?.negativeTags,
         vocalGender,
         voiceTimbre,
+        nabadVocalToggles,
+        dialectHint,
+        scriptFormat,
       });
       elevenPlanSource = "reference_fallback";
     } else {
@@ -768,39 +1096,79 @@ async function runElevenlabsGenerationJob({
         title,
         instrumental,
         vocalGender,
+        nabadVocalToggles,
+        dialectHint,
+        scriptFormat,
       });
       elevenPlanSource = "prompt_fallback";
     }
+    }
+
+    const inpaintSummary = isElevenInpaintPlan(editCompositionPlan)
+      ? summarizeElevenInpaintPlan(editCompositionPlan)
+      : null;
+    const inpaintExpectedMs = inpaintSummary ? expectedInpaintDurationMs(editCompositionPlan) : 0;
+    const inpaintDetail = inpaintSummary
+      ? [
+          `inpaint_format: ${inpaintSummary.format}`,
+          `inpaint_keep: ${inpaintSummary.keep}`,
+          `inpaint_rewrite: ${inpaintSummary.rewrite}`,
+          `inpaint_expected_ms: ${inpaintExpectedMs}`,
+          `inpaint_map: ${inpaintSummary.sections.join(" | ")}`.slice(0, 1600),
+        ].join("\n")
+      : "";
+
+    const adminDetailBefore = appendProducerAdminDetail(
+      [
+        adminDetailBase,
+        elevenPlanSource ? `eleven_plan: ${elevenPlanSource}` : "",
+        finalCompositionPlan?.sections?.length
+          ? `eleven_sections: ${finalCompositionPlan.sections.length}`
+          : "",
+        finalCompositionPlan?.chunks?.length
+          ? `eleven_chunks: ${finalCompositionPlan.chunks.length}`
+          : "",
+        inpaintDetail,
+        referenceSongId && finalCompositionPlan?.chunks?.length
+          ? `reference_chunks: ${finalCompositionPlan.chunks.filter((c) => c.conditioning_ref).length}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      producerResult,
+    );
 
     await updateMusicGenerationByTaskId(taskId, {
-      request_detail: appendProducerAdminDetail(
-        [
-          adminDetailBase,
-          elevenPlanSource ? `eleven_plan: ${elevenPlanSource}` : "",
-          finalCompositionPlan?.chunks?.length
-            ? `eleven_chunks: ${finalCompositionPlan.chunks.length}`
-            : "",
-          referenceSongId && finalCompositionPlan?.chunks?.length
-            ? `reference_chunks: ${finalCompositionPlan.chunks.filter((c) => c.conditioning_ref).length}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        producerResult,
-      ),
+      request_detail: adminDetailBefore,
     }).catch(() => null);
 
-    const upstream = await elevenlabsGenerateMusicDetailedWithRetry({
-      apiKey,
-      prompt: finalCompositionPlan ? undefined : finalPrompt,
-      compositionPlan: finalCompositionPlan || undefined,
-      model,
-      musicLengthMs,
-      instrumental,
-      finetuneId,
-      skipFinetune: Boolean(adminFinetuneDisabled),
-      withTimestamps: !instrumental,
-    });
+    const isInpaint = Boolean(editCompositionPlan);
+    if (isInpaint && inpaintSummary) {
+      console.log(
+        "[music/generate] elevenlabs inpaint compose",
+        taskId,
+        `${inpaintSummary.keep} keep / ${inpaintSummary.rewrite} rewrite`,
+        inpaintSummary.format,
+        inpaintSummary.sections.join(" | "),
+      );
+    }
+    const upstream = isInpaint
+      ? await elevenlabsComposeInpaint({
+          apiKey,
+          compositionPlan: editCompositionPlan,
+          model,
+        })
+      : await elevenlabsGenerateMusicDetailedWithRetry({
+          apiKey,
+          prompt: finalCompositionPlan ? undefined : finalPrompt,
+          compositionPlan: finalCompositionPlan || undefined,
+          model,
+          musicLengthMs,
+          instrumental,
+          finetuneId,
+          skipFinetune: Boolean(adminFinetuneDisabled),
+          withTimestamps: !instrumental,
+        });
     if (!upstream.ok) {
       console.warn("[music/generate] elevenlabs compose failed", taskId, upstream.httpStatus, upstream.userMessage, upstream.text?.slice?.(0, 240));
       await fail(upstream.userMessage || "ElevenLabs generation failed — try again.");
@@ -849,6 +1217,22 @@ async function runElevenlabsGenerationJob({
     queueUpdateMusicGenerationByTaskId(taskId, {
       status: "completed",
       provider_cost_usd: ELEVENLABS_PROVIDER_COST_USD,
+      ...(isInpaint
+        ? {
+            request_detail: [
+              adminDetailBefore,
+              `el_http: ${upstream.httpStatus || 200}`,
+              `el_model: ${upstream.model || model}`,
+              upstream.requestId ? `el_request_id: ${upstream.requestId}` : "",
+              upstream.songId ? `el_out_song_id: ${upstream.songId}` : "",
+              `out_ms: ${upstream.outputDurationMs || estimateMpegAudioDurationMs(upstream.audio?.buffer)} expected_ms: ${inpaintExpectedMs}`,
+              `out_bytes: ${upstream.audio?.buffer?.length || 0}`,
+            ]
+              .filter(Boolean)
+              .join("\n")
+              .slice(0, 4000),
+          }
+        : {}),
     });
   } catch (e) {
     console.error("[music/generate] elevenlabs background job failed", taskId, e);
@@ -1028,7 +1412,15 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
   if (!apiKey) return sendJson(res, 500, { error: "Missing GEMINI_API_KEY on server" });
 
-  if (!isAdmin && !lyriaGenerateEnabled()) {
+  const melodyLockCtx = await resolveMelodyLockForGenerate({ user, body, isAdmin, clip: false });
+  if (melodyLockCtx?.error) {
+    return sendJson(res, melodyLockCtx.status, { error: melodyLockCtx.error, code: melodyLockCtx.code });
+  }
+
+  const templateSparkFull = String(body?.templateSparkFull || "").trim() === "1";
+  // Public templates / sparks / occasions / challenges use Lyria 3.5 full via templateSparkFull.
+  // Admin Settings → Lyria (or LYRIA_GENERATE_ENABLED) still opens full Lyria for freeform create.
+  if (!isAdmin && !lyriaGenerateEnabled() && !templateSparkFull) {
     return sendJson(res, 403, {
       error: "This generation mode isn't available yet.",
       code: "lyria_admin_only",
@@ -1047,8 +1439,8 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     const debit = await callRpc("consume_credits", {
       p_user_id: user.userId,
       p_amount: FULL_SONG_COST,
-      p_reason: "full_song",
-      p_ref: "lyria",
+      p_reason: templateSparkFull ? "template_spark_full" : "full_song",
+      p_ref: templateSparkFull ? "template_spark_lyria_full" : "lyria",
     });
     if (!debit.ok || !debit.data?.ok) {
       const status = String(debit.data?.status || "");
@@ -1071,7 +1463,9 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   const instrumental = Boolean(body?.instrumental);
   const taskId = newTaskId("lyria");
   const audioId = `${taskId}_a`;
-  const model = resolveLyriaModel(String(body?.lyriaModel || "").trim());
+  const model = resolveLyriaModel(
+    String(body?.lyriaModel || (templateSparkFull ? "lyria-3.5" : "")).trim(),
+  );
   const photoImages = resolveLyriaPhotosFromBody(body);
 
   if (!instrumental && !lyrics && !stylePrompt && !photoImages.length) {
@@ -1081,16 +1475,30 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
-  const fallbackLyriaPrompt = buildLyriaPromptFromBody(body, { stylePrompt, lyrics, title, instrumental });
+  const fallbackLyriaPrompt = melodyLockCtx
+    ? buildLyriaPromptWithMelodyLock(
+        body,
+        { stylePrompt, lyrics, title, instrumental, isAdmin, clip: false },
+        { melody: melodyLockCtx.melody, sourceKind: melodyLockCtx.sourceKind },
+      )
+    : buildLyriaPromptFromBody(body, {
+        stylePrompt,
+        lyrics,
+        title,
+        instrumental,
+        isAdmin,
+      });
+  const producerOn = resolveGeminiProducerEnabled(body, isAdmin);
   const adminDetailBase = buildLyriaRequestDetail({
     flow: LYRIA_FULL_SONG_FLOW,
     model,
     lyriaPrompt: fallbackLyriaPrompt,
     photoCount: photoImages.length,
     extraLines: [
-      "pipeline: gemini_producer → lyria",
+      melodyLockCtx ? `melody_lock_id: ${melodyLockCtx.melodyId}` : "",
+      lyriaPipelineAdminLine(body, isAdmin, { ok: producerOn }),
       `lyria_model: ${model}`,
-    ],
+    ].filter(Boolean),
   });
 
   await logMusicGeneration({
@@ -1137,6 +1545,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
       body,
       stylePrompt,
       fallbackLyriaPrompt,
+      melodyLockCtx,
     }),
   );
 
@@ -1146,6 +1555,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     _provider: "lyria",
     _model: model,
     _lyriaApi: "interactions",
+    _melodyLock: melodyLockCtx ? { melodyId: melodyLockCtx.melodyId } : undefined,
     _ready: false,
     _variantCount: 1,
     _credits: {
@@ -1165,8 +1575,14 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
   if (!apiKey) return sendJson(res, 500, { error: "Missing GEMINI_API_KEY on server" });
 
+  const melodyLockCtx = await resolveMelodyLockForGenerate({ user, body, isAdmin, clip: true });
+  if (melodyLockCtx?.error) {
+    return sendJson(res, melodyLockCtx.status, { error: melodyLockCtx.error, code: melodyLockCtx.code });
+  }
+
   const templateSpark = String(body?.templateSparkClip || "").trim() === "1";
   const nabadClip = String(body?.nabadClip || "").trim() === "1";
+  const adminLyriaClip = String(body?.adminLyriaClip || "").trim() === "1";
   const clipCost = resolveClipCreditCost(body);
   if (!isAdmin && templateSpark && !templateSparkClipEnabled()) {
     return sendJson(res, 403, {
@@ -1229,26 +1645,38 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
-  const lyriaPrompt = buildLyriaPromptFromBody(body, {
-    stylePrompt,
-    lyrics,
-    title,
-    instrumental,
-    clip: true,
-  });
+  const lyriaPrompt = melodyLockCtx
+    ? buildLyriaPromptWithMelodyLock(
+        body,
+        { stylePrompt, lyrics, title, instrumental, isAdmin, clip: true },
+        { melody: melodyLockCtx.melody, sourceKind: melodyLockCtx.sourceKind },
+      )
+    : buildLyriaPromptFromBody(body, {
+        stylePrompt,
+        lyrics,
+        title,
+        instrumental,
+        clip: true,
+        isAdmin,
+      });
 
   const clipFlowLabel = templateSpark
     ? "template_spark_clip"
     : nabadClip
       ? "nabad_clip"
-      : "lyria_clip";
+      : adminLyriaClip
+        ? "admin_lyria_clip"
+        : "lyria_clip";
 
   const adminDetailBase = buildLyriaRequestDetail({
     flow: clipFlowLabel,
     model,
     lyriaPrompt,
     photoCount: photoImages.length,
-    extraLines: buildLyriaClipMetaLines(body, lyriaPrompt),
+    extraLines: [
+      melodyLockCtx ? `melody_lock_id: ${melodyLockCtx.melodyId}` : "",
+      ...buildLyriaClipMetaLines(body, lyriaPrompt),
+    ].filter(Boolean),
   });
 
   await logMusicGeneration({
@@ -1265,6 +1693,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
 
   const pendingPayload = buildPendingStatusPayload({ taskId, provider: "lyria" });
   pendingPayload._clip = true;
+  if (melodyLockCtx) pendingPayload._melodyLock = { melodyId: melodyLockCtx.melodyId };
   const pendingStored = await saveMusicProviderTaskStatus({
     userId: user.userId,
     taskId,
@@ -1300,6 +1729,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
       adminDetailBase,
       fallbackLyriaPrompt: lyriaPrompt,
       photoImages,
+      melodyLockCtx,
     }),
   );
 
@@ -1310,6 +1740,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     _model: model,
     _clip: true,
     _templateSparkClip: templateSpark || undefined,
+    _melodyLock: melodyLockCtx ? { melodyId: melodyLockCtx.melodyId } : undefined,
     _ready: false,
     _variantCount: 1,
     _credits: {
@@ -1338,13 +1769,35 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
-  const hasReference = Boolean(body?.hasReference || body?.referenceAudio || body?.referenceAudioUrl);
-  if (hasReference && Boolean(body?.instrumental) && Boolean(body?.referenceInstrumentalOnly)) {
-    return sendJson(res, 400, {
-      error: "ElevenLabs reference mode supports vocal hum/sing references — disable instrumental-from-melody for now.",
-      code: "elevenlabs_reference_instrumental_unsupported",
+  const editPlanInput = isAdmin ? body?.elevenlabsEditPlan : null;
+  const isSongEdit = Boolean(editPlanInput?.songId) && Array.isArray(editPlanInput?.chunks);
+  let editCompositionPlan = null;
+  if (isSongEdit) {
+    if (!nabadSongEditEnabled()) {
+      return sendJson(res, 403, {
+        error: "Song Edit is not enabled on this server.",
+        code: "nabad_song_edit_disabled",
+      });
+    }
+    const built = buildElevenEditCompositionPlan({
+      songId: editPlanInput.songId,
+      chunks: editPlanInput.chunks,
+      edits: editPlanInput.edits,
+      globalPositive: editPlanInput.globalPositive,
+      globalNegative: editPlanInput.globalNegative,
     });
+    if (!built.ok) {
+      return sendJson(res, 400, {
+        error: built.userMessage || "Invalid Edit plan.",
+        code: "elevenlabs_edit_invalid",
+      });
+    }
+    editCompositionPlan = built.plan;
   }
+
+  const hasReference = !isSongEdit && Boolean(body?.hasReference || body?.referenceAudio || body?.referenceAudioUrl);
+  // Hum Track / instrumental-from-melody: allow reference + instrumental.
+  // conditioning_ref is attached to instrumental chunks in applyElevenReferenceToCompositionPlan.
 
   let balanceAfterDebit = null;
   if (!isAdmin) {
@@ -1369,15 +1822,27 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     balanceAfterDebit = Number(debit.data?.balance || 0);
   }
 
-  const lyrics = String(body?.prompt || "").trim();
-  const stylePrompt = buildMusicPrompt(body);
-  const title = String(body?.title || "").trim();
+  const lyrics = isSongEdit
+    ? (Array.isArray(editPlanInput?.edits) ? editPlanInput.edits : [])
+        .filter((e) => String(e?.action || "").toLowerCase() === "rewrite")
+        .map((e) => String(e?.text || "").trim())
+        .filter(Boolean)
+        .join("\n\n")
+    : String(body?.prompt || "").trim();
+  const stylePrompt = isSongEdit ? "song edit" : buildMusicPrompt(body);
+  const title = String(body?.title || "").trim() || (isSongEdit ? "Edited song" : "");
   const instrumental = Boolean(body?.instrumental);
   const taskId = newTaskId("elevenlabs");
   const audioId = `${taskId}_a`;
-  const model = resolveElevenMusicModel(body?.elevenlabsModel);
-  const musicLengthMs = resolveElevenMusicLengthMsFromBody(body);
-  let finetuneId = resolveElevenFinetuneId(body?.elevenlabsFinetuneId);
+  const model = resolveElevenMusicModel(isSongEdit ? "music_v2_5" : body?.elevenlabsModel);
+  const musicLengthMs = isSongEdit
+    ? Math.max(
+        3000,
+        Number(editPlanInput.chunks[editPlanInput.chunks.length - 1]?.endMs)
+          || resolveElevenMusicLengthMsFromBody(body),
+      )
+    : resolveElevenMusicLengthMsFromBody(body);
+  let finetuneId = isSongEdit ? null : resolveElevenFinetuneId(body?.elevenlabsFinetuneId);
   const envFinetuneId = finetuneId;
   const adminFinetuneDisabled =
     isAdmin &&
@@ -1385,7 +1850,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
       body?.elevenlabsUseFinetune === "false" ||
       body?.elevenlabsUseFinetune === 0);
   if (adminFinetuneDisabled) {
-    console.log("[music/generate] elevenlabs admin finetune OFF — using base music_v2");
+    console.log(`[music/generate] elevenlabs admin finetune OFF — using base ${model}`);
     finetuneId = null;
   }
   const finetuneSkippedForReference = Boolean(hasReference && envFinetuneId && !adminFinetuneDisabled);
@@ -1418,7 +1883,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
       finetuneId,
       finetuneCheck.finetune?.name || "NabadAi DNA",
     );
-  } else if (!adminFinetuneDisabled) {
+  } else if (!adminFinetuneDisabled && !isSongEdit) {
     console.warn("[music/generate] elevenlabs generate without finetune_id — set ELEVENLABS_FINETUNE_ID");
   }
 
@@ -1464,7 +1929,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     );
   }
 
-  if (!instrumental && !lyrics && !stylePrompt && !hasReference) {
+  if (!isSongEdit && !instrumental && !lyrics && !stylePrompt && !hasReference) {
     return sendJson(res, 400, {
       error: "Add lyrics, style, or enable instrumental mode for ElevenLabs.",
       code: "elevenlabs_missing_prompt",
@@ -1475,6 +1940,10 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     "flow: elevenlabs",
     adminFinetuneDisabled ? "finetune: admin_off" : finetuneId ? `finetune: ${finetuneId}` : "",
     referenceSongId ? `reference: ${referenceSongId.slice(0, 12)}` : "",
+    isSongEdit ? `edit: ${String(editPlanInput.songId).slice(0, 12)}` : "",
+    editCompositionPlan
+      ? `edit_keep: ${editCompositionPlan.chunks.filter((c) => c.song_id || c.songId).length} edit_rewrite: ${editCompositionPlan.chunks.filter((c) => !(c.song_id || c.songId)).length}`
+      : "",
   ].filter(Boolean).join("\n");
 
   await logMusicGeneration({
@@ -1495,6 +1964,9 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     title,
     instrumental,
     vocalGender: String(body?.vocalGender || "").trim(),
+    nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
+    dialectHint: mergeLyriaDialectHint(body),
+    scriptFormat: String(body?.scriptFormat || "").trim(),
   });
 
   const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
@@ -1551,6 +2023,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
       referenceSongId,
       referenceRangeMs,
       referenceConditionStrength,
+      editCompositionPlan,
     }),
   );
 
@@ -1565,6 +2038,290 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     _finetuneSkippedForReference: finetuneSkippedForReference || undefined,
     _referenceApplied: Boolean(referenceSongId),
     _referenceSongId: referenceSongId || undefined,
+    _ready: false,
+    _variantCount: 1,
+    _credits: {
+      spent: isAdmin ? 0 : FULL_SONG_COST,
+      balance: balanceAfterDebit,
+      admin: isAdmin || undefined,
+    },
+  });
+}
+
+async function runMurekaGenerationJob({
+  userId,
+  isAdmin,
+  taskId,
+  audioId,
+  apiKey,
+  geminiApiKey,
+  lyrics,
+  stylePrompt,
+  title,
+  model,
+  vocalId,
+  gender,
+  body,
+}) {
+  const fail = async (msg) => {
+    if (!isAdmin) {
+      await refund(userId, FULL_SONG_COST, "refund_full_song", "mureka_upstream").catch(() => null);
+    }
+    const statusPayload = buildFailedStatusPayload({
+      taskId,
+      provider: "mureka",
+      errorMessage: msg,
+    });
+    await saveMusicProviderTaskStatus({ userId, taskId, statusPayload }).catch(() => null);
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: isAdmin ? "failed" : "refunded",
+      error_message: msg,
+    });
+  };
+
+  try {
+    let effectiveLyrics = lyrics;
+    let effectiveStyle = stylePrompt;
+    let producerResult = { ok: false, used: false, fallback: true };
+
+    if (geminiApiKey) {
+      producerResult = await enrichLyriaSongWithGeminiProducer({
+        apiKey: geminiApiKey,
+        enabled: resolveGeminiProducerEnabled(body, isAdmin),
+        input: buildSongProducerInput(body, "mureka"),
+      });
+      if (producerResult.ok) {
+        if (producerResult.structured_lyrics) {
+          effectiveLyrics = producerResult.structured_lyrics;
+        }
+        if (producerResult.enhanced_style_prompt) {
+          effectiveStyle = producerResult.enhanced_style_prompt;
+        }
+      }
+    }
+
+    const nabadVocalToggles = body?.nabadVocalChain || body?.nabadVocalToggles || null;
+    const dialectHint = mergeLyriaDialectHint(body);
+    const scriptFormat = String(body?.scriptFormat || "").trim();
+    effectiveStyle = mergeNabadVocalIntoStylePrompt(effectiveStyle, {
+      gender: body?.vocalGender || gender,
+      lyrics: effectiveLyrics,
+      dialectHint,
+      scriptFormat,
+      adminToggles: nabadVocalToggles,
+    });
+
+    const murekaLyricsPrep = prepareMurekaLyrics(effectiveLyrics);
+    if (murekaLyricsPrep.truncated) {
+      console.warn(
+        "[music/generate] mureka lyrics truncated",
+        taskId,
+        `${murekaLyricsPrep.droppedFrom || effectiveLyrics.length} → ${murekaLyricsPrep.charCount}`,
+      );
+    }
+
+    const started = await murekaGenerateSong({
+      apiKey,
+      lyrics: murekaLyricsPrep.lyrics,
+      prompt: effectiveStyle,
+      model,
+      n: 1,
+      gender,
+      vocalId,
+      referenceId: String(body?.murekaReferenceId || "").trim(),
+      melodyId: String(body?.murekaMelodyId || "").trim(),
+      stream: false,
+    });
+    if (!started.ok) {
+      await fail(murekaUserMessage(started.error));
+      return;
+    }
+
+    const waited = await murekaWaitForSong({
+      apiKey,
+      upstreamTaskId: started.upstreamTaskId,
+    });
+    if (!waited.ok) {
+      await fail(murekaUserMessage(waited.error));
+      return;
+    }
+
+    const archived = await persistRemoteAudio({
+      userId,
+      taskId,
+      remoteUrl: waited.audioUrl,
+    });
+    if (!archived.ok) {
+      await fail(archived.error || "Could not archive Mureka audio.");
+      return;
+    }
+
+    const statusPayload = buildSunoStatusPayload({
+      taskId,
+      title,
+      lyrics: effectiveLyrics,
+      audioUrl: archived.url,
+      audioId,
+      provider: "mureka",
+    });
+    statusPayload._murekaUpstreamTaskId = started.upstreamTaskId;
+    statusPayload._murekaModel = waited.model || started.model || model;
+    if (vocalId) statusPayload._murekaVocalId = vocalId;
+    if (producerResult.ok) statusPayload._geminiProducer = true;
+    const stored = await saveMusicProviderTaskStatus({ userId, taskId, statusPayload });
+    if (!stored.ok) {
+      console.warn("[music/generate] mureka task store failed (audio ok)", stored.error);
+    }
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: "completed",
+      provider_cost_usd: MUREKA_PROVIDER_COST_USD,
+      request_detail: [
+        "flow: mureka",
+        `upstream: ${started.upstreamTaskId}`,
+        waited.model || started.model ? `model: ${waited.model || started.model}` : "",
+        vocalId ? `vocal_id: ${vocalId}` : "",
+        producerResult.ok ? "geminiProducer: on (lyria compact)" : "geminiProducer: off",
+        `mureka_lyrics_chars: ${murekaLyricsPrep.charCount}/${MUREKA_LYRICS_MAX_CHARS}${murekaLyricsPrep.truncated ? " truncated" : ""}`,
+        `mureka_prompt_chars: ${Math.min(2000, String(effectiveStyle || "").trim().length)}`,
+        nabadVocalToggles ? "nabadVocalChain: on" : "",
+      ].filter(Boolean).join("\n"),
+    });
+  } catch (e) {
+    console.error("[music/generate] mureka background job failed", taskId, e);
+    await fail(e?.message || "Couldn't generate this song — try again.");
+  }
+}
+
+async function handleMurekaGenerate(req, res, { user, isAdmin, body }) {
+  const apiKey = process.env.MUREKA_API_KEY || "";
+  if (!apiKey) return sendJson(res, 500, { error: "Missing MUREKA_API_KEY on server" });
+
+  if (!isAdmin && !murekaGenerateEnabled()) {
+    return sendJson(res, 403, {
+      error: "Mureka generation is admin-only on this environment.",
+      code: "mureka_admin_only",
+    });
+  }
+
+  if (body?.personaId) {
+    return sendJson(res, 400, {
+      error: "Mureka spike does not support persona yet — clear persona or switch engine.",
+      code: "mureka_unsupported",
+    });
+  }
+
+  if (body?.hasReference || body?.referenceAudio || body?.referenceAudioUrl) {
+    return sendJson(res, 400, {
+      error: "Mureka spike does not support hum/reference yet — clear audio or switch engine.",
+      code: "mureka_unsupported",
+    });
+  }
+
+  if (body?.instrumental) {
+    return sendJson(res, 400, {
+      error: "Mureka instrumental isn't wired yet — uncheck instrumental or switch engine.",
+      code: "mureka_unsupported",
+    });
+  }
+
+  let balanceAfterDebit = null;
+  if (!isAdmin) {
+    const debit = await callRpc("consume_credits", {
+      p_user_id: user.userId,
+      p_amount: FULL_SONG_COST,
+      p_reason: "full_song",
+      p_ref: "mureka",
+    });
+    if (!debit.ok || !debit.data?.ok) {
+      const status = String(debit.data?.status || "");
+      if (status === "insufficient") {
+        return sendJson(res, 402, {
+          error: "Not enough credits",
+          code: "insufficient_credits",
+          balance: Number(debit.data?.balance || 0),
+          needed: FULL_SONG_COST,
+        });
+      }
+      return sendJson(res, 500, { error: "Credit check failed", details: debit.data || debit.error || null });
+    }
+    balanceAfterDebit = Number(debit.data?.balance || 0);
+  }
+
+  const lyrics = String(body?.prompt || "").trim();
+  if (!lyrics) {
+    return sendJson(res, 400, {
+      error: "Mureka needs lyrics — add lyrics and try again.",
+      code: "mureka_lyrics_required",
+    });
+  }
+
+  const stylePrompt = buildMusicPrompt(body);
+  const title = String(body?.title || "").trim();
+  const model = resolveMurekaModel(body?.murekaModel);
+  const vocalId = resolveMurekaVocalId(body?.murekaVocalId);
+  const gender = mapMurekaGender(body?.vocalGender) || String(body?.vocalGender || "").trim();
+  const taskId = newTaskId("mureka");
+  const audioId = `${taskId}_a`;
+
+  await logMusicGeneration({
+    userId: user.userId,
+    taskId,
+    kind: body?.watchKind === "photo" ? "photo" : "song",
+    provider: "mureka",
+    prompt: buildPromptLabel(lyrics, stylePrompt, title),
+    requestDetail: [
+      "flow: mureka",
+      model ? `model: ${model}` : "",
+      vocalId ? `vocal_id: ${vocalId}` : "",
+      gender ? `gender: ${gender}` : "",
+    ].filter(Boolean).join("\n"),
+    status: "pending",
+    creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
+    providerCostUsd: MUREKA_PROVIDER_COST_USD,
+  });
+
+  const pendingPayload = buildPendingStatusPayload({ taskId, provider: "mureka" });
+  if (vocalId) pendingPayload._murekaVocalId = vocalId;
+  pendingPayload._murekaModel = model;
+  const pendingStored = await saveMusicProviderTaskStatus({
+    userId: user.userId,
+    taskId,
+    statusPayload: pendingPayload,
+  });
+  if (!pendingStored.ok) {
+    if (!isAdmin) {
+      await refund(user.userId, FULL_SONG_COST, "refund_full_song", "mureka_task_store").catch(() => null);
+    }
+    return sendJson(res, 500, {
+      error: "Could not start Mureka generation — try again.",
+      details: pendingStored.error || null,
+    });
+  }
+
+  scheduleBackgroundWork(
+    runMurekaGenerationJob({
+      userId: user.userId,
+      isAdmin,
+      taskId,
+      audioId,
+      apiKey,
+      geminiApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "",
+      lyrics,
+      stylePrompt,
+      title,
+      model,
+      vocalId,
+      gender,
+      body,
+    }),
+  );
+
+  return sendJson(res, 200, {
+    code: 200,
+    data: { taskId, audioId, status: "PENDING" },
+    _provider: "mureka",
+    _model: model,
+    _murekaVocalId: vocalId || undefined,
     _ready: false,
     _variantCount: 1,
     _credits: {
@@ -1654,10 +2411,16 @@ module.exports = async function handler(req, res) {
     const body = await readGenerateRequestBody(req, provider);
 
     if (provider === "lyria") {
+      const mlHint = parseMelodyLockBody(body);
+      if (mlHint?.melodyId && (mlHint.preferClip || String(body?.melodyLock?.preferClip || "") === "1")) {
+        body.adminLyriaClip = body.adminLyriaClip || "1";
+        if (!body.duration) body.duration = 30;
+      }
       const clipModel = resolveLyriaModel(body?.lyriaModel);
       const clipRequested =
         String(body?.lyriaModel || "").trim().toLowerCase() === "clip" ||
         String(body?.nabadClip || "").trim() === "1" ||
+        String(body?.adminLyriaClip || "").trim() === "1" ||
         String(body?.templateSparkClip || "").trim() === "1" ||
         clipModel === "lyria-3-clip-preview";
       if (clipRequested) {
@@ -1667,6 +2430,9 @@ module.exports = async function handler(req, res) {
     }
     if (provider === "elevenlabs") {
       return handleElevenlabsGenerate(req, res, { user, isAdmin, body });
+    }
+    if (provider === "mureka") {
+      return handleMurekaGenerate(req, res, { user, isAdmin, body });
     }
     return handleMinimaxGenerate(req, res, { user, isAdmin, body });
   } catch (e) {

@@ -107,6 +107,12 @@ const {
 } = require("../_lib/clip-gemini-producer");
 const { nabadSongEditEnabled } = require("../_lib/nabad-song-edit-lib");
 const { mergeNabadVocalIntoStylePrompt } = require("../_lib/nabad-vocal-identity");
+const { resolveMelodyLockForGenerate, parseMelodyLockBody } = require("../_lib/melody-lock-resolve");
+const {
+  runMelodyLockLyriaAttempts,
+  finalizeMelodyLockRun,
+} = require("../_lib/melody-lock-lyria");
+const { buildLyriaPromptWithMelodyLock } = require("../_lib/melody-lock-prompt");
 
 const LYRIA_FULL_SONG_FLOW = "lyria_full_song";
 const FULL_SONG_COST = 15;
@@ -355,7 +361,7 @@ async function persistRemoteAudio({ userId, taskId, remoteUrl }) {
   }
 }
 
-function buildSunoStatusPayload({ taskId, title, lyrics, audioUrl, audioId, provider }) {
+function buildSunoStatusPayload({ taskId, title, lyrics, audioUrl, audioId, provider, melodyLock }) {
   const clip = {
     id: audioId,
     audioId,
@@ -364,7 +370,7 @@ function buildSunoStatusPayload({ taskId, title, lyrics, audioUrl, audioId, prov
     title: String(title || "").trim() || "Generated song",
     prompt: String(lyrics || "").trim(),
   };
-  return {
+  const out = {
     code: 200,
     data: {
       taskId,
@@ -376,6 +382,10 @@ function buildSunoStatusPayload({ taskId, title, lyrics, audioUrl, audioId, prov
     },
     _provider: provider,
   };
+  if (melodyLock && typeof melodyLock === "object") {
+    out._melodyLock = melodyLock;
+  }
+  return out;
 }
 
 function buildPendingStatusPayload({ taskId, provider }) {
@@ -413,6 +423,146 @@ function scheduleBackgroundWork(promise) {
     return;
   }
   void promise;
+}
+
+async function runLyriaMelodyLockGenerationJob({
+  userId,
+  isAdmin,
+  taskId,
+  audioId,
+  apiKey,
+  model,
+  title,
+  lyrics,
+  instrumental = false,
+  photoImages = [],
+  adminDetailBase = "",
+  body = {},
+  stylePrompt = "",
+  melodyLockCtx,
+  clip = false,
+  clipFlowLabel = LYRIA_FULL_SONG_FLOW,
+  clipCost = FULL_SONG_COST,
+  refundReason = "refund_full_song",
+  refundRef = "lyria_upstream",
+  providerCostUsd = LYRIA_PROVIDER_COST_USD,
+}) {
+  const fail = async (msg) => {
+    if (!isAdmin) {
+      await refund(userId, clip ? clipCost : FULL_SONG_COST, refundReason, refundRef).catch(() => null);
+    }
+    const statusPayload = buildFailedStatusPayload({
+      taskId,
+      provider: "lyria",
+      errorMessage: msg,
+    });
+    await saveMusicProviderTaskStatus({ userId, taskId, statusPayload }).catch(() => null);
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: isAdmin ? "failed" : "refunded",
+      error_message: msg,
+    });
+  };
+
+  try {
+    const promptExtra = {
+      stylePrompt,
+      lyrics,
+      title,
+      instrumental,
+      isAdmin,
+      clip,
+    };
+
+    const result = await runMelodyLockLyriaAttempts({
+      apiKey,
+      model,
+      photoImages,
+      body,
+      promptExtra,
+      melodyLockCtx,
+      persistAudioBuffer,
+      userId,
+      taskId,
+    });
+
+    if (!result.ok) {
+      await fail(result.error || "Melody Lock generation failed.");
+      return;
+    }
+
+    const best = result.best;
+    const upstream = best.upstream;
+    const archived = best.archived;
+    if (!archived?.ok || !archived.url) {
+      await fail("Couldn't save the audio — try again.");
+      return;
+    }
+
+    const { detailLines, melodyLockPublic } = await finalizeMelodyLockRun({
+      userId,
+      taskId,
+      melodyLockCtx,
+      best,
+      attempts: result.attempts,
+    });
+
+    let requestDetail = buildLyriaRequestDetail({
+      flow: clip ? clipFlowLabel : LYRIA_FULL_SONG_FLOW,
+      model,
+      lyriaPrompt: best.lyriaPrompt,
+      photoCount: photoImages.length,
+      extraLines: [
+        "pipeline: lyria_prompt_v2 + melody_lock",
+        ...detailLines,
+        ...(clip
+          ? buildLyriaClipMetaLines(body, best.lyriaPrompt)
+          : buildLyriaFullSongAdminExtra({
+              body,
+              producerResult: { ok: false },
+              model,
+              lyriaPrompt: best.lyriaPrompt,
+              isAdmin,
+            })),
+      ],
+    });
+    requestDetail = mergeLyriaUpstreamAdminDetail(requestDetail, upstream);
+
+    if (!instrumental && Array.isArray(upstream.alignedWords) && upstream.alignedWords.length) {
+      queueCacheTimestampedLyrics({
+        audioId,
+        taskId,
+        provider: "lyria",
+        alignedWords: upstream.alignedWords,
+      });
+    }
+
+    const displayLyrics = sanitizeLyriaLyricsForSinging(
+      String(lyrics || extractLyriaDisplayLyrics(upstream.data) || ""),
+    );
+    const statusPayload = buildSunoStatusPayload({
+      taskId,
+      title,
+      lyrics: displayLyrics,
+      audioUrl: archived.url,
+      audioId,
+      provider: "lyria",
+      melodyLock: melodyLockPublic,
+    });
+    if (clip) statusPayload._clip = true;
+
+    const stored = await saveMusicProviderTaskStatus({ userId, taskId, statusPayload });
+    if (!stored.ok) {
+      console.warn("[music/generate] melody lock lyria task store failed (audio ok)", stored.error);
+    }
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: "completed",
+      provider_cost_usd: providerCostUsd,
+      request_detail: requestDetail || adminDetailBase || undefined,
+    });
+  } catch (e) {
+    console.error("[music/generate] melody lock lyria job failed", taskId, e);
+    await fail(e?.message || "Melody Lock generation failed.");
+  }
 }
 
 function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
@@ -454,7 +604,29 @@ async function runLyriaGenerationJob({
   body = {},
   stylePrompt = "",
   fallbackLyriaPrompt = "",
+  melodyLockCtx = null,
 }) {
+  if (melodyLockCtx) {
+    return runLyriaMelodyLockGenerationJob({
+      userId,
+      isAdmin,
+      taskId,
+      audioId,
+      apiKey,
+      model,
+      title,
+      lyrics,
+      instrumental,
+      photoImages,
+      adminDetailBase,
+      body,
+      stylePrompt,
+      melodyLockCtx,
+      clip: false,
+      clipFlowLabel: LYRIA_FULL_SONG_FLOW,
+      providerCostUsd: LYRIA_PROVIDER_COST_USD,
+    });
+  }
   const fail = async (msg) => {
     if (!isAdmin) {
       await refund(userId, FULL_SONG_COST, "refund_full_song", "lyria_upstream").catch(() => null);
@@ -602,7 +774,32 @@ async function runLyriaClipGenerationJob({
   adminDetailBase,
   fallbackLyriaPrompt,
   photoImages = [],
+  melodyLockCtx = null,
 }) {
+  if (melodyLockCtx) {
+    return runLyriaMelodyLockGenerationJob({
+      userId,
+      isAdmin,
+      taskId,
+      audioId,
+      apiKey,
+      model,
+      title,
+      lyrics,
+      instrumental,
+      photoImages,
+      adminDetailBase,
+      body,
+      stylePrompt,
+      melodyLockCtx,
+      clip: true,
+      clipFlowLabel,
+      clipCost,
+      refundReason,
+      refundRef,
+      providerCostUsd: LYRIA_CLIP_COST_USD,
+    });
+  }
   const fail = async (msg) => {
     if (!isAdmin) {
       await refund(userId, clipCost, refundReason, refundRef).catch(() => null);
@@ -1215,6 +1412,11 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
   if (!apiKey) return sendJson(res, 500, { error: "Missing GEMINI_API_KEY on server" });
 
+  const melodyLockCtx = await resolveMelodyLockForGenerate({ user, body, isAdmin, clip: false });
+  if (melodyLockCtx?.error) {
+    return sendJson(res, melodyLockCtx.status, { error: melodyLockCtx.error, code: melodyLockCtx.code });
+  }
+
   const templateSparkFull = String(body?.templateSparkFull || "").trim() === "1";
   // Public templates / sparks / occasions / challenges use Lyria 3.5 full via templateSparkFull.
   // Admin Settings → Lyria (or LYRIA_GENERATE_ENABLED) still opens full Lyria for freeform create.
@@ -1273,13 +1475,19 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
-  const fallbackLyriaPrompt = buildLyriaPromptFromBody(body, {
-    stylePrompt,
-    lyrics,
-    title,
-    instrumental,
-    isAdmin,
-  });
+  const fallbackLyriaPrompt = melodyLockCtx
+    ? buildLyriaPromptWithMelodyLock(
+        body,
+        { stylePrompt, lyrics, title, instrumental, isAdmin, clip: false },
+        { melody: melodyLockCtx.melody, sourceKind: melodyLockCtx.sourceKind },
+      )
+    : buildLyriaPromptFromBody(body, {
+        stylePrompt,
+        lyrics,
+        title,
+        instrumental,
+        isAdmin,
+      });
   const producerOn = resolveGeminiProducerEnabled(body, isAdmin);
   const adminDetailBase = buildLyriaRequestDetail({
     flow: LYRIA_FULL_SONG_FLOW,
@@ -1287,9 +1495,10 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     lyriaPrompt: fallbackLyriaPrompt,
     photoCount: photoImages.length,
     extraLines: [
+      melodyLockCtx ? `melody_lock_id: ${melodyLockCtx.melodyId}` : "",
       lyriaPipelineAdminLine(body, isAdmin, { ok: producerOn }),
       `lyria_model: ${model}`,
-    ],
+    ].filter(Boolean),
   });
 
   await logMusicGeneration({
@@ -1336,6 +1545,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
       body,
       stylePrompt,
       fallbackLyriaPrompt,
+      melodyLockCtx,
     }),
   );
 
@@ -1345,6 +1555,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     _provider: "lyria",
     _model: model,
     _lyriaApi: "interactions",
+    _melodyLock: melodyLockCtx ? { melodyId: melodyLockCtx.melodyId } : undefined,
     _ready: false,
     _variantCount: 1,
     _credits: {
@@ -1363,6 +1574,11 @@ function resolveClipCreditCost(body) {
 async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
   if (!apiKey) return sendJson(res, 500, { error: "Missing GEMINI_API_KEY on server" });
+
+  const melodyLockCtx = await resolveMelodyLockForGenerate({ user, body, isAdmin, clip: true });
+  if (melodyLockCtx?.error) {
+    return sendJson(res, melodyLockCtx.status, { error: melodyLockCtx.error, code: melodyLockCtx.code });
+  }
 
   const templateSpark = String(body?.templateSparkClip || "").trim() === "1";
   const nabadClip = String(body?.nabadClip || "").trim() === "1";
@@ -1429,14 +1645,20 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
-  const lyriaPrompt = buildLyriaPromptFromBody(body, {
-    stylePrompt,
-    lyrics,
-    title,
-    instrumental,
-    clip: true,
-    isAdmin,
-  });
+  const lyriaPrompt = melodyLockCtx
+    ? buildLyriaPromptWithMelodyLock(
+        body,
+        { stylePrompt, lyrics, title, instrumental, isAdmin, clip: true },
+        { melody: melodyLockCtx.melody, sourceKind: melodyLockCtx.sourceKind },
+      )
+    : buildLyriaPromptFromBody(body, {
+        stylePrompt,
+        lyrics,
+        title,
+        instrumental,
+        clip: true,
+        isAdmin,
+      });
 
   const clipFlowLabel = templateSpark
     ? "template_spark_clip"
@@ -1451,7 +1673,10 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     model,
     lyriaPrompt,
     photoCount: photoImages.length,
-    extraLines: buildLyriaClipMetaLines(body, lyriaPrompt),
+    extraLines: [
+      melodyLockCtx ? `melody_lock_id: ${melodyLockCtx.melodyId}` : "",
+      ...buildLyriaClipMetaLines(body, lyriaPrompt),
+    ].filter(Boolean),
   });
 
   await logMusicGeneration({
@@ -1468,6 +1693,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
 
   const pendingPayload = buildPendingStatusPayload({ taskId, provider: "lyria" });
   pendingPayload._clip = true;
+  if (melodyLockCtx) pendingPayload._melodyLock = { melodyId: melodyLockCtx.melodyId };
   const pendingStored = await saveMusicProviderTaskStatus({
     userId: user.userId,
     taskId,
@@ -1503,6 +1729,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
       adminDetailBase,
       fallbackLyriaPrompt: lyriaPrompt,
       photoImages,
+      melodyLockCtx,
     }),
   );
 
@@ -1513,6 +1740,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     _model: model,
     _clip: true,
     _templateSparkClip: templateSpark || undefined,
+    _melodyLock: melodyLockCtx ? { melodyId: melodyLockCtx.melodyId } : undefined,
     _ready: false,
     _variantCount: 1,
     _credits: {
@@ -2183,6 +2411,11 @@ module.exports = async function handler(req, res) {
     const body = await readGenerateRequestBody(req, provider);
 
     if (provider === "lyria") {
+      const mlHint = parseMelodyLockBody(body);
+      if (mlHint?.melodyId && (mlHint.preferClip || String(body?.melodyLock?.preferClip || "") === "1")) {
+        body.adminLyriaClip = body.adminLyriaClip || "1";
+        if (!body.duration) body.duration = 30;
+      }
       const clipModel = resolveLyriaModel(body?.lyriaModel);
       const clipRequested =
         String(body?.lyriaModel || "").trim().toLowerCase() === "clip" ||

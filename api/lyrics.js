@@ -38,7 +38,6 @@ const {
   lightenSungArabicDiacritics,
   buildGenerationAddresseeGenderLinesEn,
   buildGenerationAddresseeGenderLinesAr,
-  applyLyriaGenerateSungHints,
   normalizeAddresseeGenderInLyrics,
 } = require("./_lib/arabic-dialect-lyrics");
 const {
@@ -55,22 +54,15 @@ function postProcessGeneratedArabicLyrics(text, {
   dialectHint = "",
 } = {}) {
   if (!arabicScript || flags.isMsa) return text;
+  const colloquial = flags.isLebanese || flags.isLevantineColloquial || flags.isEgyptian;
+  const lyriaColloquial = lyricsTarget === "lyria" && colloquial;
+  if (lyriaColloquial && mode !== "enhance" && mode !== "fix_singing" && mode !== "to_arabizi") {
+    return stripColloquialTanween(String(text || ""));
+  }
   const address = normalizeArabicAddress(arabicAddress, dialectHint);
   let normalized = normalizeAddresseeGenderInLyrics(text, address, flags);
   normalized = stripColloquialTanween(normalized);
   if (mode === "enhance" || mode === "fix_singing" || mode === "to_arabizi") {
-    return normalized;
-  }
-  const colloquial = flags.isLebanese || flags.isLevantineColloquial || flags.isEgyptian;
-  const lyriaColloquial = lyricsTarget === "lyria" && colloquial;
-  if (lyriaColloquial) {
-    // Keep model harakat for pronunciation; enforce addressee + -ak minimum only.
-    normalized = applyColloquialArabicOrthography(normalized, {
-      isLebanese: flags.isLebanese,
-      isLevantineColloquial: flags.isLevantineColloquial,
-      isEgyptian: flags.isEgyptian,
-    });
-    normalized = applyLyriaGenerateSungHints(normalized, { address, flags });
     return normalized;
   }
   normalized = stripAllArabicDiacritics(normalized);

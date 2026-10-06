@@ -30,9 +30,6 @@ const {
   dialectFlags,
   hintRequestsFormalMsa,
   normalizeArabicAddress,
-  alignLyricAddresseeForms,
-  applyLyriaGenerateSungHints,
-  normalizeAddresseeGenderInLyrics,
 } = require("./arabic-dialect-lyrics");
 const { buildNabadVocalPrompt } = require("./nabad-vocal-identity");
 
@@ -242,18 +239,9 @@ function buildLyriaAddresseePronunciationLine(address = "", flags = {}) {
   return "";
 }
 
-function prepareLyriaLyricsForSinging(rawLyrics, body = {}) {
-  const text = String(rawLyrics || "").trim();
-  if (!text) return "";
-  const dialectHint = mergeLyriaDialectHint(body);
-  const flags = dialectFlags(String(body?.dialect || "").trim(), dialectHint);
-  const address = resolveLyriaArabicAddress(body);
-  const colloquial = flags.isLebanese || flags.isLevantineColloquial || flags.isEgyptian;
-  if (!address || !colloquial) return text;
-  let out = alignLyricAddresseeForms(text, address, flags);
-  out = normalizeAddresseeGenderInLyrics(out, address, flags);
-  out = applyLyriaGenerateSungHints(out, { address, flags });
-  return out;
+/** Passthrough — addressee/tashkeel rewrite disabled until new lyrics prompt rules ship. */
+function prepareLyriaLyricsForSinging(rawLyrics, _body = {}) {
+  return String(rawLyrics || "").trim();
 }
 
 function mergeLyriaDialectHint(body = {}) {

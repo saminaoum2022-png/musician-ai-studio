@@ -10,6 +10,8 @@
  * `thumbFrame { scale, offsetY }` shape the rest of the app already understands.
  */
 
+import { COVER_STUDIO_GRADIENTS as GRADIENTS } from "./cover-art/cover-gradient-presets.js";
+
 /** Logical (export) size of the portrait cover. All layout maths is done in these units. */
 const W = 1080;
 const H = 1920;
@@ -38,14 +40,6 @@ const STYLES = [
   { id: "outline", label: "Outline" },
   { id: "glow", label: "Glow" },
   { id: "shadow", label: "Shadow" },
-];
-const GRADIENTS = [
-  ["#23d5ab", "#7c5cff"],
-  ["#ff7a59", "#7c5cff"],
-  ["#141433", "#7c5cff"],
-  ["#ffc45c", "#ff5fa2"],
-  ["#0b1f2a", "#23d5ab"],
-  ["#2b1055", "#d53369"],
 ];
 
 const ICON = {

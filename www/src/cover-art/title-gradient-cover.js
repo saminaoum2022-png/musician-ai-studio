@@ -4,6 +4,7 @@
  */
 import { COVER_PORTRAIT_W, COVER_PORTRAIT_H } from "./portrait-normalize.js";
 import { drawNabadColorWash } from "./nabad-color-wash.js";
+import { pickCoverStudioGradient } from "./cover-gradient-presets.js";
 
 export const TITLE_GRADIENT_PLAYER_Y = 0.36;
 export const TITLE_GRADIENT_THUMB_Y = 0.5;
@@ -23,17 +24,6 @@ function mulberry32(seed) {
     t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-}
-
-function randomHexChannel(rng) {
-  return Math.floor(rng() * 256);
-}
-
-function randomColor(rng) {
-  const r = randomHexChannel(rng);
-  const g = randomHexChannel(rng);
-  const b = randomHexChannel(rng);
-  return `#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
 }
 
 async function ensureFontsReady() {
@@ -86,8 +76,7 @@ function drawSpeckles(ctx, w, h, rng) {
 }
 
 function drawBackground(ctx, w, h, rng) {
-  const c1 = randomColor(rng);
-  const c2 = randomColor(rng);
+  const [c1, c2] = pickCoverStudioGradient(rng);
   const grad = ctx.createLinearGradient(w * 0.2, 0, w * 0.8, h);
   grad.addColorStop(0, c1);
   grad.addColorStop(1, c2);

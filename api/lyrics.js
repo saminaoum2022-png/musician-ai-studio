@@ -36,21 +36,45 @@ const {
   stripAllArabicDiacritics,
   applyColloquialArabicOrthography,
   lightenSungArabicDiacritics,
+  buildGenerationAddresseeGenderLinesEn,
+  buildGenerationAddresseeGenderLinesAr,
+  applyLyriaGenerateSungHints,
+  normalizeAddresseeGenderInLyrics,
 } = require("./_lib/arabic-dialect-lyrics");
 const {
   stripInlinePunctuationFromLyrics,
   NO_PUNCTUATION_IN_SUNG_LYRICS_LINES,
 } = require("./_lib/sung-lyrics-punctuation");
 
-function postProcessGeneratedArabicLyrics(text, { mode, flags, arabicScript }) {
+function postProcessGeneratedArabicLyrics(text, {
+  mode,
+  flags,
+  arabicScript,
+  lyricsTarget = "suno",
+  arabicAddress = "",
+  dialectHint = "",
+} = {}) {
   if (!arabicScript || flags.isMsa) return text;
-  let normalized = stripColloquialTanween(text);
+  const address = normalizeArabicAddress(arabicAddress, dialectHint);
+  let normalized = normalizeAddresseeGenderInLyrics(text, address, flags);
+  normalized = stripColloquialTanween(normalized);
   if (mode === "enhance" || mode === "fix_singing" || mode === "to_arabizi") {
     return normalized;
   }
-  // Plain script after ✦ Generate only — never strip harakat on lyrics the user sends to Lyria (see sanitizeLyriaLyricsForSinging).
+  const colloquial = flags.isLebanese || flags.isLevantineColloquial || flags.isEgyptian;
+  const lyriaColloquial = lyricsTarget === "lyria" && colloquial;
+  if (lyriaColloquial) {
+    // Keep model harakat for pronunciation; enforce addressee + -ak minimum only.
+    normalized = applyColloquialArabicOrthography(normalized, {
+      isLebanese: flags.isLebanese,
+      isLevantineColloquial: flags.isLevantineColloquial,
+      isEgyptian: flags.isEgyptian,
+    });
+    normalized = applyLyriaGenerateSungHints(normalized, { address, flags });
+    return normalized;
+  }
   normalized = stripAllArabicDiacritics(normalized);
-  if (flags.isLebanese || flags.isLevantineColloquial || flags.isEgyptian) {
+  if (colloquial) {
     normalized = applyColloquialArabicOrthography(normalized, {
       isLebanese: flags.isLebanese,
       isLevantineColloquial: flags.isLevantineColloquial,
@@ -287,7 +311,14 @@ module.exports = async function handler(req, res) {
             }
           }
         } else {
-          normalized = postProcessGeneratedArabicLyrics(normalized, { mode, flags, arabicScript });
+          normalized = postProcessGeneratedArabicLyrics(normalized, {
+            mode,
+            flags,
+            arabicScript,
+            lyricsTarget,
+            arabicAddress,
+            dialectHint,
+          });
         }
         if (mode === "remix_reply" && isMetaAiLyrics(normalized)) {
           const fixed = await repairMetaAiLyrics({ runLyrics, prompt, text: normalized, temperature: geminiTemperature });
@@ -402,7 +433,14 @@ module.exports = async function handler(req, res) {
         if (mode === "diacritics") {
           normalized = lightenSungArabicDiacritics(normalized, diacriticsPostOpts(flags));
         } else {
-          normalized = postProcessGeneratedArabicLyrics(normalized, { mode, flags, arabicScript });
+          normalized = postProcessGeneratedArabicLyrics(normalized, {
+            mode,
+            flags,
+            arabicScript,
+            lyricsTarget,
+            arabicAddress,
+            dialectHint,
+          });
         }
         if (mode === "remix_reply" && isMetaAiLyrics(normalized)) {
           const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
@@ -934,17 +972,29 @@ function buildPrompt({
   const scriptLines = useArabizi ? arabiziLines : [];
   const flags = dialectFlags(dialect, dialectHint);
   const colloquialArabicLines = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed })
-    ? buildColloquialArabicGenerationLines(flags)
+    ? buildColloquialArabicGenerationLines(flags, { forLyria })
     : [];
   const resolvedAddress = normalizeArabicAddress(arabicAddress, dialectHint);
+  const arabicGenContext = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed });
   const generationAddressLines =
     mode !== "diacritics" &&
     mode !== "singability_check" &&
-    resolvedAddress &&
-    isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed })
+    arabicGenContext
       ? [
-          ...buildDiacriticsAddressLinesEn(resolvedAddress, flags),
-          ...buildDiacriticsAddressLinesAr(resolvedAddress, flags),
+          ...buildGenerationAddresseeGenderLinesEn(resolvedAddress, flags),
+          ...buildGenerationAddresseeGenderLinesAr(resolvedAddress, flags),
+          ...(resolvedAddress
+            ? [
+              ...buildDiacriticsAddressLinesEn(resolvedAddress, flags),
+              ...buildDiacriticsAddressLinesAr(resolvedAddress, flags),
+            ]
+            : []),
+          ...(forLyria && (flags.isLebanese || flags.isLevantineColloquial || flags.isEgyptian)
+            ? [
+              "LYRIA: MANDATORY addressee gender (إنتَ/إنتِ، حبيبي/حبيبتي) and kasra before ك in حبيتك; no كَ/كِ on kaf. OPTIONAL: extra harakat anywhere they help Lebanese/Masri sung pronunciation.",
+              "لليريا: إلزامي المخاطَب/المخاطَبة و-ak؛ اختياري زيادة حركات للفظ والغناء.",
+            ]
+            : []),
         ]
       : [];
   if (mode === "to_arabizi") {
@@ -1334,8 +1384,14 @@ function openAiMinimalDialectLine(dialect) {
 
 function openAiMinimalAddressLine(arabicAddress, dialectHint) {
   const address = normalizeArabicAddress(arabicAddress, dialectHint);
+  const flags = dialectFlags("", dialectHint);
+  const levantine = flags.isLebanese || flags.isLevantineColloquial;
   if (address === "female") return "Address: sung to a woman (إنتِ، حبيبتي، غالية).";
-  if (address === "male") return "Address: sung to a man (إنتَ، حبيبي، غالي).";
+  if (address === "male") {
+    return levantine
+      ? "Address: sung to a man (إنتَ، حبيبي، حبيتك، نطرتك — -ak, never حبيتكي or كَ on kaf)."
+      : "Address: sung to a man (إنتَ، حبيبي، غالي).";
+  }
   if (address === "group") return "Address: sung to a group (إنتو، حبايبي، غاليين).";
   return "";
 }
@@ -1428,9 +1484,9 @@ function buildOpenAISlimPromptStructured({
 
   let dialectVoice = "Match the target dialect in spoken vocabulary, not MSA.";
   if (flags.isLebanese) {
-    dialectVoice = "Lebanese (Beirut): real daily words — شو، هيك، معي، عم، منيح، يلّا. Plain Arabic script, no tashkeel. ق→أ, ذ/ظ→ز. No commas inside lines.";
+    dialectVoice = "Lebanese (Beirut): real daily words — شو، هيك، معي، عم، منيح، يلّا. Match addressee gender (إنتَ/إنتِ, حبيتك not حبيتكي to a man). ق→أ, ذ/ظ→ز. No commas inside lines.";
   } else if (flags.isEgyptian) {
-    dialectVoice = "Egyptian Masri colloquial, plain script, no tashkeel. No commas inside lines.";
+    dialectVoice = "Egyptian Masri colloquial; match addressee (معاك/معاكي, حبيتك/حبيتكي). ق→أ on qaf. No commas inside lines.";
   } else if (flags.isLevantineColloquial) {
     dialectVoice = "Levantine colloquial, plain script, ق→أ. No commas inside lines.";
   } else if (flags.isMsa) {

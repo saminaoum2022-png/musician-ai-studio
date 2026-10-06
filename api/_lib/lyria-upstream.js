@@ -202,7 +202,7 @@ function arabicAddressNoteForLyriaHint(address = "") {
     return "Arabic address: lyrics sung TO a group; keep plural addressee words: إنتو، حبايبي، غاليين، كنتو.";
   }
   if (addr === "male") {
-    return "Arabic address: lyrics sung TO a man; keep masculine addressee words: إنتَ، حبيبي، غالي.";
+    return "Arabic address: lyrics sung TO a man; keep masculine addressee words: إنتَ، حبيبي، غالي، حبيتك، نطرتك (Levantine -ak, vowel before ك not كَ on kaf).";
   }
   return "";
 }

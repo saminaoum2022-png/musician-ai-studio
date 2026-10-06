@@ -5236,13 +5236,12 @@ function buildLyricApiArabicContext() {
   const dialectHintBase = String(els.sunoDialectHint?.value || "").trim();
   const arabicAddress = String(els.sunoArabicAddress?.value || "").trim();
   const singerGender = resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) });
-  const narratorGender = singerGender === "m" || singerGender === "f" ? singerGender : "";
   const addressNote = arabicAddressPronunciationNote(arabicAddress, singerGender);
   const lyricDialectHint =
     activePhotoSoloChallengeId() === "80s-you" && photoSoloShowsArabicDialect()
       ? lyricDialectHintFor80sYou()
       : [dialectHintBase, addressNote].filter(Boolean).join(" ");
-  return { dialect, dialectHint: lyricDialectHint, arabicAddress, narratorGender };
+  return { dialect, dialectHint: lyricDialectHint, arabicAddress };
 }
 
 function setCreateTemplateLoadedHint(title) {
@@ -6856,7 +6855,6 @@ async function draftIdeaIntoLyricsForGenerate({ seed, style, dialect, dialectHin
       dialect: dialect || arCtx.dialect,
       dialectHint: dialectHint || arCtx.dialectHint,
       arabicAddress: arCtx.arabicAddress,
-      ...(arCtx.narratorGender ? { narratorGender: arCtx.narratorGender } : {}),
       lyricsProvider: resolveLyricsProviderForMode("full"),
       lyricsTarget: resolveLyricsTargetForMusicProvider(),
       scriptFormat: resolveLyricsScriptFormat(),
@@ -7589,7 +7587,6 @@ async function fetchLyricsSingabilityReport(text, { updateUi = true, reqId = nul
         dialect: arCtx.dialect,
         dialectHint: arCtx.dialectHint,
         arabicAddress: arCtx.arabicAddress,
-        ...(arCtx.narratorGender ? { narratorGender: arCtx.narratorGender } : {}),
         lyricsProvider: "gemini",
         scriptFormat: resolveLyricsScriptFormat(),
       }),
@@ -76030,7 +76027,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           dialect: arCtx.dialect,
           dialectHint: arCtx.dialectHint,
           arabicAddress: arCtx.arabicAddress,
-          ...(arCtx.narratorGender ? { narratorGender: arCtx.narratorGender } : {}),
           lyricsProvider,
           lyricsTarget: resolveLyricsTargetForMusicProvider(),
           scriptFormat: resolveLyricsScriptFormat(),
@@ -76173,7 +76169,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           dialect: arCtx.dialect,
           dialectHint: arCtx.dialectHint,
           arabicAddress: arCtx.arabicAddress,
-          ...(arCtx.narratorGender ? { narratorGender: arCtx.narratorGender } : {}),
           lyricsProvider: "gemini",
           scriptFormat: resolveLyricsScriptFormat(),
           includeSingability: wantsLyricsSingabilityWithGenerate(),
@@ -76254,7 +76249,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           dialect: arCtx.dialect,
           dialectHint: arCtx.dialectHint,
           arabicAddress: arCtx.arabicAddress,
-          ...(arCtx.narratorGender ? { narratorGender: arCtx.narratorGender } : {}),
           lyricsProvider: "gemini",
           scriptFormat: resolveLyricsScriptFormat(),
           includeSingability: wantsLyricsSingabilityWithGenerate(),
@@ -76337,7 +76331,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           dialect: arCtx.dialect,
           dialectHint: arCtx.dialectHint,
           arabicAddress: arCtx.arabicAddress,
-          ...(arCtx.narratorGender ? { narratorGender: arCtx.narratorGender } : {}),
           lyricsProvider: "gemini",
           scriptFormat: resolveLyricsScriptFormat(),
           includeSingability: wantsLyricsSingabilityWithGenerate(),
@@ -78001,7 +77994,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 dialect: arCtxClip.dialect,
                 dialectHint: arCtxClip.dialectHint,
                 arabicAddress: arCtxClip.arabicAddress,
-                ...(arCtxClip.narratorGender ? { narratorGender: arCtxClip.narratorGender } : {}),
                 lyricsProvider: "gemini",
                 lyricsTarget: "lyria",
                 scriptFormat: resolveLyricsScriptFormat(),
@@ -78381,7 +78373,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               dialect: arCtxAuto.dialect,
               dialectHint: arCtxAuto.dialectHint,
               arabicAddress: arCtxAuto.arabicAddress,
-              ...(arCtxAuto.narratorGender ? { narratorGender: arCtxAuto.narratorGender } : {}),
               lyricsProvider: resolveLyricsProviderForMode("arrange"),
               lyricsTarget: resolveLyricsTargetForMusicProvider(),
               scriptFormat: resolveLyricsScriptFormat(),

@@ -44,10 +44,6 @@ const {
   stripInlinePunctuationFromLyrics,
   NO_PUNCTUATION_IN_SUNG_LYRICS_LINES,
 } = require("./_lib/sung-lyrics-punctuation");
-const {
-  buildLyriaChatGptRuleLines,
-  shouldUseLyriaChatGptRule,
-} = require("./_lib/lyria-chatgpt-rule");
 
 function postProcessGeneratedArabicLyrics(text, {
   mode,
@@ -183,11 +179,6 @@ module.exports = async function handler(req, res) {
     const useOpenAiSlimPrompt =
       !sunoLyricsRequested && primaryForPrompt === "openai";
     const buildLyricsPrompt = useOpenAiSlimPrompt ? buildOpenAISlimPrompt : buildPrompt;
-    const narratorGender = String(
-      body?.narratorGender || body?.vocalGender || body?.singerGender || "",
-    )
-      .trim()
-      .slice(0, 8);
     const prompt = buildLyricsPrompt({
       seed: promptSeed,
       style,
@@ -196,7 +187,6 @@ module.exports = async function handler(req, res) {
       dialect,
       dialectHint,
       arabicAddress,
-      narratorGender,
       sourceLyrics,
       sourceTitle,
       sourceCreator,
@@ -955,7 +945,6 @@ function buildPrompt({
   dialect,
   dialectHint,
   arabicAddress = "",
-  narratorGender = "",
   sourceLyrics,
   sourceTitle,
   sourceCreator,
@@ -974,27 +963,16 @@ function buildPrompt({
   const arabiziLines = useArabizi ? buildArabiziPromptLines({ dialect, dialectHint }) : [];
   const scriptLines = useArabizi ? arabiziLines : [];
   const flags = dialectFlags(dialect, dialectHint);
-  const arabicGenContext = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed });
-  const useLyriaChatGptRule = shouldUseLyriaChatGptRule({
-    lyricsTarget,
-    flags,
-    arabicScript: arabicGenContext,
-    mode,
-  });
-  const colloquialArabicLines = arabicGenContext
-    ? buildColloquialArabicGenerationLines(flags, { forLyria, lyriaChatGptRule: useLyriaChatGptRule })
+  const colloquialArabicLines = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed })
+    ? buildColloquialArabicGenerationLines(flags, { forLyria })
     : [];
   const resolvedAddress = normalizeArabicAddress(arabicAddress, dialectHint);
-  const lyriaChatGptRuleLines = useLyriaChatGptRule
-    ? buildLyriaChatGptRuleLines({ arabicAddress: resolvedAddress, narratorGender })
-    : [];
+  const arabicGenContext = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed });
   const generationAddressLines =
     mode !== "diacritics" &&
     mode !== "singability_check" &&
     arabicGenContext
-      ? useLyriaChatGptRule
-        ? lyriaChatGptRuleLines
-        : [
+      ? [
           ...buildGenerationAddresseeGenderLinesEn(resolvedAddress, flags),
           ...buildGenerationAddresseeGenderLinesAr(resolvedAddress, flags),
           ...(resolvedAddress
@@ -1458,7 +1436,6 @@ function buildOpenAISlimPromptStructured({
   dialect,
   dialectHint,
   arabicAddress = "",
-  narratorGender = "",
   sourceLyrics,
   sourceTitle,
   sourceCreator,
@@ -1475,7 +1452,6 @@ function buildOpenAISlimPromptStructured({
       dialect,
       dialectHint,
       arabicAddress,
-      narratorGender,
       sourceLyrics,
       sourceTitle,
       sourceCreator,
@@ -1487,17 +1463,6 @@ function buildOpenAISlimPromptStructured({
   const forLyria = lyricsTarget === "lyria";
   const flags = dialectFlags(dialect, dialectHint);
   const useArabizi = scriptFormat === "arabizi" || (scriptFormat !== "arabic" && looksLikeArabizi(seed));
-  const arabicGenContext = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed });
-  const useLyriaChatGptRule = shouldUseLyriaChatGptRule({
-    lyricsTarget,
-    flags,
-    arabicScript: arabicGenContext,
-    mode,
-  });
-  const resolvedAddress = normalizeArabicAddress(arabicAddress, dialectHint);
-  const lyriaChatGptRuleLines = useLyriaChatGptRule
-    ? buildLyriaChatGptRuleLines({ arabicAddress: resolvedAddress, narratorGender })
-    : [];
   const contextLines = openAiStructuredContextLines(dialect, dialectHint, arabicAddress);
 
   const structureBlock = forLyria
@@ -1510,9 +1475,7 @@ function buildOpenAISlimPromptStructured({
     ];
 
   let dialectVoice = "Match the target dialect in spoken vocabulary, not MSA.";
-  if (useLyriaChatGptRule) {
-    dialectVoice = "Lebanese (Beirut): real daily words — شو، هيك، معي، عم، منيح، يلّا. No commas inside lines.";
-  } else if (flags.isLebanese) {
+  if (flags.isLebanese) {
     dialectVoice = "Lebanese (Beirut): real daily words — شو، هيك، معي، عم، منيح، يلّا. Match addressee gender (إنتَ/إنتِ, حبيتك not حبيتكي to a man). ق→أ, ذ/ظ→ز. No commas inside lines.";
   } else if (flags.isEgyptian) {
     dialectVoice = "Egyptian Masri colloquial; match addressee (معاك/معاكي, حبيتك/حبيتكي). ق→أ on qaf. No commas inside lines.";
@@ -1530,7 +1493,6 @@ function buildOpenAISlimPromptStructured({
       ...structureBlock,
       ...openAiRhymeLinesForSeed(seed),
       dialectVoice,
-      ...lyriaChatGptRuleLines,
       ...contextLines,
       style ? `Style/mood: ${style}` : "",
       sourceTitle ? `Original: ${sourceTitle}` : "",
@@ -1548,7 +1510,6 @@ function buildOpenAISlimPromptStructured({
       "[Verse] optional 2 lines · [Chorus] 2–4 lines, clean ending. Max 8 lines.",
       ...openAiRhymeLinesForSeed(seed),
       dialectVoice,
-      ...lyriaChatGptRuleLines,
       ...contextLines,
       style ? `Style/mood: ${style}` : "",
       "",
@@ -1562,7 +1523,6 @@ function buildOpenAISlimPromptStructured({
       "[Verse 1] max 4 · optional [Pre-Chorus] 2 · [Chorus] max 4. Max 12 lines.",
       ...openAiRhymeLinesForSeed(seed),
       dialectVoice,
-      ...lyriaChatGptRuleLines,
       ...contextLines,
       style ? `Style/mood: ${style}` : "",
       "",
@@ -1576,7 +1536,6 @@ function buildOpenAISlimPromptStructured({
       ...structureBlock,
       ...openAiRhymeLinesForSeed(seed),
       dialectVoice,
-      ...lyriaChatGptRuleLines,
       ...contextLines,
       style ? `Style/mood: ${style}` : "",
       "",
@@ -1588,7 +1547,6 @@ function buildOpenAISlimPromptStructured({
     return [
       "Continue these lyrics in the same voice — do not rewrite existing lines.",
       dialectVoice,
-      ...lyriaChatGptRuleLines,
       ...contextLines,
       style ? `Style/mood: ${style}` : "",
       "",
@@ -1605,7 +1563,6 @@ function buildOpenAISlimPromptStructured({
     ...openAiRhymeLinesForSeed(seed),
     useArabizi ? "Write in Arabizi (Latin letters, spoken sounds)." : "",
     dialectVoice,
-    ...lyriaChatGptRuleLines,
     ...contextLines,
     style ? `Style/mood: ${style}` : "",
     seed ? `Idea:\n${seed}` : "Invent a coherent theme.",

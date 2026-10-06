@@ -83,7 +83,7 @@ function buildColloquialArabicGenerationLines(
     isEgyptian = false,
     isLevantineColloquial = false,
   } = {},
-  { forLyria = false } = {},
+  { forLyria = false, lyriaChatGptRule = false } = {},
 ) {
   if (isMsa) {
     return [
@@ -96,7 +96,7 @@ function buildColloquialArabicGenerationLines(
       "- Spoken Cairo Masri ONLY — never fusHa nahwi, NEVER tanween (ًٌٍ) unless user explicitly asked for MSA.",
       "- Use Egyptian present-tense prefix ب- on verbs (بيحلى، بيقول، بشوف، بعمل).",
       "- Write Cairo hamza/qaf as أ (ألبي) — not classical /q/. Do NOT insert Latin digits unless the user's seed has them.",
-      ...buildPlainColloquialGenerationLines({ isEgyptian: true, forLyria }),
+      ...buildPlainColloquialGenerationLines({ isEgyptian: true, forLyria, lyriaChatGptRule }),
       ...buildEgyptianLexiconLines(),
     ];
   }
@@ -109,7 +109,7 @@ function buildColloquialArabicGenerationLines(
       "- Examples of stopped endings: خلّص، عم، منّ، فيّ، شفت، قلّي — consonant feels closed, not classical open vowel + tanween.",
       "- ق = hamza in speech — write with أ (ألبي not قلبي), not classical /q/. ذ and ظ → ز (Levantine spoken).",
       "- NEVER insert Latin digits (0–9) in lyrics unless the user's seed already contains them.",
-      ...buildPlainColloquialGenerationLines({ isLebanese: true, forLyria }),
+      ...buildPlainColloquialGenerationLines({ isLebanese: true, forLyria, lyriaChatGptRule }),
       ...buildLebaneseLexiconLines(),
     ];
   }
@@ -120,7 +120,7 @@ function buildColloquialArabicGenerationLines(
       "- Close word endings naturally (sukoon feel) — no open classical case endings on final words.",
       "- ق → أ (hamza), ذ → ز, ظ → ز — not classical /q/ or MSA ذ/ظ.",
       "- NEVER insert Latin digits (0–9) unless the user's seed already contains them.",
-      ...buildPlainColloquialGenerationLines({ isLevantineColloquial: true, forLyria }),
+      ...buildPlainColloquialGenerationLines({ isLevantineColloquial: true, forLyria, lyriaChatGptRule }),
     ];
   }
   return [
@@ -136,9 +136,17 @@ function buildPlainColloquialGenerationLines({
   isLevantineColloquial = false,
   isEgyptian = false,
   forLyria = false,
+  lyriaChatGptRule = false,
 } = {}) {
   const levantine = isLebanese || isLevantineColloquial;
   if (forLyria) {
+    if (lyriaChatGptRule && isLebanese) {
+      return [
+        "Colloquial Arabic for AI singing (Lyria).",
+        "Levantine letters: ق→أ, ذ→ز, ظ→ز. No Latin digits.",
+        "Tashkeel and addressee: follow LYRIA CHATGPT RULE in this prompt.",
+      ];
+    }
     const lines = [
       "Colloquial Arabic for AI singing (Lyria).",
       "MANDATORY (always): addressee gender in words — إنتَ/إنتِ/كنتَ/كنتِ، حبيبي/حبيبتي، matching verb forms; never حبيتكي to a man.",

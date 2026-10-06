@@ -165,7 +165,13 @@ function buildArrangementLines({ durationSec, clip, meter, bpm }) {
   );
 }
 
-const { sanitizeDialectHintForLyriaPrompt } = require("./lyria-upstream");
+const {
+  sanitizeDialectHintForLyriaPrompt,
+  prepareLyriaLyricsForSinging,
+  resolveLyriaArabicAddress,
+  buildLyriaAddresseePronunciationLine,
+} = require("./lyria-upstream");
+const { dialectFlags } = require("./arabic-dialect-lyrics");
 
 function buildVocalLineV2({ vocalGender, dialectHint, instrumental }) {
   if (instrumental) return "";
@@ -240,7 +246,9 @@ function buildLyriaPromptV2(opts = {}) {
     meter: meterOverride || pack.meter,
   };
 
-  const lyricText = instrumental ? "" : sanitizeLyriaLyricsForSinging(lyricsRaw);
+  const lyricText = instrumental
+    ? ""
+    : sanitizeLyriaLyricsForSinging(prepareLyriaLyricsForSinging(lyricsRaw, body));
   const arabizi = isArabiziScript({ scriptFormat, lyrics: lyricText || lyricsRaw });
   const arrangement = buildArrangementLines({
     durationSec,
@@ -273,6 +281,9 @@ function buildLyriaPromptV2(opts = {}) {
   blocks.push(buildStyleBlockV2({ pack: resolvedPack, userStyle, songKey, moodHint: "" }));
   const vocal = buildVocalLineV2({ vocalGender, dialectHint, instrumental });
   if (vocal) blocks.push(vocal);
+  const address = resolveLyriaArabicAddress(body);
+  const addressee = buildLyriaAddresseePronunciationLine(address, dialectFlags("", dialectHint));
+  if (addressee) blocks.push(addressee);
   if (ideaBrief && !lyricText) {
     blocks.push(`Creative brief (do not sing): ${ideaBrief.slice(0, 500)}`);
   }

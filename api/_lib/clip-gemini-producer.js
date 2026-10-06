@@ -24,7 +24,8 @@ OUTPUT SCHEMA:
 
 === structured_lyrics ===
 - If idea_brief is set (prompt-to-song): WRITE original singable lyrics that fulfill the brief. Do NOT copy the brief, challenge instructions, line counts, or phrases like "Write a clip" into sung lines.
-- Else if lyrics_raw is set: the user provided lyrics — preserve their words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines. You may only trim if clearly too long for ~28s.
+- If arabic_address is "female", lyrics are sung TO a woman — use feminine address (إنتِ، حبيبتي، غالية), never masculine habibi/enta on those lines. If "male", use masculine (إنتَ، حبيبي، غالي). Honor arabic_address even when vocal_gender differs (singer gender ≠ addressee).
+- Else if lyrics_raw is set: the user provided lyrics — preserve their words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines. You may only trim if clearly too long for ~28s. Still honor arabic_address for any clear vocatives you keep.
 - Structure tags MUST be in English only, on their own lines, e.g.:
   [Quick Catchy Intro]
   [Main Hook / Chorus Drop]
@@ -147,7 +148,8 @@ OUTPUT SCHEMA:
 
 === structured_lyrics (SUNG WORDS ONLY) ===
 - If idea_brief is set (prompt-to-song): WRITE original catchy singable lyrics that fulfill the brief. Do NOT copy the brief, challenge instructions, line counts, or phrases like "Write a song" / "Create a" into sung lines.
-- Else if lyrics_raw is set: preserve the user's words and meaning. You MAY trim extra sections (Intro/Pre-Chorus/Outro) to fit ~180s — do NOT add new sections the user did not write.
+- If arabic_address is "female", lyrics are sung TO a woman — feminine address (إنتِ، حبيبتي، غالية). If "male", masculine (إنتَ، حبيبي، غالي). Singer vocal_gender is NOT the addressee — honor arabic_address in the sung words.
+- Else if lyrics_raw is set: preserve the user's words and meaning. You MAY trim extra sections (Intro/Pre-Chorus/Outro) to fit ~180s — do NOT add new sections the user did not write. Still honor arabic_address on vocatives.
 - COMPACT structure only (max ~18 sung lines total):
   [Verse 1] — up to 4 lines
   [Chorus] — up to 4 lines (sticky hook — repeat verbatim in second chorus)
@@ -415,6 +417,7 @@ function buildClipProducerInput(body, flow = "nabad_clip") {
     vocal_character_label: "Nabad Signature",
     vocal_lyria_hint: vocalLyriaHint,
     dialect_hint: String(body?.dialectHint || body?.dialect || "").trim(),
+    arabic_address: String(body?.arabicAddress || body?.address || "").trim().toLowerCase(),
     challenge_id: String(body?.challenge?.id || body?.challengeId || "").trim(),
     instrumental: Boolean(body?.instrumental),
     script_format: String(body?.scriptFormat || "").trim(),

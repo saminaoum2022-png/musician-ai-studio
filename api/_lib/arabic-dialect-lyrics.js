@@ -720,6 +720,36 @@ function buildGenerationAddresseeGenderLinesAr(address = "", flags = {}) {
   return lines.length > 1 ? lines : [];
 }
 
+/** Align clear vocatives to the Arabic address chip (before Lyria / after LLM). */
+function alignLyricAddresseeForms(input, address = "", flags = {}) {
+  let text = String(input || "");
+  if (!text || !address) return text;
+  if (address === "female") {
+    text = text.replace(/حبيبي/g, "حبيبتي");
+    text = text.replace(/إنتَ/g, "إنتِ");
+    text = text.replace(/(^|[\s\[\]|،؛])إنت([\s\[\]|،؛]|$)/gm, "$1إنتِ$2");
+    text = text.replace(/كنتَ/g, "كنتِ");
+    text = text.replace(/(^|[\s\[\]|،؛])كنت([\s\[\]|،؛]|$)/gm, "$1كنتِ$2");
+    text = text.replace(/(^|[\s\[\]|،؛])غالي([\s\[\]|،؛]|$)/gm, "$1غالية$2");
+    if (flags.isEgyptian) {
+      text = text.replace(/معاك(?!ي)/g, "معاكي");
+      text = text.replace(/عليك(?!ي)/g, "عليكي");
+    }
+  } else if (address === "male") {
+    text = text.replace(/حبيبتي/g, "حبيبي");
+    text = text.replace(/إنتِ/g, "إنتَ");
+    text = text.replace(/(^|[\s\[\]|،؛])إنت([\s\[\]|،؛]|$)/gm, "$1إنتَ$2");
+    text = text.replace(/كنتِ/g, "كنتَ");
+    text = text.replace(/(^|[\s\[\]|،؛])كنت([\s\[\]|،؛]|$)/gm, "$1كنتَ$2");
+    text = text.replace(/غالية/g, "غالي");
+    if (flags.isEgyptian) {
+      text = text.replace(/معاكي/g, "معاك");
+      text = text.replace(/عليكي/g, "عليك");
+    }
+  }
+  return text;
+}
+
 /** Fix common LLM mistakes (حبيتكي → حبيتك when singing to a man in Levantine). */
 function normalizeAddresseeGenderInLyrics(input, address = "", flags = {}) {
   let text = String(input || "");
@@ -874,6 +904,7 @@ module.exports = {
   buildGenerationAddresseeGenderLinesEn,
   buildGenerationAddresseeGenderLinesAr,
   normalizeAddresseeGenderInLyrics,
+  alignLyricAddresseeForms,
   applyLyriaGenerateSungHints,
   hintKafCliticWordMarks,
   stripVowelMarksOnWordFinalKaf,

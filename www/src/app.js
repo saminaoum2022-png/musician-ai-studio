@@ -78051,6 +78051,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           title: clipTitle,
           dialect,
           dialectHint: lyricDialectHint,
+          ...(arabicAddress ? { arabicAddress: String(arabicAddress) } : {}),
           lyriaModel: "clip",
           duration: useLyriaClipMusicProvider() ? 30 : undefined,
           nabadClip: templateSparkClip || useLyriaClipMusicProvider() ? undefined : "1",

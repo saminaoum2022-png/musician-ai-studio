@@ -30,6 +30,9 @@ const {
   dialectFlags,
   hintRequestsFormalMsa,
   normalizeArabicAddress,
+  alignLyricAddresseeForms,
+  applyLyriaGenerateSungHints,
+  normalizeAddresseeGenderInLyrics,
 } = require("./arabic-dialect-lyrics");
 const { buildNabadVocalPrompt } = require("./nabad-vocal-identity");
 
@@ -207,6 +210,52 @@ function arabicAddressNoteForLyriaHint(address = "") {
   return "";
 }
 
+function resolveLyriaArabicAddress(body = {}) {
+  const hint = mergeLyriaDialectHint(body);
+  return normalizeArabicAddress(
+    String(body?.arabicAddress || body?.address || "").trim(),
+    hint,
+  );
+}
+
+/**
+ * Positive-only Lyria direction — addressee pronunciation (not singer gender).
+ * Kept in the musical direction block, above "Sing only the lyrics below".
+ */
+function buildLyriaAddresseePronunciationLine(address = "", flags = {}) {
+  const a = String(address || "").trim().toLowerCase();
+  if (a === "female") {
+    const dialect = flags.isEgyptian
+      ? "Egyptian Masri feminine addressee (entee, habibti, maaki)"
+      : "Levantine feminine addressee (entee, habibti, ghalyeh)";
+    return `${dialect}: lyrics are sung TO a woman — match feminine words and vowels in the lyric lines (إنتِ، حبيبتي، غالية), not masculine habibi or enta on those lines`;
+  }
+  if (a === "male") {
+    const dialect = flags.isEgyptian
+      ? "Egyptian Masri masculine addressee (enta, habibi, maak)"
+      : "Levantine masculine addressee (enta, habibi, ghali)";
+    return `${dialect}: lyrics are sung TO a man — match masculine address words in the lyric lines (إنتَ، حبيبي، غالي), not habibti or entee on those lines`;
+  }
+  if (a === "group") {
+    return "Lyrics sung TO a group: plural addressee forms (intoo, habaibi, ghalyeen) where the lyric uses group address";
+  }
+  return "";
+}
+
+function prepareLyriaLyricsForSinging(rawLyrics, body = {}) {
+  const text = String(rawLyrics || "").trim();
+  if (!text) return "";
+  const dialectHint = mergeLyriaDialectHint(body);
+  const flags = dialectFlags(String(body?.dialect || "").trim(), dialectHint);
+  const address = resolveLyriaArabicAddress(body);
+  const colloquial = flags.isLebanese || flags.isLevantineColloquial || flags.isEgyptian;
+  if (!address || !colloquial) return text;
+  let out = alignLyricAddresseeForms(text, address, flags);
+  out = normalizeAddresseeGenderInLyrics(out, address, flags);
+  out = applyLyriaGenerateSungHints(out, { address, flags });
+  return out;
+}
+
 function mergeLyriaDialectHint(body = {}) {
   const direct = [String(body?.dialectHint || "").trim(), String(body?.dialect || "").trim()]
     .filter(Boolean)
@@ -305,6 +354,7 @@ function buildLyriaInlineVocalDirection({
   voiceTimbre = "",
   challengeId = "",
   dialectHint = "",
+  arabicAddress = "",
   clipVocalProfileId = "",
   arabizi = false,
   lyrics = "",
@@ -347,6 +397,10 @@ function buildLyriaInlineVocalDirection({
 
   const dialectLine = buildLyriaDialectVocalNote(dialectHint, { arabizi });
   if (dialectLine) bits.push(dialectLine);
+
+  const addrFlags = dialectFlags("", dialectHint);
+  const addresseeLine = buildLyriaAddresseePronunciationLine(arabicAddress, addrFlags);
+  if (addresseeLine) bits.push(addresseeLine);
 
   return bits.join(" ").replace(/\s+/g, " ").trim();
 }
@@ -426,11 +480,18 @@ function buildLyriaPrompt({
   scriptFormat = "",
   nabadVocalToggles = null,
   useNabadVocalIdentity = true,
+  prepBody = null,
+  arabicAddress = "",
 } = {}) {
   const style = String(enhancedStylePrompt || "").trim();
   const sanitizedStyle = style ? sanitizeStyleForLyria(style) : sanitizeStyleForLyria(stylePrompt);
   const rawLyrics = String(structuredLyrics || lyrics || "").trim();
-  const lyricText = instrumental ? "" : sanitizeLyriaLyricsForSinging(rawLyrics);
+  const preppedRaw = instrumental
+    ? ""
+    : prepBody
+      ? prepareLyriaLyricsForSinging(rawLyrics, prepBody)
+      : rawLyrics;
+  const lyricText = instrumental ? "" : sanitizeLyriaLyricsForSinging(preppedRaw);
   const arrangementText = String(arrangement || "").trim()
     || (clip ? "" : extractArrangementFromMixedLyrics(rawLyrics));
   const songTitle = String(title || "").trim();
@@ -465,14 +526,16 @@ function buildLyriaPrompt({
   if (sanitizedStyle) direction.push(sanitizedStyle);
 
   if (!instrumental) {
+    const resolvedAddress = arabicAddress || (prepBody ? resolveLyriaArabicAddress(prepBody) : "");
     const vocal = buildLyriaInlineVocalDirection({
       vocalGender,
       voiceTimbre,
       challengeId,
       dialectHint,
+      arabicAddress: resolvedAddress,
       clipVocalProfileId,
       arabizi,
-      lyrics: lyricText || rawLyrics,
+      lyrics: lyricText || preppedRaw || rawLyrics,
       scriptFormat,
       nabadVocalToggles,
       useNabadVocalIdentity,
@@ -1068,6 +1131,9 @@ module.exports = {
   buildLyriaPrompt,
   buildLyriaVocalProfile,
   mergeLyriaDialectHint,
+  resolveLyriaArabicAddress,
+  prepareLyriaLyricsForSinging,
+  buildLyriaAddresseePronunciationLine,
   sanitizeDialectHintForLyriaPrompt,
   resolveLyriaDialectLabel,
   resolveLyriaArabicPronunciationMode,

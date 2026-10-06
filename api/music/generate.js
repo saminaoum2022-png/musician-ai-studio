@@ -331,6 +331,7 @@ function buildLyriaPromptFromBody(body, extra = {}) {
     voiceTimbre: String(body?.voiceTimbre || "").trim(),
     challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
     dialectHint: mergeLyriaDialectHint(body),
+    arabicAddress: String(body?.arabicAddress || body?.address || "").trim(),
     clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
     enhancedStylePrompt: extra.enhancedStylePrompt || "",
     structuredLyrics: extra.structuredLyrics || "",
@@ -340,6 +341,7 @@ function buildLyriaPromptFromBody(body, extra = {}) {
     scriptFormat: extra.scriptFormat ?? String(body?.scriptFormat || "").trim(),
     nabadVocalToggles: extra.nabadVocalToggles ?? body?.nabadVocalChain ?? body?.nabadVocalToggles ?? null,
     useNabadVocalIdentity: extra.useNabadVocalIdentity !== false,
+    prepBody: body,
   });
 }
 

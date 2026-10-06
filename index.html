@@ -879,13 +879,20 @@
           <div id="simpleBox">
           <header class="appScreenHeader createPageHeader">
             <div class="createHeadRow">
-              <h2 class="appScreenTitle">Create</h2>
-              <span id="createCreditsChip" class="createCreditsChip" role="status" hidden aria-label="Credits balance">
-                <svg class="createCreditsChipIco" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2.8l2.1 6.1 6.1 2.1-6.1 2.1L12 19.2l-2.1-6.1-6.1-2.1 6.1-2.1z"/></svg>
-                <span id="createCreditsChipValue" class="createCreditsChipValue">0</span>
-              </span>
+              <div class="createHeadTitleGroup">
+                <h2 class="appScreenTitle">Create</h2>
+                <div id="createFlowModeBar" class="createFlowModeInline" hidden role="group" aria-label="Create layout">
+                  <span class="createHeadDivider" aria-hidden="true"></span>
+                  <button type="button" id="btnCreateFlowSimple" class="createFlowModeLink isActive" data-create-flow-mode="simple" aria-pressed="true">Simple</button>
+                  <button type="button" id="btnCreateFlowAdvanced" class="createFlowModeLink" data-create-flow-mode="advanced" aria-pressed="false">Advanced</button>
+                </div>
+              </div>
               <div class="createHeadActions">
-                <span class="coachFabSlot" data-coach-fab-slot="generate" aria-hidden="true"></span>
+                <span id="createCreditsChip" class="createCreditsChip" role="status" hidden aria-label="Credits balance">
+                  <svg class="createCreditsChipIco" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2.8l2.1 6.1 6.1 2.1-6.1 2.1L12 19.2l-2.1-6.1-6.1-2.1 6.1-2.1z"/></svg>
+                  <span id="createCreditsChipValue" class="createCreditsChipValue">0</span>
+                </span>
+                <span class="coachFabSlot coachFabSlot--createReserve" data-coach-fab-slot="generate" hidden aria-hidden="true"></span>
                 <button id="btnOpenAdvancedSheet" class="btnCreateSettings" type="button" hidden aria-hidden="true" tabindex="-1" title="Advanced options" aria-label="Advanced options">
                   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
                     <path d="M8 5v14"/>
@@ -910,6 +917,7 @@
               </button>
             </div>
           </header>
+          <div id="createSimpleAura" class="createSimpleAura" aria-hidden="true" hidden></div>
           <div class="createFlow" id="createFlow">
           <section class="createFlowStep" aria-label="Start your song">
           <div class="createTabs" role="tablist" aria-label="How to start">
@@ -1266,13 +1274,14 @@
               </div>
 
               <div class="createPane createPane--lyrics" data-mode="lyrics">
-                <div class="field grow inputPanel" id="lyricsFieldPanel" data-lyrics-mode="write">
-                  <div class="label inPanelLabel lyricsPanelHead">
+                <div class="field grow inputPanel createSimpleCard" id="lyricsFieldPanel" data-lyrics-mode="write">
+                  <div class="label inPanelLabel lyricsPanelHead createSimpleCardHead">
                     <div class="lyricsModeTabs" role="tablist" aria-label="How to start">
                       <button id="lyricsModeWrite" class="lyricsModeTab isActive" type="button" role="tab" aria-selected="true">Write</button>
                       <button id="lyricsModeGenerate" class="lyricsModeTab" type="button" role="tab" aria-selected="false">Idea</button>
                     </div>
                   </div>
+                  <div id="createSimpleLangPanel" class="createSimpleLangPanel">
                   <label class="ghost lyricsAttachBtn srOnly" title="Attach vocal reference">
                     Insert vocal
                     <input id="sunoVocalUpload" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm" />
@@ -1326,6 +1335,7 @@
                       </div>
                     </div>
                   </div>
+                  </div>
                   <div class="lyricsBox">
                     <div class="lyricsBoxMain">
                       <textarea id="sunoPrompt" dir="auto" rows="3" placeholder="Write your lyrics…"></textarea>
@@ -1367,13 +1377,32 @@
                     <span id="imageMoodSummary" class="imageMoodSummary" hidden></span>
                   </div>
                 </div>
+                <div id="createSimpleStudioHost" class="createSimpleStudioHost field grow inputPanel"></div>
+                <div id="createSimpleGenerateWrap" class="createSimpleGenerateWrap" hidden>
+                  <button id="btnSunoGenerateSimple" class="primary aiGenerate createSimpleGenerateBtn" type="button">Generate song</button>
+                </div>
               </div>
             </div>
           </div>
           </section>
 
           <section class="createFlowStep" aria-label="Sound and title">
-            <label class="field grow inputPanel inputPanel--style">
+            <div id="createAdvancedStudioHost" class="createAdvancedStudioHost">
+            <div id="createStudioBlock" class="createStudioBlock field grow inputPanel inputPanel--style">
+              <div id="createSimpleStudioToolbar" class="createSimpleStudioToolbar" hidden>
+                <span class="label inPanelLabel createSimpleStudioLabel">Studio</span>
+                <button type="button" id="btnLyriaStudioSpark" class="createSimpleSparkBtn" aria-label="Surprise style">✦</button>
+              </div>
+              <p id="lyriaStudioStyleLabel" class="label inPanelLabel lyriaStudioStyleLabel" hidden>Studio styles</p>
+              <div id="lyriaStudioStyleRow" class="styleSuggestRow lyriaStudioStyleRow" hidden role="group" aria-label="Studio styles"></div>
+              <details id="lyriaStudioSoundPrompt" class="lyriaStudioSoundPrompt" hidden>
+                <summary class="lyriaStudioSoundPromptSummary">Sound prompt <span class="lyriaStudioSoundPromptSub">(sent to Lyria)</span></summary>
+                <pre id="lyriaStudioSoundPromptText" class="lyriaStudioSoundPromptText"></pre>
+              </details>
+              <p id="lyriaStudioStyleHint" class="hint createInlineHint lyriaStudioStyleHint" hidden>Style is ready — write your idea above, then Generate.</p>
+            </div>
+            </div>
+            <label class="field grow inputPanel inputPanel--style inputPanel--styleAdvanced" id="createStyleAdvancedPanel">
               <div class="label inPanelLabel stylePanelHead">
                 <span>Style / Tags</span>
                 <div class="stylePanelHeadActions">
@@ -1470,7 +1499,7 @@
                 <button type="button" class="optChip" data-lyrics-dialect="msa" aria-pressed="false">MSA</button>
               </div>
             </div>
-              <label class="field grow inputPanel inputPanel--style">
+              <label id="createArtworkStylePanel" class="field grow inputPanel inputPanel--style">
                 <div class="label inPanelLabel stylePanelHead">
                   <span>Artwork style</span>
                   <button id="btnArtworkSuggest" class="lyricsMagicBtn styleBoostBtn aiAssistBtn" type="button" hidden title="Suggest artwork from your song" aria-label="Suggest artwork from your song"><span class="aiAssistIco" aria-hidden="true">✦</span><span class="aiAssistLabel">Suggest</span></button>
@@ -1579,6 +1608,13 @@
           </div>
           </section>
           </div>
+          </div>
+
+          <div id="createStudioStylesBackdrop" class="createStudioSheetBackdrop" hidden aria-hidden="true"></div>
+          <div id="createStudioStylesSheet" class="createStudioSheet inputPanel" hidden role="dialog" aria-modal="true" aria-label="Studio styles">
+            <div class="createStudioSheetGrab" aria-hidden="true"></div>
+            <p class="label inPanelLabel createStudioSheetTitle">Studio styles</p>
+            <div id="createStudioStylesSheetList" class="createStudioSheetList styleSuggestRow createStudioSheetPills"></div>
           </div>
 
           <div id="humTrackSheet" class="createAltFlow humTrackFlow" hidden aria-hidden="true">

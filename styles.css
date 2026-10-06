@@ -12199,6 +12199,315 @@ body.playerLyricsOpen .playerLyricsChip{
 
 /* ── Smart Style Assistant — neutral suggestion pills under Style/Tags ──
    Monochrome pills; selected = brighter white lift on the Create surface. */
+.lyriaStudioStyleHint{
+  margin: 6px 0 4px;
+  line-height: 1.35;
+}
+.createHeadTitleGroup{
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 0;
+}
+.createHeadTitleGroup .appScreenTitle{
+  flex: 0 0 auto;
+  margin: 0;
+}
+.createHeadDivider{
+  width: 1px;
+  height: 20px;
+  margin: 0 12px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.14);
+}
+html[data-theme="light"] .createHeadDivider{
+  background: rgba(0, 0, 0, 0.12);
+}
+.createFlowModeInline{
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.createFlowModeInline[hidden]{
+  display: none !important;
+}
+.createFlowModeLink{
+  -webkit-appearance: none;
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 2px 0;
+  margin: 0;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--create-icon, rgba(231, 238, 255, 0.55));
+  cursor: pointer;
+  line-height: 1.2;
+}
+.createFlowModeLink.isActive{
+  color: #f7f5fa;
+  font-weight: 750;
+}
+html[data-theme="light"] .createFlowModeLink.isActive{
+  color: #1a1a22;
+}
+body[data-route="generate"] .createPageHeader .coachFabSlot--createReserve{
+  display: none !important;
+}
+body[data-route="generate"] .createHeadActions{
+  margin-left: auto;
+  flex-shrink: 0;
+}
+body[data-route="generate"] .createHeadActions .createCreditsChip{
+  margin-right: 0;
+}
+.createStudioBlock{
+  margin-bottom: 10px;
+}
+.lyriaStudioSoundPrompt{
+  margin: 10px 0 4px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: rgba(0,0,0,0.22);
+}
+.lyriaStudioSoundPromptSummary{
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+}
+.lyriaStudioSoundPromptSummary::-webkit-details-marker{ display: none; }
+.lyriaStudioSoundPromptSub{
+  font-weight: 400;
+  opacity: 0.65;
+}
+.lyriaStudioSoundPromptText{
+  margin: 10px 0 0;
+  max-height: 140px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 11px;
+  line-height: 1.45;
+  opacity: 0.88;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+body[data-route="generate"][data-create-layout="simple"] #createTabs,
+body[data-route="generate"][data-create-layout="simple"] .createTabs{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] .createSongTypeRow{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleLangPanel{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] .createPane:not(.createPane--lyrics){
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] .createFlowStep[aria-label="Sound and title"]{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #createGenerateDock .generateDockOptions{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #createStyleAdvancedPanel{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSongTitleField,
+body[data-route="generate"][data-create-layout="simple"] #createArtworkStylePanel{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsAssistBar{
+  display: none !important;
+}
+#createSimpleAura.createSimpleAura{
+  position: absolute;
+  width: min(320px, 85vw);
+  height: 320px;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  filter: blur(72px);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
+  transition: background 0.65s ease;
+}
+body[data-route="generate"] #simpleBox.createSimpleLayout{
+  position: relative;
+  z-index: 1;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel.createSimpleCard{
+  gap: 0;
+  position: relative;
+  z-index: 2;
+  margin-bottom: 0;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost:not([hidden]){
+  margin-top: 14px;
+  padding: 12px 14px 14px;
+  position: relative;
+  z-index: 2;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .createStudioBlock{
+  margin: 0;
+  padding: 0;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost[hidden]{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] .createSimpleGenerateWrap{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsBox textarea{
+  min-height: 140px;
+  font-size: 17px;
+  line-height: 1.45;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsPanelHead{
+  margin-bottom: 8px;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsBox{
+  margin-top: 0;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyriaStudioStyleLabel{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] .createSimpleStudioToolbar{
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+body[data-route="generate"][data-create-layout="simple"] .createSimpleStudioToolbar[hidden]{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] .createSimpleStudioLabel{
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+body[data-route="generate"][data-create-layout="simple"] .createSimpleSparkBtn{
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: var(--create-icon-accent, #23d5ab);
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .lyriaStudioStyleRow{
+  margin-top: 0;
+  gap: 6px;
+  mask-image: linear-gradient(90deg, #000 88%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .styleSuggestPill{
+  padding: 8px 12px;
+  font-size: 12px;
+}
+body[data-route="generate"][data-create-layout="simple"] .styleSuggestPill--studioAll{
+  border-style: dashed;
+  opacity: 0.92;
+}
+body[data-route="generate"][data-create-layout="simple"] #createTabPhoto,
+body[data-route="generate"][data-create-layout="simple"] #createTabHum,
+body[data-route="generate"][data-create-layout="simple"] #createTabVibe,
+body[data-route="generate"][data-create-layout="simple"] #createTabEdit{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyriaStudioSoundPrompt,
+body[data-route="generate"][data-create-layout="simple"] .lyriaStudioStyleHint{
+  display: none !important;
+}
+.createStudioSheetBackdrop{
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(3, 4, 8, 0.62);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.createStudioSheetBackdrop.isOpen{
+  opacity: 1;
+  pointer-events: auto;
+}
+.createStudioSheet{
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0));
+  z-index: 9001;
+  max-height: min(58vh, 520px);
+  overflow-y: auto;
+  padding: 10px 14px 16px;
+  border-radius: 20px;
+  transform: translateY(calc(100% + 24px));
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+html:not([data-theme="light"]) .createStudioSheet{
+  background: rgba(255, 255, 255, 0.075);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  border: 1px solid transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 16px 48px rgba(0, 0, 0, 0.45);
+}
+.createStudioSheet.isOpen{
+  transform: translateY(0);
+}
+.createStudioSheetGrab{
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0 auto 10px;
+}
+.createStudioSheetTitle{
+  margin: 0 0 10px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+.createStudioSheetList.createStudioSheetPills{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+  overflow: visible;
+  mask-image: none;
+  -webkit-mask-image: none;
+  max-height: none;
+}
+.createStudioSheetList .styleSuggestPill{
+  white-space: normal;
+  text-align: left;
+  line-height: 1.25;
+  max-width: 100%;
+}
+.styleSuggestPill--studio.isActive{
+  border-color: var(--accent, #c9a227);
+}
 .styleSuggestRow{
   display:flex;
   flex-wrap:nowrap;
@@ -65568,16 +65877,12 @@ html.is-native-shell .playerCard[data-discover-reel="1"].isReelAnimating .player
  * Roles — teal = go / ready / credits · violet = selected / focus / AI · Pro = badge only.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Header — balance chip sits right after the title so the Coach pill (right) never covers it. */
-body[data-route="generate"] .createHeadRow .appScreenTitle{
-  flex: 0 1 auto;
-}
 .createCreditsChip{
   display: inline-flex;
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
-  margin-right: auto;
+  margin-right: 0;
   min-height: 28px;
   padding: 4px 11px 4px 9px;
   border-radius: 999px;

@@ -54738,11 +54738,6 @@ async function playLibraryListRowById(id, opts) {
     } catch {}
   }
   if (!t?.url) return;
-  t = await prepareLibraryTrackForPlayback(t);
-  if (!String(t.url || "").trim()) {
-    showToast("This song has no playable audio yet.", { durationMs: 3800 });
-    return;
-  }
   primeGlobalPlayerInGesture();
   setPlaybackPending({ type: "library", id });
   try { syncAllPlaybackRowHighlights(); } catch {}
@@ -54752,14 +54747,43 @@ async function playLibraryListRowById(id, opts) {
   try {
     stopVocalsPlayback();
   } catch {}
-  const playSource = await resolveArchivePlaybackUrl(t);
   const openPlayer = openPlayerUnlessFeedOrDesk(opts);
   if (openPlayer && !isDeskWebLayout()) {
     try {
       if (!/^#\/player\b/i.test(String(location.hash || ""))) location.hash = "#/player";
     } catch {}
   }
+  const libSource = {
+    type: "library",
+    id,
+    cloudSongId: String(t.cloudSongId || trackCloudShareId(t) || ""),
+    songId: trackCloudShareId(t) || "",
+    taskId: String(t.taskId || ""),
+    audioId: String(t.audioId || ""),
+    publicOnProfile: Boolean(t.publicOnProfile),
+  };
+  currentPlayerTrackRef = t;
+  const meta = {
+    title: t.title || "Library song",
+    subtitle: "Library · Full song",
+    artUrl: trackCoverArtForPlayer(t) || placeholderCoverDataUrl(),
+    releaseCaption: releaseCaptionForTrack(t),
+    remixOf: remixAttributionForTrack(t),
+  };
+  miniSource = libSource;
+  libraryNowPlayingId = id;
+  if (openPlayer) {
+    setPlayerMeta(meta, { trackRef: t, coverImmediate: true });
+  }
+  try {
+    refreshOwnSongsUi({ soft: true });
+  } catch {}
   if (!isArchivedSongStorageUrl(t.url)) queueArchiveLibraryTrack(t);
+  void (async () => {
+    try {
+      await prepareLibraryTrackForPlayback(t);
+    } catch {}
+  })();
   // Never block tap-to-play on Suno refresh — iOS rejects play() once the
   // gesture goes stale. Refresh in the background and retry only if stuck.
   void (async () => {
@@ -54793,26 +54817,11 @@ async function playLibraryListRowById(id, opts) {
       }
     } catch {}
   })();
-  currentPlayerTrackRef = t;
-  const meta = {
-    title: t.title || "Library song",
-    subtitle: "Library · Full song",
-    artUrl: trackCoverArtForPlayer(t) || placeholderCoverDataUrl(),
-    releaseCaption: releaseCaptionForTrack(t),
-    remixOf: remixAttributionForTrack(t),
-  };
-  const libSource = {
-    type: "library",
-    id,
-    cloudSongId: String(t.cloudSongId || trackCloudShareId(t) || ""),
-    songId: trackCloudShareId(t) || "",
-    taskId: String(t.taskId || ""),
-    audioId: String(t.audioId || ""),
-    publicOnProfile: Boolean(t.publicOnProfile),
-  };
-  miniSource = libSource;
-  libraryNowPlayingId = id;
-  refreshOwnSongsUi();
+  const playSource = await resolveArchivePlaybackUrl(t);
+  if (!playSource) {
+    showToast("This song has no playable audio yet.", { durationMs: 3800 });
+    return;
+  }
   if (openPlayer) {
     await playOnPlayerPage(playSource, "Full song", meta, { trackRef: t, coverImmediate: true });
   } else {

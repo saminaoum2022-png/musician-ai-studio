@@ -1175,6 +1175,7 @@ const els = {
   playerSource: document.getElementById("playerSource"),
   playerArt: document.getElementById("playerArt"),
   playerTitle: document.getElementById("playerTitle"),
+  playerOriginBadges: document.getElementById("playerOriginBadges"),
   playerNabadBadge: document.getElementById("playerNabadBadge"),
   playerCreatorIdentity: document.getElementById("playerCreatorIdentity"),
   btnPlayerBecomeFan: document.getElementById("btnPlayerBecomeFan"),
@@ -32191,6 +32192,25 @@ function libraryDraftTitleHtml(track, safeTitle) {
     : titleEl;
   if (!badge) return titleBlock;
   return `<span class="rowTitleWithBadge">${titleBlock}${badge}</span>`;
+}
+
+function syncPlayerOriginBadges(track) {
+  const slot = els.playerOriginBadges;
+  if (!slot) return;
+  const html = songOriginBadgesHtml(track, {
+    size: 13,
+    wrapClass: "songOriginBadges songOriginBadges--player",
+    inline: true,
+  });
+  if (!html) {
+    slot.hidden = true;
+    slot.setAttribute("aria-hidden", "true");
+    slot.innerHTML = "";
+    return;
+  }
+  slot.hidden = false;
+  slot.setAttribute("aria-hidden", "false");
+  slot.innerHTML = html;
 }
 
 function syncPlayerNabadBadge(track) {
@@ -70762,7 +70782,9 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
     subtitle: subtitle || "",
   };
   try {
-    syncPlayerNabadBadge(resolvePlayerLibraryTrack() || currentPlayerTrackRef);
+    const trackForChrome = resolvePlayerLibraryTrack() || currentPlayerTrackRef;
+    syncPlayerOriginBadges(trackForChrome);
+    syncPlayerNabadBadge(trackForChrome);
   } catch {}
   renderHubNowPlaying();
   syncLockScreenNowPlaying({ force: true });

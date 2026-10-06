@@ -10,7 +10,8 @@
  * - MINIMAX_API_KEY, MINIMAX_KEY_KIND, MINIMAX_MUSIC_MODEL, MINIMAX_GENERATE_ENABLED
  * - GEMINI_API_KEY / GOOGLE_API_KEY, LYRIA_MUSIC_MODEL, LYRIA_GENERATE_ENABLED
  * - CLIP_GEMINI_PRODUCER_ENABLED=1 — Gemini prompt enrichment for clips + ElevenLabs (staging preview)
- * - LYRIA_PROMPT_V2=1 — optional minimal Lyria prompt v2 (off by default); skips Gemini producer on Lyria
+ * - Lyria default: bare passthrough (style + lyrics only). LYRIA_LEGACY_PROMPTS=1 restores Nabad stack.
+ * - LYRIA_PROMPT_V2=1 — optional minimal Lyria prompt v2 (legacy mode only); skips Gemini producer on Lyria
  * - CLIP_GEMINI_PRODUCER_MODEL — optional override; else tries 3.6 → 3.5 → 2.5 flash
  * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_FINETUNE_ID, ELEVENLABS_GENERATE_ENABLED
  * - MUREKA_API_KEY, MUREKA_MUSIC_MODEL, MUREKA_VOCAL_ID, MUREKA_GENERATE_ENABLED
@@ -101,6 +102,7 @@ const {
 const {
   lyriaLegacyPromptsEnabled,
   resolveBareLyriaPrompt,
+  isLyriaIdeaPromptBody,
 } = require("../_lib/lyria-bare-passthrough");
 const { uploadObject } = require("../_lib/supabase-storage");
 const { queueCacheTimestampedLyrics } = require("../_lib/music-timestamped-lyrics-cache");
@@ -466,6 +468,9 @@ function scheduleBackgroundWork(promise) {
 
 function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
   if (!lyriaLegacyPromptsEnabled()) {
+    if (isLyriaIdeaPromptBody(body)) {
+      return "pipeline: lyria_bare_passthrough · idea → style + brief (Lyria writes lyrics)";
+    }
     return "pipeline: lyria_bare_passthrough (no server prompt injection)";
   }
   if (resolveLyriaPromptV2Enabled(body, isAdmin)) {

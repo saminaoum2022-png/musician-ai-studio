@@ -31509,6 +31509,13 @@ function lyriaSendRawBoxesOnly() {
   return useLyriaForThisGenerate() || isLyriaClipGenerateFlow();
 }
 
+/** Idea tab + brief text → Lyria composes lyrics (style + idea, like Google AI Studio). */
+function lyriaIdeaModeForGenerate(text, { instrumental = false, hasReference = false, hasRemix = false } = {}) {
+  if (!lyriaSendRawBoxesOnly() || instrumental || hasReference || hasRemix) return false;
+  if (!isCreateIdeaMode()) return false;
+  return promptIsSongIdeaNotLyrics(text);
+}
+
 function isLyriaClipGenerateFlow() {
   return useLyriaClipMusicProvider() || isNabadClipFlow() || isTemplateSparkClipFlow();
 }
@@ -77976,9 +77983,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ? lyricDialectHintFor80sYou()
           : [dialectHint, arabicAddressNote].filter(Boolean).join(" ");
         let finalPrompt = lyriaRaw ? userPrompt : sanitizeLyricsPrompt(userPrompt);
+        const lyriaIdeaClip = lyriaIdeaModeForGenerate(userPrompt, { instrumental: false });
         const ideaClip = lyriaRaw ? false : createIdeaIsPromptToSong(userPrompt);
-        if (ideaClip) finalPrompt = "";
-        const clipStyle = lyriaRaw ? userStyleRaw : ideaClip ? mergeIdeaIntoStyle(userPrompt, userStyle) : userStyle;
+        if (ideaClip || lyriaIdeaClip) finalPrompt = "";
+        const clipStyle = lyriaIdeaClip
+          ? userStyleRaw
+          : lyriaRaw
+            ? userStyleRaw
+            : ideaClip
+              ? mergeIdeaIntoStyle(userPrompt, userStyle)
+              : userStyle;
         if (!finalPrompt && is80sPhotoSolo && !is80sInstrumental) {
           try { updateCoachPriorityStatus("Crafting your lyrics…", { generating: true }); } catch {}
           await draft80sYouLyricsForGenerate(imageMoodData);
@@ -78053,7 +78067,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           || "";
         const photoImageForLyria = resolvePhotoImagePayloadForLyria();
         const payload = {
-          prompt: ideaClip ? "" : finalPrompt,
+          prompt: ideaClip || lyriaIdeaClip ? "" : finalPrompt,
           style: clipStyle,
           title: clipTitle,
           ...(lyriaRaw
@@ -78063,6 +78077,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 dialectHint: lyricDialectHint,
                 ...(arabicAddress ? { arabicAddress: String(arabicAddress) } : {}),
               }),
+          ...(lyriaIdeaClip || ideaClip ? { ideaPrompt: true, ideaBrief: userPrompt } : {}),
           lyriaModel: "clip",
           duration: useLyriaClipMusicProvider() ? 30 : undefined,
           nabadClip: templateSparkClip || useLyriaClipMusicProvider() ? undefined : "1",
@@ -78076,7 +78091,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             : {}),
           watchKind: clipAllowImageOnly ? "photo" : "clip",
           ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
-          ...(ideaClip ? { ideaPrompt: true, ideaBrief: userPrompt } : {}),
           ...(isLyriaClipGenerateFlow() ? { scriptFormat: resolveLyricsScriptFormat() } : {}),
           ...(creditsState.isAdmin
             ? {
@@ -78331,6 +78345,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       let finalPrompt = lyriaRaw ? userPrompt : sanitizeLyricsPrompt(userPrompt);
       const imageOnlyInstrumental = Boolean(imageMoodAppliedForNextGen && !finalPrompt && !hasReference);
       const shouldGenerateInstrumental = Boolean(instrumentalSelected || imageOnlyInstrumental);
+      const lyriaIdeaMode = lyriaIdeaModeForGenerate(userPrompt, {
+        instrumental: shouldGenerateInstrumental,
+        hasReference,
+        hasRemix: Boolean(currentRemixSource),
+      });
       const ideaNotLyrics = lyriaRaw
         ? false
         : Boolean(
@@ -78351,7 +78370,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       const voiceClipChallenge = isVoiceClipChallengeId(challengePromptContext()?.id);
       const voiceClipClipOnly = Boolean(voiceClipChallenge && hasReference && !finalPrompt);
-      if (ideaNotLyrics) {
+      if (lyriaIdeaMode) {
+        finalPrompt = "";
+        engine = "idea_prompt";
+        engineLabel = "Idea → Lyria";
+        try { beginCoachPriorityStatus("Composing from your idea…", { generating: true }); } catch {}
+      } else if (ideaNotLyrics) {
         setStatus("Turning your idea into a song…");
         try { beginCoachPriorityStatus("Turning your idea into a song…", { generating: true }); } catch {}
         if (ideaPromptToSongAlt) {
@@ -78511,8 +78535,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`;
       const songDurationSec = resolveSongDurationForGeneration();
       const photoImageForLyria = useLyriaForThisGenerate() ? resolvePhotoImagePayloadForLyria() : "";
+      const lyriaIdeaPayload = lyriaIdeaMode;
       const payload = {
-        prompt: ideaPromptToSongAlt ? "" : finalPrompt,
+        prompt: ideaPromptToSongAlt || lyriaIdeaPayload ? "" : finalPrompt,
         style: ideaSimpleMode ? "" : ideaPromptToSongAlt ? mergeIdeaIntoStyle(userPrompt, personaStyleBase) : personaStyleBase,
         songKey: mapSolfegeToLetterKey((els.sunoSongKey?.value || "").trim()),
         title: ideaSimpleMode ? "" : (els.sunoTitle?.value || "").trim(),
@@ -78529,7 +78554,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ...(useLyriaForThisGenerate() ? { scriptFormat: resolveLyricsScriptFormat() } : {}),
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
         ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
-        ...(ideaPromptToSongAlt ? { ideaPrompt: true, ideaBrief: userPrompt } : {}),
+        ...(ideaPromptToSongAlt || lyriaIdeaPayload ? { ideaPrompt: true, ideaBrief: userPrompt } : {}),
         ...(isTemplateSparkLyriaFullFlow()
           ? { lyriaModel: "lyria-3.5", templateSparkFull: "1" }
           : {}),

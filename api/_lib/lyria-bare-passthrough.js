@@ -37,19 +37,9 @@ function resolveBareLyriaPrompt(body, { lyrics = "", instrumental = false, photo
     };
   }
 
-  const blocks = [];
-  if (style) blocks.push(style);
+  const prompt = [style, lyricText].filter(Boolean).join("\n\n");
 
-  if (lyricText) {
-    if (blocks.length) blocks.push("");
-    blocks.push("Sing only the lyrics below. Do not sing any text above this line.");
-    blocks.push("");
-    blocks.push("Lyrics:");
-    blocks.push("");
-    blocks.push(lyricText);
-  }
-
-  if (!blocks.length) {
+  if (!prompt) {
     if (photoOnly) {
       return { ok: true, prompt: "", planSource: "photo_only" };
     }
@@ -62,7 +52,7 @@ function resolveBareLyriaPrompt(body, { lyrics = "", instrumental = false, photo
 
   return {
     ok: true,
-    prompt: blocks.join("\n").slice(0, 8000),
+    prompt: prompt.slice(0, 8000),
     planSource: style && lyricText ? "client_style_and_lyrics" : style ? "client_style" : "client_lyrics",
   };
 }

@@ -31504,6 +31504,11 @@ function useLyriaForThisGenerate() {
   return useLyriaMusicProvider() || isTemplateSparkLyriaFullFlow();
 }
 
+/** Lyria generate: Style + Lyrics boxes only — no auto tags, dialect merge, or AI draft on submit. */
+function lyriaSendRawBoxesOnly() {
+  return useLyriaForThisGenerate() || isLyriaClipGenerateFlow();
+}
+
 function isLyriaClipGenerateFlow() {
   return useLyriaClipMusicProvider() || isNabadClipFlow() || isTemplateSparkClipFlow();
 }
@@ -77958,8 +77963,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setProgress(5);
         try { applyLyricsLanguageToDialect(); } catch {}
         try { apply80sYouArabicLyricsContext(); } catch {}
+        const lyriaRaw = lyriaSendRawBoxesOnly();
         const userPrompt = (els.sunoPrompt?.value || "").trim();
-        const userStyle = resolveStyleInputForGeneration((els.sunoStyle?.value || "").trim());
+        const userStyleRaw = String(els.sunoStyle?.value || "").trim();
+        const userStyle = lyriaRaw ? userStyleRaw : resolveStyleInputForGeneration(userStyleRaw);
         const dialect = String(els.sunoDialect?.value || "").trim();
         const dialectHint = String(els.sunoDialectHint?.value || "").trim();
         const arabicAddress = String(els.sunoArabicAddress?.value || "").trim();
@@ -77968,17 +77975,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         const lyricDialectHint = is80sPhotoSolo
           ? lyricDialectHintFor80sYou()
           : [dialectHint, arabicAddressNote].filter(Boolean).join(" ");
-        let finalPrompt = sanitizeLyricsPrompt(userPrompt);
-        const ideaClip = createIdeaIsPromptToSong(userPrompt);
+        let finalPrompt = lyriaRaw ? userPrompt : sanitizeLyricsPrompt(userPrompt);
+        const ideaClip = lyriaRaw ? false : createIdeaIsPromptToSong(userPrompt);
         if (ideaClip) finalPrompt = "";
-        const clipStyle = ideaClip ? mergeIdeaIntoStyle(userPrompt, userStyle) : userStyle;
+        const clipStyle = lyriaRaw ? userStyleRaw : ideaClip ? mergeIdeaIntoStyle(userPrompt, userStyle) : userStyle;
         if (!finalPrompt && is80sPhotoSolo && !is80sInstrumental) {
           try { updateCoachPriorityStatus("Crafting your lyrics…", { generating: true }); } catch {}
           await draft80sYouLyricsForGenerate(imageMoodData);
           finalPrompt = sanitizeLyricsPrompt(String(els.sunoPrompt?.value || "").trim());
           try { updateCoachPriorityStatus("Making your 80s clip…", { generating: true }); } catch {}
         }
-        if (!finalPrompt && !clipAllowImageOnly && !isTemplateSparkClipFlow() && !ideaClip) {
+        if (!lyriaRaw && !finalPrompt && !clipAllowImageOnly && !isTemplateSparkClipFlow() && !ideaClip) {
           try {
             setStatus("Drafting lyrics with Nabad AI…");
             const arCtxClip = buildLyricApiArabicContext();
@@ -78049,9 +78056,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           prompt: ideaClip ? "" : finalPrompt,
           style: clipStyle,
           title: clipTitle,
-          dialect,
-          dialectHint: lyricDialectHint,
-          ...(arabicAddress ? { arabicAddress: String(arabicAddress) } : {}),
+          ...(lyriaRaw
+            ? {}
+            : {
+                dialect,
+                dialectHint: lyricDialectHint,
+                ...(arabicAddress ? { arabicAddress: String(arabicAddress) } : {}),
+              }),
           lyriaModel: "clip",
           duration: useLyriaClipMusicProvider() ? 30 : undefined,
           nabadClip: templateSparkClip || useLyriaClipMusicProvider() ? undefined : "1",
@@ -78295,8 +78306,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { trackFirstGenerateOnce(modeLabel); } catch {}
 
       try { applyLyricsLanguageToDialect(); } catch {}
+      const lyriaRaw = lyriaSendRawBoxesOnly();
       const userPrompt = (els.sunoPrompt?.value || "").trim();
-      const userStyle = resolveStyleInputForGeneration((els.sunoStyle?.value || "").trim());
+      const userStyleRaw = String(els.sunoStyle?.value || "").trim();
+      const userStyle = lyriaRaw ? userStyleRaw : resolveStyleInputForGeneration(userStyleRaw);
       const userAvoidTags = trimAvoidTagsForSuno(els.sunoAvoidTags?.value || "");
       const artworkStyle = (els.sunoArtworkStyle?.value || "").trim();
       const dialect = String(els.sunoDialect?.value || "").trim();
@@ -78315,15 +78328,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const groovePace = String(els.sunoGroovePace?.value || "").trim();
       const prosodyStrictness = String(els.sunoProsody?.value || "").trim();
       const beatStability = String(els.sunoBeatStability?.value || "").trim();
-      let finalPrompt = sanitizeLyricsPrompt(userPrompt);
+      let finalPrompt = lyriaRaw ? userPrompt : sanitizeLyricsPrompt(userPrompt);
       const imageOnlyInstrumental = Boolean(imageMoodAppliedForNextGen && !finalPrompt && !hasReference);
       const shouldGenerateInstrumental = Boolean(instrumentalSelected || imageOnlyInstrumental);
-      const ideaNotLyrics = Boolean(
-        createIdeaIsPromptToSong(userPrompt)
-          && !shouldGenerateInstrumental
-          && !hasReference
-          && !currentRemixSource,
-      );
+      const ideaNotLyrics = lyriaRaw
+        ? false
+        : Boolean(
+            createIdeaIsPromptToSong(userPrompt)
+              && !shouldGenerateInstrumental
+              && !hasReference
+              && !currentRemixSource,
+          );
       let ideaSimpleMode = false;
       const ideaPromptToSongAlt =
         ideaNotLyrics && (useLyriaForThisGenerate() || useElevenlabsMusicProvider());
@@ -78359,7 +78374,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       // Auto-draft lyrics with Gemini when the user hasn't typed any.
       // Voice Note + clip: skip — send empty prompt and let Suno remix from audio.
-      if (!finalPrompt && !shouldGenerateInstrumental && !ideaNotLyrics && !(voiceClipChallenge && hasReference)) {
+      if (
+        !lyriaRaw
+        && !finalPrompt
+        && !shouldGenerateInstrumental
+        && !ideaNotLyrics
+        && !(voiceClipChallenge && hasReference)
+      ) {
         try {
           setStatus("Preparing prompt with Gemini… (Engine: Gemini assisted)");
           const arCtxAuto = buildLyricApiArabicContext();
@@ -78479,13 +78500,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           showToast("Generating from your idea — saved voice needs written lyrics.", { icon: "♪", durationMs: 3600 });
         } catch {}
       }
-      const personaStyleBase = hasReference
-        ? isRecordedVoicePersona && personaIdSel
-          ? stripPersonaConflictingStyleTags(String(userStyle || "").trim())
-          : String(userStyle || "").trim()
-        : isRecordedVoicePersona
-        ? [userStyle, styleExtras, artworkStyle ? `cover art: ${artworkStyle}` : ""].filter(Boolean).join(" | ")
-        : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`;
+      const personaStyleBase = lyriaRaw
+        ? userStyleRaw
+        : hasReference
+          ? isRecordedVoicePersona && personaIdSel
+            ? stripPersonaConflictingStyleTags(String(userStyle || "").trim())
+            : String(userStyle || "").trim()
+          : isRecordedVoicePersona
+            ? [userStyle, styleExtras, artworkStyle ? `cover art: ${artworkStyle}` : ""].filter(Boolean).join(" | ")
+            : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`;
       const songDurationSec = resolveSongDurationForGeneration();
       const photoImageForLyria = useLyriaForThisGenerate() ? resolvePhotoImagePayloadForLyria() : "";
       const payload = {
@@ -78496,9 +78519,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         customMode: !ideaSimpleMode,
         instrumental: shouldGenerateInstrumental,
         model: modelForRequest,
-        ...(dialect ? { dialect: String(dialect) } : {}),
-        ...(lyricDialectHint ? { dialectHint: String(lyricDialectHint) } : {}),
-        ...(arabicAddress ? { arabicAddress: String(arabicAddress) } : {}),
+        ...(lyriaRaw
+          ? {}
+          : {
+              ...(dialect ? { dialect: String(dialect) } : {}),
+              ...(lyricDialectHint ? { dialectHint: String(lyricDialectHint) } : {}),
+              ...(arabicAddress ? { arabicAddress: String(arabicAddress) } : {}),
+            }),
         ...(useLyriaForThisGenerate() ? { scriptFormat: resolveLyricsScriptFormat() } : {}),
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
         ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
@@ -78556,8 +78583,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (useElevenlabsMusicProvider() && !shouldGenerateInstrumental && creditsState.isAdmin) {
         payload.nabadVocalChain = getNabadVocalChainPrefs();
       }
-      if (userAvoidTags) payload.negativeTags = userAvoidTags;
-      payload.style = compactStyleForProvider(payload.style, 980);
+      if (userAvoidTags && !lyriaRaw) payload.negativeTags = userAvoidTags;
+      if (!lyriaRaw) payload.style = compactStyleForProvider(payload.style, 980);
       if (useElevenlabsMusicProvider()) {
         payload.elevenlabsUseFinetune = getElevenlabsFinetunePref();
       }

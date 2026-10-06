@@ -477,7 +477,7 @@ export async function regenerateAbstractCoverForTrack(track, opts = {}) {
       thumbFrame: undefined,
       ...(hintOverride
         ? { artworkHint: hintOverride, artworkStyle: hintOverride }
-        : {}),
+        : { artworkHint: "", artworkStyle: "" }),
     },
   };
   await enqueueLibraryPatch(() => {

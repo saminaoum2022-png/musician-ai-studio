@@ -10,7 +10,8 @@
  * - MINIMAX_API_KEY, MINIMAX_KEY_KIND, MINIMAX_MUSIC_MODEL, MINIMAX_GENERATE_ENABLED
  * - GEMINI_API_KEY / GOOGLE_API_KEY, LYRIA_MUSIC_MODEL, LYRIA_GENERATE_ENABLED
  * - CLIP_GEMINI_PRODUCER_ENABLED=1 — Gemini prompt enrichment for clips + ElevenLabs (staging preview)
- * - LYRIA_PROMPT_V2=1 — optional minimal Lyria prompt v2 (off by default); skips Gemini producer on Lyria
+ * - Lyria default: bare passthrough (style + lyrics only). LYRIA_LEGACY_PROMPTS=1 restores Nabad stack.
+ * - LYRIA_PROMPT_V2=1 — optional minimal Lyria prompt v2 (legacy mode only); skips Gemini producer on Lyria
  * - CLIP_GEMINI_PRODUCER_MODEL — optional override; else tries 3.6 → 3.5 → 2.5 flash
  * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_FINETUNE_ID, ELEVENLABS_GENERATE_ENABLED
  * - MUREKA_API_KEY, MUREKA_MUSIC_MODEL, MUREKA_VOCAL_ID, MUREKA_GENERATE_ENABLED
@@ -98,6 +99,10 @@ const {
   elevenLegacyPlansEnabled,
   resolveBareElevenCompose,
 } = require("../_lib/elevenlabs-bare-passthrough");
+const {
+  lyriaLegacyPromptsEnabled,
+  resolveBareLyriaPrompt,
+} = require("../_lib/lyria-bare-passthrough");
 const { uploadObject } = require("../_lib/supabase-storage");
 const { queueCacheTimestampedLyrics } = require("../_lib/music-timestamped-lyrics-cache");
 const {
@@ -306,6 +311,15 @@ function buildLyriaPromptFromBody(body, extra = {}) {
   const photoImages = resolveLyriaPhotosFromBody(body);
   const lyrics = extra.lyrics ?? String(body?.prompt || "").trim();
   const isAdmin = Boolean(extra.isAdmin);
+  const instrumental = extra.instrumental ?? Boolean(body?.instrumental);
+  if (!lyriaLegacyPromptsEnabled()) {
+    const bare = resolveBareLyriaPrompt(body, {
+      lyrics,
+      instrumental,
+      photoOnly: photoImages.length > 0,
+    });
+    if (bare.ok) return bare.prompt;
+  }
   if (resolveLyriaPromptV2Enabled(body, isAdmin)) {
     return buildLyriaPromptV2({
       body,
@@ -452,6 +466,9 @@ function scheduleBackgroundWork(promise) {
 }
 
 function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
+  if (!lyriaLegacyPromptsEnabled()) {
+    return "pipeline: lyria_bare_passthrough (no server prompt injection)";
+  }
   if (resolveLyriaPromptV2Enabled(body, isAdmin)) {
     return "pipeline: lyria_prompt_v2 (no gemini producer)";
   }
@@ -510,11 +527,16 @@ async function runLyriaGenerationJob({
 
   try {
     let lyriaPrompt = fallbackLyriaPrompt;
+    if (!lyriaLegacyPromptsEnabled()) {
+      console.info("[music/generate] lyria bare passthrough", taskId, {
+        promptLen: String(lyriaPrompt || "").length,
+      });
+    }
     const dialectHint = mergeLyriaDialectHint(body);
     const durationSec = resolveLyriaDurationSec(body);
     const useLyriaV2 = resolveLyriaPromptV2Enabled(body, isAdmin);
     let producerResult = { ok: false };
-    if (!useLyriaV2) {
+    if (lyriaLegacyPromptsEnabled() && !useLyriaV2) {
       producerResult = await enrichLyriaSongWithGeminiProducer({
         apiKey,
         enabled: resolveGeminiProducerEnabled(body, isAdmin),
@@ -588,14 +610,13 @@ async function runLyriaGenerationJob({
         alignedWords: upstream.alignedWords,
       });
     }
-    const displayLyrics = sanitizeLyriaLyricsForSinging(
-      String(
-        (producerResult.ok && producerResult.structured_lyrics) ||
-          lyrics ||
-          extractLyriaDisplayLyrics(upstream.data) ||
-          "",
-      ),
-    );
+    const displayLyricsSource =
+      lyriaLegacyPromptsEnabled() && producerResult.ok && producerResult.structured_lyrics
+        ? producerResult.structured_lyrics
+        : lyrics || extractLyriaDisplayLyrics(upstream.data) || "";
+    const displayLyrics = lyriaLegacyPromptsEnabled()
+      ? sanitizeLyriaLyricsForSinging(String(displayLyricsSource))
+      : String(displayLyricsSource || "").trim();
     const displayTitle = resolveLyriaStoredDisplayTitle(body, {
       title,
       lyrics: displayLyrics,
@@ -666,7 +687,7 @@ async function runLyriaClipGenerationJob({
     let lyriaPrompt = fallbackLyriaPrompt;
     const useLyriaV2 = resolveLyriaPromptV2Enabled(body, isAdmin);
     let producerResult = { ok: false };
-    if (!useLyriaV2) {
+    if (lyriaLegacyPromptsEnabled() && !useLyriaV2) {
       producerResult = await enrichClipWithGeminiProducer({
         apiKey,
         enabled: resolveGeminiProducerEnabled(body, isAdmin),
@@ -737,14 +758,13 @@ async function runLyriaClipGenerationJob({
         alignedWords: upstream.alignedWords,
       });
     }
-    const displayLyrics = sanitizeLyriaLyricsForSinging(
-      String(
-        (producerResult.ok && producerResult.structured_lyrics) ||
-          lyrics ||
-          extractLyriaDisplayLyrics(upstream.data) ||
-          "",
-      ),
-    );
+    const clipLyricsSource =
+      lyriaLegacyPromptsEnabled() && producerResult.ok && producerResult.structured_lyrics
+        ? producerResult.structured_lyrics
+        : lyrics || extractLyriaDisplayLyrics(upstream.data) || "";
+    const displayLyrics = lyriaLegacyPromptsEnabled()
+      ? sanitizeLyriaLyricsForSinging(String(clipLyricsSource))
+      : String(clipLyricsSource || "").trim();
     const displayTitle = resolveLyriaStoredDisplayTitle(body, {
       title,
       lyrics: displayLyrics,
@@ -1388,6 +1408,17 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
+  if (!lyriaLegacyPromptsEnabled()) {
+    const bareCheck = resolveBareLyriaPrompt(body, {
+      lyrics,
+      instrumental,
+      photoOnly: photoImages.length > 0,
+    });
+    if (!bareCheck.ok) {
+      return sendJson(res, 400, { error: bareCheck.error, code: "lyria_bare_missing_prompt" });
+    }
+  }
+
   const fallbackLyriaPrompt = buildLyriaPromptFromBody(body, {
     stylePrompt,
     lyrics,
@@ -1543,6 +1574,17 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
       error: "Add lyrics, style, or photo mood before generating a clip.",
       code: "nabad_clip_missing_prompt",
     });
+  }
+
+  if (!lyriaLegacyPromptsEnabled()) {
+    const bareCheck = resolveBareLyriaPrompt(body, {
+      lyrics,
+      instrumental,
+      photoOnly: photoImages.length > 0,
+    });
+    if (!bareCheck.ok) {
+      return sendJson(res, 400, { error: bareCheck.error, code: "lyria_bare_missing_prompt" });
+    }
   }
 
   const lyriaPrompt = buildLyriaPromptFromBody(body, {

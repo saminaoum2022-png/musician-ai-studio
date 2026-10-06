@@ -40,6 +40,7 @@ const {
   resolveLyriaModel,
   resolveLyriaPhotoImages,
   mergeLyriaDialectHint,
+  sanitizeDialectHintForLyriaPrompt,
   resolveLyriaDialectLabel,
   buildLyriaDirectStylePrompt,
   buildLyriaArabicPronunciationLine,
@@ -53,9 +54,10 @@ const {
 } = require("../_lib/lyria-prompt-v2");
 const { clipVocalProfileById } = require("../_lib/clip-vocal-profiles");
 const {
-  applyElevenReferenceToCompositionPlan,
   buildElevenMusicPrompt,
   buildElevenReferenceCompositionPlan,
+  buildElevenAppLikeReferenceCompositionPlan,
+  buildElevenHumTrackCompositionPlan,
   buildElevenSongCompositionPlan,
   buildElevenEditCompositionPlan,
   elevenlabsComposeInpaint,
@@ -91,6 +93,15 @@ const {
   saveMusicProviderTaskStatus,
   providerFolder,
 } = require("../_lib/music-provider-task-store");
+const { resolveHumTrackPreset } = require("../_lib/hum-track-presets");
+const {
+  elevenLegacyPlansEnabled,
+  resolveBareElevenCompose,
+} = require("../_lib/elevenlabs-bare-passthrough");
+const {
+  lyriaLegacyPromptsEnabled,
+  resolveBareLyriaPrompt,
+} = require("../_lib/lyria-bare-passthrough");
 const { uploadObject } = require("../_lib/supabase-storage");
 const { queueCacheTimestampedLyrics } = require("../_lib/music-timestamped-lyrics-cache");
 const {
@@ -159,7 +170,28 @@ function newTaskId(provider) {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "")}`;
 }
 
+function applyHumTrackGenerateDefaults(body) {
+  if (!body?.humTrack) return;
+  const preset = resolveHumTrackPreset(body?.instrumentPreset);
+  body.humTrack = true;
+  body.instrumental = true;
+  if (!String(body?.style || "").trim()) body.style = preset.style;
+  if (!String(body?.negativeTags || "").trim()) {
+    body.negativeTags = String(preset.negativeTags || "")
+      .split(/[,|]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .filter((t) => !/^(humming|hum)$/i.test(t))
+      .join(", ");
+  }
+}
+
 function buildMusicPrompt(body) {
+  if (body?.humTrack) {
+    const preset = resolveHumTrackPreset(body?.instrumentPreset);
+    const style = String(body?.style || "").trim() || preset.style;
+    return style.slice(0, 2000);
+  }
   const style = String(body?.style || "").trim();
   const instruments = String(body?.instruments || "").trim();
   const songKey = String(body?.songKey || "").trim();
@@ -278,6 +310,15 @@ function buildLyriaPromptFromBody(body, extra = {}) {
   const photoImages = resolveLyriaPhotosFromBody(body);
   const lyrics = extra.lyrics ?? String(body?.prompt || "").trim();
   const isAdmin = Boolean(extra.isAdmin);
+  const instrumental = extra.instrumental ?? Boolean(body?.instrumental);
+  if (!lyriaLegacyPromptsEnabled()) {
+    const bare = resolveBareLyriaPrompt(body, {
+      lyrics,
+      instrumental,
+      photoOnly: photoImages.length > 0,
+    });
+    if (bare.ok) return bare.prompt;
+  }
   if (resolveLyriaPromptV2Enabled(body, isAdmin)) {
     return buildLyriaPromptV2({
       body,
@@ -303,6 +344,7 @@ function buildLyriaPromptFromBody(body, extra = {}) {
     voiceTimbre: String(body?.voiceTimbre || "").trim(),
     challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
     dialectHint: mergeLyriaDialectHint(body),
+    arabicAddress: String(body?.arabicAddress || body?.address || "").trim(),
     clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
     enhancedStylePrompt: extra.enhancedStylePrompt || "",
     structuredLyrics: extra.structuredLyrics || "",
@@ -312,6 +354,7 @@ function buildLyriaPromptFromBody(body, extra = {}) {
     scriptFormat: extra.scriptFormat ?? String(body?.scriptFormat || "").trim(),
     nabadVocalToggles: extra.nabadVocalToggles ?? body?.nabadVocalChain ?? body?.nabadVocalToggles ?? null,
     useNabadVocalIdentity: extra.useNabadVocalIdentity !== false,
+    prepBody: body,
   });
 }
 
@@ -422,6 +465,9 @@ function scheduleBackgroundWork(promise) {
 }
 
 function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
+  if (!lyriaLegacyPromptsEnabled()) {
+    return "pipeline: lyria_bare_passthrough (no server prompt injection)";
+  }
   if (resolveLyriaPromptV2Enabled(body, isAdmin)) {
     return "pipeline: lyria_prompt_v2 (no gemini producer)";
   }
@@ -431,7 +477,7 @@ function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
 }
 
 function buildLyriaFullSongAdminExtra({ body, producerResult, model = "", lyriaPrompt = "", isAdmin = false } = {}) {
-  const dialectHintLine = mergeLyriaDialectHint(body);
+  const dialectHintLine = sanitizeDialectHintForLyriaPrompt(mergeLyriaDialectHint(body));
   const dialectLabel = resolveLyriaDialectLabel(body);
   return [
     lyriaPipelineAdminLine(body, isAdmin, producerResult),
@@ -480,11 +526,16 @@ async function runLyriaGenerationJob({
 
   try {
     let lyriaPrompt = fallbackLyriaPrompt;
+    if (!lyriaLegacyPromptsEnabled()) {
+      console.info("[music/generate] lyria bare passthrough", taskId, {
+        promptLen: String(lyriaPrompt || "").length,
+      });
+    }
     const dialectHint = mergeLyriaDialectHint(body);
     const durationSec = resolveLyriaDurationSec(body);
     const useLyriaV2 = resolveLyriaPromptV2Enabled(body, isAdmin);
     let producerResult = { ok: false };
-    if (!useLyriaV2) {
+    if (lyriaLegacyPromptsEnabled() && !useLyriaV2) {
       producerResult = await enrichLyriaSongWithGeminiProducer({
         apiKey,
         enabled: resolveGeminiProducerEnabled(body, isAdmin),
@@ -558,14 +609,13 @@ async function runLyriaGenerationJob({
         alignedWords: upstream.alignedWords,
       });
     }
-    const displayLyrics = sanitizeLyriaLyricsForSinging(
-      String(
-        (producerResult.ok && producerResult.structured_lyrics) ||
-          lyrics ||
-          extractLyriaDisplayLyrics(upstream.data) ||
-          "",
-      ),
-    );
+    const displayLyricsSource =
+      lyriaLegacyPromptsEnabled() && producerResult.ok && producerResult.structured_lyrics
+        ? producerResult.structured_lyrics
+        : lyrics || extractLyriaDisplayLyrics(upstream.data) || "";
+    const displayLyrics = lyriaLegacyPromptsEnabled()
+      ? sanitizeLyriaLyricsForSinging(String(displayLyricsSource))
+      : String(displayLyricsSource || "").trim();
     const displayTitle = resolveLyriaStoredDisplayTitle(body, {
       title,
       lyrics: displayLyrics,
@@ -636,7 +686,7 @@ async function runLyriaClipGenerationJob({
     let lyriaPrompt = fallbackLyriaPrompt;
     const useLyriaV2 = resolveLyriaPromptV2Enabled(body, isAdmin);
     let producerResult = { ok: false };
-    if (!useLyriaV2) {
+    if (lyriaLegacyPromptsEnabled() && !useLyriaV2) {
       producerResult = await enrichClipWithGeminiProducer({
         apiKey,
         enabled: resolveGeminiProducerEnabled(body, isAdmin),
@@ -707,14 +757,13 @@ async function runLyriaClipGenerationJob({
         alignedWords: upstream.alignedWords,
       });
     }
-    const displayLyrics = sanitizeLyriaLyricsForSinging(
-      String(
-        (producerResult.ok && producerResult.structured_lyrics) ||
-          lyrics ||
-          extractLyriaDisplayLyrics(upstream.data) ||
-          "",
-      ),
-    );
+    const clipLyricsSource =
+      lyriaLegacyPromptsEnabled() && producerResult.ok && producerResult.structured_lyrics
+        ? producerResult.structured_lyrics
+        : lyrics || extractLyriaDisplayLyrics(upstream.data) || "";
+    const displayLyrics = lyriaLegacyPromptsEnabled()
+      ? sanitizeLyriaLyricsForSinging(String(clipLyricsSource))
+      : String(clipLyricsSource || "").trim();
     const displayTitle = resolveLyriaStoredDisplayTitle(body, {
       title,
       lyrics: displayLyrics,
@@ -792,10 +841,29 @@ async function runElevenlabsGenerationJob({
     let finalCompositionPlan = null;
     let elevenPlanSource = null;
 
+    if (!editCompositionPlan && !elevenLegacyPlansEnabled()) {
+      const bare = resolveBareElevenCompose(body);
+      if (!bare.ok) {
+        await fail(bare.error);
+        return;
+      }
+      finalCompositionPlan = bare.compositionPlan || null;
+      finalPrompt = finalCompositionPlan ? undefined : bare.prompt;
+      elevenPlanSource = bare.planSource;
+      console.info("[music/generate] elevenlabs bare passthrough", taskId, elevenPlanSource, {
+        promptLen: finalPrompt ? finalPrompt.length : 0,
+        chunks: finalCompositionPlan?.chunks?.length || 0,
+      });
+    } else if (!editCompositionPlan) {
+    const humTrackInstrumental =
+      Boolean(body?.humTrack) && instrumental && referenceSongId && !editCompositionPlan;
+    const appLikeReference =
+      Boolean(referenceSongId) && !editCompositionPlan && !Boolean(body?.humTrack);
+
     if (editCompositionPlan) {
       finalCompositionPlan = editCompositionPlan;
       elevenPlanSource = "admin_song_edit";
-    } else if (geminiApiKey) {
+    } else if (geminiApiKey && !humTrackInstrumental && !appLikeReference) {
       producerResult = await enrichSongWithGeminiProducer({
         apiKey: geminiApiKey,
         enabled: resolveGeminiProducerEnabled(body, isAdmin),
@@ -821,7 +889,80 @@ async function runElevenlabsGenerationJob({
     const dialectHint = mergeLyriaDialectHint(body);
     const scriptFormat = String(body?.scriptFormat || "").trim();
     const isSongInpaint = Boolean(editCompositionPlan);
-    if (!isSongInpaint && !finalCompositionPlan?.chunks?.length) {
+    if (!isSongInpaint && appLikeReference) {
+      const planBuilt = await buildElevenAppLikeReferenceCompositionPlan({
+        apiKey,
+        stylePrompt,
+        title,
+        lyrics,
+        musicLengthMs,
+        model,
+        instrumental,
+        negativeTags: body?.negativeTags,
+        referenceSongId,
+        referenceRangeMs,
+        conditionStrength: referenceConditionStrength,
+        vocalGender,
+      });
+      if (planBuilt.ok && planBuilt.plan?.chunks?.length) {
+        finalCompositionPlan = planBuilt.plan;
+        elevenPlanSource = planBuilt.planSource || "reference_app_like";
+        console.log(
+          "[music/generate] elevenlabs app-like reference plan",
+          taskId,
+          finalCompositionPlan.chunks.length,
+          "chunks",
+          "ref_on_chunk_0",
+        );
+      } else {
+        console.warn(
+          "[music/generate] elevenlabs app-like reference fallback",
+          taskId,
+          planBuilt.userMessage || planBuilt.error || "unknown",
+        );
+        finalCompositionPlan = buildElevenReferenceCompositionPlan({
+          lyrics,
+          stylePrompt,
+          title,
+          musicLengthMs,
+          instrumental,
+          referenceSongId,
+          referenceRangeMs,
+          conditionStrength: referenceConditionStrength,
+          negativeTags: body?.negativeTags,
+          vocalGender,
+          voiceTimbre,
+          nabadVocalToggles,
+          dialectHint,
+          scriptFormat,
+          useNabadVocalIdentity: false,
+        });
+        elevenPlanSource = "reference_app_like_fallback";
+      }
+    } else if (!isSongInpaint && humTrackInstrumental) {
+      finalCompositionPlan = buildElevenHumTrackCompositionPlan({
+        stylePrompt,
+        musicLengthMs,
+        referenceSongId,
+        referenceRangeMs,
+        conditionStrength: referenceConditionStrength,
+        negativeTags: body?.negativeTags,
+      });
+      elevenPlanSource = "hum_track_instrument_reference";
+      console.log(
+        "[music/generate] elevenlabs hum track plan",
+        taskId,
+        finalCompositionPlan?.chunks?.length || 0,
+        "chunks",
+      );
+      if (!finalCompositionPlan?.chunks?.length) {
+        await fail("Hum Track plan failed — re-record a 15–30 second hum and try again.");
+        return;
+      }
+    } else if (Boolean(body?.humTrack) && instrumental && !humTrackInstrumental) {
+      await fail("Hum Track needs your hum recording — record or upload again, then retry.");
+      return;
+    } else if (!isSongInpaint && !finalCompositionPlan?.chunks?.length) {
     const planBuilt = await buildElevenSongCompositionPlan({
       apiKey,
       stylePrompt: effectiveStyle,
@@ -842,43 +983,6 @@ async function runElevenlabsGenerationJob({
     if (planBuilt.ok && planBuilt.plan?.chunks?.length) {
       finalCompositionPlan = planBuilt.plan;
       elevenPlanSource = planBuilt.planSource || "elevenlabs_plan_api";
-      if (referenceSongId) {
-        finalCompositionPlan = applyElevenReferenceToCompositionPlan(finalCompositionPlan, {
-          referenceSongId,
-          referenceRangeMs,
-          conditionStrength: referenceConditionStrength,
-          instrumental,
-        });
-        const refChunkCount = finalCompositionPlan.chunks.filter((c) => c.conditioning_ref).length;
-        if (!refChunkCount) {
-          // Multi-chunk plan had no attachable chunks — fall back to single-chunk reference.
-          finalCompositionPlan = buildElevenReferenceCompositionPlan({
-            lyrics: effectiveLyrics,
-            stylePrompt: effectiveStyle,
-            title,
-            musicLengthMs,
-            instrumental,
-            referenceSongId,
-            referenceRangeMs,
-            conditionStrength: referenceConditionStrength,
-            negativeTags: body?.negativeTags,
-            vocalGender,
-            voiceTimbre,
-            nabadVocalToggles,
-            dialectHint,
-            scriptFormat,
-          });
-          elevenPlanSource = "reference_fallback_empty_chunks";
-        } else {
-          elevenPlanSource = `${elevenPlanSource}_reference`;
-          console.log(
-            "[music/generate] elevenlabs multi-chunk reference",
-            taskId,
-            refChunkCount,
-            instrumental ? "instrumental chunks" : "vocal chunks",
-          );
-        }
-      }
       console.log(
         "[music/generate] elevenlabs composition plan",
         taskId,
@@ -924,6 +1028,7 @@ async function runElevenlabsGenerationJob({
         scriptFormat,
       });
       elevenPlanSource = "prompt_fallback";
+    }
     }
     }
 
@@ -1302,6 +1407,17 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
+  if (!lyriaLegacyPromptsEnabled()) {
+    const bareCheck = resolveBareLyriaPrompt(body, {
+      lyrics,
+      instrumental,
+      photoOnly: photoImages.length > 0,
+    });
+    if (!bareCheck.ok) {
+      return sendJson(res, 400, { error: bareCheck.error, code: "lyria_bare_missing_prompt" });
+    }
+  }
+
   const fallbackLyriaPrompt = buildLyriaPromptFromBody(body, {
     stylePrompt,
     lyrics,
@@ -1459,6 +1575,17 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
+  if (!lyriaLegacyPromptsEnabled()) {
+    const bareCheck = resolveBareLyriaPrompt(body, {
+      lyrics,
+      instrumental,
+      photoOnly: photoImages.length > 0,
+    });
+    if (!bareCheck.ok) {
+      return sendJson(res, 400, { error: bareCheck.error, code: "lyria_bare_missing_prompt" });
+    }
+  }
+
   const lyriaPrompt = buildLyriaPromptFromBody(body, {
     stylePrompt,
     lyrics,
@@ -1554,6 +1681,9 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
 }
 
 async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
+  if (elevenLegacyPlansEnabled()) {
+    applyHumTrackGenerateDefaults(body);
+  }
   const apiKey = process.env.ELEVENLABS_API_KEY || "";
   if (!apiKey) return sendJson(res, 500, { error: "Missing ELEVENLABS_API_KEY on server" });
 
@@ -1598,8 +1728,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   }
 
   const hasReference = !isSongEdit && Boolean(body?.hasReference || body?.referenceAudio || body?.referenceAudioUrl);
-  // Hum Track / instrumental-from-melody: allow reference + instrumental.
-  // conditioning_ref is attached to instrumental chunks in applyElevenReferenceToCompositionPlan.
+  // Hum Track uses its own plan; Create + reference uses app-like flow (ref on plan chunk 0).
 
   let balanceAfterDebit = null;
   if (!isAdmin) {
@@ -1631,13 +1760,17 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
         .filter(Boolean)
         .join("\n\n")
     : String(body?.prompt || "").trim();
-  const stylePrompt = isSongEdit ? "song edit" : buildMusicPrompt(body);
+  const stylePrompt = isSongEdit
+    ? "song edit"
+    : elevenLegacyPlansEnabled()
+      ? buildMusicPrompt(body)
+      : String(body?.style || "").trim();
   const title = String(body?.title || "").trim() || (isSongEdit ? "Edited song" : "");
   const instrumental = Boolean(body?.instrumental);
   const taskId = newTaskId("elevenlabs");
   const audioId = `${taskId}_a`;
   const model = resolveElevenMusicModel(isSongEdit ? "music_v2_5" : body?.elevenlabsModel);
-  const musicLengthMs = isSongEdit
+  let musicLengthMs = isSongEdit
     ? Math.max(
         3000,
         Number(editPlanInput.chunks[editPlanInput.chunks.length - 1]?.endMs)
@@ -1722,16 +1855,39 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     referenceRangeMs = Number(body?.referenceDurationMs) > 0
       ? Number(body.referenceDurationMs)
       : estimateReferenceDurationMs(refResolved.buffer);
+    if (body?.humTrack && elevenLegacyPlansEnabled()) {
+      const refMs = Math.max(3000, Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)));
+      musicLengthMs = Math.max(
+        35000,
+        Math.min(90000, Number(body?.musicLengthMs) || refMs + 15000),
+      );
+    }
     console.log(
       "[music/generate] elevenlabs reference uploaded",
       referenceSongId.slice(0, 12),
       refResolved.source || "payload",
       "rangeMs",
       referenceRangeMs,
+      body?.humTrack ? `humTrackMs ${musicLengthMs}` : "",
     );
   }
 
-  if (!isSongEdit && !instrumental && !lyrics && !stylePrompt && !hasReference) {
+  if (!isSongEdit && !elevenLegacyPlansEnabled()) {
+    const bareCheck = resolveBareElevenCompose(body);
+    if (!bareCheck.ok && !hasReference) {
+      return sendJson(res, 400, {
+        error: bareCheck.error,
+        code: "elevenlabs_missing_prompt",
+      });
+    }
+    if (!bareCheck.ok && hasReference) {
+      return sendJson(res, 400, {
+        error:
+          "Reference uploaded, but bare Eleven mode still needs style, prompt, or elevenCompositionPlan in the request.",
+        code: "elevenlabs_missing_prompt",
+      });
+    }
+  } else if (!isSongEdit && !instrumental && !lyrics && !stylePrompt && !hasReference) {
     return sendJson(res, 400, {
       error: "Add lyrics, style, or enable instrumental mode for ElevenLabs.",
       code: "elevenlabs_missing_prompt",
@@ -1760,16 +1916,18 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     providerCostUsd: ELEVENLABS_PROVIDER_COST_USD,
   });
 
-  const elevenPrompt = buildElevenMusicPrompt({
-    stylePrompt,
-    lyrics,
-    title,
-    instrumental,
-    vocalGender: String(body?.vocalGender || "").trim(),
-    nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
-    dialectHint: mergeLyriaDialectHint(body),
-    scriptFormat: String(body?.scriptFormat || "").trim(),
-  });
+  const elevenPrompt = elevenLegacyPlansEnabled()
+    ? buildElevenMusicPrompt({
+        stylePrompt,
+        lyrics,
+        title,
+        instrumental,
+        vocalGender: String(body?.vocalGender || "").trim(),
+        nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
+        dialectHint: mergeLyriaDialectHint(body),
+        scriptFormat: String(body?.scriptFormat || "").trim(),
+      })
+    : "";
 
   const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
 

@@ -145,17 +145,9 @@ export function userExplicitArtworkHint(meta, opts = {}) {
   );
 }
 
-/** Random gradient + song title when no user artwork description. */
-export function shouldUseTitleGradientCover(track, opts = {}) {
-  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
-  if (hasUserPhotoCoverMeta(meta)) return false;
-  if (meta.photoMode || meta.imageOnlyInstrumental) return false;
-  /** Regen: only a hint typed for this regen counts — ignore stale meta.artworkHint. */
-  if (Boolean(opts.coverRegenerate)) {
-    return !String(opts.artworkHint || opts.artworkStyle || "").trim();
-  }
-  if (userExplicitArtworkHint(meta, opts)) return false;
-  return true;
+/** Auto title-gradient covers are off — new songs and regen use Flux (Cover Studio can still pick gradients). */
+export function shouldUseTitleGradientCover(_track, _opts = {}) {
+  return false;
 }
 
 export function coverArtParamsFromTrack(track, opts = {}) {

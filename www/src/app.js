@@ -30449,10 +30449,22 @@ function resolvePlayerCoverArtUrl(artUrl, trackRef) {
   return DEFAULT_SONG_COVER_URL;
 }
 
+/** Portrait player art must not flash the baked square list thumb (title-gradient, framed thumbs). */
+function playerPortraitHasDistinctThumb(track) {
+  const m = track?.meta || {};
+  const portrait = String(m.imageUrl || track?.artUrl || "").trim();
+  const thumb = String(m.imageThumb || "").trim();
+  if (!portrait || !thumb || portrait === thumb) return false;
+  if (String(m.coverSource || "") === "title_gradient") return true;
+  if (m.thumbFrame && typeof m.thumbFrame === "object") return true;
+  return isSquareListCoverUrl(thumb);
+}
+
 /** Smaller list thumb for instant player paint while full portrait loads. */
 function resolvePlayerCoverQuickArt(trackRef) {
   const ref = trackRef || currentPlayerTrackRef;
   if (!ref) return "";
+  if (playerPortraitHasDistinctThumb(ref)) return "";
   const display = trackCoverArtForPlayer(ref);
   const quick = trackCoverArtForSquareTile(ref, { width: 384 });
   if (
@@ -30496,7 +30508,7 @@ function schedulePlayerCoverUpgrade(fullArt, trackId, seq) {
     return;
   }
   const pre = new Image();
-  if (/^https?:\/\//i.test(raw)) pre.crossOrigin = "anonymous";
+  if (/^https?:\/\//i.test(raw) && !isSupabaseSongCoverObjectUrl(raw)) pre.crossOrigin = "anonymous";
   pre.onload = () => {
     if (!playerCoverAssignIsCurrent(img, seq)) return;
     if (trackId && String(currentPlayerTrackRef?.id || "") !== String(trackId)) return;
@@ -30654,6 +30666,9 @@ async function persistTrackCoverIfNeeded(track) {
       };
       items[idx] = { ...prev, artUrl: imageUrl, meta: nextMeta, ts: Date.now() };
       saveLibrary(items);
+      if (String(currentPlayerTrackRef?.id || "") === id) {
+        currentPlayerTrackRef = items[idx];
+      }
       try {
         patchLibraryRowCoverArt(id);
         refreshOwnSongsUi({ soft: false });
@@ -30672,7 +30687,11 @@ async function persistTrackCoverIfNeeded(track) {
           if (onPlayer) {
             const cur = String(els.playerArt?.dataset.coverSrc || "").trim();
             const quietUpgrade = cur.startsWith("data:") && els.playerArt?.complete && els.playerArt.naturalWidth > 0;
-            await applyPlayerCoverReveal(imageUrl, { quiet: quietUpgrade, trackId: id });
+            try {
+              await applyPlayerCoverReveal(imageUrl, { quiet: quietUpgrade, trackId: id });
+            } catch {
+              /* Keep the in-memory data: frame if Storage URL fails to paint. */
+            }
           } else {
             setPlayerMeta({
               title: row.title || "Now Playing",
@@ -30680,7 +30699,7 @@ async function persistTrackCoverIfNeeded(track) {
               artUrl: imageUrl,
               releaseCaption: releaseCaptionForTrack(row) || "",
               remixOf: remixAttributionForTrack(row) || null,
-            }, { trackRef: row });
+            }, { trackRef: row, coverImmediate: true });
           }
         }
       } catch {}
@@ -70387,12 +70406,19 @@ function coverImageRetryUrl(original, attempt) {
   }
 }
 
+function isSupabaseSongCoverObjectUrl(url) {
+  return /\/storage\/v1\/object\/public\/song_covers\//i.test(String(url || "").trim());
+}
+
 function applyCoverImageStateClasses(img, raw, src, empty) {
   if (!img) return;
   img.classList.toggle("isCoverPlaceholder", empty || isBrokenCoverPlaceholder(src) || isLogoCoverUrl(src));
   img.classList.add("coverImg");
-  if (/^https?:\/\//i.test(src)) img.crossOrigin = "anonymous";
-  else img.removeAttribute("crossorigin");
+  const isPlayerArt = img.id === "playerArt" || img.classList.contains("playerArt");
+  if (/^https?:\/\//i.test(src)) {
+    if (isPlayerArt && isSupabaseSongCoverObjectUrl(src)) img.removeAttribute("crossorigin");
+    else img.crossOrigin = "anonymous";
+  } else img.removeAttribute("crossorigin");
 }
 
 /** Assign cover URL without clearing the current frame until the next image is decoded. */
@@ -70575,7 +70601,7 @@ async function applyPlayerCoverReveal(url, opts = {}) {
   }
 
   const pre = new Image();
-  if (/^https?:\/\//i.test(raw)) pre.crossOrigin = "anonymous";
+  if (/^https?:\/\//i.test(raw) && !isSupabaseSongCoverObjectUrl(raw)) pre.crossOrigin = "anonymous";
   await new Promise((resolve, reject) => {
     pre.onload = () => resolve();
     pre.onerror = () => reject(new Error("Cover load failed"));
@@ -70595,10 +70621,20 @@ async function applyPlayerCoverReveal(url, opts = {}) {
   applyCoverImageStateClasses(img, raw, raw, false);
 
   if (opts.quiet) {
+    const keepSrc = String(img.currentSrc || img.src || "").trim();
     img.src = raw;
     try {
       if (typeof img.decode === "function") await img.decode();
-    } catch {}
+      if (!img.naturalWidth) throw new Error("Cover decode empty");
+    } catch {
+      img.dataset.coverSrc = prevRaw;
+      img.dataset.coverRetry = "0";
+      img.dataset.coverFallback = "";
+      if (keepSrc && keepSrc !== raw) img.src = keepSrc;
+      else if (prevRaw) img.src = prevRaw;
+      applyCoverImageStateClasses(img, prevRaw, img.src, false);
+      return false;
+    }
     const artWrap = document.querySelector(".playerArtWrap");
     if (artWrap) applyCoverGlowRgb(artWrap, raw);
     const timeline = document.getElementById("playerTimeline");
@@ -71098,9 +71134,9 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
     const updated = await regenerateAbstractCoverForTrack(track, { artworkHint: hint, regenFromSheet: true });
     if (updated) {
       currentPlayerTrackRef = updated;
-      const artUrl = trackCoverArtForDisplay(updated);
+      const artUrl = trackCoverArtForPlayer(updated);
       const revealed = artUrl && !isDefaultSongCoverUrl(artUrl) && !isLogoCoverUrl(artUrl)
-        ? await applyPlayerCoverReveal(artUrl)
+        ? await applyPlayerCoverReveal(artUrl, { trackId: String(updated.id || "") })
         : false;
       if (revealed) {
         flashPlayerCover();

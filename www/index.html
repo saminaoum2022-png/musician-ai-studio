@@ -1274,7 +1274,57 @@
               </div>
 
               <div class="createPane createPane--lyrics" data-mode="lyrics">
+                <div id="createLyricsAttachStack" class="createLyricsAttachStack" hidden aria-live="polite">
+                  <div id="createLyricsAttachPhoto" class="remixSourceBanner createContextCard createLyricsAttachCard createLyricsAttachCard--photo" hidden>
+                    <div class="remixSourceBannerRow">
+                      <div class="remixSourceBannerCover createLyricsAttachCover" id="createLyricsAttachPhotoCover" aria-hidden="true"></div>
+                      <div class="remixSourceBannerBody">
+                        <div class="remixSourceBannerKicker">Photo mood</div>
+                        <div class="remixSourceBannerTitle" id="createLyricsAttachPhotoTitle">Photo attached</div>
+                        <div class="remixSourceBannerSub" id="createLyricsAttachPhotoSub">Guides style and cover.</div>
+                      </div>
+                      <button id="createLyricsAttachPhotoClear" class="remixSourceBannerClose" type="button" aria-label="Remove photo">
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div id="createLyricsAttachHum" class="remixSourceBanner createContextCard createLyricsAttachCard createLyricsAttachCard--hum" hidden>
+                    <div class="remixSourceBannerRow">
+                      <div class="createLyricsAttachIcon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="22" height="22" focusable="false"><rect x="9" y="3" width="6" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5 11a7 7 0 0 0 14 0"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 18v3"/></svg>
+                      </div>
+                      <div class="remixSourceBannerBody">
+                        <div class="remixSourceBannerKicker">Hum</div>
+                        <div class="remixSourceBannerTitle" id="createLyricsAttachHumTitle">Melody guide</div>
+                        <div class="remixSourceBannerSub" id="createLyricsAttachHumSub">Recorded take</div>
+                      </div>
+                      <button id="createLyricsAttachHumClear" class="remixSourceBannerClose" type="button" aria-label="Remove hum">
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div id="createLyricsAttachVibe" class="remixSourceBanner createContextCard createLyricsAttachCard createLyricsAttachCard--vibe" hidden>
+                    <div class="remixSourceBannerRow">
+                      <div class="createLyricsAttachIcon createLyricsAttachIcon--vibe" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="22" height="22" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 14v4"/><path d="M8 10v8"/><path d="M12 6v12"/><path d="M16 10v8"/><path d="M20 14v4"/></svg>
+                      </div>
+                      <div class="remixSourceBannerBody">
+                        <div class="remixSourceBannerKicker">Vibe</div>
+                        <div class="remixSourceBannerTitle" id="createLyricsAttachVibeTitle">Vibe read</div>
+                        <div class="remixSourceBannerSub" id="createLyricsAttachVibeSub">Inspiration only</div>
+                      </div>
+                      <button id="createLyricsAttachVibeClear" class="remixSourceBannerClose" type="button" aria-label="Remove vibe">
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
                 <div class="field grow inputPanel createSimpleCard" id="lyricsFieldPanel" data-lyrics-mode="write">
+                  <div id="createLyricsAttachFabWrap" class="createLyricsAttachFabWrap" hidden>
+                    <button id="btnCreateLyricsAttach" class="createLyricsAttachFab" type="button" aria-haspopup="dialog" aria-controls="createLyricsAttachSheet" aria-expanded="false" aria-label="Add photo, hum, or vibe">
+                      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+                    </button>
+                  </div>
                   <div class="label inPanelLabel lyricsPanelHead createSimpleCardHead">
                     <div class="lyricsModeTabs" role="tablist" aria-label="How to start">
                       <button id="lyricsModeWrite" class="lyricsModeTab isActive" type="button" role="tab" aria-selected="true">Write</button>
@@ -1377,7 +1427,7 @@
                     <span id="imageMoodSummary" class="imageMoodSummary" hidden></span>
                   </div>
                 </div>
-                <div id="createSimpleStudioHost" class="createSimpleStudioHost field grow inputPanel"></div>
+                <div id="createSimpleStudioHost" class="createSimpleStudioHost" hidden></div>
                 <div id="createSimpleGenerateWrap" class="createSimpleGenerateWrap" hidden>
                   <button id="btnSunoGenerateSimple" class="primary aiGenerate createSimpleGenerateBtn" type="button">Generate song</button>
                 </div>
@@ -1615,6 +1665,17 @@
             <div class="createStudioSheetGrab" aria-hidden="true"></div>
             <p class="label inPanelLabel createStudioSheetTitle">Studio styles</p>
             <div id="createStudioStylesSheetList" class="createStudioSheetList styleSuggestRow createStudioSheetPills"></div>
+          </div>
+
+          <div id="createLyricsAttachBackdrop" class="createStudioSheetBackdrop" hidden aria-hidden="true"></div>
+          <div id="createLyricsAttachSheet" class="createStudioSheet inputPanel" hidden role="dialog" aria-modal="true" aria-label="Add photo, hum, or vibe">
+            <div class="createStudioSheetGrab" aria-hidden="true"></div>
+            <p class="label inPanelLabel createStudioSheetTitle">Add to your song</p>
+            <div id="createLyricsAttachSheetList" class="createStudioSheetList styleSuggestRow createStudioSheetPills" role="menu">
+              <button type="button" class="styleSuggestPill styleSuggestPill--studio" role="menuitem" data-create-attach="photo">Photo</button>
+              <button type="button" class="styleSuggestPill styleSuggestPill--studio" role="menuitem" data-create-attach="hum">Hum</button>
+              <button type="button" class="styleSuggestPill styleSuggestPill--studio createLyricsAttachSheetItem--vibe" role="menuitem" data-create-attach="vibe" hidden>Vibe</button>
+            </div>
           </div>
 
           <div id="humTrackSheet" class="createAltFlow humTrackFlow" hidden aria-hidden="true">

@@ -19761,7 +19761,17 @@ function openFriendsComposeSheet() {
   }
 }
 
-const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet", "imageMoodModal", "vibeReadModal", "coverRegenSheet"];
+const FIXED_OVERLAY_IDS = [
+  "createChooserSheet",
+  "friendsComposeSheet",
+  "imageMoodModal",
+  "vibeReadModal",
+  "coverRegenSheet",
+  "createStudioStylesBackdrop",
+  "createStudioStylesSheet",
+  "createLyricsAttachBackdrop",
+  "createLyricsAttachSheet",
+];
 
 /** Keep full-screen overlays on `body` — `main.grid.routeSwap` transform breaks iOS touch on fixed children. */
 function mountFixedOverlaysToBody() {
@@ -24901,7 +24911,8 @@ function syncPhotoMoodActionButtonsState({ analyzing = false } = {}) {
 function openImageMoodSheet() {
   if (!isNabadClipPhotoDirectFlow()) setCreateEntryIntent("song");
   try {
-    setActiveCreateTab("photo");
+    if (!isCreateLyricsComposerLayout()) setActiveCreateTab("photo");
+    else setActiveCreateTab("lyrics");
   } catch {}
   mountFixedOverlaysToBody();
   const sheet = els.imageMoodModal || document.getElementById("imageMoodModal");
@@ -25104,6 +25115,7 @@ function applyImageMoodToSongFields() {
   try {
     syncGenerateOrbVisibility();
   } catch {}
+  try { syncCreateLyricsAttachStack(); } catch {}
 }
 let pendingGeneratedCoverDataUrl = "";
 const PHOTO_COVER_SESSION_KEY = "nabad.generation.photoCover.v1";
@@ -25175,6 +25187,7 @@ async function applyCoverOnlyFromPhotoMood() {
     els.imageMoodSummary.textContent = "Cover attached — generate when you're ready.";
     els.imageMoodSummary.hidden = false;
   }
+  try { syncCreateLyricsAttachStack(); } catch {}
   return true;
 }
 
@@ -25204,6 +25217,7 @@ async function applyPhotoForNabadClipDirect() {
     els.imageMoodSummary.hidden = false;
   }
   try { syncNabadClipCreateUi(); } catch {}
+  try { syncCreateLyricsAttachStack(); } catch {}
   return true;
 }
 
@@ -25254,7 +25268,10 @@ function setCreateVibeAttachmentPreview(summary = "", fileName = "") {
 function openVibeReadSheet() {
   if (!nabadVibeEnabled()) return;
   setCreateEntryIntent("song");
-  try { setActiveCreateTab("vibe"); } catch {}
+  try {
+    if (!isCreateLyricsComposerLayout()) setActiveCreateTab("vibe");
+    else setActiveCreateTab("lyrics");
+  } catch {}
   mountFixedOverlaysToBody();
   const sheet = els.vibeReadModal || document.getElementById("vibeReadModal");
   if (!sheet) return;
@@ -25400,6 +25417,7 @@ function applyVibeReadToSongFields() {
   setCreateVibeAttachmentPreview(`${summaryText} · inspiration only`, vibeReadSourceName);
   try { syncGenerateOrbVisibility(); } catch {}
   try { renderStyleSelectedChips(); } catch {}
+  try { syncCreateLyricsAttachStack(); } catch {}
 }
 
 async function analyzeVibeRead() {
@@ -26945,6 +26963,7 @@ function refreshVocalReferenceUi() {
   // Keep the persona banner copy in sync with whether a reference is
   // attached — that's the only way the warning state can be triggered.
   try { renderActivePersonaBanner(); } catch {}
+  try { syncCreateLyricsAttachStack(); } catch {}
 }
 
 function setVocalRefFile(file, label, origin) {
@@ -80094,7 +80113,12 @@ function syncCreateSimpleChrome() {
   const box = document.getElementById("simpleBox");
   const tabs = document.querySelector(".createTabs");
   if (aura) aura.hidden = !simple;
-  if (studioHost) studioHost.hidden = !simple;
+  if (studioHost) {
+    studioHost.hidden = !simple;
+    studioHost.classList.toggle("field", simple);
+    studioHost.classList.toggle("grow", simple);
+    studioHost.classList.toggle("inputPanel", simple);
+  }
   if (toolbar) toolbar.hidden = !simple;
   if (box) box.classList.toggle("createSimpleLayout", simple);
   if (tabs) {
@@ -80126,6 +80150,264 @@ function syncCreateSimpleChrome() {
   syncCreateSimpleAura();
 }
 
+function isCreateLyricsComposerLayout() {
+  try {
+    if (typeof is80sYouCreateFlow === "function" && is80sYouCreateFlow()) return false;
+  } catch {}
+  const onGenerate = String(document.body.getAttribute("data-route") || "") === "generate";
+  return onGenerate && createFlowModeEnabled() && getCreateFlowMode() === "advanced";
+}
+
+function closeCreateLyricsAttachSheet() {
+  const back = document.getElementById("createLyricsAttachBackdrop");
+  const sheet = document.getElementById("createLyricsAttachSheet");
+  const btn = document.getElementById("btnCreateLyricsAttach");
+  if (btn) btn.setAttribute("aria-expanded", "false");
+  if (back) {
+    back.classList.remove("isOpen");
+    back.setAttribute("aria-hidden", "true");
+    setTimeout(() => { if (back) back.hidden = true; }, 260);
+  }
+  if (sheet) {
+    sheet.classList.remove("isOpen");
+    setTimeout(() => { if (sheet) sheet.hidden = true; }, 320);
+  }
+}
+
+function openCreateLyricsAttachSheet() {
+  mountFixedOverlaysToBody();
+  const vibeBtn = document.querySelector("#createLyricsAttachSheetList .createLyricsAttachSheetItem--vibe");
+  if (vibeBtn) vibeBtn.hidden = !nabadVibeEnabled();
+  const back = document.getElementById("createLyricsAttachBackdrop");
+  const sheet = document.getElementById("createLyricsAttachSheet");
+  const btn = document.getElementById("btnCreateLyricsAttach");
+  if (btn) btn.setAttribute("aria-expanded", "true");
+  if (back) {
+    back.classList.remove("isOpen");
+    back.hidden = false;
+    back.setAttribute("aria-hidden", "false");
+  }
+  if (sheet) {
+    sheet.classList.remove("isOpen");
+    sheet.hidden = false;
+    sheet.setAttribute("aria-hidden", "false");
+  }
+  requestAnimationFrame(() => {
+    back?.classList.add("isOpen");
+    sheet?.classList.add("isOpen");
+  });
+}
+
+function handleCreateLyricsAttachChoice(kind) {
+  closeCreateLyricsAttachSheet();
+  haptic("light");
+  if (kind === "photo") {
+    openImageMoodSheet();
+    return;
+  }
+  if (kind === "hum") {
+    if (!proFeatureAllowed()) {
+      requireProFeature("Hum");
+      return;
+    }
+    openVocalRecorderModal();
+    return;
+  }
+  if (kind === "vibe") {
+    openVibeReadSheet();
+  }
+}
+
+function clearCreateLyricsAttachPhoto() {
+  imageMoodAppliedForNextGen = false;
+  imageMoodCoverOnlyForNextGen = false;
+  imageMoodData = null;
+  imageMoodCoverDataUrl = "";
+  clearPhotoCoverForGeneration();
+  setCreatePhotoAttachmentPreview("", "");
+  if (els.imageMoodSummary) {
+    els.imageMoodSummary.textContent = "";
+    els.imageMoodSummary.hidden = true;
+  }
+  try { syncGenerateOrbVisibility(); } catch {}
+  syncCreateLyricsAttachStack();
+}
+
+function clearCreateLyricsAttachVibe() {
+  vibeReadAppliedForNextGen = false;
+  vibeReadData = null;
+  vibeReadSourceName = "";
+  setCreateVibeAttachmentPreview("", "");
+  if (els.vibeReadSummary) {
+    els.vibeReadSummary.textContent = "";
+    els.vibeReadSummary.hidden = true;
+  }
+  try { syncGenerateOrbVisibility(); } catch {}
+  try { renderStyleSelectedChips(); } catch {}
+  syncCreateLyricsAttachStack();
+}
+
+function syncCreateLyricsAttachStack() {
+  const stack = document.getElementById("createLyricsAttachStack");
+  if (!stack) return;
+  const composer = isCreateLyricsComposerLayout();
+  const photoCard = document.getElementById("createLyricsAttachPhoto");
+  const humCard = document.getElementById("createLyricsAttachHum");
+  const vibeCard = document.getElementById("createLyricsAttachVibe");
+  if (!composer) {
+    stack.hidden = true;
+    if (photoCard) photoCard.hidden = true;
+    if (humCard) humCard.hidden = true;
+    if (vibeCard) vibeCard.hidden = true;
+    return;
+  }
+
+  const coverEl = document.getElementById("createLyricsAttachPhotoCover");
+  const photoTitle = document.getElementById("createLyricsAttachPhotoTitle");
+  const photoSub = document.getElementById("createLyricsAttachPhotoSub");
+  const humTitle = document.getElementById("createLyricsAttachHumTitle");
+  const humSub = document.getElementById("createLyricsAttachHumSub");
+  const vibeTitle = document.getElementById("createLyricsAttachVibeTitle");
+  const vibeSub = document.getElementById("createLyricsAttachVibeSub");
+
+  const coverUrl = String(imageMoodCoverDataUrl || resolvePendingPhotoCoverDataUrl() || "").trim();
+  const hasPhoto = Boolean(
+    imageMoodAppliedForNextGen
+    || imageMoodCoverOnlyForNextGen
+    || coverUrl.startsWith("data:")
+  );
+  if (photoCard) {
+    photoCard.hidden = !hasPhoto;
+    if (hasPhoto) {
+      const summary = String(els.imageMoodSummary?.textContent || "").trim()
+        || String(sanitizeImageMoodForClient(imageMoodData || {})?.concept || "").trim()
+        || "Photo attached";
+      if (photoTitle) photoTitle.textContent = summary.slice(0, 72);
+      if (photoSub) {
+        photoSub.textContent = imageMoodCoverOnlyForNextGen
+          ? "Cover only for your next song"
+          : "Style tags and mood for this song";
+      }
+      if (coverEl) {
+        coverEl.style.backgroundImage = coverUrl.startsWith("data:") ? `url("${coverUrl}")` : "";
+      }
+    }
+  }
+
+  const refFile = getVocalReferenceFile();
+  const hasHum = Boolean(refFile && refFile.size);
+  if (humCard) {
+    humCard.hidden = !hasHum;
+    if (hasHum) {
+      if (humTitle) humTitle.textContent = refFile.name || "Melody guide";
+      let originLabel = "Attached";
+      if (vocalRefOrigin === "upload") originLabel = "Uploaded file";
+      else if (vocalRefOrigin === "record") originLabel = "Recorded take";
+      else if (vocalRefOrigin === "remix") originLabel = "Remix source";
+      const kb = Math.max(1, Math.round(refFile.size / 1024));
+      if (humSub) humSub.textContent = `${originLabel} · ~${kb} KB`;
+    }
+  }
+
+  const vibeSummary = String(els.vibeReadSummary?.textContent || "").trim();
+  const hasVibe = Boolean(vibeReadAppliedForNextGen && (vibeSummary || vibeReadData));
+  if (vibeCard) {
+    vibeCard.hidden = !hasVibe;
+    if (hasVibe) {
+      if (vibeTitle) {
+        vibeTitle.textContent = vibeReadSourceName || "Vibe read";
+      }
+      if (vibeSub) {
+        vibeSub.textContent = vibeSummary || "Inspiration only — not a copy";
+      }
+    }
+  }
+
+  const any = hasPhoto || hasHum || hasVibe;
+  stack.hidden = !any;
+}
+
+function syncCreateLyricsComposerChrome() {
+  const composer = isCreateLyricsComposerLayout();
+  if (composer) {
+    document.body.setAttribute("data-create-composer", "1");
+  } else {
+    document.body.removeAttribute("data-create-composer");
+  }
+  const fabWrap = document.getElementById("createLyricsAttachFabWrap");
+  if (fabWrap) fabWrap.hidden = !composer;
+  const tabs = document.querySelector(".createTabs");
+  if (tabs) {
+    if (composer || (createFlowModeEnabled() && getCreateFlowMode() === "simple")) {
+      tabs.hidden = true;
+      tabs.style.display = "none";
+    } else if (String(document.body.getAttribute("data-route") || "") === "generate") {
+      tabs.hidden = false;
+      tabs.style.display = "";
+    }
+  }
+  if (composer) {
+    try { setActiveCreateTab("lyrics"); } catch {}
+  }
+  syncCreateLyricsAttachStack();
+  if (!composer) closeCreateLyricsAttachSheet();
+}
+
+function wireCreateLyricsAttachOnce() {
+  if (wireCreateLyricsAttachOnce._done) return;
+  wireCreateLyricsAttachOnce._done = true;
+  const btn = document.getElementById("btnCreateLyricsAttach");
+  if (btn) {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      haptic("light");
+      openCreateLyricsAttachSheet();
+    });
+  }
+  const attachBack = document.getElementById("createLyricsAttachBackdrop");
+  if (attachBack && !attachBack.dataset.bound) {
+    attachBack.dataset.bound = "1";
+    attachBack.addEventListener("click", () => closeCreateLyricsAttachSheet());
+  }
+  const attachList = document.getElementById("createLyricsAttachSheetList");
+  if (attachList && !attachList.dataset.bound) {
+    attachList.dataset.bound = "1";
+    attachList.addEventListener("click", (e) => {
+      const item = e.target?.closest?.("[data-create-attach]");
+      if (!item) return;
+      handleCreateLyricsAttachChoice(String(item.getAttribute("data-create-attach") || ""));
+    });
+  }
+  document.getElementById("createLyricsAttachPhotoClear")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    clearCreateLyricsAttachPhoto();
+  });
+  document.getElementById("createLyricsAttachHumClear")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    clearVocalReferenceSelection();
+  });
+  document.getElementById("createLyricsAttachVibeClear")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    clearCreateLyricsAttachVibe();
+  });
+  document.getElementById("createLyricsAttachPhoto")?.addEventListener("click", (e) => {
+    if (e.target?.closest?.("button")) return;
+    openImageMoodSheet();
+  });
+  document.getElementById("createLyricsAttachHum")?.addEventListener("click", (e) => {
+    if (e.target?.closest?.("button")) return;
+    if (!proFeatureAllowed()) {
+      requireProFeature("Hum");
+      return;
+    }
+    openVocalRecorderModal();
+  });
+  document.getElementById("createLyricsAttachVibe")?.addEventListener("click", (e) => {
+    if (e.target?.closest?.("button")) return;
+    openVibeReadSheet();
+  });
+}
+
 function renderCreateStudioStylesSheet() {
   const list = document.getElementById("createStudioStylesSheetList");
   if (!list) return;
@@ -80141,18 +80423,24 @@ function renderCreateStudioStylesSheet() {
 }
 
 function openCreateStudioStylesSheet() {
+  mountFixedOverlaysToBody();
   renderCreateStudioStylesSheet();
   const back = document.getElementById("createStudioStylesBackdrop");
   const sheet = document.getElementById("createStudioStylesSheet");
   if (back) {
+    back.classList.remove("isOpen");
     back.hidden = false;
     back.setAttribute("aria-hidden", "false");
-    requestAnimationFrame(() => back.classList.add("isOpen"));
   }
   if (sheet) {
+    sheet.classList.remove("isOpen");
     sheet.hidden = false;
-    requestAnimationFrame(() => sheet.classList.add("isOpen"));
+    sheet.setAttribute("aria-hidden", "false");
   }
+  requestAnimationFrame(() => {
+    back?.classList.add("isOpen");
+    sheet?.classList.add("isOpen");
+  });
 }
 
 function closeCreateStudioStylesSheet() {
@@ -80187,6 +80475,10 @@ function mountCreateStudioBlockForFlowMode(mode) {
   block.classList.toggle("inputPanel--style", !simple);
   block.classList.toggle("field", !simple);
   block.classList.toggle("grow", !simple);
+  simpleHost.hidden = !simple;
+  simpleHost.classList.toggle("field", simple);
+  simpleHost.classList.toggle("grow", simple);
+  simpleHost.classList.toggle("inputPanel", simple);
 }
 
 function syncCreateFlowLayoutUi() {
@@ -80227,6 +80519,7 @@ function syncCreateFlowLayoutUi() {
     els.sunoPrompt.placeholder = "Describe your song idea…";
   }
   syncCreateSimpleChrome();
+  syncCreateLyricsComposerChrome();
   syncLyriaStudioStyleUi();
   syncLyriaStudioSoundPromptPreview();
 }
@@ -87445,8 +87738,13 @@ function setActiveCreateTab(mode, opts = {}) {
     el.setAttribute("aria-selected", active ? "true" : "false");
   });
   if (createPanesWrap) createPanesWrap.dataset.mode = mode;
+  const composerLyricsOnly = isCreateLyricsComposerLayout();
   document.querySelectorAll(".createPane").forEach((p) => {
-    p.hidden = p.dataset.mode !== mode;
+    if (composerLyricsOnly) {
+      p.hidden = p.dataset.mode !== "lyrics";
+    } else {
+      p.hidden = p.dataset.mode !== mode;
+    }
   });
   try { syncCreateGenerateDock(); } catch {}
 }
@@ -87483,6 +87781,7 @@ if (createPhotoCtaBtn) {
   });
 }
 wireCreatePhotoSoloBannerOnce();
+wireCreateLyricsAttachOnce();
 const createVibeCtaBtn = document.getElementById("createVibeCta");
 if (createVibeCtaBtn) {
   createVibeCtaBtn.addEventListener("click", () => {

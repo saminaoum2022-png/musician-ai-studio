@@ -5,7 +5,7 @@ import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParams
 import { generateTitleGradientCoverDataUrl, generateTitleGradientThumbDataUrl, defaultThumbOffsetYForTitleY, TITLE_GRADIENT_PLAYER_Y } from "./title-gradient-cover.js";
 import { applyNabadColorWashToDataUrl } from "./nabad-color-wash.js";
 import { fnv1a } from "./prompt.js";
-import { buildAbstractCoverPrompt, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, resolveRegenMoodFromHint, shouldUseConcreteSubjectDna, userHintRequestsDaylight } from "./prompt.js";
+import { buildAbstractCoverPrompt, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, directorSceneHintBrightEnough, resolveStoryTheme, resolveRegenMoodFromHint, shouldUseConcreteSubjectDna, userHintRequestsDaylight } from "./prompt.js";
 import { resolveVisualDirection } from "./visual-director/director.mjs";
 import { nabadIdentityPhrases } from "./visual-director/nabad-identity.mjs";
 import { DEFAULT_SONG_COVER_URL, isDefaultSongCoverUrl } from "./placeholders.js";
@@ -128,8 +128,9 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
   const built = buildAbstractCoverPrompt(promptInput, {
     regenSalt,
     regenVariety: !hintOverride,
-    /** No-hint regen uses REGEN_VARIETY scenes in prompt.js — director heuristics skew night/dark and must not feed Flux scratch. */
-    directorSceneHint: hintOverride ? (vd.sceneHint || "") : "",
+    directorSceneHint: hintOverride
+      ? (vd.sceneHint || "")
+      : (directorSceneHintBrightEnough(vd.sceneHint) ? (vd.sceneHint || "") : ""),
     nabadIdentityPhrases: identityPhrases,
     visualDirection: vd.direction || undefined,
     userArtworkOverride: hintOverride || undefined,

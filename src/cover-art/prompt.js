@@ -47,7 +47,7 @@ const USER_DAYLIGHT_PALETTE =
  */
 
 /** Bump when cover prompt policy changes. */
-export const COVER_PROMPT_POLICY_VERSION = 33;
+export const COVER_PROMPT_POLICY_VERSION = 34;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -98,12 +98,13 @@ const FLUX_ABSTRACT_SCENES = [
 
 /** Default Nabad covers when no template/artwork theme is sent. */
 const NABAD_PULSE_SCENES = [
-  "abstract sonic pulse rings expanding through a dark studio void, teal-cyan shockwaves and violet bloom, music visualization, no people",
-  "luminous sound waves drifting across a moody recording studio, speaker cones and mixing-desk LEDs in haze, teal-violet grade, no people",
-  "heartbeat pulse of light in deep black, concentric frequency rings in cyan and violet, premium Nabad music artwork, no people",
-  "atmospheric music studio at night, empty vocal-booth glass catching teal spill and violet haze, quiet pulse of LED meters, no people",
-  "flowing audio waveform sculpture in mid-air over a dark soundstage, glassy teal-violet energy, no people",
-  "sub-bass pulse lighting a dark stage floor, concentric ripples of cyan light through violet fog, no people",
+  "cinematic empty stage with teal-violet spill light and soft haze, balanced natural exposure, premium album mood, no people",
+  "symbolic still life on charcoal velvet, vinyl record and glass catching rose-gold and cyan studio rim light, editorial photograph, no people",
+  "sunlit coastal horizon at dusk, pearlescent sky glow with teal-violet grade, cinematic depth, no people",
+  "elegant interior with chandelier bokeh, champagne gold warmth and soft cyan fill light, celebration mood, no people",
+  "serene botanical still life, bright window light on dried flowers, teal-violet color grade accents, no people",
+  "minimal studio still life, glass catching teal-cyan light beams on warm wood surface, lifted midtones, no people",
+  "abstract luminous sonic aura in teal and violet, soft bloom on muted charcoal ground, premium Nabad music artwork, no people",
 ];
 
 const NABAD_COLOR_LOCK =
@@ -157,7 +158,7 @@ const NEGATIVE_TEXT_PROMPT =
   "plain solid square block, flat color rectangle, empty geometric block, meaningless placeholder shape, solid teal square, featureless box, blank panel, low detail abstract block, text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, cursive, script font, decorative lettering, word art, letter shapes, holiday lettering, christmas text, greeting card text, festive banner, neon sign with words, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, graffiti letters, title card, greeting card, banner text, embroidered text, carved letters, glowing words, light text, 3d text, people, person, human, humans, humanoid, man, woman, child, baby, crowd, dancer, performer, musician, face, faces, portrait, portraits, silhouette, silhouettes, body, bodies, hand, hands, finger, fingers, arm, arms, leg, legs, head, heads, eye, eyes, mouth, mouths, teeth, nose, ear, skin, anatomy, bad anatomy, deformed anatomy, extra fingers, missing fingers, six fingers, duplicate limbs, floating limbs, mutated hands, broken hands, multiple mouths, crossed eyes, lazy eye, crooked eyes, disfigured face, cropped face, duplicate subject, floating objects, blurry, low quality, jpeg artifacts, oversaturated, distorted perspective, elongated face, stretched portrait, vertically stretched body, squashed proportions, wrong aspect ratio, fisheye portrait, close-up portrait, beauty portrait, fashion portrait, headshot, detailed facial features, recognizable face, portrait photography, full body portrait, tall thin figure, unnaturally long neck, stretched silhouette, selfie, model, fashion model, vertically stretched object, elongated object, stretched props, unnaturally tall object, macro close-up, extreme close-up, oversized object filling entire frame, giant prop dominating frame, object too large, fills frame edge to edge, cropped too tight, tight crop on single prop, low resolution zoom, object touching all four edges";
 
 const STYLE_CORE =
-  "premium cinematic photograph, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette, physically plausible lighting, atmospheric depth, immersive environment, balanced vertical composition, symbolic objects and environments, no human subjects";
+  "premium cinematic photograph, elegant composition, rich color grading, high-end editorial look, natural balanced exposure with luminous teal and violet accents, deep teal and violet palette, physically plausible lighting, atmospheric depth, immersive environment, balanced vertical composition, symbolic objects and environments, no human subjects";
 
 /** Flux Schnell defaults to candlelit still lifes when the prompt is vague. */
 const NO_CANDLE_GUARD =
@@ -204,10 +205,10 @@ const MOOD_PALETTES = {
   chill: "deep teal, cool cyan lighting, soft cyan mist, muted violet atmospheric glow",
   wedding: "champagne gold warm glow, ivory soft light, soft violet atmospheric haze",
   hype: "aggressive teal, cool cyan rim light, sharp violet, soft purple atmospheric glow, high contrast",
-  dark: "near-black void, deep purple atmospheric haze, toxic teal trace glow",
+  dark: "charcoal backdrop, deep purple atmospheric haze, teal rim glow, readable shadows not crushed black",
   dreamy: "lavender soft glow, teal mist, pearlescent white light",
   epic: "royal violet, soft purple atmospheric glow, teal beam, bright gold crest light",
-  default: "deep void black, deep teal, cool cyan lighting, rich violet, soft purple atmospheric glow, rose-gold accent warm glow",
+  default: "rich teal and cyan lighting, soft violet atmospheric glow, rose-gold accent warm glow, lifted midtones, natural photoreal exposure",
 };
 
 /** Story themes — chosen from title + lyrics + style, highest match wins. */
@@ -1154,7 +1155,7 @@ function fluxPhotoLeadForMode(visualMode) {
 }
 
 /** Trim Flux-sized prompts to 2048 cap — keep the head (scene + hint), drop redundant tail safety. */
-function compressPromptForFlux(prompt, maxLen) {
+export function compressPromptForFlux(prompt, maxLen) {
   let s = String(prompt || "").trim();
   if (s.length <= maxLen) return s;
   const dropPatterns = [
@@ -1175,10 +1176,14 @@ function compressPromptForFlux(prompt, maxLen) {
   return (lastComma > maxLen * 0.55 ? cut.slice(0, lastComma) : cut).trim();
 }
 
-/** Legacy COVER_FLUX_PROMPT_MODE=legacy only — same bare baseline as flux-prompt.cjs. */
-export function buildFluxCoverPrompt(_prompt, { userArtwork = "" } = {}) {
+/** Cloudflare Flux — compress the full art-director prompt (COVER_FLUX_PROMPT_MODE=scratch uses flux-prompt.cjs instead). */
+export function buildFluxCoverPrompt(longPrompt, { userArtwork = "" } = {}) {
   const userArt = positiveOnlyFluxUserHint(String(userArtwork || "").trim());
-  return (userArt || "music").slice(0, FLUX_PROMPT_MAX);
+  let p = compressPromptForFlux(longPrompt, FLUX_PROMPT_MAX);
+  if (userArt && !p.toLowerCase().includes(userArt.slice(0, 40).toLowerCase())) {
+    p = compressPromptForFlux(`${userArt}, ${p}`, FLUX_PROMPT_MAX);
+  }
+  return p;
 }
 
 function positiveOnlyFluxUserHint(text) {
@@ -1215,6 +1220,15 @@ function buildCoverSeed(input, storyTheme, bucketKey, userArtwork, regenSalt = "
 }
 
 /** Strip human language from scenes; never generate people in cover art. */
+const DIRECTOR_DARK_SCENE_RE =
+  /\b(at night|nightclub|void black|deep black|deep void|stormy atmospheric sky over dark|wet urban street at night|recording studio at night|vocal-booth glass|soundstage at night)\b/i;
+
+export function directorSceneHintBrightEnough(hint) {
+  const s = String(hint || "").trim();
+  if (!s) return false;
+  return !DIRECTOR_DARK_SCENE_RE.test(s);
+}
+
 export function enforceNoHumansScene(scene) {
   let s = String(scene || "").trim();
   if (!s) return s;
@@ -1289,6 +1303,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     : regenLitPool
       ? (regenMood?.scene
         || (storySceneOkForRegen ? storyScene : "")
+        || (directorSceneHintBrightEnough(directorSceneHint) ? directorSceneHint : "")
         || pickFrom(REGEN_VARIETY_POOL, songId, regenSaltKey || "regen-variety"))
     : forceMusicFallback || !explicitCoverTheme
       ? pickFrom(NABAD_PULSE_SCENES, songId, regenSaltKey || "nabad-pulse")
@@ -1314,7 +1329,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     ? "soft teal and cyan fill light, rich violet atmospheric glow, rose-gold accent, lifted midtones, readable colors"
     : moodPaletteForBucket(bucketKey);
   const compositionSalt = regenSaltKey || "";
-  const regenBrightness = regenSaltKey ? REGEN_BRIGHTNESS_GUARD : "";
+  const regenBrightness = regenSaltKey || pulseDefault ? REGEN_BRIGHTNESS_GUARD : "";
   const composition = creativeMode
     ? COMPOSITIONS[fnv1a(`${songId}:comp:${compositionSalt}`) % COMPOSITIONS.length]
     : compositionPhraseForCover(
@@ -1411,10 +1426,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       }
     } else {
       parts = [
-        regenSaltKey ? REGEN_COLOR_LOCK : NABAD_COLOR_LOCK,
-        nabadIdentityPhrases || (regenSaltKey
-          ? "soft charcoal ground with luminous depth, teal-violet atmospheric haze, lifted midtones"
-          : "deep void black ground, teal-violet atmospheric haze, soft cyan fill"),
+        REGEN_COLOR_LOCK,
+        nabadIdentityPhrases || "soft charcoal ground with luminous depth, teal-violet atmospheric haze, lifted midtones",
         autoFrame,
         PLAYER_WIDE_COMPOSE_GUARD,
         styleCore,

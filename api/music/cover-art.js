@@ -69,9 +69,11 @@ async function writeFluxScene(ctx, seed) {
   }
 }
 
-/** COVER_FLUX_PROMPT_MODE=legacy switches Cloudflare Flux back to the old long prompt (default: scratch). */
-function fluxLegacyPromptMode() {
-  return /^(legacy|old)$/i.test(String(process.env.COVER_FLUX_PROMPT_MODE || "").trim());
+/** COVER_FLUX_PROMPT_MODE=scratch uses the short scratch prompt; default is the full art-director prompt. */
+function fluxScratchPromptMode() {
+  const mode = String(process.env.COVER_FLUX_PROMPT_MODE || "").trim().toLowerCase();
+  if (/^(legacy|old|rich|full)$/i.test(mode)) return false;
+  return /^(scratch|short|minimal)$/i.test(mode);
 }
 
 async function getPromptModule() {
@@ -177,7 +179,7 @@ async function fetchAbstractCoverImage({
   const provider = preferredProvider || resolveDefaultCoverImageProvider();
 
   if (provider === "cloudflare") {
-    const useScratch = !fluxLegacyPromptMode() && fluxContext;
+    const useScratch = fluxScratchPromptMode() && fluxContext;
     let fluxPrompt;
     if (useScratch) {
       const ctx = { ...fluxContext, userArtwork: fluxContext.userArtwork || userArtwork || "", seed };

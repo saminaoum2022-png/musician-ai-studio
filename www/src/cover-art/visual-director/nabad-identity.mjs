@@ -10,8 +10,8 @@ export const NABAD_DNA_VERSION = 1;
 
 /** @type {Record<NabadRootId, string>} */
 export const NABAD_ROOT_PHRASES = {
-  void: "deep void black ground with luminous depth",
-  atmosphere: "teal-violet atmospheric haze and soft cyan fill",
+  void: "rich charcoal backdrop with soft fill light and luminous depth, lifted midtones",
+  atmosphere: "teal-violet atmospheric haze, soft cyan fill, readable exposure",
   accent: "subtle rose-gold accent glow at low intensity",
   bloom: "glassy diffusion and soft luminous edges",
   single_hero: "single clear focal subject at modest scale",

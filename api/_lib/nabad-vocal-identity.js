@@ -45,14 +45,14 @@ const NABAD_VOCAL_FX_ELEVEN_TAGS = Object.freeze({
 const NABAD_VOCAL_MATRIX_ELEVEN_TAGS = Object.freeze({
   male_ar: [
     "Nabad male Arabic vocal identity",
-    "warm baritone-tenor range",
+    "warm baritone range",
     "conversational delivery",
     "microtonal oriental runs",
     "melismatic ornaments",
   ],
   male_en: [
     "Nabad male English vocal identity",
-    "warm baritone-tenor range",
+    "warm baritone range",
     "rhythmic syncopated delivery",
     "smooth modern R&B phrasing",
   ],
@@ -86,9 +86,9 @@ const NABAD_VOCAL_FX_DEFAULTS = Object.freeze({
 
 const NABAD_VOCAL_MATRIX = Object.freeze({
   male_ar:
-    "Lead Male Vocal with Nabad identity: warm baritone-tenor range, conversational delivery with subtle vocal fry at line endings, accented with microtonal oriental runs and melismatic ornaments.",
+    "Lead Male Vocal with Nabad identity: warm baritone range, low-mid chest voice, conversational close-mic delivery with subtle vocal fry at line endings, microtonal oriental runs and light melismatic ornaments, chorus hook stays mid-range baritone chest voice.",
   male_en:
-    "Lead Male Vocal with Nabad identity: warm baritone-tenor range, rhythmic syncopated delivery with subtle vocal fry at phrase endings, smooth modern R&B phrasing and clean vocal agility.",
+    "Lead Male Vocal with Nabad identity: warm baritone range, low-mid chest voice, rhythmic syncopated delivery with subtle vocal fry at phrase endings, smooth modern R&B phrasing, chorus hook stays mid-range baritone chest voice.",
   female_ar:
     "Lead Female Vocal with Nabad identity: intimate breathy whisper-pop delivery transitioning into a rich emotional chest voice, soft vibrato, and oriental melismatic ornaments.",
   female_en:

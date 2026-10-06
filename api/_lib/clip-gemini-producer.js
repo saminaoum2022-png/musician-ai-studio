@@ -52,7 +52,7 @@ Include when inferable:
    - Bass that follows the chords. Skip generic 808 / "ear-candy" / risers unless the genre is trap.
 6. Hook dynamics: motif in the first 2 seconds, chorus peak, clean last phrase.
 7. Vocal: honor vocal_gender, vocal_character_id, and vocal_lyria_hint.
-   Default male (warm / empty / unknown character): modern pop TENOR — mid-range, on-pitch, radio-ready. Never default to baritone, bass, rasp, or jabali folk.
+   Default male (warm / empty / unknown character): modern pop baritone — low-mid chest voice, conversational close-mic, on-pitch, radio-ready. Chorus hook stays mid-range baritone. Use bass, rasp, or jabali folk only when vocal_character_id names them.
    Default female: warm modern pop alto.
    Folk / grit / deep / soft characters only when vocal_character_id names them.
    Conversational close-mic; belt only if the character or genre needs it.
@@ -101,11 +101,11 @@ OUTPUT SCHEMA:
 - If instrumental is true: lines may be empty; use {instrumental} direction in section text via empty lines + styles that exclude vocals; every chunk negative_styles must include "vocals" and "lyrics".
 
 === VOCAL PERFORMANCE (critical — every vocal chunk) ===
-- Honor vocal_gender from input: "f" → expressive female vocal with clear tone; "m" → warm male TENOR pop vocal (NOT deep bass, NOT baritone).
+- Honor vocal_gender from input: "f" → expressive female vocal with clear tone; "m" → warm male baritone pop vocal, low-mid chest, mid-range chorus hook.
 - Merge vocal_lyria_hint into positive_styles when present.
 - EVERY vocal chunk positive_styles MUST include the exact BPM tag (e.g. "108 BPM") plus: "on-pitch accurate vocals", "expressive vocal performance", "natural lyrical phrasing", "clear diction".
 - Verse / pre-chorus: emotional storytelling, breath and dynamics, melody-led singing — still on groove.
-- Chorus / hook: "powerful chorus lift", "sing-along hook", "full-voice energy" — allow melisma/vibrato when genre fits (R&B, Arabic, ballad).
+- Chorus / hook: "sing-along hook", "mid-range baritone chorus lift" for male vocal_gender m; "warm controlled chorus lift" for female — allow light melisma when genre fits (R&B, Arabic, ballad), avoid shout or tenor belt on male leads.
 - EVERY vocal chunk negative_styles MUST include only: "off-key vocals", "pitchy singing", "mumbled lyrics", "spoken word".
 - Arabic lyrics are fine — still use English tags for all styles. Lines can breathe; honor dialect ornamentation when dialect_hint suggests it.
 
@@ -192,7 +192,7 @@ Include when inferable:
 5. ONE memorable melodic hook a listener can hum; verse/chorus contrast; pocketed drums.
 6. Layers: pick a clear lead + harmonic bed + bass + drum identity (do not stack every instrument).
 7. Dynamics: sparse intro → fuller chorus → breathing bridge → resolved outro.
-8. Vocal: gender, character, close-mic conversational delivery from inputs; merge vocal_lyria_hint if present.
+8. Vocal: gender, character, close-mic conversational delivery from inputs; male → warm baritone low-mid chest, chorus stays baritone mid-range; merge vocal_lyria_hint if present.
 9. Arabic/dialect: honor dialect_hint for vocabulary and vocal color when present.
 
 Be specific ("palm-muted guitar stabs", "808 on downbeats", "mijwiz hook") — avoid vague filler.

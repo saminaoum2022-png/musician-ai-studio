@@ -469,9 +469,9 @@ function scheduleBackgroundWork(promise) {
 function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
   if (!lyriaLegacyPromptsEnabled()) {
     if (isLyriaIdeaPromptBody(body)) {
-      return "pipeline: lyria_bare_passthrough · idea → style + brief (Lyria writes lyrics)";
+      return "pipeline: lyria_bare_passthrough · idea → style (dialect/addressee) + brief + topic hint";
     }
-    return "pipeline: lyria_bare_passthrough (no server prompt injection)";
+    return "pipeline: lyria_bare_passthrough · style includes dialect/addressee when set";
   }
   if (resolveLyriaPromptV2Enabled(body, isAdmin)) {
     return "pipeline: lyria_prompt_v2 (no gemini producer)";

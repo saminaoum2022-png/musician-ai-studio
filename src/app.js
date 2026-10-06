@@ -5244,6 +5244,25 @@ function buildLyricApiArabicContext() {
   return { dialect, dialectHint: lyricDialectHint, arabicAddress };
 }
 
+/** Lyria bare mode: dialect + addressee chips → server weaves Studio-style tags into the style line. */
+function lyriaBareArabicContextFields() {
+  try { applyLyricsLanguageToDialect(); } catch {}
+  const dialect = String(els.sunoDialect?.value || "").trim();
+  const dialectHint = String(els.sunoDialectHint?.value || "").trim();
+  const arabicAddress = String(els.sunoArabicAddress?.value || "").trim();
+  return {
+    ...(dialect ? { dialect } : {}),
+    ...(dialectHint ? { dialectHint } : {}),
+    ...(arabicAddress ? { arabicAddress } : {}),
+  };
+}
+
+function lyriaBareLyricsLanguageField() {
+  const lang = String(lyricsLanguage || "auto").trim().toLowerCase();
+  if (!lang || lang === "auto") return {};
+  return { lyricsLanguage: lang };
+}
+
 function setCreateTemplateLoadedHint(title) {
   if (!els.createChallengeHint) return;
   const t = String(title || "Template").trim();
@@ -78071,7 +78090,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           style: clipStyle,
           title: clipTitle,
           ...(lyriaRaw
-            ? {}
+            ? { ...lyriaBareArabicContextFields(), ...lyriaBareLyricsLanguageField() }
             : {
                 dialect,
                 dialectHint: lyricDialectHint,
@@ -78545,7 +78564,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         instrumental: shouldGenerateInstrumental,
         model: modelForRequest,
         ...(lyriaRaw
-          ? {}
+          ? { ...lyriaBareArabicContextFields(), ...lyriaBareLyricsLanguageField() }
           : {
               ...(dialect ? { dialect: String(dialect) } : {}),
               ...(lyricDialectHint ? { dialectHint: String(lyricDialectHint) } : {}),

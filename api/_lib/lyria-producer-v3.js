@@ -63,7 +63,7 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary, no extr
     {
       "name": "Intro" | "Mawwal" | "Verse 1" | "Pre-Chorus" | "Chorus" | "Verse 2" | "Bridge" | "Instrumental" | "Final Chorus" | "Outro",
       "bars": <integer>,
-      "arrangement": "<max 16 words, English, instruments and dynamics only>",
+      "arrangement": "<English, instruments and dynamics only; Verse 1 may be longer to include the vocal-enter phrase>",
       "intensity": <integer 1-10>,
       "lyrics": ["<line>", "<line>"],
       "backing": ["<short echo line>"]
@@ -79,6 +79,7 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary, no extr
 
 === SECTION PLAN ===
 - You choose the form. A common shape is Intro → Verse 1 → Chorus → Verse 2 → Chorus → optional Bridge → Final Chorus → Outro, but you may drop, add, or reorder sections to fit the lyrics.
+- Intro is at least 8 bars, never shorter (instrumental groove only, no sung lyrics). Mawwal still replaces Intro when style_tags mentions Mawwal.
 - If lyrics are short: add Instrumental breaks (mainly after a Chorus, before the next Verse) instead of repeating lyric lines. Instrumental sections have "lyrics": [].
 - Do not stretch a short lyric set by repeating the same lines over and over.
 - If BPM is above 115, verses and choruses may be 16 bars. Total timed length must stay under 180 seconds: seconds = bars × 4 × 60 / bpm for 4/4 (bars × 2 × 60 / bpm for 6/8, where bpm is the dotted-quarter pulse). Shorter than 180 is OK.
@@ -89,22 +90,24 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary, no extr
 
 === ARRANGEMENT TEXT PER SECTION ===
 - You MAY add instruments that fit the genre even if they are not named in style_tags (e.g. soft strings, acoustic guitar, pads). Prefer instruments implied by the genre (Tarab/Mawwal: oud nay riqq violins; dabke: mijwiz darbuka; Khaleeji: oud mirwas claps; pop: keys drums bass; ballad: piano strings oud). Never add 808s or trap drums to folk/tarab.
-- Intro: 1-2 instruments, soft.
-- Verse: lead instrument + light rhythm, space for the vocal.
-- Chorus: full arrangement. Backing vocals, handclaps or chants ONLY here, and only if style_tags has them.
+- Intro: 1-2 instruments, soft groove. No vocal.
+- Verse: the verse groove (lead + light rhythm) with space for the vocal.
+- Verse 1 arrangement MUST include this exact phrase: vocal enters on the downbeat after the intro phrase ends
+- CHORUS is the catchy, strongest moment. Make it hit with a clear lead melody hook, a stronger groove, and the vocal on top — NOT by stacking more instruments. Chorus = the verse groove plus ONE added layer (one extra percussion, a bass entry, or a hook counter-line — pick one). Keep the mix clean on phone speakers and still full on big speakers.
 - Bridge: stripped back.
-- Final Chorus: full, one step bigger.
+- Final Chorus = same arrangement as Chorus with a light lift (e.g. a slightly fuller beat or one extra percussion). Never maximum.
 - Outro: the intro instrument, fading.
 - Each section changes at least two things versus the previous one.
 - Add one short transition at the end of the text when useful, e.g. "darbuka fill into chorus".
-- Never use these words: powerful, belting, belt, soaring, screaming, shouting, strained, desperate, intense, piercing, triumphant, tenor, epic, anthem.
+- Never use these words: powerful, belting, belt, soaring, screaming, shouting, strained, desperate, intense, piercing, triumphant, tenor, epic, anthem, maximum, heavy, aggressive, massive, wall of sound.
 
 === INTENSITY ===
-Intro 2, Mawwal 3, Verse 4, Pre-Chorus 5, Chorus 7, Instrumental 3, Bridge 3, Final Chorus 8, Outro 2.
+Intro 2, Mawwal 3, Verse 4, Pre-Chorus 5, Chorus 7, Instrumental 3, Bridge 3, Final Chorus 7, Outro 2.
 Do not write intensity into any lyric or arrangement string — it is a number field only.
 
 === LYRICS: GENERAL ===
 - One lyric line = one 2-bar musical phrase. So a section has bars ÷ 2 lines (an 8-bar verse = 4 lines).
+- If user lines are very short (under 6 spoken syllables), join two of them into one sung line so each 2-bar phrase is full. A chorus of 8 short lines becomes 4 lines over 8 bars.
 - Syllables per line (spoken syllables):
   - BPM up to 90 (ballad, tarab): 7-11
   - BPM 91-115 (pop, khaleeji, R&B): 8-12
@@ -112,7 +115,7 @@ Do not write intensity into any lyric or arrangement string — it is a number f
 - Every line is a complete small phrase. No 1-2 word fragments, no run-on sentences.
 - No commas, semicolons, colons, dashes, bullets or quotes inside lines. Use line breaks only.
 - Never put timing, BPM, style words, dialect notes or instructions in lyrics.
-- "backing": optional, chorus only, max 2 short echo lines (2-4 syllables, e.g. a repeated word from the hook). Empty elsewhere.
+- BACKING echoes are optional and rare. Leave "backing": [] unless style_tags explicitly asks for chants, choir, or group vocals. Never invent backing just to fill the chorus.
 
 === IDEA MODE (idea_brief set, lyrics_raw empty) ===
 - Write original lyrics in the dialect from dialect_hint (default Levantine/Lebanese colloquial), using natural spoken words, not formal Arabic (fusha).
@@ -410,8 +413,9 @@ function normalizeLyriaProducerV3Output(raw, { instrumental = false, input = {} 
     if (!name) continue;
     let bars = Math.max(0, Math.round(Number(item?.bars) || 0));
     if (name === "Mawwal") bars = 0;
-    if (name !== "Mawwal" && bars < 2) {
-      bars = name === "Intro" || name === "Outro" || name === "Bridge" || name === "Instrumental" ? 4 : 8;
+    if (name === "Intro" && bars < 8) bars = 8;
+    if (name !== "Mawwal" && name !== "Intro" && bars < 2) {
+      bars = name === "Outro" || name === "Bridge" || name === "Instrumental" ? 4 : 8;
     }
     let arrangement = capWords(String(item?.arrangement || "").trim(), 16);
     if (name === "Mawwal" && !arrangement) arrangement = capWords("solo oud, free-time", 16);
@@ -456,7 +460,7 @@ function normalizeLyriaProducerV3Output(raw, { instrumental = false, input = {} 
           }
         : {
             name: "Intro",
-            bars: 4,
+            bars: 8,
             arrangement: capWords("soft, 1-2 instruments", 16),
             intensity: 2,
             lyrics: [],
@@ -493,7 +497,7 @@ function assignTimestamps(sections, { bpm, meter }) {
   const stamp = (list) => {
     let t = 0;
     for (const s of list) {
-      const dur = durationOf(s);
+      const dur = Math.max(1, Math.round(durationOf(s)));
       s.startSec = t;
       s.endSec = t + dur;
       t = s.endSec;
@@ -513,7 +517,7 @@ function assignTimestamps(sections, { bpm, meter }) {
     const scale = 180 / total;
     let t = 0;
     for (const s of out) {
-      const dur = Math.max(2, (s.endSec - s.startSec) * scale);
+      const dur = Math.max(1, Math.round((s.endSec - s.startSec) * scale));
       s.startSec = t;
       s.endSec = t + dur;
       t = s.endSec;
@@ -623,8 +627,12 @@ function buildLyriaPromptV3({
   if (dialect) head.push(dialect);
   if (arabiziSentence) head.push(arabiziSentence);
 
+  const vocalEnter = "vocal enters on the downbeat after the intro phrase ends";
   const arrLines = timed.map((s) => {
-    const a = String(s.arrangement || "").replace(/\.\s*$/, "");
+    let a = String(s.arrangement || "").replace(/\.\s*$/, "");
+    if (s.name === "Verse 1" && !/vocal enters on the downbeat/i.test(a)) {
+      a = a ? `${a}; ${vocalEnter}` : vocalEnter;
+    }
     return `[${fmtTime(s.startSec)} - ${fmtTime(s.endSec)}] ${s.name}: ${a}`;
   });
 

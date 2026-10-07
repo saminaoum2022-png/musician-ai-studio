@@ -145,6 +145,13 @@ const writeStitch = v3.buildLyriaPromptV3({
 if (!writeStitch.ok) fail(`write adapted stitch: ${writeStitch.error}`);
 assert.ok(writeStitch.prompt.includes("acoustic textures"));
 assert.ok(writeStitch.prompt.includes("[") && writeStitch.prompt.includes("Instrumental"));
+assert.ok(writeStitch.prompt.includes("vocal enters on the downbeat after the intro phrase ends"));
+const writeIntro = writeStitch.prompt.split("\n").find((l) => l.includes("] Intro:"));
+assert.ok(writeIntro);
+const writeIntroTimes = writeIntro.match(/\[(\d):(\d{2}) - (\d):(\d{2})\]/);
+const writeIntroDur = Number(writeIntroTimes[3]) * 60 + Number(writeIntroTimes[4])
+  - (Number(writeIntroTimes[1]) * 60 + Number(writeIntroTimes[2]));
+assert.ok(writeIntroDur >= 16, `intro must be >= 8 bars (~16s+), got ${writeIntroDur}s from ${writeIntro}`);
 
 const mawwalZero = v3.normalizeLyriaProducerV3Output({
   sections: [

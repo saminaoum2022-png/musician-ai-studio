@@ -2730,7 +2730,10 @@ function renderHubNowPlaying() {
     const stripGlass = document.getElementById("hubNowStripGlass");
     if (stripGlass) {
       const floatGlass = Boolean(
-        showMini && document.body.classList.contains("tabbarCollapsed"),
+        showMini && (
+          document.body.classList.contains("tabbarCollapsed")
+          || route === "messages-thread"
+        ),
       );
       stripGlass.classList.toggle("isVisible", floatGlass);
       if (!floatGlass) stripGlass.classList.remove("isDockSettling");
@@ -80100,11 +80103,7 @@ function syncCreateSoundPanelUi() {
   }
   if (spark) spark.hidden = true;
   const strip = document.getElementById("createStudioActiveStrip");
-  const stripLabel = document.getElementById("createStudioActiveStripLabel");
-  const preset = getLyriaStudioStyle(_activeLyriaStudioStyleId);
-  const showStrip = unified && mode === "studio" && Boolean(preset);
-  if (strip) strip.hidden = !showStrip;
-  if (stripLabel && preset) stripLabel.textContent = preset.label;
+  if (strip) strip.hidden = true;
 }
 
 function createFlowModeEnabled() {
@@ -80515,8 +80514,7 @@ function renderCreateStudioStylesSheet() {
   let html = "";
   for (const preset of LYRIA_STUDIO_STYLES) {
     const on = preset.id === active;
-    const tip = preset.subtitle ? `${preset.label} · ${preset.subtitle}` : preset.label;
-    html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio${on ? " isActive" : ""}" data-lyria-studio-sheet-id="${escapeHtml(preset.id)}" aria-pressed="${on ? "true" : "false"}" title="${escapeHtml(tip)}">${escapeHtml(preset.label)}</button>`;
+    html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio${on ? " isActive" : ""}" data-lyria-studio-sheet-id="${escapeHtml(preset.id)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(preset.label)}</button>`;
   }
   html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio styleSuggestPill--studioCustom" data-lyria-studio-sheet-custom="1">Custom</button>`;
   list.innerHTML = html;
@@ -80679,10 +80677,6 @@ function applyLyriaStudioStyle(id) {
   syncCreateSimpleAura();
   syncStyleUi();
   try { syncGenerateOrbVisibility(); } catch {}
-  try {
-    const kind = isCreateSimpleCreateLayout() ? "Sound" : "Studio style";
-    showToast(`${kind}: ${preset.label}`, { icon: "♪", durationMs: 2800 });
-  } catch {}
 }
 
 function renderLyriaStudioStyleRow() {
@@ -80697,14 +80691,14 @@ function renderLyriaStudioStyleRow() {
   if (simple) {
     for (const preset of getSimpleStudioRowPresets()) {
       const on = preset.id === active;
-      html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio${on ? " isActive" : ""}" data-lyria-studio-id="${escapeHtml(preset.id)}" aria-pressed="${on ? "true" : "false"}" title="${escapeHtml(preset.styleLine.slice(0, 240))}">${escapeHtml(preset.label)}</button>`;
+      html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio${on ? " isActive" : ""}" data-lyria-studio-id="${escapeHtml(preset.id)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(preset.label)}</button>`;
     }
     html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio styleSuggestPill--studioAll" data-lyria-studio-all="1">More</button>`;
   } else {
     html = "";
     for (const preset of LYRIA_STUDIO_STYLES) {
       const on = preset.id === active;
-      html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio${on ? " isActive" : ""}" data-lyria-studio-id="${escapeHtml(preset.id)}" aria-pressed="${on ? "true" : "false"}" title="${escapeHtml(preset.styleLine.slice(0, 240))}">${escapeHtml(preset.label)}</button>`;
+      html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio${on ? " isActive" : ""}" data-lyria-studio-id="${escapeHtml(preset.id)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(preset.label)}</button>`;
     }
   }
   row.innerHTML = html;
@@ -82140,20 +82134,12 @@ function isCreateSimpleCreateLayout() {
   );
 }
 
-function setGenerateInputFocus(activePanel) {
+function setGenerateInputFocus(_activePanel) {
   const flow = document.getElementById("createFlow");
   if (!flow) return;
-  if (isCreateSimpleCreateLayout()) {
-    flow.classList.remove("focusInput");
-    getCreatePageRoot()?.querySelectorAll(".inputPanel").forEach((p) => {
-      p.classList.remove("isFocusCard");
-    });
-    try { syncCreateComposeLayout(); } catch {}
-    return;
-  }
-  flow.classList.toggle("focusInput", Boolean(activePanel));
+  flow.classList.remove("focusInput");
   getCreatePageRoot()?.querySelectorAll(".inputPanel").forEach((p) => {
-    p.classList.toggle("isFocusCard", p === activePanel && Boolean(activePanel));
+    p.classList.remove("isFocusCard");
   });
   try { syncCreateComposeLayout(); } catch {}
 }

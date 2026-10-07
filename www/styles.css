@@ -12383,11 +12383,7 @@ body[data-route="generate"][data-create-layout="simple"] #createStyleAdvancedPan
   display: none !important;
 }
 .createStudioActiveStrip{
-  margin: 0 0 10px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(201, 162, 39, 0.32);
-  background: rgba(124, 92, 255, 0.08);
+  display: none !important;
 }
 .createStudioActiveStrip[hidden]{
   display: none !important;
@@ -17735,10 +17731,10 @@ html[data-theme="light"] body[data-route="generate"] .lyricsBox.generating .lyri
 body[data-route="generate"] #createFlow.focusInput{
   gap: 10px;
 }
-body[data-route="generate"][data-create-layout="simple"] #createFlow.focusInput,
-body[data-route="generate"][data-create-layout="simple"] #createFlow.focusInput .inputPanel,
-body[data-route="generate"][data-create-layout="simple"] #createFlow.focusInput .inputPanel:not(.isFocusCard),
-body[data-route="generate"][data-create-layout="simple"] #createFlow.focusInput .inputPanel.isFocusCard{
+body[data-route="generate"] #createFlow.focusInput,
+body[data-route="generate"] #createFlow.focusInput .inputPanel,
+body[data-route="generate"] #createFlow.focusInput .inputPanel:not(.isFocusCard),
+body[data-route="generate"] #createFlow.focusInput .inputPanel.isFocusCard{
   gap: inherit;
   opacity: 1 !important;
   transform: none !important;
@@ -17746,7 +17742,7 @@ body[data-route="generate"][data-create-layout="simple"] #createFlow.focusInput 
   transition: none !important;
   box-shadow: none;
 }
-body[data-route="generate"][data-create-layout="simple"] #createFlow.focusInput .inputPanel.isFocusCard{
+body[data-route="generate"] #createFlow.focusInput .inputPanel.isFocusCard{
   border-color: rgba(255, 255, 255, 0.09);
 }
 body[data-route="generate"] #createFlow.focusInput .inputPanel{
@@ -22541,9 +22537,6 @@ body.trackSheetOpen .footer{
     /* Push the cover bottom fade lower without changing cover crop or lyrics. */
     --player-cover-fade-shift: 32px;
   }
-  body[data-route="messages-thread"] .hubNowPlaying{
-    display: none !important;
-  }
   body[data-route="player"] .header{
     display: none !important;
   }
@@ -23330,11 +23323,8 @@ body.trackSheetOpen .footer{
     padding-bottom: calc(var(--create-keyboard-inset, 0px) + 64px);
   }
   body[data-route="generate"] #createFlow.createComposeStack.focusInput #lyricsFieldPanel.isFocusCard{
-    transform: translateY(-4px);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.16),
-      0 20px 36px rgba(0, 0, 0, 0.36),
-      0 0 34px rgba(124, 92, 255, 0.14);
+    transform: none !important;
+    box-shadow: none !important;
   }
   body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack{
     --create-simple-stack-gap: 10px;
@@ -72517,6 +72507,58 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay:active{ backgrou
   body.tabbarCollapsed[data-route="generate"] .hubNowPlaying:not(.isPlaced){ bottom: calc(13px + var(--strip-m)); }
 
   body.imageMoodSheetOpen .hubNowPlaying, body.vibeReadSheetOpen .hubNowPlaying{ opacity: .35; pointer-events: none; }
+
+  /* Chats hide the tab bar, so the strip must sit as a pill above the composer —
+     not at the collapsed-dock bottom (which covers the input). */
+  body[data-route="messages-thread"] .hubNowPlaying,
+  body[data-route="messages-thread"] .hubNowPlaying.isPlaced,
+  body.tabbarCollapsed[data-route="messages-thread"] .hubNowPlaying{
+    --hub-vinyl-size: 40px;
+    left: 12px !important;
+    right: 12px !important;
+    top: auto !important;
+    bottom: calc(var(--messages-composer-h, 72px) + 8px) !important;
+    width: auto;
+    height: 52px;
+    display: flex;
+    border-radius: 999px;
+    background: transparent;
+    box-shadow: none;
+    z-index: 8;
+  }
+  body[data-route="messages-thread"] .hubNowPlaying.isVisible{
+    transform: translate3d(0, 0, 0);
+  }
+  body[data-route="messages-thread"] .hubNowPlaying::after{
+    opacity: 0;
+  }
+  body[data-route="messages-thread"].hasMiniStrip .hubNowStripGlass,
+  body.tabbarCollapsed[data-route="messages-thread"].hasMiniStrip .hubNowStripGlass.isVisible{
+    display: block;
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    left: 12px;
+    right: 12px;
+    height: 52px;
+    border-radius: 999px;
+    bottom: calc(var(--messages-composer-h, 72px) + 8px);
+    z-index: 7;
+  }
+  body.messagesThreadKeyboardOpen[data-route="messages-thread"] .hubNowPlaying,
+  body.messagesThreadKeyboardOpen[data-route="messages-thread"] .hubNowStripGlass{
+    display: none !important;
+  }
+}
+
+body[data-route="messages-thread"].hasMiniStrip:not(.messagesThreadKeyboardOpen) .messagesThreadMount{
+  padding-bottom: calc(var(--messages-composer-h, 72px) + 68px);
+  scroll-padding-bottom: calc(var(--messages-composer-h, 72px) + 68px);
+}
+body[data-route="messages-thread"].hasMiniStrip:not(.messagesThreadKeyboardOpen) .toast{
+  bottom: calc(var(--messages-composer-h, 72px) + 74px);
+}
+body[data-route="messages-thread"].hasMiniStrip:not(.messagesThreadKeyboardOpen) .liveListenChipRow{
+  bottom: calc(var(--messages-composer-h, 72px) + 68px + 12px);
 }
 
 

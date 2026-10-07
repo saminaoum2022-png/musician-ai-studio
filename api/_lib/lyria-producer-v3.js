@@ -663,22 +663,21 @@ function buildLyriaPromptV3({
 }
 
 function appendLyriaProducerV3AdminDetail(producerResult, stitch) {
-  const lines = ["pipeline: lyria_producer_v3 → lyria"];
+  const applied = Boolean(producerResult?.ok) && !producerResult?.fallback && stitch?.ok !== false;
+  const reason = String(
+    producerResult?.error || stitch?.error || (!applied ? "bare" : ""),
+  ).trim();
+  const lines = [`producer: ${applied ? "applied" : "fallback"}`];
+  if (!applied && reason) lines.push(`producer_reason: ${reason}`);
   if (producerResult?.model) lines.push(`lyria_producer_v3_model: ${producerResult.model}`);
   if (producerResult?.latencyMs != null) lines.push(`lyria_producer_v3_ms: ${producerResult.latencyMs}`);
-  if (producerResult?.error) lines.push(`lyria_producer_v3_error: ${producerResult.error}`);
-  if (stitch?.error) lines.push(`lyria_producer_v3_stitch: ${stitch.error}`);
   if (stitch?.bpm) lines.push(`lyria_producer_v3_bpm: ${stitch.bpm} ${stitch.meter || ""}`.trim());
   if (stitch?.bpmAppended) lines.push(`lyria_producer_v3_bpm_appended: ${stitch.bpmAppended}`);
   const secs = stitch?.sections || producerResult?.sections || [];
   if (secs.length) {
     lines.push(`lyria_producer_v3_sections: ${secs.map((s) => `${s.name}:${s.bars || 0}`).join(",")}`);
-    try {
-      lines.push(`lyria_producer_v3_json: ${JSON.stringify({ sections: secs }).slice(0, 1600)}`);
-    } catch {}
   }
-  if (stitch?.prompt) lines.push(`lyria_prompt: ${String(stitch.prompt).slice(0, 1800)}`);
-  return lines.join("\n").slice(0, 4000);
+  return lines.join("\n");
 }
 
 module.exports = {

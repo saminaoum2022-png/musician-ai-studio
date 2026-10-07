@@ -1628,10 +1628,129 @@ td.num { font-variant-numeric: tabular-nums; }
 }
 
 .genDetailPrompt--payload {
-  max-height: 420px;
+  max-height: 480px;
   overflow: auto;
   font-size: 0.78rem;
   line-height: 1.45;
+  margin-top: 8px;
+}
+
+.genCardList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.genCard {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+}
+
+.genCard:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.genProducerHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.genProducerReason {
+  color: #fca5a5;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.badge.producerApplied,
+.badge.producerFallback,
+.badge.genProducerUnknown {
+  text-transform: none;
+  letter-spacing: 0.03em;
+  font-weight: 700;
+}
+
+.badge.producerApplied {
+  background: rgba(74, 222, 128, 0.18);
+  color: #86efac;
+}
+
+.badge.producerFallback {
+  background: rgba(255, 107, 122, 0.18);
+  color: #fca5a5;
+}
+
+.badge.genProducerUnknown {
+  background: rgba(139, 156, 184, 0.15);
+  color: var(--muted);
+}
+
+.genCardMeta {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
+
+.genCardSummary {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  color: var(--text);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.genCardError {
+  margin: 0 0 8px;
+  color: #fca5a5;
+  font-size: 0.8rem;
+}
+
+.genCardToggles,
+.genToggleBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+.genLyricsCompare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.genLyricsCompare[hidden],
+.genDetailPrompt[hidden],
+.genToggleBlock [hidden] {
+  display: none !important;
+}
+
+.genLyricsCompare h4 {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+@media (max-width: 800px) {
+  .genLyricsCompare {
+    grid-template-columns: 1fr;
+  }
 }
 
 .marketingFieldInput {

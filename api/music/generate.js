@@ -261,8 +261,8 @@ function buildLyriaRequestDetail({
     const bit = String(line || "").trim();
     if (bit) lines.push(bit);
   }
-  lines.push("", "lyria_prompt:", String(lyriaPrompt || "").trim());
-  return lines.join("\n").slice(0, 4000);
+  lines.push("", "lyria_prompt:", String(lyriaPrompt || "").trim(), "end_lyria_prompt");
+  return lines.join("\n").slice(0, 24000);
 }
 
 function mergeLyriaUpstreamAdminDetail(baseDetail, upstream = {}) {
@@ -279,7 +279,7 @@ function mergeLyriaUpstreamAdminDetail(baseDetail, upstream = {}) {
   if (resolvedModel && !/^resolved_model: /m.test(detail)) {
     detail = detail.replace(/^(model: .*)$/m, `$1\nresolved_model: ${resolvedModel}`);
   }
-  return detail.slice(0, 4000);
+  return detail.slice(0, 24000);
 }
 
 function buildClipPromptLabel(lyrics, stylePrompt, title, body, lyriaPrompt) {
@@ -494,18 +494,41 @@ function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
     : "pipeline: direct → lyria (gemini_producer off)";
 }
 
-function buildLyriaFullSongAdminExtra({ body, producerResult, model = "", lyriaPrompt = "", isAdmin = false } = {}) {
+function adminMultilineField(name, text) {
+  const body = String(text || "").trim();
+  if (!body) return [];
+  return [`${name}:`, body, `end_${name}`];
+}
+
+function buildLyriaFullSongAdminExtra({
+  body,
+  producerResult,
+  model = "",
+  lyriaPrompt = "",
+  isAdmin = false,
+  originalLyrics = "",
+  adaptedLyrics = "",
+} = {}) {
   const dialectHintLine = sanitizeDialectHintForLyriaPrompt(mergeLyriaDialectHint(body));
   const dialectLabel = resolveLyriaDialectLabel(body);
+  const idea = isLyriaIdeaPromptBody(body);
+  const producerLines = producerResult?.v3
+    ? String(appendLyriaProducerV3AdminDetail(producerResult, producerResult.v3Stitch || { error: producerResult.error }))
+      .split("\n")
+      .filter(Boolean)
+    : String(appendProducerAdminDetail("", producerResult) || "")
+      .split("\n")
+      .filter(Boolean);
   return [
     lyriaPipelineAdminLine(body, isAdmin, producerResult),
     ...(model ? [`lyria_model: ${model}`] : []),
+    ...producerLines,
+    `lyrics_mode: ${idea ? "idea" : "write"}`,
+    ...adminMultilineField("original_lyrics", idea ? "" : originalLyrics),
+    ...adminMultilineField("adapted_lyrics", idea ? "" : adaptedLyrics),
     ...(dialectLabel ? [`dialect: ${dialectLabel}`] : []),
     ...(dialectHintLine ? [`dialect_hint: ${dialectHintLine.slice(0, 400)}`] : []),
     ...buildLyriaClipMetaLines(body, lyriaPrompt),
-    ...String(appendProducerAdminDetail("", producerResult) || "")
-      .split("\n")
-      .filter(Boolean),
   ];
 }
 
@@ -630,14 +653,17 @@ async function runLyriaGenerationJob({
       model,
       lyriaPrompt,
       photoCount: photoImages.length,
-      extraLines: [
-        ...buildLyriaFullSongAdminExtra({ body, producerResult, model, lyriaPrompt, isAdmin }),
-        ...(producerResult?.v3
-          ? String(appendLyriaProducerV3AdminDetail(producerResult, producerResult.v3Stitch || { error: producerResult.error, prompt: lyriaPrompt }))
-            .split("\n")
-            .filter(Boolean)
-          : []),
-      ],
+      extraLines: buildLyriaFullSongAdminExtra({
+        body,
+        producerResult,
+        model,
+        lyriaPrompt,
+        isAdmin,
+        originalLyrics: isLyriaIdeaPromptBody(body) ? "" : String(lyrics || "").trim(),
+        adaptedLyrics: isLyriaIdeaPromptBody(body)
+          ? ""
+          : String(v3DisplayLyrics || producerResult?.structured_lyrics || "").trim(),
+      }),
     });
 
     await updateMusicGenerationByTaskId(taskId, {

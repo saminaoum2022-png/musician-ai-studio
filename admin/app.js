@@ -32,7 +32,7 @@ const state = {
   subFilter: "active",
   subSearch: "",
   billingSearch: "",
-  generationFilters: { dateFrom: "", dateTo: "", kind: "", provider: "", status: "" },
+  generationFilters: { dateFrom: "", dateTo: "", kind: "", provider: "", status: "", producerStatus: "" },
   userDetailId: "",
   generationDetailId: "",
   returnView: "users",
@@ -646,6 +646,7 @@ async function adminFetch(view, {
   if (gf.kind) qs.set("kind", gf.kind);
   if (gf.provider) qs.set("provider", gf.provider);
   if (gf.status) qs.set("status", gf.status);
+  if (gf.producerStatus) qs.set("producerStatus", gf.producerStatus);
   if (healthRefresh) qs.set("healthRefresh", "1");
   if (view === "funnel") qs.set("days", String(state.funnelWindow || 28));
   const r = await fetch(`/api/music/admin?${qs}`, {
@@ -1539,7 +1540,7 @@ function viewCacheKey() {
   }
   if (state.view === "generations") {
     const gf = state.generationFilters || {};
-    key += `:gf:${gf.dateFrom || ""}:${gf.dateTo || ""}:${gf.kind || ""}:${gf.provider || ""}:${gf.status || ""}`;
+    key += `:gf:${gf.dateFrom || ""}:${gf.dateTo || ""}:${gf.kind || ""}:${gf.provider || ""}:${gf.status || ""}:${gf.producerStatus || ""}`;
   }
   if (state.view === "user" && state.userDetailId) {
     key += `:uid:${state.userDetailId}`;
@@ -3237,20 +3238,122 @@ function renderUserDetail(data) {
 function parseLyriaRequestDetail(detail) {
   const text = String(detail || "");
   const lineValue = (key) => {
-    const m = new RegExp(`^${key}:\\s*(.+)$`, "im").exec(text);
+    const m = new RegExp(`^${key}:\\s*(.*)$`, "im").exec(text);
     return m?.[1]?.trim() || "";
   };
+  const extractMarked = (name) => {
+    const header = new RegExp(`^${name}:\\s*$`, "im").exec(text);
+    if (header) {
+      const rest = text.slice(header.index + header[0].length).replace(/^\r?\n/, "");
+      const end = new RegExp(`^end_${name}\\s*$`, "im").exec(rest);
+      if (end) return rest.slice(0, end.index).replace(/\s+$/, "");
+    }
+    const same = new RegExp(`^${name}:\\s+(.+)$`, "im").exec(text);
+    return same?.[1]?.trim() || "";
+  };
+  let lyriaPrompt = "";
   const promptIdx = text.search(/^lyria_prompt:\s*$/im);
-  const lyriaPrompt = promptIdx >= 0
-    ? text.slice(promptIdx).replace(/^lyria_prompt:\s*/i, "").trim()
-    : "";
+  if (promptIdx >= 0) {
+    lyriaPrompt = text.slice(promptIdx).replace(/^lyria_prompt:\s*/i, "").trim();
+    const end = /^end_lyria_prompt\s*$/im.exec(lyriaPrompt);
+    if (end) lyriaPrompt = lyriaPrompt.slice(0, end.index).trim();
+  } else {
+    const sameIdx = text.search(/^lyria_prompt:\s+\S/im);
+    if (sameIdx >= 0) {
+      lyriaPrompt = text.slice(sameIdx).replace(/^lyria_prompt:\s+/i, "").trim();
+    }
+  }
   return {
     flow: lineValue("flow"),
     model: lineValue("resolved_model") || lineValue("model"),
     api: lineValue("api"),
     photoInput: lineValue("photo_input"),
     lyriaPrompt,
+    producerStatus: String(gProducerStatusFromDetail(text) || ""),
+    producerReason: lineValue("producer_reason") || lineValue("lyria_producer_v3_error") || lineValue("gemini_producer_error"),
+    lyricsMode: lineValue("lyrics_mode").toLowerCase(),
+    originalLyrics: extractMarked("original_lyrics"),
+    adaptedLyrics: extractMarked("adapted_lyrics"),
   };
+}
+
+function gProducerStatusFromDetail(text) {
+  const src = String(text || "");
+  const producer = (/^producer:\s*(.+)$/im.exec(src)?.[1] || "").trim().toLowerCase();
+  if (producer === "applied" || producer.startsWith("applied")) return "applied";
+  if (producer === "fallback" || producer.startsWith("fallback") || producer === "skipped") return "fallback";
+  const gemini = (/^gemini_producer:\s*(.+)$/im.exec(src)?.[1] || "").trim().toLowerCase();
+  if (gemini === "applied") return "applied";
+  if (gemini === "fallback" || gemini === "skipped") return "fallback";
+  const pipe = (/^pipeline:\s*(.+)$/im.exec(src)?.[1] || "");
+  if (/lyria_producer_v3\s+fallback/i.test(pipe)) return "fallback";
+  if (/lyria_producer_v3\s*→\s*lyria/i.test(pipe) && !/fallback/i.test(pipe)) return "applied";
+  if (/gemini_producer off/i.test(pipe)) return "fallback";
+  if (/gemini_producer\s*→/i.test(pipe)) return "applied";
+  return "";
+}
+
+function producerBadgeHtml(status, reason) {
+  const st = String(status || "").toLowerCase();
+  if (st === "applied") {
+    return `<span class="badge producerApplied">PRODUCER: APPLIED</span>`;
+  }
+  if (st === "fallback") {
+    const why = String(reason || "").trim();
+    return `<span class="badge producerFallback">PRODUCER: FALLBACK</span>${
+      why ? ` <span class="genProducerReason">${escapeHtml(why)}</span>` : ""
+    }`;
+  }
+  return "";
+}
+
+function generationPromptLyricsToggles({
+  idPrefix,
+  lyriaPrompt,
+  lyricsMode,
+  originalLyrics,
+  adaptedLyrics,
+} = {}) {
+  const prefix = String(idPrefix || "gen").replace(/[^a-zA-Z0-9_-]/g, "") || "gen";
+  const promptId = `${prefix}-prompt`;
+  const lyricsId = `${prefix}-lyrics`;
+  const prompt = String(lyriaPrompt || "").trim();
+  const mode = String(lyricsMode || "").toLowerCase();
+  const original = String(originalLyrics || "").trim();
+  const adapted = String(adaptedLyrics || "").trim();
+  const promptBlock = prompt
+    ? `<div class="genToggleBlock">
+         <button type="button" class="btnGhost btnGhost--sm genToggleBtn" data-gen-toggle="prompt" data-label-show="Show prompt" data-label-hide="Hide prompt" aria-expanded="false" aria-controls="${escapeHtml(promptId)}">Show prompt</button>
+         <pre id="${escapeHtml(promptId)}" class="genDetailPrompt genDetailPrompt--payload" hidden>${escapeHtml(prompt)}</pre>
+       </div>`
+    : "";
+  const lyricsBlock = mode === "write" && (original || adapted)
+    ? `<div class="genToggleBlock">
+         <button type="button" class="btnGhost btnGhost--sm genToggleBtn" data-gen-toggle="lyrics" data-label-show="Show lyrics" data-label-hide="Hide lyrics" aria-expanded="false" aria-controls="${escapeHtml(lyricsId)}">Show lyrics</button>
+         <div id="${escapeHtml(lyricsId)}" class="genLyricsCompare" hidden>
+           <div>
+             <h4>Original (Write)</h4>
+             <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(original || "—")}</pre>
+           </div>
+           <div>
+             <h4>Producer adapted</h4>
+             <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(adapted || "—")}</pre>
+           </div>
+         </div>
+       </div>`
+    : "";
+  return { promptBlock, lyricsBlock };
+}
+
+function stripDuplicateProducerMeta(detail) {
+  return String(detail || "")
+    .replace(/^gemini_producer(?:_model|_error|_ms)?:.*$/gim, "")
+    .replace(/^lyria_prompt:[\s\S]*/im, "")
+    .replace(/^end_lyria_prompt\s*$/gim, "")
+    .replace(/^original_lyrics:[\s\S]*?^end_original_lyrics\s*$/gim, "")
+    .replace(/^adapted_lyrics:[\s\S]*?^end_adapted_lyrics\s*$/gim, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function providerRequestLabel(provider) {
@@ -3277,11 +3380,20 @@ function renderGenerationDetail(data) {
     ? `<div class="userDetailAlert">${escapeHtml(g.errorMessage)}</div>`
     : "";
 
+  const parsed = g.provider === "lyria" ? parseLyriaRequestDetail(g.requestDetail) : null;
+  const lyriaPrompt = String(g.lyriaPrompt || parsed?.lyriaPrompt || "").trim();
+  const producerStatus = g.producerStatus || parsed?.producerStatus || "";
+  const producerReason = g.producerReason || parsed?.producerReason || "";
+  const lyricsMode = String(g.lyricsMode || parsed?.lyricsMode || "").toLowerCase();
+  const originalLyrics = String(g.originalLyrics || parsed?.originalLyrics || "").trim();
+  const adaptedLyrics = String(g.adaptedLyrics || parsed?.adaptedLyrics || "").trim();
+  const producerHead = producerBadgeHtml(producerStatus, producerReason);
+
   const promptBlock = g.prompt
     ? `<pre class="genDetailPrompt">${escapeHtml(g.prompt)}</pre>`
     : `<p class="sectionNote">No user-facing prompt summary stored for this log entry.</p>`;
 
-  const lyriaMeta = g.provider === "lyria" ? parseLyriaRequestDetail(g.requestDetail) : null;
+  const lyriaMeta = parsed;
   const lyriaMetaBlock = g.provider === "lyria"
     ? `<div class="detailMetaBlock"><strong>Lyria engine</strong></div>
        <p class="sectionNote">
@@ -3293,25 +3405,29 @@ function renderGenerationDetail(data) {
        </p>`
     : "";
 
-  const lyriaPromptBlock = lyriaMeta?.lyriaPrompt
-    ? `<div class="detailMetaBlock"><strong>Prompt sent to Lyria</strong></div>
-       <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(lyriaMeta.lyriaPrompt)}</pre>`
+  const toggles = generationPromptLyricsToggles({
+    idPrefix: `genDetail-${String(g.id || "x").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40)}`,
+    lyriaPrompt,
+    lyricsMode,
+    originalLyrics,
+    adaptedLyrics,
+  });
+  const lyriaPromptBlock = toggles.promptBlock
+    ? `<div class="detailMetaBlock"><strong>Prompt sent to Lyria</strong></div>${toggles.promptBlock}`
     : (g.provider === "lyria"
       ? `<div class="detailMetaBlock"><strong>Prompt sent to Lyria</strong></div>
          <p class="sectionNote">Not stored for this generation (logged before Lyria observability). The user prompt summary above is what Nabad composed; the exact payload sent to Google Lyria was not saved.</p>`
       : "");
 
-  const requestBlock = g.requestDetail && !lyriaMeta?.lyriaPrompt
-    ? `<div class="detailMetaBlock"><strong>${providerRequestLabel(g.provider)}</strong></div>
-       <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(g.requestDetail)}</pre>`
-    : (g.requestDetail && lyriaMeta?.lyriaPrompt
-      ? `<div class="detailMetaBlock"><strong>${providerRequestLabel(g.provider)} metadata</strong></div>
-         <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(
-           String(g.requestDetail || "")
-             .replace(/^lyria_prompt:[\s\S]*/im, "")
-             .trim(),
-         )}</pre>`
-      : "");
+  const lyricsCompareBlock = toggles.lyricsBlock
+    ? `<div class="detailMetaBlock"><strong>Write lyrics</strong></div>${toggles.lyricsBlock}`
+    : "";
+
+  const metaText = String(g.requestMeta || "").trim() || stripDuplicateProducerMeta(g.requestDetail || "");
+  const requestBlock = metaText
+    ? `<div class="detailMetaBlock"><strong>${providerRequestLabel(g.provider)} metadata</strong></div>
+       <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(metaText)}</pre>`
+    : "";
 
   const outputClips = Array.isArray(g.outputClips) ? g.outputClips : [];
   const outputLinks = [];
@@ -3405,6 +3521,7 @@ function renderGenerationDetail(data) {
         <div class="userDetailActions">${userBtn}</div>
       </div>
       ${errorBlock}
+      ${producerHead ? `<div class="genProducerHead">${producerHead}</div>` : ""}
       <div class="detailHeroMain">
         <h3 class="detailHeroTitle">
           <span class="badge ${escapeHtml(g.status || "")}">${escapeHtml(g.status || "—")}</span>
@@ -3422,6 +3539,7 @@ function renderGenerationDetail(data) {
       ${promptBlock}
       ${lyriaMetaBlock}
       ${lyriaPromptBlock}
+      ${lyricsCompareBlock}
       ${requestBlock}
       ${outputBlock}
       <p class="detailMetaBlock detailMetaBlock--ids">
@@ -3999,29 +4117,45 @@ function renderGenerations(data) {
   const statusSelect = statusOptions.map(([val, label]) =>
     `<option value="${escapeHtml(val)}"${filters.status === val ? " selected" : ""}>${escapeHtml(label)}</option>`,
   ).join("");
+  const producerFilterActive = String(filters.producerStatus || "all") || "all";
+  const producerFilterPills = filterPillsHtml("producer-filter", [
+    ["all", "All"],
+    ["applied", "Applied"],
+    ["fallback", "Fallback"],
+  ], producerFilterActive === "applied" || producerFilterActive === "fallback" ? producerFilterActive : "all");
   const body = rows.length
-    ? rows.map((g) => {
-      const gid = escapeHtml(g.id || "");
-      const ledgerRecovery = String(g.id || "").startsWith("ledger-credit-");
-      const reason = String(g.errorMessage || "").trim();
-      const reasonShort = reason
-        ? (reason.length > 72 ? `${reason.slice(0, 69)}…` : reason)
-        : (g.status === "pending" ? "Waiting on Suno…" : (ledgerRecovery ? "Recovered from credit ledger" : "—"));
-      const rowAttrs = `class="rowClickable${ledgerRecovery ? " rowRecovered" : ""}" tabindex="0" role="link" data-generation-view="${gid}" data-return-view="generations" aria-label="Open generation"`;
+    ? `<div class="genCardList">${rows.map((g) => {
+      const gid = String(g.id || "");
+      const gidEsc = escapeHtml(gid);
+      const idSafe = gid.replace(/[^a-zA-Z0-9_-]/g, "") || "x";
+      const ledgerRecovery = gid.startsWith("ledger-credit-");
+      const failReason = String(g.errorMessage || "").trim();
+      const toggles = generationPromptLyricsToggles({
+        idPrefix: `genList-${idSafe}`,
+        lyriaPrompt: g.lyriaPrompt,
+        lyricsMode: g.lyricsMode,
+        originalLyrics: g.originalLyrics,
+        adaptedLyrics: g.adaptedLyrics,
+      });
+      const badge = producerBadgeHtml(g.producerStatus, g.producerReason);
       return `
-      <tr ${rowAttrs}>
-        <td>${escapeHtml(g.userLabel || "—")}</td>
-        <td class="promptCell" title="${(g.prompt || "").replace(/"/g, "&quot;")}">${g.prompt || "—"}</td>
-        <td>${escapeHtml(g.provider || "—")}</td>
-        <td>${escapeHtml(g.kind || "—")}</td>
-        <td><span class="badge ${escapeHtml(g.status || "")}">${escapeHtml(g.status || "—")}</span></td>
-        <td class="promptCell" title="${reason.replace(/"/g, "&quot;")}">${escapeHtml(reasonShort)}</td>
-        <td class="num">${fmtNum(g.creditsUsed, 1)}</td>
-        <td class="num">${g.providerCostUsd != null ? fmtUsd(g.providerCostUsd) : "—"}</td>
-        ${dateCell(g.createdAt)}
-      </tr>`;
-    }).join("")
-    : `<tr><td colspan="9" class="loading">No generation logs yet</td></tr>`;
+      <article class="genCard rowClickable${ledgerRecovery ? " rowRecovered" : ""}" tabindex="0" role="link" data-generation-view="${gidEsc}" data-return-view="generations" aria-label="Open generation">
+        <div class="genProducerHead">${badge || `<span class="badge genProducerUnknown">PRODUCER: —</span>`}</div>
+        <div class="genCardMeta">
+          <strong>${escapeHtml(g.userLabel || "—")}</strong>
+          · ${escapeHtml(g.kind || "—")}
+          · ${escapeHtml(g.provider || "—")}
+          · <span class="badge ${escapeHtml(g.status || "")}">${escapeHtml(g.status || "—")}</span>
+          · ${escapeHtml(fmtDateCompact(g.createdAt))}
+          · ${fmtNum(g.creditsUsed, 1)} cr
+          ${g.providerCostUsd != null ? ` · ${fmtUsd(g.providerCostUsd)}` : ""}
+        </div>
+        ${failReason ? `<p class="genCardError">${escapeHtml(failReason)}</p>` : ""}
+        <p class="genCardSummary">${escapeHtml(g.prompt || "—")}</p>
+        <div class="genCardToggles">${toggles.promptBlock}${toggles.lyricsBlock}</div>
+      </article>`;
+    }).join("")}</div>`
+    : `<p class="loading">No generation logs yet</p>`;
 
   els.panels.generations.innerHTML = adminPageStack(`
     <div class="genCountWrap">
@@ -4058,19 +4192,9 @@ function renderGenerations(data) {
     </form>
     ${listSection({
       title: "Generation log",
-      note: "Covers, remixes, stems, sounds, and full songs. Kind comes from the request type. Reason shows Suno reject/fail text when available. Click a row for the full payload.",
-      tableHtml: `
-    <div class="tableWrap tableWrap--plain">
-      <table class="table--compact">
-        <thead>
-          <tr>
-            <th>User</th><th>Prompt</th><th>Provider</th><th>Kind</th>
-            <th>Status</th><th>Reason</th><th>Credits</th><th>Cost</th><th>Date</th>
-          </tr>
-        </thead>
-        <tbody>${body}</tbody>
-      </table>
-    </div>`,
+      note: "Producer badge is Applied (green) or Fallback (red). Show prompt is the full Lyria payload. Write songs also have original vs adapted lyrics. Click a card to open the generation.",
+      extraHtml: producerFilterPills,
+      tableHtml: body,
       pager: pagerHtml(total, state.offset),
     })}
   `, { plain: true });
@@ -7340,6 +7464,7 @@ document.body.addEventListener("submit", (e) => {
       kind: String(document.getElementById("genFilterKind")?.value || "").trim(),
       provider: String(document.getElementById("genFilterProvider")?.value || "").trim(),
       status: String(document.getElementById("genFilterStatus")?.value || "").trim(),
+      producerStatus: String(state.generationFilters?.producerStatus || "").trim(),
     };
     state.offset = 0;
     void loadView({ force: true });
@@ -7639,7 +7764,7 @@ document.body.addEventListener("keydown", (e) => {
   }
 
   if (e.key !== "Enter" && e.key !== " ") return;
-  const row = e.target.closest("tr.rowClickable, tr.singerRowClickable");
+  const row = e.target.closest("tr.rowClickable, tr.singerRowClickable, article.rowClickable");
   if (!row) return;
   if (e.target.closest(".singerRowActions")) return;
   e.preventDefault();
@@ -8524,7 +8649,7 @@ document.body.addEventListener("click", (e) => {
 
   const genFilterClear = e.target.closest("#genFilterClear");
   if (genFilterClear) {
-    state.generationFilters = { dateFrom: "", dateTo: "", kind: "", provider: "", status: "" };
+    state.generationFilters = { dateFrom: "", dateTo: "", kind: "", provider: "", status: "", producerStatus: "" };
     state.offset = 0;
     void loadView({ force: true });
     return;
@@ -8585,9 +8710,38 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
+  const genToggleBtn = e.target.closest(".genToggleBtn");
+  if (genToggleBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const panelId = genToggleBtn.getAttribute("aria-controls");
+    const panel = panelId ? document.getElementById(panelId) : null;
+    if (!panel) return;
+    const hide = !panel.hidden;
+    panel.hidden = hide;
+    genToggleBtn.setAttribute("aria-expanded", hide ? "false" : "true");
+    genToggleBtn.textContent = hide
+      ? (genToggleBtn.dataset.labelShow || "Show")
+      : (genToggleBtn.dataset.labelHide || "Hide");
+    return;
+  }
+
+  const producerFilterBtn = e.target.closest("[data-producer-filter]");
+  if (producerFilterBtn) {
+    e.preventDefault();
+    const val = String(producerFilterBtn.dataset.producerFilter || "all").trim().toLowerCase();
+    state.generationFilters = {
+      ...(state.generationFilters || {}),
+      producerStatus: val === "applied" || val === "fallback" ? val : "",
+    };
+    state.offset = 0;
+    void loadView({ force: true });
+    return;
+  }
+
   const generationViewBtn = e.target.closest("[data-generation-view]");
   if (generationViewBtn && !e.target.closest("form")) {
-    if (generationViewBtn.classList?.contains("rowClickable") && e.target.closest("a, button, input, select, textarea")) return;
+    if (generationViewBtn.classList?.contains("rowClickable") && e.target.closest("a, button, input, select, textarea, .genCardToggles")) return;
     const gid = generationViewBtn.dataset.generationView;
     const returnView = generationViewBtn.dataset.returnView || "generations";
     if (gid) openGenerationDetail(gid, returnView);

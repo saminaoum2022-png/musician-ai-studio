@@ -453,13 +453,17 @@ function buildSongProducerInput(body, flow = "elevenlabs") {
 function appendProducerAdminDetail(baseDetail, producerResult) {
   const lines = [String(baseDetail || "").trim()].filter(Boolean);
   if (!producerResult) {
-    lines.push("gemini_producer: skipped");
-    return lines.join("\n").slice(0, 4000);
+    lines.push("producer: fallback");
+    lines.push("producer_reason: skipped");
+    return lines.join("\n").slice(0, 24000);
   }
-  lines.push(`gemini_producer: ${producerResult.used ? "applied" : "fallback"}`);
-  if (producerResult.model) lines.push(`gemini_producer_model: ${producerResult.model}`);
-  if (producerResult.error) lines.push(`gemini_producer_error: ${producerResult.error}`);
-  if (producerResult.latencyMs != null) lines.push(`gemini_producer_ms: ${producerResult.latencyMs}`);
+  const applied = Boolean(producerResult.used || producerResult.ok) && !producerResult.fallback;
+  lines.push(`producer: ${applied ? "applied" : "fallback"}`);
+  if (!applied) {
+    lines.push(`producer_reason: ${producerResult.error || "fallback"}`);
+  }
+  if (producerResult.model) lines.push(`producer_model: ${producerResult.model}`);
+  if (producerResult.latencyMs != null) lines.push(`producer_ms: ${producerResult.latencyMs}`);
   if (producerResult.enhanced_style_prompt) {
     lines.push(`enhanced_style_prompt: ${producerResult.enhanced_style_prompt.slice(0, 600)}`);
   }
@@ -472,7 +476,7 @@ function appendProducerAdminDetail(baseDetail, producerResult) {
   if (producerResult.chunk_plan && Array.isArray(producerResult.composition_chunks)) {
     lines.push(`gemini_chunk_plan: ${producerResult.composition_chunks.length} sections`);
   }
-  return lines.join("\n").slice(0, 4000);
+  return lines.join("\n").slice(0, 24000);
 }
 
 async function enrichWithGeminiProducer({

@@ -5666,7 +5666,15 @@ function syncRoutePanelVisibility(wanted) {
   if (!route) return;
   if (route !== "generate") clearCreatePageKeyboardInset();
   if (route !== "auth") clearAuthKeyboardInset();
+  const prevRoute = String(document.body.getAttribute("data-route") || "");
   document.body.setAttribute("data-route", route);
+  if (route === "generate" && prevRoute !== "generate") {
+    try {
+      if (typeof createFlowModeEnabled === "function" && createFlowModeEnabled()) {
+        localStorage.setItem("nabad_create_flow_mode_v1", "simple");
+      }
+    } catch {}
+  }
   if (route !== "messages-thread") {
     setMessagesThreadHeadCollapsed(false);
     closeDmVoiceDropSheet();
@@ -7361,9 +7369,10 @@ function syncLyricsToolsBar() {
   const bar = els.btnLyricsMagic?.closest?.(".lyricsAssistBar");
   if (bar) {
     const generateMode = String(lyricsInputMode || "write") === "generate";
+    const simple = createFlowModeEnabled() && getCreateFlowMode() === "simple";
     const anyChip = [els.btnLyricsUndo, els.btnLyricsCopy, els.btnLyricsNew, els.btnLyricsDone]
       .some((btn) => btn && !btn.hidden);
-    bar.hidden = !generateMode && !anyChip;
+    bar.hidden = !simple && !generateMode && !anyChip;
   }
 }
 
@@ -8714,7 +8723,7 @@ function syncSettingsGeminiProducerRow() {
   }
   if (sub) {
     sub.textContent = producerOn
-      ? "On — Gemini rewrites style/lyrics before Lyria"
+      ? "On — Gemini plans song sections and lyrics; your style line stays as written"
       : "Off — direct prompt to Lyria (no Gemini producer)";
   }
 }
@@ -78693,6 +78702,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       if (creditsState.isAdmin) {
         payload.geminiProducer = getGeminiProducerPref() ? "1" : "0";
+        payload.lyriaProducerV3 = getGeminiProducerPref() ? "1" : "0";
       }
       applyScratchDisplayTitleToPayload(payload, {
         instrumental: shouldGenerateInstrumental,
@@ -80621,6 +80631,7 @@ function syncCreateFlowLayoutUi() {
   syncLyriaStudioStyleUi();
   syncLyriaStudioSoundPromptPreview();
   try { syncCreateSongTypeTabs(); } catch {}
+  try { syncLyricsToolsBar(); } catch {}
   try { syncCreateComposeLayout(); } catch {}
   if (mode === "simple" && enabled && _createSimpleAutofocusAfterLayout) {
     _createSimpleAutofocusAfterLayout = false;

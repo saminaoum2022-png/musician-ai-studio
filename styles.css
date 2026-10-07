@@ -1054,6 +1054,11 @@ html[data-theme="light"] .btnNewSong{
   border-color: rgba(15, 23, 40, 0.10);
   color: var(--text);
 }
+html[data-theme="light"] body[data-route="generate"] .createHeadActions .btnNewSong{
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
 
 html[data-theme="light"] .btnNewSong:hover{
   border-color: rgba(124, 92, 255, 0.28);
@@ -10639,6 +10644,20 @@ html:not([data-theme="light"]) body[data-route="generate"] .createHeadActions .b
   width: 34px;
   height: 34px;
   padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+html:not([data-theme="light"]) body[data-route="generate"] .createHeadActions .btnNewSong:hover{
+  background: transparent;
+  border: 0;
+  color: #fff;
+}
+html:not([data-theme="light"]) body[data-route="generate"] .createHeadActions .btnNewSong.isArmed{
+  background: transparent;
+  border: 0;
+  color: #ff8a8a;
 }
 html:not([data-theme="light"]) body[data-route="generate"] .createTab.isActive,
 html:not([data-theme="light"]) body[data-route="generate"] .lyricsModeTab.isActive,
@@ -10698,6 +10717,10 @@ body[data-route="generate"] .createHeadRow{
   padding: 0;
   justify-content: center;
   gap: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .createHeadActions .btnNewSong .btnNewSongLabel{
   display: none;
@@ -12406,7 +12429,25 @@ body[data-route="generate"][data-create-layout="simple"] #createArtworkStylePane
   display: none !important;
 }
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsAssistBar{
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsAssistBar[hidden]{
   display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel[data-lyrics-mode="write"] #btnLyricsMagic{
+  display: inline-flex !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnLyricsMagic .lyricsMagicLabel,
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnLyricsMagic .aiAssistLabel{
+  display: inline;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsSingabilityPanel{
+  flex: 0 0 auto;
 }
 #createSimpleAura.createSimpleAura{
   position: absolute;
@@ -23379,6 +23420,10 @@ body.trackSheetOpen .footer{
     flex: 1 1 auto;
     min-height: 0;
     margin: 0;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsAssistBar,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsSingabilityPanel{
+    flex: 0 0 auto;
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
     flex: 0 0 auto;

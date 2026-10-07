@@ -11,6 +11,7 @@
  * - GEMINI_API_KEY / GOOGLE_API_KEY, LYRIA_MUSIC_MODEL, LYRIA_GENERATE_ENABLED
  * - CLIP_GEMINI_PRODUCER_ENABLED=1 — Gemini prompt enrichment for clips + ElevenLabs (staging preview)
  * - Lyria default: bare passthrough (style + lyrics only). LYRIA_LEGACY_PROMPTS=1 restores Nabad stack.
+ * - LYRIA_PRODUCER_V3 — admin-only Flash section planner (default on). Does not rewrite style.
  * - LYRIA_PROMPT_V2=1 — optional minimal Lyria prompt v2 (legacy mode only); skips Gemini producer on Lyria
  * - CLIP_GEMINI_PRODUCER_MODEL — optional override; else tries 3.6 → 3.5 → 2.5 flash
  * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_FINETUNE_ID, ELEVENLABS_GENERATE_ENABLED
@@ -117,9 +118,16 @@ const {
   buildSongProducerInput,
   enrichClipWithGeminiProducer,
   enrichLyriaSongWithGeminiProducer,
+  enrichLyriaSongWithGeminiProducerV3,
   enrichSongWithGeminiProducer,
   resolveGeminiProducerEnabled,
 } = require("../_lib/clip-gemini-producer");
+const {
+  resolveLyriaProducerV3Enabled,
+  buildLyriaProducerV3Input,
+  buildLyriaPromptV3,
+  appendLyriaProducerV3AdminDetail,
+} = require("../_lib/lyria-producer-v3");
 const { nabadSongEditEnabled } = require("../_lib/nabad-song-edit-lib");
 const { mergeNabadVocalIntoStylePrompt } = require("../_lib/nabad-vocal-identity");
 const {
@@ -467,6 +475,11 @@ function scheduleBackgroundWork(promise) {
 }
 
 function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
+  if (producerResult?.v3) {
+    return producerResult.ok
+      ? "pipeline: lyria_producer_v3 → lyria"
+      : `pipeline: lyria_producer_v3 fallback · ${producerResult.error || "bare"}`;
+  }
   if (!lyriaLegacyPromptsEnabled()) {
     if (isLyriaIdeaPromptBody(body)) {
       return "pipeline: lyria_bare_passthrough · idea → style (dialect/addressee) + brief + topic hint";
@@ -540,7 +553,41 @@ async function runLyriaGenerationJob({
     const durationSec = resolveLyriaDurationSec(body);
     const useLyriaV2 = resolveLyriaPromptV2Enabled(body, isAdmin);
     let producerResult = { ok: false };
-    if (lyriaLegacyPromptsEnabled() && !useLyriaV2) {
+    let v3DisplayLyrics = "";
+    const useProducerV3 =
+      !lyriaLegacyPromptsEnabled()
+      && resolveLyriaProducerV3Enabled(body, isAdmin);
+    if (useProducerV3) {
+      const v3input = buildLyriaProducerV3Input(body, { lyrics, durationSec });
+      producerResult = await enrichLyriaSongWithGeminiProducerV3({
+        apiKey,
+        enabled: true,
+        input: v3input,
+      });
+      producerResult.v3 = true;
+      if (producerResult.ok) {
+        const stitched = buildLyriaPromptV3({
+          body,
+          producerResult,
+          instrumental,
+          lyricsRaw: lyrics,
+        });
+        if (stitched.ok) {
+          lyriaPrompt = stitched.prompt;
+          v3DisplayLyrics = stitched.displayLyrics || "";
+          producerResult.v3Stitch = stitched;
+        } else {
+          producerResult = {
+            ...producerResult,
+            ok: false,
+            used: false,
+            fallback: true,
+            error: stitched.error || "v3_stitch_failed",
+            v3: true,
+          };
+        }
+      }
+    } else if (lyriaLegacyPromptsEnabled() && !useLyriaV2) {
       producerResult = await enrichLyriaSongWithGeminiProducer({
         apiKey,
         enabled: resolveGeminiProducerEnabled(body, isAdmin),
@@ -583,7 +630,14 @@ async function runLyriaGenerationJob({
       model,
       lyriaPrompt,
       photoCount: photoImages.length,
-      extraLines: buildLyriaFullSongAdminExtra({ body, producerResult, model, lyriaPrompt, isAdmin }),
+      extraLines: [
+        ...buildLyriaFullSongAdminExtra({ body, producerResult, model, lyriaPrompt, isAdmin }),
+        ...(producerResult?.v3
+          ? String(appendLyriaProducerV3AdminDetail(producerResult, producerResult.v3Stitch || { error: producerResult.error, prompt: lyriaPrompt }))
+            .split("\n")
+            .filter(Boolean)
+          : []),
+      ],
     });
 
     await updateMusicGenerationByTaskId(taskId, {
@@ -614,11 +668,11 @@ async function runLyriaGenerationJob({
         alignedWords: upstream.alignedWords,
       });
     }
-    const displayLyricsSource =
-      lyriaLegacyPromptsEnabled() && producerResult.ok && producerResult.structured_lyrics
+    const displayLyricsSource = v3DisplayLyrics
+      || (lyriaLegacyPromptsEnabled() && producerResult.ok && producerResult.structured_lyrics
         ? producerResult.structured_lyrics
-        : lyrics || extractLyriaDisplayLyrics(upstream.data) || "";
-    const displayLyrics = lyriaLegacyPromptsEnabled()
+        : lyrics || extractLyriaDisplayLyrics(upstream.data) || "");
+    const displayLyrics = (lyriaLegacyPromptsEnabled() || v3DisplayLyrics)
       ? sanitizeLyriaLyricsForSinging(String(displayLyricsSource))
       : String(displayLyricsSource || "").trim();
     const displayTitle = resolveLyriaStoredDisplayTitle(body, {

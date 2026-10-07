@@ -5,6 +5,11 @@
 
 const { buildLyriaVocalProfile, clipVocalProfileById, sanitizeLyriaLyricsForSinging, normalizeLyriaArrangementLines } = require("./lyria-upstream");
 const { stripInlinePunctuationFromLyrics } = require("./sung-lyrics-punctuation");
+const {
+  LYRIA_PRODUCER_V3_SYSTEM_PROMPT,
+  LYRIA_PRODUCER_V3_RESPONSE_SCHEMA,
+  normalizeLyriaProducerV3Output,
+} = require("./lyria-producer-v3");
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const PRODUCER_TIMEOUT_MS = Number(process.env.CLIP_GEMINI_PRODUCER_TIMEOUT_MS || 15000);
@@ -478,6 +483,7 @@ async function enrichWithGeminiProducer({
   maxStyleChars,
   normalizeFn,
   enabled,
+  generationConfig = null,
 } = {}) {
   const started = Date.now();
   const instrumental = Boolean(input?.instrumental);
@@ -491,13 +497,16 @@ async function enrichWithGeminiProducer({
 
   const models = resolveProducerModels();
   const userMessage = JSON.stringify(input || {}, null, 0);
+  const genConfig = generationConfig && typeof generationConfig === "object"
+    ? generationConfig
+    : {
+        temperature: 0.65,
+        responseMimeType: "application/json",
+      };
   const requestBody = JSON.stringify({
     systemInstruction: { parts: [{ text: String(systemPrompt || "").trim() }] },
     contents: [{ role: "user", parts: [{ text: userMessage }] }],
-    generationConfig: {
-      temperature: 0.65,
-      responseMimeType: "application/json",
-    },
+    generationConfig: genConfig,
   });
 
   let lastError = "unknown";
@@ -602,6 +611,35 @@ async function enrichLyriaSongWithGeminiProducer({ apiKey, input, enabled } = {}
   });
 }
 
+/** Lyria 3.5 full song — v3 section plan. Does not rewrite style. */
+async function enrichLyriaSongWithGeminiProducerV3({ apiKey, input, enabled } = {}) {
+  const shared = {
+    apiKey,
+    input,
+    systemPrompt: LYRIA_PRODUCER_V3_SYSTEM_PROMPT,
+    timeoutMs: SONG_PRODUCER_TIMEOUT_MS,
+    enabled,
+    normalizeFn: (parsed, ctx) => normalizeLyriaProducerV3Output(parsed, ctx),
+  };
+  const withSchema = await enrichWithGeminiProducer({
+    ...shared,
+    generationConfig: {
+      temperature: 0.65,
+      responseMimeType: "application/json",
+      responseSchema: LYRIA_PRODUCER_V3_RESPONSE_SCHEMA,
+      maxOutputTokens: 4096,
+    },
+  });
+  if (withSchema.ok) return withSchema;
+  return enrichWithGeminiProducer({
+    ...shared,
+    generationConfig: {
+      temperature: 0.65,
+      responseMimeType: "application/json",
+    },
+  });
+}
+
 module.exports = {
   CLIP_PRODUCER_SYSTEM_PROMPT,
   LYRIA_SONG_PRODUCER_SYSTEM_PROMPT,
@@ -614,4 +652,5 @@ module.exports = {
   enrichClipWithGeminiProducer,
   enrichSongWithGeminiProducer,
   enrichLyriaSongWithGeminiProducer,
+  enrichLyriaSongWithGeminiProducerV3,
 };

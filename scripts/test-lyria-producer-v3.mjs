@@ -1,0 +1,132 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const v3 = require("../api/_lib/lyria-producer-v3.js");
+
+function fail(msg) {
+  console.error("FAIL", msg);
+  process.exit(1);
+}
+
+function mockSections({ mawwal = false, lyrics } = {}) {
+  const chorus = lyrics?.chorus || ["hook line one", "hook line two"];
+  const verse1 = lyrics?.verse1 || ["verse one a", "verse one b"];
+  const verse2 = lyrics?.verse2 || ["verse two a", "verse two b"];
+  const list = [
+    mawwal
+      ? { name: "Mawwal", bars: 6, arrangement: "solo oud free-time", intensity: 3, lyrics: ["يا دني"], backing: [] }
+      : { name: "Intro", bars: 4, arrangement: "soft sparse opening", intensity: 2, lyrics: [], backing: [] },
+    { name: "Verse 1", bars: 8, arrangement: "lead and light rhythm space", intensity: 4, lyrics: verse1, backing: [] },
+    { name: "Chorus", bars: 8, arrangement: "full arrangement", intensity: 7, lyrics: chorus, backing: ["يا دني"] },
+    { name: "Verse 2", bars: 8, arrangement: "same pocket new color", intensity: 4, lyrics: verse2, backing: [] },
+    { name: "Final Chorus", bars: 8, arrangement: "full one step bigger", intensity: 8, lyrics: chorus, backing: ["يا دني"] },
+    { name: "Outro", bars: 4, arrangement: "opening color fading", intensity: 2, lyrics: [], backing: [] },
+  ];
+  return v3.normalizeLyriaProducerV3Output({ sections: list }, { input: { style_tags: mawwal ? "Mawwal tarab" : "pop" } });
+}
+
+assert.equal(v3.defaultBpmForStyleFamily("Lebanese dabke wedding"), 126);
+assert.equal(v3.defaultBpmForStyleFamily("Modern Khaleeji pop"), 95);
+assert.equal(v3.defaultBpmForStyleFamily("piano ballad sad"), 80);
+assert.equal(v3.defaultBpmForStyleFamily("Greek-Arabic pop"), 105);
+assert.equal(v3.extractBpmFromText("85 BPM Bayati"), 85);
+
+assert.equal(v3.styleAlreadyDescribesVocal("rich warm male vocal with vibrato"), true);
+assert.equal(v3.styleAlreadyDescribesVocal("Lebanese folk, 85 BPM"), false);
+
+const described = v3.composeV3StyleLine(
+  { style: "rich warm male vocal, Lebanese folk", vocalGender: "m" },
+  { bpmAppended: 0 },
+);
+assert.equal(described.includes("male lead vocal"), false, "must not duplicate vocal");
+
+const missingVocal = v3.composeV3StyleLine(
+  { style: "Lebanese folk", vocalGender: "m" },
+  { bpmAppended: 0 },
+);
+assert.ok(missingVocal.includes("male lead vocal"));
+
+const bpmAppend = v3.composeV3StyleLine(
+  { style: "Levantine pop" },
+  { bpmAppended: 105 },
+);
+assert.ok(/\b105 BPM\b/.test(bpmAppend));
+
+const lebanese = {
+  style: "Lebanese folk, classic Tarab, free-time Mawwal intro with solo oud, rich warm male vocal, 85 BPM, Bayati maqam",
+  vocalGender: "m",
+  dialect: "Lebanese",
+  arabicAddress: "male",
+  ideaPrompt: true,
+  ideaBrief: "someone who wants to change his life",
+};
+const lebaneseNorm = mockSections({
+  mawwal: true,
+  lyrics: {
+    verse1: ["يا دني اسمع", "قلب تعبان"],
+    verse2: ["بدي فيي امشي", "على درب تاني"],
+    chorus: ["غير حياتي", "وإعمل الدنيا"],
+  },
+});
+const lebaneseStitch = v3.buildLyriaPromptV3({
+  body: lebanese,
+  producerResult: lebaneseNorm,
+  lyricsRaw: "",
+});
+if (!lebaneseStitch.ok) fail(`lebanese stitch: ${lebaneseStitch.error}`);
+assert.ok(lebaneseStitch.prompt.startsWith(lebaneseStitch.styleLine));
+assert.ok(lebaneseStitch.prompt.includes("\nLyrics:\n"));
+assert.equal(/\bIntensity\s+\d/.test(lebaneseStitch.prompt), false);
+assert.equal(lebaneseStitch.styleLine.includes("male lead vocal"), false);
+assert.equal(lebaneseStitch.bpm, 85);
+const mawwalLine = lebaneseStitch.prompt.split("\n").find((l) => l.includes("] Mawwal:"));
+assert.ok(mawwalLine, "mawwal timestamp");
+const mTimes = mawwalLine.match(/\[(\d):(\d{2}) - (\d):(\d{2})\]/);
+const mDur = Number(mTimes[3]) * 60 + Number(mTimes[4]) - (Number(mTimes[1]) * 60 + Number(mTimes[2]));
+assert.ok(mDur >= 15 && mDur <= 20, `mawwal duration ${mDur}`);
+
+const pop = {
+  style: "Greek-Arabic pop, bouzouki and oud, warm vocal",
+  vocalGender: "f",
+  dialect: "Levantine",
+};
+const popStitch = v3.buildLyriaPromptV3({
+  body: pop,
+  producerResult: mockSections({
+    lyrics: {
+      verse1: ["night over athens", "lights on the water"],
+      verse2: ["two names one song", "we keep the melody"],
+      chorus: ["hold the line", "don't let go"],
+    },
+  }),
+  lyricsRaw: "",
+});
+if (!popStitch.ok) fail(`pop stitch: ${popStitch.error}`);
+assert.equal(popStitch.bpm, 105);
+assert.ok(/\b105 BPM\b/.test(popStitch.styleLine));
+
+const khaleeji = {
+  style: "Modern Khaleeji pop, oud and mirwas, laid-back groove",
+  vocalGender: "m",
+  dialect: "Gulf",
+};
+const khStitch = v3.buildLyriaPromptV3({
+  body: khaleeji,
+  producerResult: mockSections({
+    lyrics: {
+      verse1: ["يا ليل الخليج", "نجوم فوق البيت"],
+      verse2: ["امسكن يدي", "على درب البيت"],
+      chorus: ["هذا ليلي", "هذا صوتي"],
+    },
+  }),
+  lyricsRaw: "",
+});
+if (!khStitch.ok) fail(`khaleeji stitch: ${khStitch.error}`);
+assert.equal(khStitch.bpm, 95);
+
+console.log("--- Greek-Arabic pop ---\n" + popStitch.prompt.slice(0, 900) + "\n");
+console.log("--- Lebanese Mawwal ---\n" + lebaneseStitch.prompt.slice(0, 1100) + "\n");
+console.log("--- Khaleeji pop ---\n" + khStitch.prompt.slice(0, 900) + "\n");
+console.log("lyria-producer-v3 tests ok");

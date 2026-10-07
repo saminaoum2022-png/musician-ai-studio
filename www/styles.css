@@ -22943,6 +22943,12 @@ body.trackSheetOpen .footer{
   body[data-route="generate"] .app{
     padding-bottom: calc(198px + env(safe-area-inset-bottom));
   }
+  body[data-route="generate"][data-create-layout="simple"] .app{
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .app{
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
   /* Mobile web: Generate is in the page after Artwork, so only clear the tab bar. */
   html:not(.is-native-shell) body[data-route="generate"] .app,
   html:not(.is-native-shell) body[data-route="generate"].createKeyboardOpen .app{
@@ -23158,21 +23164,64 @@ body.trackSheetOpen .footer{
       0 20px 36px rgba(0, 0, 0, 0.36),
       0 0 34px rgba(124, 92, 255, 0.14);
   }
-  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack > .createFlowStep:first-child{
-    gap: 8px;
+  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack{
+    --create-simple-stack-gap: 12px;
+    gap: var(--create-simple-stack-gap);
+    min-height: calc(
+      100dvh - 112px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+      - var(--create-keyboard-inset, 0px)
+    );
   }
-  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #simpleBox,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack{
+    min-height: calc(
+      100dvh - 112px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+      - var(--create-keyboard-inset, 0px) - 56px
+    );
+    padding-bottom: calc(var(--create-keyboard-inset, 0px) + 56px);
+  }
+  html:not(.is-native-shell) body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack{
+    min-height: calc(var(--create-vv-height, 100dvh) - 112px);
+    max-height: calc(var(--create-vv-height, 100dvh) - 112px);
+  }
+  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack > .createFlowStep:first-child{
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: var(--create-simple-stack-gap);
+  }
+  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #simpleBox{
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--create-simple-stack-gap);
+  }
+  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createSectionStack,
+  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createPane--lyrics{
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
   body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel{
     flex: 1 1 auto;
     min-height: 0;
+    margin-bottom: 0;
   }
   body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
     flex: 0 0 auto;
-    margin-top: -8px;
+    margin-top: 0;
     z-index: 2;
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.1),
-      0 14px 28px rgba(0, 0, 0, 0.28);
+  }
+  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createFlowStep--generate{
+    flex: 0 0 auto;
+    margin-top: 0;
+    gap: var(--create-simple-stack-gap);
+  }
+  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack.focusInput #lyricsFieldPanel.isFocusCard{
+    transform: none;
+  }
+  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain textarea{
+    min-height: 160px !important;
   }
   body[data-route="generate"] input:focus,
   body[data-route="generate"] textarea:focus,

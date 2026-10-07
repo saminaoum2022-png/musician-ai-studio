@@ -80611,6 +80611,7 @@ function syncCreateFlowLayoutUi() {
   syncCreateSoundPanelUi();
   syncLyriaStudioStyleUi();
   syncLyriaStudioSoundPromptPreview();
+  try { syncCreateComposeLayout(); } catch {}
 }
 
 function clearLyriaStudioStyleSelection({ clearStyleField = false } = {}) {
@@ -82055,8 +82056,19 @@ function setGenerateInputFocus(activePanel) {
   try { syncCreateComposeLayout(); } catch {}
 }
 
+function isCreateSimpleMobileFill() {
+  if (!isGenerateRouteActive()) return false;
+  if (!createFlowModeEnabled() || getCreateFlowMode() !== "simple") return false;
+  try {
+    return window.matchMedia("(max-width: 720px)").matches;
+  } catch {
+    return false;
+  }
+}
+
 function shouldAutoFocusCreateLyricsOnEnter() {
   if (!isGenerateRouteActive()) return false;
+  if (!createFlowModeEnabled() || getCreateFlowMode() !== "simple") return false;
   const flow = getCreateFlow();
   if (flow && flow !== "song") return false;
   if (document.body.classList.contains("generateLocked")) return false;
@@ -82098,12 +82110,18 @@ function syncCreateComposeLayout() {
   try {
     mobile = window.matchMedia("(max-width: 720px)").matches;
   } catch {}
+  const simpleFill = isCreateSimpleMobileFill();
   const keyboardOpen = document.body.classList.contains("createKeyboardOpen");
   const lyricsFocused =
     flow.classList.contains("focusInput") &&
     document.getElementById("lyricsFieldPanel")?.classList.contains("isFocusCard");
-  const stack = mobile && (keyboardOpen || lyricsFocused);
+  const stack =
+    simpleFill ||
+    (mobile && !simpleFill && (keyboardOpen || lyricsFocused));
   flow.classList.toggle("createComposeStack", stack);
+  if (stack) {
+    try { autoResizeLyricsBox(); } catch {}
+  }
 }
 
 let _createFocusedField = null;

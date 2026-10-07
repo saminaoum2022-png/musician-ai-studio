@@ -76,6 +76,13 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary, no extr
 - bpm and time signature: read them from style_tags (default 4/4). The user message also includes numeric bpm and timeSignature — use those for bar math.
 - max_length_seconds / target_length_seconds: a HARD CAP (never above 180). A shorter song is fine and often better. Do not pad to fill 180 seconds.
 - idea_brief / lyrics_raw, dialect_hint, arabic_address, script_format, instrumental.
+- previous_take: if present, this is the producer JSON from an earlier take of the same song.
+
+=== PREVIOUS TAKE ===
+If previous_take is present:
+- Keep the same section names, order, bar counts, and arrangement wording unless the user's new inputs require a change.
+- Only adapt what actually changed (lyrics, vocal gender, style instruments, idea, or instrumental).
+- Do not invent a new form or new bar counts when previous_take already fits.
 
 === SECTION PLAN ===
 - You choose the form. A common shape is Intro → Verse 1 → Chorus → Verse 2 → Chorus → optional Bridge → Final Chorus → Outro, but you may drop, add, or reorder sections to fit the lyrics.
@@ -368,6 +375,20 @@ function composeV3StyleLine(body = {}, { bpmAppended } = {}) {
   return style;
 }
 
+function compactPreviousTake(raw) {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const list = Array.isArray(src.sections) ? src.sections : Array.isArray(raw) ? raw : [];
+  const sections = list.map((s) => ({
+    name: String(s?.name || "").trim(),
+    bars: Number.isFinite(Number(s?.bars)) ? Math.round(Number(s.bars)) : 0,
+    arrangement: String(s?.arrangement || "").trim(),
+    intensity: Number.isFinite(Number(s?.intensity)) ? Math.round(Number(s.intensity)) : 0,
+    lyrics: Array.isArray(s?.lyrics) ? s.lyrics.map((line) => String(line || "").trim()).filter(Boolean) : [],
+    backing: Array.isArray(s?.backing) ? s.backing.map((line) => String(line || "").trim()).filter(Boolean) : [],
+  })).filter((s) => s.name);
+  return sections.length ? { sections } : null;
+}
+
 function buildLyriaProducerV3Input(body = {}, { lyrics = "", durationSec = 0 } = {}) {
   const idea = isLyriaIdeaPromptBody(body);
   const rawPrompt = String(lyrics || body?.prompt || "").trim();
@@ -379,6 +400,7 @@ function buildLyriaProducerV3Input(body = {}, { lyrics = "", durationSec = 0 } =
   const cap = Number(durationSec) > 0
     ? Math.max(60, Math.min(maxSec, Math.round(durationSec)))
     : maxSec;
+  const previousTake = compactPreviousTake(body?.previousTake || body?.previous_take);
   return {
     title: String(body?.title || "").trim(),
     lyrics_raw: idea ? "" : rawPrompt,
@@ -398,6 +420,7 @@ function buildLyriaProducerV3Input(body = {}, { lyrics = "", durationSec = 0 } =
     target_length_seconds: cap,
     length_note: "max_not_target_shorter_ok",
     flow: "lyria_producer_v3",
+    ...(previousTake ? { previous_take: previousTake } : {}),
   };
 }
 
@@ -715,6 +738,7 @@ module.exports = {
   styleFamilyId,
   styleAlreadyDescribesVocal,
   composeV3StyleLine,
+  compactPreviousTake,
   buildLyriaProducerV3Input,
   normalizeLyriaProducerV3Output,
   buildLyriaPromptV3,

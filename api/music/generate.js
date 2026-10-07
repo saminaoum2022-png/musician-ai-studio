@@ -128,6 +128,13 @@ const {
   buildLyriaPromptV3,
   appendLyriaProducerV3AdminDetail,
 } = require("../_lib/lyria-producer-v3");
+const {
+  applyTake2Title,
+  buildCreateInputsFromBody,
+  compactProducerJson,
+  insertTakeCard,
+  resolveTake2Replay,
+} = require("../_lib/song-take-card");
 const { nabadSongEditEnabled } = require("../_lib/nabad-song-edit-lib");
 const { mergeNabadVocalIntoStylePrompt } = require("../_lib/nabad-vocal-identity");
 const {
@@ -577,11 +584,32 @@ async function runLyriaGenerationJob({
     const useLyriaV2 = resolveLyriaPromptV2Enabled(body, isAdmin);
     let producerResult = { ok: false };
     let v3DisplayLyrics = "";
+    const take2 = await resolveTake2Replay({ userId, isAdmin, body });
+    if (take2.replay && take2.finalPrompt) {
+      lyriaPrompt = take2.finalPrompt;
+      producerResult = {
+        ok: true,
+        used: true,
+        v3: true,
+        replay: true,
+        fallback: false,
+        sections: take2.producerJson?.sections || [],
+      };
+      v3DisplayLyrics = Array.isArray(take2.producerJson?.sections)
+        ? take2.producerJson.sections
+          .flatMap((s) => Array.isArray(s.lyrics) ? s.lyrics : [])
+          .join("\n")
+        : "";
+    }
     const useProducerV3 =
-      !lyriaLegacyPromptsEnabled()
+      !take2.replay
+      && !lyriaLegacyPromptsEnabled()
       && resolveLyriaProducerV3Enabled(body, isAdmin);
     if (useProducerV3) {
-      const v3input = buildLyriaProducerV3Input(body, { lyrics, durationSec });
+      const v3input = buildLyriaProducerV3Input(
+        take2.previousTake ? { ...body, previousTake: take2.previousTake } : body,
+        { lyrics, durationSec },
+      );
       const v3MaxAttempts = 3;
       let v3LastError = "plan_failed";
       for (let attempt = 1; attempt <= v3MaxAttempts; attempt++) {
@@ -644,7 +672,7 @@ async function runLyriaGenerationJob({
         await fail(`Producer couldn't plan this song (${v3LastError}). Try again.`, failDetail);
         return;
       }
-    } else if (lyriaLegacyPromptsEnabled() && !useLyriaV2) {
+    } else if (!take2.replay && lyriaLegacyPromptsEnabled() && !useLyriaV2) {
       producerResult = await enrichLyriaSongWithGeminiProducer({
         apiKey,
         enabled: resolveGeminiProducerEnabled(body, isAdmin),
@@ -682,22 +710,30 @@ async function runLyriaGenerationJob({
       }
     }
 
+    const take2Line = take2.replay
+      ? "take2: replay"
+      : take2.previousTake
+        ? "take2: previous_take"
+        : "";
     let requestDetail = buildLyriaRequestDetail({
       flow: LYRIA_FULL_SONG_FLOW,
       model,
       lyriaPrompt,
       photoCount: photoImages.length,
-      extraLines: buildLyriaFullSongAdminExtra({
-        body,
-        producerResult,
-        model,
-        lyriaPrompt,
-        isAdmin,
-        originalLyrics: isLyriaIdeaPromptBody(body) ? "" : String(lyrics || "").trim(),
-        adaptedLyrics: isLyriaIdeaPromptBody(body)
-          ? ""
-          : String(v3DisplayLyrics || producerResult?.structured_lyrics || "").trim(),
-      }),
+      extraLines: [
+        take2Line,
+        ...buildLyriaFullSongAdminExtra({
+          body,
+          producerResult,
+          model,
+          lyriaPrompt,
+          isAdmin,
+          originalLyrics: isLyriaIdeaPromptBody(body) ? "" : String(lyrics || "").trim(),
+          adaptedLyrics: isLyriaIdeaPromptBody(body)
+            ? ""
+            : String(v3DisplayLyrics || producerResult?.structured_lyrics || "").trim(),
+        }),
+      ].filter(Boolean),
     });
 
     await updateMusicGenerationByTaskId(taskId, {
@@ -742,6 +778,29 @@ async function runLyriaGenerationJob({
       clip: false,
       instrumental,
     });
+    const createInputs = buildCreateInputsFromBody(body);
+    const producerJson = compactProducerJson(producerResult) || take2.producerJson;
+    const takeCardPayload = {
+      hasCard: true,
+      taskId,
+      createInputs,
+      producerJson,
+      finalPrompt: lyriaPrompt,
+      parentSongId: take2.parentSongId || "",
+      parentTaskId: take2.parentTaskId || "",
+      replay: Boolean(take2.replay),
+    };
+    insertTakeCard({
+      userId,
+      taskId,
+      parentSongId: take2.parentSongId,
+      parentTaskId: take2.parentTaskId,
+      createInputs,
+      producerJson,
+      finalPrompt: lyriaPrompt,
+    }).catch((e) => {
+      console.warn("[music/generate] take card insert failed", taskId, e?.message || e);
+    });
     const statusPayload = buildSunoStatusPayload({
       taskId,
       title: displayTitle,
@@ -750,6 +809,7 @@ async function runLyriaGenerationJob({
       audioId,
       provider: "lyria",
     });
+    statusPayload._takeCard = takeCardPayload;
     const stored = await saveMusicProviderTaskStatus({ userId, taskId, statusPayload });
     if (!stored.ok) {
       console.warn("[music/generate] lyria task store failed (song audio ok)", stored.error);
@@ -1511,7 +1571,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   const stylePrompt = buildLyriaDirectStylePrompt(body);
   const instrumental =
     body?.instrumental === true || body?.instrumental === 1 || String(body?.instrumental || "") === "1";
-  const title = String(body?.title || "").trim();
+  const title = applyTake2Title(String(body?.title || "").trim(), body);
   const taskId = newTaskId("lyria");
   const audioId = `${taskId}_a`;
   const model = resolveLyriaModel(

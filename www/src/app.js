@@ -42,6 +42,20 @@ import {
   nabadSongEditEnabled,
 } from "./nabad-song-edit.js";
 import {
+  configureNabadTake2,
+  nabadTake2Enabled,
+  trackHasTakeCard,
+  takeCardFromTrack,
+  take2RowHtml,
+  normalizeCreateInputs,
+  createInputsEqual,
+  nextTakeTitle,
+  nextTakeNumber,
+  rootSongId,
+  rootTaskId,
+  stripTakeSuffix,
+} from "./nabad-take2.js";
+import {
   configureNabadLiveListen,
   syncLiveListenChrome,
   startLiveListenGuestInbox,
@@ -54534,6 +54548,7 @@ function renderTrackSheetLibrary(track) {
   l.innerHTML = `
     ${publishRow}
     ${recordEligible ? `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--studio" data-track-sheet-action="library_record_voice">Open in Studio</button>` : ""}
+    ${nabadTake2Enabled() && trackHasTakeCard(track) ? take2RowHtml() : ""}
     ${nabadSongEditEnabled() && recordEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_song_edit">Edit structure</button>` : ""}
     ${!isSound && recordEligible ? `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--proSinger" data-track-sheet-action="library_pro_singer">Request real singer</button>` : ""}
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
@@ -54570,6 +54585,7 @@ function renderTrackSheetProfileLib(t) {
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="profile_lib_share">Share</button>
   `;
   l.innerHTML = `
+    ${nabadTake2Enabled() && trackHasTakeCard(t) ? take2RowHtml() : ""}
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
     ${trackSheetDownloadRowsHtml(t)}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_lib_featured">${escapeHtml(featuredLabel)}</button>
@@ -54913,6 +54929,110 @@ async function playLibraryListRowById(id, opts) {
     setPlayerMeta(meta, { trackRef: t, coverImmediate: true });
     await playInline(playSource, "Full song", libSource);
   }
+}
+
+let _take2Session = null;
+
+function collectCreateInputsFromScreen() {
+  const mode = isCreateIdeaMode() ? "idea" : "write";
+  return normalizeCreateInputs({
+    mode,
+    prompt: String(els.sunoPrompt?.value || "").trim(),
+    style: String(els.sunoStyle?.value || "").trim(),
+    title: String(els.sunoTitle?.value || "").trim(),
+    vocalGender: String(els.sunoSingerGender?.value || "").trim(),
+    singerGender: String(els.sunoSingerGender?.value || "").trim(),
+    personaId: getActivePersonaId(),
+    dialect: String(els.sunoDialect?.value || "").trim(),
+    dialectHint: String(els.sunoDialectHint?.value || "").trim(),
+    arabicAddress: String(els.sunoArabicAddress?.value || "").trim(),
+    instrumental: String(els.vocalInstrumentalOnly?.value || "0") === "1",
+    songKey: String(els.sunoSongKey?.value || "").trim(),
+    durationPreset: String(els.sunoSongDuration?.value || "").trim(),
+    timing: String(els.sunoTiming?.value || "").trim(),
+    groovePace: String(els.sunoGroovePace?.value || "").trim(),
+    prosody: String(els.sunoProsody?.value || "").trim(),
+    beatStability: String(els.sunoBeatStability?.value || "").trim(),
+    avoidTags: String(els.sunoAvoidTags?.value || "").trim(),
+    artworkStyle: String(els.sunoArtworkStyle?.value || "").trim(),
+    voiceProfile: String(els.sunoVoiceProfile?.value || "").trim(),
+    lyricsLanguage,
+    lyricsDialect,
+  });
+}
+
+function applyTake2Prefill(inputs) {
+  const next = normalizeCreateInputs(inputs);
+  setActiveCreateTab("lyrics");
+  setCreateSongType(next.instrumental ? "instrumental" : "song");
+  setLyricsInputMode(next.mode === "idea" ? "generate" : "write", { preserveText: true, silent: true });
+  if (els.sunoPrompt) els.sunoPrompt.value = next.prompt;
+  try { autoResizeLyricsBox(); } catch {}
+  if (els.sunoStyle) els.sunoStyle.value = next.style;
+  if (els.sunoTitle) els.sunoTitle.value = next.title;
+  if (els.sunoSingerGender) els.sunoSingerGender.value = next.vocalGender;
+  if (els.sunoVoiceProfile && next.voiceProfile) els.sunoVoiceProfile.value = next.voiceProfile;
+  if (els.sunoDialect) els.sunoDialect.value = next.dialect;
+  if (els.sunoDialectHint) els.sunoDialectHint.value = next.dialectHint;
+  if (els.sunoArabicAddress) els.sunoArabicAddress.value = next.arabicAddress;
+  if (els.sunoSongKey) els.sunoSongKey.value = next.songKey;
+  if (els.sunoSongDuration && next.durationPreset) els.sunoSongDuration.value = next.durationPreset;
+  if (els.sunoTiming) els.sunoTiming.value = next.timing;
+  if (els.sunoGroovePace) els.sunoGroovePace.value = next.groovePace;
+  if (els.sunoProsody) els.sunoProsody.value = next.prosody;
+  if (els.sunoBeatStability) els.sunoBeatStability.value = next.beatStability;
+  if (els.sunoAvoidTags) els.sunoAvoidTags.value = next.avoidTags;
+  if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = next.artworkStyle;
+  try { savePersonaSelection(next.personaId || ""); } catch {}
+  if (els.sunoPersonaId) els.sunoPersonaId.value = next.personaId || "";
+  if (next.lyricsLanguage) {
+    try { setLyricsLanguage(next.lyricsLanguage); } catch {}
+  }
+  if (next.lyricsDialect) {
+    try { setLyricsDialect(next.lyricsDialect); } catch {}
+  }
+  try { syncSingerGenderPills(); } catch {}
+  try { renderSingerPersonaPill(); } catch {}
+  try { syncLyricsPlaceholder(); } catch {}
+  try { syncCreateTabMorph(); } catch {}
+}
+
+async function startTake2FromLibraryTrack(track) {
+  if (!nabadTake2Enabled()) return;
+  let card = takeCardFromTrack(track);
+  if ((!card || !card.finalPrompt) && track?.taskId) {
+    try {
+      const r = await apiFetch(`/api/music/take-card?taskId=${encodeURIComponent(String(track.taskId))}`);
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data?.takeCard?.hasCard) card = data.takeCard;
+    } catch {}
+  }
+  if (!card?.hasCard && !card?.finalPrompt) {
+    showToast("Take 2 isn’t available for this song.", { icon: "!", durationMs: 3600 });
+    return;
+  }
+  const parentId = rootSongId(track);
+  const takeNumber = nextTakeNumber(loadLibrary(), parentId);
+  const baseTitle = stripTakeSuffix(card.createInputs?.title || track.title || "Song");
+  _take2Session = {
+    parentSongId: parentId,
+    parentTaskId: rootTaskId(track),
+    takeNumber,
+    createInputs: normalizeCreateInputs({
+      ...(card.createInputs || {}),
+      title: baseTitle,
+    }),
+    producerJson: card.producerJson || null,
+    finalPrompt: String(card.finalPrompt || "").trim(),
+    sourceTaskId: String(card.taskId || track.taskId || "").trim(),
+  };
+  applyTake2Prefill(_take2Session.createInputs);
+  hideCreateResultCards();
+  setGenerateFieldsLocked(false);
+  enterGenerateSubFlow("", () => {
+    try { applyTake2Prefill(_take2Session.createInputs); } catch {}
+  });
+  showToast("Take 2 — same inputs. Edit or Generate.", { icon: "♪", durationMs: 3200 });
 }
 
 async function startLibraryRemixForLibraryTrack(t) {
@@ -55478,6 +55598,12 @@ function runTrackSheetAction(action, sourceEl) {
       try { openStudioForTrack(t); } catch {}
       return;
     }
+    if (action === "library_take2") {
+      if (!nabadTake2Enabled()) return;
+      shut();
+      void startTake2FromLibraryTrack(t);
+      return;
+    }
     if (action === "library_song_edit") {
       if (!nabadSongEditEnabled()) return;
       shut();
@@ -55528,6 +55654,12 @@ function runTrackSheetAction(action, sourceEl) {
     if (action === "profile_lib_remix") {
       shut();
       void startLibraryRemixForLibraryTrack(t);
+      return;
+    }
+    if (action === "library_take2") {
+      if (!nabadTake2Enabled()) return;
+      shut();
+      void startTake2FromLibraryTrack(t);
       return;
     }
     if (action === "profile_lib_share") {
@@ -77412,6 +77544,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       finishedAudioUrl: pickSunoFinishedAudioUrl(first),
       durationSec: Number(first?.duration || first?.durationSec || first?.duration_sec || 0) || 0,
       providerLyrics,
+      takeCard: data?._takeCard && typeof data._takeCard === "object" ? data._takeCard : null,
     };
   };
 
@@ -77531,6 +77664,18 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 : photoCoverMeta;
             }
             genMeta = mergeGeneratedLyricsIntoMeta(genMeta, state.providerLyrics);
+            if (state.takeCard && typeof state.takeCard === "object") {
+              genMeta = {
+                ...(genMeta || {}),
+                takeCard: { ...(genMeta?.takeCard || {}), ...state.takeCard, hasCard: true },
+              };
+              try {
+                lastGenerationMeta = {
+                  ...(lastGenerationMeta || {}),
+                  takeCard: genMeta.takeCard,
+                };
+              } catch {}
+            }
             try { applyGeneratedLyricsToCreateUi(state.providerLyrics, genMeta); } catch {}
             try {
               if (lastGenerationMeta && typeof lastGenerationMeta === "object" && state.providerLyrics) {
@@ -77561,6 +77706,20 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 }));
               }
             }
+            const take2Saved = savedEntries[0];
+            if (take2Saved?.taskId && nabadTake2Enabled()) {
+              void apiFetch("/api/music/take-card", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "attach",
+                  taskId: take2Saved.taskId,
+                  localSongId: take2Saved.id,
+                  songId: take2Saved.cloudSongId || "",
+                }),
+              }).catch(() => null);
+            }
+            _take2Session = null;
             const genTaskId = sunoTaskId || "";
             clearGenerationPending(genTaskId);
             try {
@@ -78769,6 +78928,42 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ...(photoCoverMeta || {}),
         ...(vibeReadAppliedForNextGen ? { vibeReadApplied: true } : {}),
       };
+      const createInputsSnap = collectCreateInputsFromScreen();
+      if (useLyriaForThisGenerate() || shelfLyriaFull) {
+        payload.take2CreateInputs = createInputsSnap;
+        if (_take2Session) {
+          payload.take2ParentSongId = _take2Session.parentSongId;
+          payload.take2ParentTaskId = _take2Session.parentTaskId;
+          payload.take2TaskId = _take2Session.sourceTaskId;
+          payload.take2Number = _take2Session.takeNumber;
+          const takeTitle = nextTakeTitle(
+            String(payload.title || createInputsSnap.title || "").trim() || "Song",
+            _take2Session.takeNumber,
+          );
+          payload.title = takeTitle;
+          if (els.sunoTitle) els.sunoTitle.value = takeTitle;
+          if (createInputsEqual(createInputsSnap, _take2Session.createInputs) && _take2Session.finalPrompt) {
+            payload.take2Replay = true;
+            payload.take2FinalPrompt = _take2Session.finalPrompt;
+          } else if (_take2Session.producerJson) {
+            payload.previousTake = _take2Session.producerJson;
+          }
+        }
+      }
+      lastGenerationMeta.takeCard = {
+        hasCard: false,
+        createInputs: createInputsSnap,
+        parentSongId: _take2Session?.parentSongId || "",
+        parentTaskId: _take2Session?.parentTaskId || "",
+        takeNumber: _take2Session?.takeNumber || 0,
+      };
+      if (_take2Session) {
+        lastGenerationMeta.parentSongId = _take2Session.parentSongId;
+        lastGenerationMeta.parentTaskId = _take2Session.parentTaskId;
+        lastGenerationMeta.rootSongId = _take2Session.parentSongId;
+        lastGenerationMeta.rootTaskId = _take2Session.parentTaskId;
+        lastGenerationMeta.takeNumber = _take2Session.takeNumber;
+      }
       if (shouldGenerateInstrumental) {
         setStatus(
           referenceInstrumentalOnly
@@ -86773,6 +86968,12 @@ try {
   });
   syncNabadSongEditCreateTab();
 } catch (e) { console.warn("[nabad-song-edit] init", e); }
+
+try {
+  configureNabadTake2({
+    isAdmin: () => Boolean(creditsState.isAdmin),
+  });
+} catch (e) { console.warn("[nabad-take2] init", e); }
 
 try {
   configureCoverStudio({

@@ -47,6 +47,7 @@ const {
   roundUsd,
 } = require("../../_lib/provider-spend");
 const { computeGeminiSharedWalletBalance } = require("../../_lib/gemini-wallet");
+const { attachProducerFields } = require("../../_lib/generation-admin-detail");
 const {
   isCloudflareFluxConfigured,
   resolveDefaultCoverImageProvider,
@@ -2208,6 +2209,7 @@ async function getGenerations(limit, offset, filters = {}) {
   const kind = String(filters.kind || "").trim().toLowerCase();
   const provider = String(filters.provider || "").trim().toLowerCase();
   const status = String(filters.status || "").trim().toLowerCase();
+  const producerStatus = String(filters.producerStatus || "").trim().toLowerCase();
   if (dateFrom) parts.push(`created_at=gte.${encodeURIComponent(`${dateFrom}T00:00:00.000Z`)}`);
   if (dateTo) parts.push(`created_at=lte.${encodeURIComponent(`${dateTo}T23:59:59.999Z`)}`);
   // Kind filter uses stored kind; older cover/remix rows may still be "song".
@@ -2220,7 +2222,10 @@ async function getGenerations(limit, offset, filters = {}) {
   if (status && ["pending", "completed", "failed", "refunded"].includes(status)) {
     parts.push(`status=eq.${encodeURIComponent(status)}`);
   }
-  parts.push(`order=created_at.desc&limit=${limit}&offset=${offset}`);
+  const producerFilterOn = producerStatus === "applied" || producerStatus === "fallback";
+  const fetchLimit = producerFilterOn ? Math.min(400, Math.max(limit * 8, 200)) : limit;
+  const fetchOffset = producerFilterOn ? 0 : offset;
+  parts.push(`order=created_at.desc&limit=${fetchLimit}&offset=${fetchOffset}`);
   const res = await serviceFetch(parts.join("&"));
   const rows = Array.isArray(res.data) ? res.data : [];
   const ids = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
@@ -2345,15 +2350,51 @@ async function getGenerations(limit, offset, filters = {}) {
       }
     }
 
+    let out = withSongMeta.map((g) => {
+      const attached = attachProducerFields(g, g.requestDetail);
+      return {
+        id: attached.id,
+        userId: attached.userId,
+        userLabel: attached.userLabel,
+        taskId: attached.taskId,
+        kind: attached.kind,
+        storedKind: attached.storedKind,
+        provider: attached.provider,
+        prompt: attached.prompt,
+        status: attached.status,
+        creditsUsed: attached.creditsUsed,
+        providerCostUsd: attached.providerCostUsd,
+        errorMessage: attached.errorMessage,
+        createdAt: attached.createdAt,
+        completedAt: attached.completedAt,
+        producerStatus: attached.producerStatus,
+        producerReason: attached.producerReason,
+        lyricsMode: attached.lyricsMode,
+        originalLyrics: attached.originalLyrics,
+        adaptedLyrics: attached.adaptedLyrics,
+        lyriaPrompt: attached.lyriaPrompt,
+      };
+    });
     if (kind) {
-      return withSongMeta.filter((g) => String(g.kind || "") === kind);
+      out = out.filter((g) => String(g.kind || "") === kind);
     }
     if (status) {
-      return withSongMeta.filter((g) => String(g.status || "") === status);
+      out = out.filter((g) => String(g.status || "") === status);
     }
-    return withSongMeta;
+    if (producerStatus === "applied" || producerStatus === "fallback") {
+      out = out.filter((g) => String(g.producerStatus || "") === producerStatus);
+      const page = out.slice(offset, offset + limit);
+      return { rows: page, filteredTotal: out.length };
+    }
+    return { rows: out, filteredTotal: null };
   })();
-  return { generations, total: res.total ?? generations.length, filters: { dateFrom, dateTo, kind, provider, status } };
+  const list = Array.isArray(generations?.rows) ? generations.rows : generations;
+  const filteredTotal = generations?.filteredTotal;
+  return {
+    generations: list,
+    total: filteredTotal != null ? filteredTotal : (res.total ?? list.length),
+    filters: { dateFrom, dateTo, kind, provider, status, producerStatus },
+  };
 }
 
 async function getPublications(limit, offset, search = "") {
@@ -3291,6 +3332,7 @@ async function getGenerationDetail(generationIdInput) {
         outputClips: [],
       };
 
+  const producerFields = attachProducerFields({}, row.request_detail || "");
   return {
     generation: {
       id: row.id,
@@ -3302,7 +3344,8 @@ async function getGenerationDetail(generationIdInput) {
       kind: inferredKind,
       provider: row.provider || "",
       prompt: row.prompt || "",
-      requestDetail: row.request_detail || "",
+      requestDetail: producerFields.requestMeta || "",
+      ...producerFields,
       status: row.status || "",
       creditsUsed: Number(row.credits_used || 0),
       providerCostUsd: row.provider_cost_usd != null ? Number(row.provider_cost_usd) : null,
@@ -3554,6 +3597,7 @@ module.exports = async function handler(req, res) {
   const genKind = String(url.searchParams.get("kind") || "").trim().toLowerCase();
   const genProvider = String(url.searchParams.get("provider") || "").trim().toLowerCase();
   const genStatus = String(url.searchParams.get("status") || "").trim().toLowerCase();
+  const genProducerStatus = String(url.searchParams.get("producerStatus") || "").trim().toLowerCase();
   const healthRefresh = String(url.searchParams.get("healthRefresh") || "").trim() === "1";
   const funnelDays = clampInt(url.searchParams.get("days"), 7, 90, 28);
 
@@ -3615,6 +3659,7 @@ module.exports = async function handler(req, res) {
           kind: genKind,
           provider: genProvider,
           status: genStatus,
+          producerStatus: genProducerStatus,
         })),
       };
     } else if (view === "subscriptions") {

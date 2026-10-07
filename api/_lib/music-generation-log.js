@@ -88,7 +88,7 @@ async function logMusicGeneration({
               ? "other"
               : "suno",
     prompt: String(prompt || "").trim().slice(0, 2000),
-    request_detail: String(requestDetail || "").trim().slice(0, 4000),
+    request_detail: String(requestDetail || "").trim().slice(0, 24000),
     status: ["pending", "completed", "failed", "refunded"].includes(status) ? status : "pending",
     credits_used: Number(creditsUsed || 0),
     provider_cost_usd: providerCostUsd != null ? providerCostUsd : estimateProviderCost(creditsUsed),

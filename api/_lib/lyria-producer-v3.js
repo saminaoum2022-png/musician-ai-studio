@@ -33,6 +33,9 @@ const SECTION_NAME_MAP = Object.freeze({
   bridge: "Bridge",
   "final chorus": "Final Chorus",
   "last chorus": "Final Chorus",
+  instrumental: "Instrumental",
+  "instrumental break": "Instrumental",
+  break: "Instrumental",
   outro: "Outro",
 });
 
@@ -51,14 +54,16 @@ Your ONLY jobs:
 
 You do NOT write or rewrite the style. style_tags is final and is sent to Lyria verbatim by our code. Never output a style description, vocal description, BPM, key, or genre text.
 
+You decide the song structure. Google Lyria only sings the plan you return.
+
 Return ONLY valid JSON matching this schema. No markdown, no commentary, no extra keys.
 
 {
   "sections": [
     {
-      "name": "Intro" | "Mawwal" | "Verse 1" | "Pre-Chorus" | "Chorus" | "Verse 2" | "Bridge" | "Final Chorus" | "Outro",
+      "name": "Intro" | "Mawwal" | "Verse 1" | "Pre-Chorus" | "Chorus" | "Verse 2" | "Bridge" | "Instrumental" | "Final Chorus" | "Outro",
       "bars": <integer>,
-      "arrangement": "<max 12 words, English, instruments and dynamics only>",
+      "arrangement": "<max 16 words, English, instruments and dynamics only>",
       "intensity": <integer 1-10>,
       "lyrics": ["<line>", "<line>"],
       "backing": ["<short echo line>"]
@@ -67,21 +72,23 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary, no extr
 }
 
 === INPUTS YOU USE ===
-- style_tags: read it ONLY to know which instruments exist and whether it mentions Mawwal, Tarab, dabke, or high-register vocals.
+- style_tags: read it for genre, mood, named instruments, and whether it mentions Mawwal, Tarab, dabke, or high-register vocals.
 - bpm and time signature: read them from style_tags (default 4/4). The user message also includes numeric bpm and timeSignature — use those for bar math.
-- target_length_seconds: aim for 130-170 seconds total, never above 180.
+- max_length_seconds / target_length_seconds: a HARD CAP (never above 180). A shorter song is fine and often better. Do not pad to fill 180 seconds.
 - idea_brief / lyrics_raw, dialect_hint, arabic_address, script_format, instrumental.
 
 === SECTION PLAN ===
-- Default order: Intro (4 bars) → Verse 1 (8) → Chorus (8) → Verse 2 (8) → Chorus (8) → optional Bridge (4) → Final Chorus (8) → Outro (4).
-- If BPM is above 115, verses and choruses may be 16 bars so the song is not too short. Check that the total stays under 180 seconds: seconds = bars × 4 × 60 / bpm for 4/4 (bars × 2 × 60 / bpm for 6/8, where bpm is the dotted-quarter pulse).
-- If style_tags mentions Mawwal: replace the Intro with "Mawwal" (free time, 1-2 long sung lines, OR instrumental oud if the user wrote no mawwal lines). Do not grid the Mawwal; our server assigns 15-20 seconds.
-- Intro, Outro and instrumental breaks have "lyrics": [].
+- You choose the form. A common shape is Intro → Verse 1 → Chorus → Verse 2 → Chorus → optional Bridge → Final Chorus → Outro, but you may drop, add, or reorder sections to fit the lyrics.
+- If lyrics are short: add Instrumental breaks (mainly after a Chorus, before the next Verse) instead of repeating lyric lines. Instrumental sections have "lyrics": [].
+- Do not stretch a short lyric set by repeating the same lines over and over.
+- If BPM is above 115, verses and choruses may be 16 bars. Total timed length must stay under 180 seconds: seconds = bars × 4 × 60 / bpm for 4/4 (bars × 2 × 60 / bpm for 6/8, where bpm is the dotted-quarter pulse). Shorter than 180 is OK.
+- If style_tags mentions Mawwal: open with "Mawwal" (free time, 1-2 long sung lines, OR instrumental oud if the user wrote no mawwal lines). Set bars to 0. Do not grid the Mawwal — our server always assigns a fixed 15-20 second window.
+- Intro, Outro and Instrumental have "lyrics": [].
 - Chorus and Final Chorus use the EXACT same lyric lines. Final Chorus may repeat the last line once.
 - Pre-Chorus only if lyrics_raw already has one.
 
 === ARRANGEMENT TEXT PER SECTION ===
-- Use ONLY instruments that appear in style_tags. If style_tags names none, use the fewest instruments that the genre implies (Tarab/Mawwal: oud nay riqq violins; dabke: mijwiz darbuka; Khaleeji: oud mirwas claps; pop: keys drums bass; ballad: piano strings oud). Never add 808s or trap drums to folk/tarab.
+- You MAY add instruments that fit the genre even if they are not named in style_tags (e.g. soft strings, acoustic guitar, pads). Prefer instruments implied by the genre (Tarab/Mawwal: oud nay riqq violins; dabke: mijwiz darbuka; Khaleeji: oud mirwas claps; pop: keys drums bass; ballad: piano strings oud). Never add 808s or trap drums to folk/tarab.
 - Intro: 1-2 instruments, soft.
 - Verse: lead instrument + light rhythm, space for the vocal.
 - Chorus: full arrangement. Backing vocals, handclaps or chants ONLY here, and only if style_tags has them.
@@ -93,7 +100,7 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary, no extr
 - Never use these words: powerful, belting, belt, soaring, screaming, shouting, strained, desperate, intense, piercing, triumphant, tenor, epic, anthem.
 
 === INTENSITY ===
-Intro 2, Mawwal 3, Verse 4, Pre-Chorus 5, Chorus 7, Bridge 3, Final Chorus 8, Outro 2.
+Intro 2, Mawwal 3, Verse 4, Pre-Chorus 5, Chorus 7, Instrumental 3, Bridge 3, Final Chorus 8, Outro 2.
 Do not write intensity into any lyric or arrangement string — it is a number field only.
 
 === LYRICS: GENERAL ===
@@ -115,11 +122,11 @@ Do not write intensity into any lyric or arrangement string — it is a number f
 - Script: Arabic script by default. If script_format is "arabizi", write Arabizi using letters only: "a" for ع, "h" for ح, "kh" for خ, "gh" for غ, "'" for ء. No numerals.
 
 === WRITE MODE (lyrics_raw set) ===
-- Never change, add, translate or reorder the user's words.
-- Allowed: split a line that is longer than the syllable range into two lines at a natural break, and assign the user's blocks to sections.
+- Keep the meaning of the user's lyrics. Never invent new verses, new story events, or a new message.
+- You MAY adapt for singability: split or join lines, place lines into sections, repeat the chorus, and make small wording fixes so the lines sit in the groove.
 - If the user labeled sections, keep their labels. A repeated block is the Chorus.
 - If the lyrics are too long for 180 seconds, drop whole repeated chorus copies first, then a third verse. Never cut inside a section.
-- Keep the user's script (Arabic or Arabizi) exactly as written.
+- Keep the user's script (Arabic or Arabizi). Do not translate.
 
 === INSTRUMENTAL ===
 If instrumental is true, every section has "lyrics": [] and "backing": [] and no vocal words in the arrangement text.
@@ -134,7 +141,10 @@ const LYRIA_PRODUCER_V3_RESPONSE_SCHEMA = {
       items: {
         type: "OBJECT",
         properties: {
-          name: { type: "STRING" },
+          name: {
+            type: "STRING",
+            enum: ["Intro", "Mawwal", "Verse 1", "Pre-Chorus", "Chorus", "Verse 2", "Bridge", "Instrumental", "Final Chorus", "Outro"],
+          },
           bars: { type: "INTEGER" },
           arrangement: { type: "STRING" },
           intensity: { type: "INTEGER" },
@@ -362,9 +372,10 @@ function buildLyriaProducerV3Input(body = {}, { lyrics = "", durationSec = 0 } =
   const style = String(body?.style || "").trim();
   const bpm = resolveV3Bpm(style, body?.bpm || body?.tempo);
   const timeSignature = resolveV3Meter(style, body?.timeSignature);
-  const target = Number(durationSec) > 0
-    ? Math.max(60, Math.min(180, Math.round(durationSec)))
-    : 180;
+  const maxSec = 180;
+  const cap = Number(durationSec) > 0
+    ? Math.max(60, Math.min(maxSec, Math.round(durationSec)))
+    : maxSec;
   return {
     title: String(body?.title || "").trim(),
     lyrics_raw: idea ? "" : rawPrompt,
@@ -380,7 +391,9 @@ function buildLyriaProducerV3Input(body = {}, { lyrics = "", durationSec = 0 } =
     instrumental: Boolean(body?.instrumental),
     script_format: String(body?.scriptFormat || "").trim(),
     target: "full_length_song",
-    target_length_seconds: target,
+    max_length_seconds: cap,
+    target_length_seconds: cap,
+    length_note: "max_not_target_shorter_ok",
     flow: "lyria_producer_v3",
   };
 }
@@ -397,8 +410,11 @@ function normalizeLyriaProducerV3Output(raw, { instrumental = false, input = {} 
     if (!name) continue;
     let bars = Math.max(0, Math.round(Number(item?.bars) || 0));
     if (name === "Mawwal") bars = 0;
-    if (name !== "Mawwal" && bars < 2) bars = name === "Intro" || name === "Outro" || name === "Bridge" ? 4 : 8;
-    const arrangement = capWords(String(item?.arrangement || "").trim(), 12);
+    if (name !== "Mawwal" && bars < 2) {
+      bars = name === "Intro" || name === "Outro" || name === "Bridge" || name === "Instrumental" ? 4 : 8;
+    }
+    let arrangement = capWords(String(item?.arrangement || "").trim(), 16);
+    if (name === "Mawwal" && !arrangement) arrangement = capWords("solo oud, free-time", 16);
     if (!arrangement) continue;
     let intensity = Math.round(Number(item?.intensity) || 0);
     if (!Number.isFinite(intensity) || intensity < 1) intensity = 4;
@@ -420,7 +436,7 @@ function normalizeLyriaProducerV3Output(raw, { instrumental = false, input = {} 
       bars,
       arrangement,
       intensity,
-      lyrics: name === "Intro" || name === "Outro" ? [] : lyrics,
+      lyrics: name === "Intro" || name === "Outro" || name === "Instrumental" ? [] : lyrics,
       backing,
     });
   }
@@ -433,7 +449,7 @@ function normalizeLyriaProducerV3Output(raw, { instrumental = false, input = {} 
         ? {
             name: "Mawwal",
             bars: 0,
-            arrangement: capWords("solo oud, free-time", 12),
+            arrangement: capWords("solo oud, free-time", 16),
             intensity: 3,
             lyrics: [],
             backing: [],
@@ -441,7 +457,7 @@ function normalizeLyriaProducerV3Output(raw, { instrumental = false, input = {} 
         : {
             name: "Intro",
             bars: 4,
-            arrangement: capWords("soft, 1-2 instruments", 12),
+            arrangement: capWords("soft, 1-2 instruments", 16),
             intensity: 2,
             lyrics: [],
             backing: [],
@@ -471,7 +487,8 @@ function assignTimestamps(sections, { bpm, meter }) {
     if (s.name === "Mawwal") {
       return Math.max(MAWWAL_SECONDS_MIN, Math.min(MAWWAL_SECONDS_MAX, MAWWAL_SECONDS));
     }
-    return Math.max(2, (Number(s.bars) || 4) * spb);
+    const bars = Math.max(1, Number(s.bars) || 4);
+    return Math.max(2, bars * spb);
   };
   const stamp = (list) => {
     let t = 0;
@@ -559,12 +576,7 @@ function validateLyriaPromptV3({
       return { ok: false, error: "chorus_mismatch" };
     }
   }
-  if (!instrumental && !ideaMode && String(lyricsRaw || "").trim()) {
-    const all = (sections || []).flatMap((s) => s.lyrics || []).join(" ");
-    if (!tokensInOrder(lyricsRaw, all)) {
-      return { ok: false, error: "write_lyrics_not_preserved" };
-    }
-  }
+  // write_lyrics_not_preserved is not enforced: Write lyrics may be adapted.
   return { ok: true };
 }
 
@@ -589,14 +601,11 @@ function buildLyriaPromptV3({
   const styleLine = composeV3StyleLine(body, { bpmAppended });
   if (!styleLine) return { ok: false, error: "empty_style" };
 
-  const allowed = allowedInstruments(styleOrig || styleLine);
   for (const s of sectionsIn) {
     if (FORBIDDEN_ARRANGEMENT.test(s.arrangement || "")) {
       return { ok: false, error: `forbidden_arrangement:${s.name}` };
     }
-    if (!arrangementUsesOnlyAllowed(s.arrangement, allowed)) {
-      return { ok: false, error: `unknown_instrument:${s.name}` };
-    }
+    // unknown_instrument is not enforced: genre-fitting extra instruments are allowed.
   }
 
   const timed = assignTimestamps(sectionsIn, { bpm, meter });
@@ -665,9 +674,10 @@ function buildLyriaPromptV3({
 function appendLyriaProducerV3AdminDetail(producerResult, stitch) {
   const applied = Boolean(producerResult?.ok) && !producerResult?.fallback && stitch?.ok !== false;
   const reason = String(
-    producerResult?.error || stitch?.error || (!applied ? "bare" : ""),
+    producerResult?.error || stitch?.error || (!applied ? "plan_failed" : ""),
   ).trim();
-  const lines = [`producer: ${applied ? "applied" : "fallback"}`];
+  const lines = [`producer: ${applied ? "applied" : "error"}`];
+  if (producerResult?.v3Attempts) lines.push(`lyria_producer_v3_attempts: ${producerResult.v3Attempts}`);
   if (!applied && reason) lines.push(`producer_reason: ${reason}`);
   if (producerResult?.model) lines.push(`lyria_producer_v3_model: ${producerResult.model}`);
   if (producerResult?.latencyMs != null) lines.push(`lyria_producer_v3_ms: ${producerResult.latencyMs}`);
@@ -675,7 +685,14 @@ function appendLyriaProducerV3AdminDetail(producerResult, stitch) {
   if (stitch?.bpmAppended) lines.push(`lyria_producer_v3_bpm_appended: ${stitch.bpmAppended}`);
   const secs = stitch?.sections || producerResult?.sections || [];
   if (secs.length) {
-    lines.push(`lyria_producer_v3_sections: ${secs.map((s) => `${s.name}:${s.bars || 0}`).join(",")}`);
+    lines.push(`lyria_producer_v3_sections: ${secs.map((s) => {
+      if (s.name === "Mawwal") {
+        const dur = Math.max(0, Math.round((Number(s.endSec) || 0) - (Number(s.startSec) || 0)))
+          || MAWWAL_SECONDS;
+        return `Mawwal:${dur}s`;
+      }
+      return `${s.name}:${s.bars || 0}`;
+    }).join(",")}`);
   }
   return lines.join("\n");
 }

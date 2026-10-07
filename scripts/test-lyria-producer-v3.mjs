@@ -126,6 +126,55 @@ const khStitch = v3.buildLyriaPromptV3({
 if (!khStitch.ok) fail(`khaleeji stitch: ${khStitch.error}`);
 assert.equal(khStitch.bpm, 95);
 
+const writeOriginal = "I walk the old street tonight I miss your name forever";
+const writeNorm = v3.normalizeLyriaProducerV3Output({
+  sections: [
+    { name: "Intro", bars: 4, arrangement: "soft strings pad", intensity: 2, lyrics: [], backing: [] },
+    { name: "Verse 1", bars: 8, arrangement: "acoustic textures guitar", intensity: 4, lyrics: ["I walk the old street", "tonight I miss your name"], backing: [] },
+    { name: "Chorus", bars: 8, arrangement: "full keys drums bass", intensity: 7, lyrics: ["I miss your name"], backing: [] },
+    { name: "Instrumental", bars: 4, arrangement: "oud and strings break", intensity: 3, lyrics: [], backing: [] },
+    { name: "Final Chorus", bars: 8, arrangement: "full one step bigger", intensity: 8, lyrics: ["I miss your name"], backing: [] },
+    { name: "Outro", bars: 4, arrangement: "strings fading", intensity: 2, lyrics: [], backing: [] },
+  ],
+}, { input: { style_tags: "Levantine pop, 105 BPM" } });
+const writeStitch = v3.buildLyriaPromptV3({
+  body: { style: "Levantine pop, 105 BPM", vocalGender: "m" },
+  producerResult: writeNorm,
+  lyricsRaw: writeOriginal,
+});
+if (!writeStitch.ok) fail(`write adapted stitch: ${writeStitch.error}`);
+assert.ok(writeStitch.prompt.includes("acoustic textures"));
+assert.ok(writeStitch.prompt.includes("[") && writeStitch.prompt.includes("Instrumental"));
+
+const mawwalZero = v3.normalizeLyriaProducerV3Output({
+  sections: [
+    { name: "Mawwal", bars: 0, arrangement: "", intensity: 3, lyrics: ["يا ليل"], backing: [] },
+    { name: "Verse 1", bars: 8, arrangement: "oud nay light riqq", intensity: 4, lyrics: ["قلبي تعبان"], backing: [] },
+    { name: "Chorus", bars: 8, arrangement: "violins and darbuka", intensity: 7, lyrics: ["يا دني"], backing: [] },
+    { name: "Final Chorus", bars: 8, arrangement: "full tarab", intensity: 8, lyrics: ["يا دني"], backing: [] },
+    { name: "Outro", bars: 4, arrangement: "oud fading", intensity: 2, lyrics: [], backing: [] },
+  ],
+}, { input: { style_tags: "classic Tarab, Mawwal, 80 BPM" } });
+assert.equal(mawwalZero.sections[0].name, "Mawwal");
+assert.equal(mawwalZero.sections[0].bars, 0);
+assert.ok(mawwalZero.sections[0].arrangement);
+const mawwalZeroStitch = v3.buildLyriaPromptV3({
+  body: { style: "classic Tarab, Mawwal, 80 BPM", vocalGender: "m" },
+  producerResult: mawwalZero,
+  lyricsRaw: "يا ليل قلبي تعبان يا دني",
+});
+if (!mawwalZeroStitch.ok) fail(`mawwal 0 bars stitch: ${mawwalZeroStitch.error}`);
+const mzLine = mawwalZeroStitch.prompt.split("\n").find((l) => l.includes("] Mawwal:"));
+const mzTimes = mzLine.match(/\[(\d):(\d{2}) - (\d):(\d{2})\]/);
+const mzDur = Number(mzTimes[3]) * 60 + Number(mzTimes[4]) - (Number(mzTimes[1]) * 60 + Number(mzTimes[2]));
+assert.ok(mzDur >= 15 && mzDur <= 20, `mawwal fixed window ${mzDur}`);
+const mawwalAdmin = v3.appendLyriaProducerV3AdminDetail(
+  { ok: true, v3: true, fallback: false },
+  mawwalZeroStitch,
+);
+assert.ok(/producer: applied/.test(mawwalAdmin));
+assert.ok(/Mawwal:\d+s/.test(mawwalAdmin), mawwalAdmin);
+
 console.log("--- Greek-Arabic pop ---\n" + popStitch.prompt.slice(0, 900) + "\n");
 console.log("--- Lebanese Mawwal ---\n" + lebaneseStitch.prompt.slice(0, 1100) + "\n");
 console.log("--- Khaleeji pop ---\n" + khStitch.prompt.slice(0, 900) + "\n");

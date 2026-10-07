@@ -56,7 +56,12 @@ function inferProducerStatus(text) {
   const src = String(text || "");
   const producer = lineValue(src, "producer").toLowerCase();
   if (producer === "applied" || producer.startsWith("applied")) return "applied";
-  if (producer === "fallback" || producer.startsWith("fallback") || producer === "skipped") {
+  if (
+    producer === "fallback"
+    || producer.startsWith("fallback")
+    || producer === "skipped"
+    || producer === "error"
+  ) {
     return "fallback";
   }
 
@@ -66,7 +71,7 @@ function inferProducerStatus(text) {
 
   const pipe = /^pipeline:\s*(.+)$/im.exec(src);
   const pipeLine = String(pipe?.[1] || "");
-  if (/lyria_producer_v3\s+fallback/i.test(pipeLine)) return "fallback";
+  if (/lyria_producer_v3\s+(fallback|error)/i.test(pipeLine)) return "fallback";
   if (/lyria_producer_v3\s*→\s*lyria/i.test(pipeLine) && !/fallback/i.test(pipeLine)) {
     return "applied";
   }

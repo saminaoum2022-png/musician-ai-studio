@@ -478,7 +478,7 @@ function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
   if (producerResult?.v3) {
     return producerResult.ok
       ? "pipeline: lyria_producer_v3 → lyria"
-      : `pipeline: lyria_producer_v3 fallback · ${producerResult.error || "bare"}`;
+      : `pipeline: lyria_producer_v3 error · ${producerResult.error || "plan_failed"}`;
   }
   if (!lyriaLegacyPromptsEnabled()) {
     if (isLyriaIdeaPromptBody(body)) {
@@ -548,7 +548,7 @@ async function runLyriaGenerationJob({
   stylePrompt = "",
   fallbackLyriaPrompt = "",
 }) {
-  const fail = async (msg) => {
+  const fail = async (msg, requestDetailOverride) => {
     if (!isAdmin) {
       await refund(userId, FULL_SONG_COST, "refund_full_song", "lyria_upstream").catch(() => null);
     }
@@ -561,7 +561,7 @@ async function runLyriaGenerationJob({
     queueUpdateMusicGenerationByTaskId(taskId, {
       status: isAdmin ? "failed" : "refunded",
       error_message: msg,
-      request_detail: adminDetailBase || undefined,
+      request_detail: requestDetailOverride || adminDetailBase || undefined,
     });
   };
 
@@ -582,33 +582,67 @@ async function runLyriaGenerationJob({
       && resolveLyriaProducerV3Enabled(body, isAdmin);
     if (useProducerV3) {
       const v3input = buildLyriaProducerV3Input(body, { lyrics, durationSec });
-      producerResult = await enrichLyriaSongWithGeminiProducerV3({
-        apiKey,
-        enabled: true,
-        input: v3input,
-      });
-      producerResult.v3 = true;
-      if (producerResult.ok) {
-        const stitched = buildLyriaPromptV3({
-          body,
-          producerResult,
-          instrumental,
-          lyricsRaw: lyrics,
+      const v3MaxAttempts = 3;
+      let v3LastError = "plan_failed";
+      for (let attempt = 1; attempt <= v3MaxAttempts; attempt++) {
+        producerResult = await enrichLyriaSongWithGeminiProducerV3({
+          apiKey,
+          enabled: true,
+          input: v3input,
         });
-        if (stitched.ok) {
-          lyriaPrompt = stitched.prompt;
-          v3DisplayLyrics = stitched.displayLyrics || "";
-          producerResult.v3Stitch = stitched;
-        } else {
+        producerResult.v3 = true;
+        producerResult.v3Attempts = attempt;
+        producerResult.fallback = false;
+        if (producerResult.ok && Array.isArray(producerResult.sections) && producerResult.sections.length) {
+          const stitched = buildLyriaPromptV3({
+            body,
+            producerResult,
+            instrumental,
+            lyricsRaw: lyrics,
+          });
+          if (stitched.ok) {
+            lyriaPrompt = stitched.prompt;
+            v3DisplayLyrics = stitched.displayLyrics || "";
+            producerResult.v3Stitch = stitched;
+            v3LastError = "";
+            break;
+          }
+          v3LastError = stitched.error || "v3_stitch_failed";
           producerResult = {
             ...producerResult,
             ok: false,
             used: false,
-            fallback: true,
-            error: stitched.error || "v3_stitch_failed",
+            fallback: false,
+            error: v3LastError,
             v3: true,
+            v3Attempts: attempt,
           };
+        } else {
+          v3LastError = producerResult.error || "invalid_json";
+          producerResult.ok = false;
+          producerResult.used = false;
+          producerResult.fallback = false;
+          producerResult.error = v3LastError;
         }
+      }
+      if (!producerResult.ok || !producerResult.v3Stitch?.ok) {
+        const failDetail = buildLyriaRequestDetail({
+          flow: LYRIA_FULL_SONG_FLOW,
+          model,
+          lyriaPrompt: "",
+          photoCount: photoImages.length,
+          extraLines: buildLyriaFullSongAdminExtra({
+            body,
+            producerResult,
+            model,
+            lyriaPrompt: "",
+            isAdmin,
+            originalLyrics: isLyriaIdeaPromptBody(body) ? "" : String(lyrics || "").trim(),
+            adaptedLyrics: "",
+          }),
+        });
+        await fail(`Producer couldn't plan this song (${v3LastError}). Try again.`, failDetail);
+        return;
       }
     } else if (lyriaLegacyPromptsEnabled() && !useLyriaV2) {
       producerResult = await enrichLyriaSongWithGeminiProducer({

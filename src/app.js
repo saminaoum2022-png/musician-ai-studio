@@ -6773,7 +6773,9 @@ function applyRoute({ passGen } = {}) {
     try { renderPersonaSelect(); } catch {}
     try { restoreCreatePageOnRouteEnter(); } catch {}
     try { autoResizeLyricsBox(); } catch {}
-    if (prevRoute !== "generate") {
+    if (prevRoute !== wanted) {
+      _createSimpleAutofocusAfterLayout =
+        createFlowModeEnabled() && getCreateFlowMode() === "simple";
       scheduleCreateLyricsAutofocus();
     }
   }
@@ -80612,6 +80614,10 @@ function syncCreateFlowLayoutUi() {
   syncLyriaStudioStyleUi();
   syncLyriaStudioSoundPromptPreview();
   try { syncCreateComposeLayout(); } catch {}
+  if (mode === "simple" && enabled && _createSimpleAutofocusAfterLayout) {
+    _createSimpleAutofocusAfterLayout = false;
+    scheduleCreateLyricsAutofocus();
+  }
 }
 
 function clearLyriaStudioStyleSelection({ clearStyleField = false } = {}) {
@@ -81982,6 +81988,7 @@ function lyricsBoxEmptyBaseHeight() {
 }
 
 let _createIgnoreAutofocus = false;
+let _createSimpleAutofocusAfterLayout = false;
 
 function blurCreateFieldsQuietly() {
   try {
@@ -82046,9 +82053,25 @@ function wireLyricsPromptBidiOnce() {
 
   el.addEventListener("paste", onPaste);
 }
+function isCreateSimpleCreateLayout() {
+  return (
+    isGenerateRouteActive()
+    && createFlowModeEnabled()
+    && getCreateFlowMode() === "simple"
+  );
+}
+
 function setGenerateInputFocus(activePanel) {
   const flow = document.getElementById("createFlow");
   if (!flow) return;
+  if (isCreateSimpleCreateLayout()) {
+    flow.classList.remove("focusInput");
+    getCreatePageRoot()?.querySelectorAll(".inputPanel").forEach((p) => {
+      p.classList.remove("isFocusCard");
+    });
+    try { syncCreateComposeLayout(); } catch {}
+    return;
+  }
   flow.classList.toggle("focusInput", Boolean(activePanel));
   getCreatePageRoot()?.querySelectorAll(".inputPanel").forEach((p) => {
     p.classList.toggle("isFocusCard", p === activePanel && Boolean(activePanel));
@@ -82094,13 +82117,15 @@ function scheduleCreateLyricsAutofocus() {
     if (!el || el.disabled) return;
     try {
       el.focus({ preventScroll: true });
-      setGenerateInputFocus(el.closest(".inputPanel"));
       autoResizeLyricsBox();
+      syncCreateComposeLayout();
     } catch {}
   };
-  window.setTimeout(attempt, 180);
-  window.setTimeout(attempt, 420);
-  window.setTimeout(attempt, 680);
+  window.setTimeout(attempt, 120);
+  window.setTimeout(attempt, 320);
+  window.setTimeout(attempt, 560);
+  window.setTimeout(attempt, 900);
+  window.setTimeout(attempt, 1200);
 }
 
 function syncCreateComposeLayout() {

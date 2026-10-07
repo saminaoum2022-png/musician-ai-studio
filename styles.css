@@ -17599,6 +17599,20 @@ html[data-theme="light"] body[data-route="generate"] .lyricsBox.generating .lyri
 body[data-route="generate"] #createFlow.focusInput{
   gap: 10px;
 }
+body[data-route="generate"][data-create-layout="simple"] #createFlow.focusInput,
+body[data-route="generate"][data-create-layout="simple"] #createFlow.focusInput .inputPanel,
+body[data-route="generate"][data-create-layout="simple"] #createFlow.focusInput .inputPanel:not(.isFocusCard),
+body[data-route="generate"][data-create-layout="simple"] #createFlow.focusInput .inputPanel.isFocusCard{
+  gap: inherit;
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+  transition: none !important;
+  box-shadow: none;
+}
+body[data-route="generate"][data-create-layout="simple"] #createFlow.focusInput .inputPanel.isFocusCard{
+  border-color: rgba(255, 255, 255, 0.09);
+}
 body[data-route="generate"] #createFlow.focusInput .inputPanel{
   transition: border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease, transform 180ms ease;
 }
@@ -22946,6 +22960,28 @@ body.trackSheetOpen .footer{
   body[data-route="generate"][data-create-layout="simple"] .app{
     padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   }
+  body[data-route="generate"][data-create-layout="simple"] .card.wide[data-route="generate"]{
+    flex: 1 1 auto;
+    min-height: calc(
+      100dvh - var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) - env(safe-area-inset-top, 0px) - 8px
+    );
+    display: flex;
+    flex-direction: column;
+  }
+  body[data-route="generate"][data-create-layout="simple"] #simpleBox{
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  body[data-route="generate"][data-create-layout="simple"] #simpleBox .createPageHeader{
+    flex: 0 0 auto;
+    margin-bottom: 6px;
+  }
+  body[data-route="generate"][data-create-layout="simple"] #simpleBox #createFlow{
+    flex: 1 1 auto;
+    min-height: 0;
+  }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .app{
     padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   }
@@ -23165,23 +23201,13 @@ body.trackSheetOpen .footer{
       0 0 34px rgba(124, 92, 255, 0.14);
   }
   body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack{
-    --create-simple-stack-gap: 12px;
+    --create-simple-stack-gap: 10px;
     gap: var(--create-simple-stack-gap);
-    min-height: calc(
-      100dvh - 112px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
-      - var(--create-keyboard-inset, 0px)
-    );
+    min-height: 0;
+    flex: 1 1 auto;
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack{
-    min-height: calc(
-      100dvh - 112px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
-      - var(--create-keyboard-inset, 0px) - 56px
-    );
-    padding-bottom: calc(var(--create-keyboard-inset, 0px) + 56px);
-  }
-  html:not(.is-native-shell) body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack{
-    min-height: calc(var(--create-vv-height, 100dvh) - 112px);
-    max-height: calc(var(--create-vv-height, 100dvh) - 112px);
+    padding-bottom: calc(var(--create-keyboard-inset, 0px) + 52px);
   }
   body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack > .createFlowStep:first-child{
     flex: 1 1 auto;
@@ -23217,8 +23243,10 @@ body.trackSheetOpen .footer{
     margin-top: 0;
     gap: var(--create-simple-stack-gap);
   }
-  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack.focusInput #lyricsFieldPanel.isFocusCard{
-    transform: none;
+  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack.focusInput #lyricsFieldPanel.isFocusCard,
+  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel.isFocusCard{
+    transform: none !important;
+    box-shadow: none !important;
   }
   body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain textarea{
     min-height: 160px !important;

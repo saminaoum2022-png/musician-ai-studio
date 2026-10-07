@@ -4433,6 +4433,9 @@ function flushTabRouteNavigation(route, targetHash) {
     }
   }
   syncRoutePanelVisibility(nextRoute);
+  if (nextRoute === "generate" && prevBodyRoute !== "generate") {
+    try { focusSimpleCreateLyricsIfNeeded(); } catch {}
+  }
   if (_applyRouteRaf) {
     cancelAnimationFrame(_applyRouteRaf);
     _applyRouteRaf = 0;
@@ -76827,12 +76830,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     els.lyricsModeWrite.addEventListener("click", () => {
       if (els.lyricsModeWrite.disabled) return;
       setLyricsInputMode("write");
+      try { if (isCreateSimpleCreateLayout()) focusSimpleCreateLyricsIfNeeded(); } catch {}
     });
   }
   if (els.lyricsModeGenerate) {
     els.lyricsModeGenerate.addEventListener("click", () => {
       if (els.lyricsModeGenerate.disabled) return;
       setLyricsInputMode("generate");
+      try { if (isCreateSimpleCreateLayout()) focusSimpleCreateLyricsIfNeeded(); } catch {}
     });
   }
   if (els.btnCloseImageMood) {
@@ -81161,6 +81166,9 @@ function closeStyleLibrary() {
       btn.addEventListener("click", () => {
         haptic("light");
         setCreateFlowMode(mode);
+        if (mode === "simple") {
+          try { focusSimpleCreateLyricsIfNeeded(); } catch {}
+        }
       });
     };
     bindFlow(els.btnCreateFlowSimple, "simple");
@@ -81989,6 +81997,64 @@ function lyricsBoxEmptyBaseHeight() {
 
 let _createIgnoreAutofocus = false;
 let _createSimpleAutofocusAfterLayout = false;
+// Simple Create always lays out for an open keyboard. Until iOS reports the real
+// keyboard height we assume this (iPhone portrait) so the stack never jumps.
+let _createSimpleKbAssumed = false;
+const CREATE_SIMPLE_KB_FALLBACK = 336;
+let _createSimpleKbHideTimer = 0;
+function cancelCreateSimpleKeyboardHide() {
+  if (_createSimpleKbHideTimer) {
+    clearTimeout(_createSimpleKbHideTimer);
+    _createSimpleKbHideTimer = 0;
+  }
+}
+const CREATE_SIMPLE_DOCK_H = 52;
+const CREATE_SIMPLE_STACK_GAP = 10;
+
+// Focus the lyrics box synchronously (must run inside the tap that opened Create,
+// otherwise iOS refuses to raise the keyboard).
+function focusSimpleCreateLyricsIfNeeded() {
+  if (!shouldAutoFocusCreateLyricsOnEnter()) return false;
+  const el = els.sunoPrompt;
+  if (!el || el.disabled) return false;
+  _createIgnoreAutofocus = false;
+  _createSimpleKbAssumed = true;
+  cancelCreateSimpleKeyboardHide();
+  try { syncCreateComposeLayout(); } catch {}
+  try { el.focus({ preventScroll: true }); } catch {}
+  return document.activeElement === el;
+}
+
+// Size the Simple stack to the space above the keyboard + Generate so
+// lyrics fills the free space and Studio sits right above Generate.
+function syncCreateSimpleViewportHeight() {
+  const root = document.documentElement;
+  const flow = document.getElementById("createFlow");
+  if (!flow || !isCreateSimpleMobileFill()) {
+    root.style.removeProperty("--create-simple-flow-h");
+    root.style.removeProperty("--create-simple-dock-bottom");
+    return;
+  }
+  const kb = _createKeyboardHeight > 0
+    ? _createKeyboardHeight
+    : (_createSimpleKbAssumed ? CREATE_SIMPLE_KB_FALLBACK : 0);
+  let dockBottom;
+  if (kb > 0) {
+    dockBottom = kb + CREATE_SIMPLE_STACK_GAP;
+  } else {
+    const tb = document.querySelector(".mobileTabbar");
+    const r = tb?.getBoundingClientRect?.();
+    dockBottom = r && r.height > 0
+      ? Math.round(window.innerHeight - r.top) + 12
+      : 86;
+  }
+  const top = flow.getBoundingClientRect().top + (window.scrollY || 0);
+  const h = Math.round(
+    window.innerHeight - top - dockBottom - CREATE_SIMPLE_DOCK_H - CREATE_SIMPLE_STACK_GAP
+  );
+  root.style.setProperty("--create-simple-flow-h", `${Math.max(240, h)}px`);
+  root.style.setProperty("--create-simple-dock-bottom", `${dockBottom}px`);
+}
 
 function blurCreateFieldsQuietly() {
   try {
@@ -82144,6 +82210,7 @@ function syncCreateComposeLayout() {
     simpleFill ||
     (mobile && !simpleFill && (keyboardOpen || lyricsFocused));
   flow.classList.toggle("createComposeStack", stack);
+  try { syncCreateSimpleViewportHeight(); } catch {}
   if (stack) {
     try { autoResizeLyricsBox(); } catch {}
   }
@@ -82312,21 +82379,35 @@ function wireCreatePageKeyboardOnce() {
   if (Keyboard?.addListener) {
     Keyboard.addListener("keyboardWillShow", (info) => {
       if (!isGenerateRouteActive()) return;
+      cancelCreateSimpleKeyboardHide();
       applyCreateKeyboardOpen(info?.keyboardHeight);
     });
     Keyboard.addListener("keyboardDidShow", (info) => {
       if (!isGenerateRouteActive()) return;
+      cancelCreateSimpleKeyboardHide();
       applyCreateKeyboardOpen(info?.keyboardHeight);
     });
-    Keyboard.addListener("keyboardWillHide", () => {
+    const applyKeyboardHidden = () => {
+      _createSimpleKbHideTimer = 0;
       if (!isGenerateRouteActive()) return;
-      clearCreatePageKeyboardInset();
-    });
-    Keyboard.addListener("keyboardDidHide", () => {
-      if (!isGenerateRouteActive()) return;
+      _createSimpleKbAssumed = false;
       clearCreatePageKeyboardInset();
       setGenerateInputFocus(null);
-    });
+    };
+    // Simple keeps its keyboard-sized layout for a beat so the tap that dismissed
+    // the keyboard (Idea, Advanced, a Studio chip…) still lands on a steady button.
+    // Write/Idea re-open the keyboard inside that window and cancel the reflow.
+    const onKeyboardHide = () => {
+      if (!isGenerateRouteActive()) return;
+      if (isCreateSimpleMobileFill()) {
+        cancelCreateSimpleKeyboardHide();
+        _createSimpleKbHideTimer = window.setTimeout(applyKeyboardHidden, 450);
+        return;
+      }
+      applyKeyboardHidden();
+    };
+    Keyboard.addListener("keyboardWillHide", onKeyboardHide);
+    Keyboard.addListener("keyboardDidHide", onKeyboardHide);
   } else {
     const vv = window.visualViewport;
     const onViewportResize = () => {

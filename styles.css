@@ -23251,6 +23251,66 @@ body.trackSheetOpen .footer{
   body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain textarea{
     min-height: 160px !important;
   }
+  /* Simple Create (native): lyrics fills free space → Studio → Generate, always
+     sized for an open keyboard. Height comes from syncCreateSimpleViewportHeight(). */
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] .app,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .app{
+    padding-bottom: 0;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack{
+    height: var(--create-simple-flow-h, auto);
+    min-height: 0;
+    max-height: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    overflow: hidden;
+    gap: 0;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack > .createFlowStep:first-child,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createSectionStack,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createPanes,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createPane--lyrics{
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--create-simple-stack-gap, 10px);
+    margin: 0;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createPane--lyrics[hidden]{
+    display: none;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel{
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  /* Advanced sound panel + generate step take no room in Simple; the dock floats. */
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack > .createFlowStep[aria-label="Sound and title"]{
+    display: none;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createFlowStep--generate{
+    flex: 0 0 0;
+    height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] .createGenerateDockSpacer{
+    display: none;
+  }
+  /* Generate sits right on top of the keyboard (or the tab bar once it is dismissed). */
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createGenerateDock,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createGenerateDock{
+    bottom: var(--create-simple-dock-bottom, 86px);
+    padding-right: 16px;
+    z-index: 120;
+    transition: none;
+  }
   body[data-route="generate"] input:focus,
   body[data-route="generate"] textarea:focus,
   body[data-route="generate"] select:focus{

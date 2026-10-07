@@ -974,6 +974,7 @@ const els = {
   lyricsFieldPanel: document.getElementById("lyricsFieldPanel"),
   lyricsModeWrite: document.getElementById("lyricsModeWrite"),
   lyricsModeGenerate: document.getElementById("lyricsModeGenerate"),
+  btnCreateInstrumentalTick: document.getElementById("btnCreateInstrumentalTick"),
   imageMoodSummary: document.getElementById("imageMoodSummary"),
   imageMoodModal: document.getElementById("imageMoodModal"),
   btnCloseImageMood: document.getElementById("btnCloseImageMood"),
@@ -6901,8 +6902,7 @@ function syncLyricsPlaceholder() {
   if (!els.sunoPrompt) return;
   const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   if (instrumental) {
-    els.sunoPrompt.placeholder =
-      "Instrumental mode: lyrics will be ignored. Hum a melody or describe the mood in Style / Tags.";
+    els.sunoPrompt.placeholder = "Describe the mood, instruments, or feel…";
     return;
   }
   if (currentRemixSource) {
@@ -7714,6 +7714,7 @@ async function ensureSingabilityBeforeGenerate() {
 
 /** True when Arabic flow is active and dialect + address are both chosen. */
 function arabicLyricChoicesReady() {
+  if (isCreateSimpleCreateLayout()) return true;
   const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   if (instrumentalOnly) return true;
   if (!shouldShowArabicDialectRow() && !shouldShowArabicAddress()) return true;
@@ -20165,9 +20166,8 @@ function syncCreateSongTypeTabs() {
   const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   const row = document.getElementById("createSongTypeTabs");
   if (row) {
-    const hide = is80sYouCreateFlow();
-    row.hidden = hide;
-    row.setAttribute("aria-hidden", hide ? "true" : "false");
+    row.hidden = true;
+    row.setAttribute("aria-hidden", "true");
     row.querySelectorAll("[data-create-song-type]").forEach((b) => {
       const on = instrumental
         ? b.getAttribute("data-create-song-type") === "instrumental"
@@ -20175,6 +20175,18 @@ function syncCreateSongTypeTabs() {
       b.classList.toggle("isActive", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
     });
+  }
+  const tick = els.btnCreateInstrumentalTick || document.getElementById("btnCreateInstrumentalTick");
+  if (tick) {
+    let hideTick = false;
+    try {
+      hideTick = is80sYouCreateFlow()
+        || (createFlowModeEnabled() && getCreateFlowMode() === "simple");
+    } catch {}
+    tick.hidden = hideTick;
+    tick.setAttribute("aria-hidden", hideTick ? "true" : "false");
+    tick.classList.toggle("isOn", instrumental);
+    tick.setAttribute("aria-pressed", instrumental ? "true" : "false");
   }
   const singerPanel = document.getElementById("singerVoicePanel");
   if (singerPanel && !is80sYouCreateFlow()) singerPanel.hidden = instrumental;
@@ -80076,7 +80088,7 @@ function syncCreateSoundPanelUi() {
     btnCustom.classList.toggle("isActive", on);
     btnCustom.setAttribute("aria-pressed", on ? "true" : "false");
   }
-  if (spark) spark.hidden = !unified || mode !== "studio";
+  if (spark) spark.hidden = true;
   const strip = document.getElementById("createStudioActiveStrip");
   const stripLabel = document.getElementById("createStudioActiveStripLabel");
   const preset = getLyriaStudioStyle(_activeLyriaStudioStyleId);
@@ -80110,25 +80122,8 @@ function setCreateFlowMode(mode) {
 function syncLyriaStudioSoundPromptPreview() {
   const details = els.lyriaStudioSoundPrompt;
   const pre = els.lyriaStudioSoundPromptText;
-  if (!details || !pre) return;
-  const simple =
-    getCreateFlowMode() === "simple"
-    && createFlowModeEnabled()
-    && String(document.body.getAttribute("data-route") || "") === "generate";
-  const preset = getLyriaStudioStyle(_activeLyriaStudioStyleId);
-  const text = preset?.styleLine || String(els.sunoStyle?.value || "").trim();
-  if (simple) {
-    pre.textContent = "";
-    details.hidden = true;
-    return;
-  }
-  if (preset && text) {
-    pre.textContent = text;
-    details.hidden = false;
-  } else {
-    pre.textContent = "";
-    details.hidden = true;
-  }
+  if (pre) pre.textContent = "";
+  if (details) details.hidden = true;
 }
 
 const LYRIA_STUDIO_AURA = Object.freeze({
@@ -80189,6 +80184,10 @@ function syncCreateSimpleChrome() {
     studioHost.classList.toggle("inputPanel", simple);
   }
   if (toolbar) toolbar.hidden = !simple;
+  const langPanel = document.getElementById("createSimpleLangPanel");
+  if (langPanel) langPanel.hidden = simple;
+  const sheetTitle = document.querySelector(".createStudioSheetTitle");
+  if (sheetTitle) sheetTitle.textContent = simple ? "Sound" : "Studio styles";
   if (box) box.classList.toggle("createSimpleLayout", simple);
   if (tabs) {
     tabs.hidden = simple;
@@ -80557,15 +80556,22 @@ function sparkRandomLyriaStudioStyle() {
 function mountCreateStudioBlockForFlowMode(mode) {
   const block = document.getElementById("createStudioBlock");
   const simpleHost = document.getElementById("createSimpleStudioHost");
-  const advancedHost = document.getElementById("createAdvancedStudioHost");
-  if (!block || !simpleHost || !advancedHost) return;
+  const advancedPanel = document.getElementById("createSoundPanel");
+  if (!block || !simpleHost || !advancedPanel) return;
   const simple = mode === "simple";
-  const host = simple ? simpleHost : advancedHost;
-  if (block.parentElement !== host) host.appendChild(block);
-  block.classList.toggle("inputPanel", !simple);
-  block.classList.toggle("inputPanel--style", !simple);
-  block.classList.toggle("field", !simple);
-  block.classList.toggle("grow", !simple);
+  if (simple) {
+    if (block.parentElement !== simpleHost) simpleHost.appendChild(block);
+  } else {
+    const customFields = document.getElementById("createSoundCustomFields");
+    if (customFields) {
+      if (block.parentElement !== advancedPanel || block.nextElementSibling !== customFields) {
+        advancedPanel.insertBefore(block, customFields);
+      }
+    } else if (block.parentElement !== advancedPanel) {
+      advancedPanel.appendChild(block);
+    }
+  }
+  block.classList.remove("inputPanel", "inputPanel--style", "field", "grow");
   simpleHost.hidden = !simple;
   simpleHost.classList.toggle("field", simple);
   simpleHost.classList.toggle("grow", simple);
@@ -80614,6 +80620,7 @@ function syncCreateFlowLayoutUi() {
   syncCreateSoundPanelUi();
   syncLyriaStudioStyleUi();
   syncLyriaStudioSoundPromptPreview();
+  try { syncCreateSongTypeTabs(); } catch {}
   try { syncCreateComposeLayout(); } catch {}
   if (mode === "simple" && enabled && _createSimpleAutofocusAfterLayout) {
     _createSimpleAutofocusAfterLayout = false;
@@ -80662,7 +80669,8 @@ function applyLyriaStudioStyle(id) {
   syncStyleUi();
   try { syncGenerateOrbVisibility(); } catch {}
   try {
-    showToast(`Studio style: ${preset.label}`, { icon: "♪", durationMs: 2800 });
+    const kind = isCreateSimpleCreateLayout() ? "Sound" : "Studio style";
+    showToast(`${kind}: ${preset.label}`, { icon: "♪", durationMs: 2800 });
   } catch {}
 }
 
@@ -82470,9 +82478,6 @@ function getReferenceHints() {
   if (refOn && (dialect || vp || singerGenderHint || String(els.sunoSongKey?.value || "").trim() || persona)) {
     pushHint("For cleaner melody follow, keep Accent, Voice Profile, Song Key, and Persona on Auto first.", "critical");
   }
-  if (dialect && !dialectHint) {
-    pushHint("Add one short example line in this dialect to improve pronunciation.");
-  }
   if ((vp.includes("baritone") || vp.includes("bass")) && timing) {
     const bpm = parseBpmFromTimingText(timing);
     const fastWords = /\b(fast|upbeat|dance|energetic|club)\b/i.test(timing);
@@ -82521,12 +82526,6 @@ function renderReferenceHints() {
   els.sunoReferenceHint.textContent = hints.map((h, i) => `${i + 1}. ${h.text}`).join(" ");
 }
 
-function showReferenceHintsPopupOnce() {
-  const hints = getReferenceHints();
-  if (!hints.length) return;
-  const msg = hints.map((h, i) => `${i + 1}. ${h.text}`).join("\n");
-  window.alert(msg);
-}
 ["input", "change", "compositionend"].forEach((ev) => {
   els.sunoPrompt?.addEventListener(ev, syncGenerateOrbVisibility);
   els.sunoStyle?.addEventListener(ev, syncGenerateOrbVisibility);
@@ -82722,9 +82721,6 @@ if (typeof requestAnimationFrame === "function") {
 } else {
   setTimeout(_bootInitialLists, 0);
 }
-els.sunoPrompt?.addEventListener("focus", showReferenceHintsPopupOnce, { once: true });
-els.sunoStyle?.addEventListener("focus", showReferenceHintsPopupOnce, { once: true });
-
 // "Boost style": send the user's short style words to /api/music/boost-style
 // (Suno's style/generate behind a provider-neutral path) and replace the
 // field with the richer produced description. The button doubles as Undo
@@ -88118,6 +88114,13 @@ if (createSongTypeTabs) {
     if (!btn) return;
     haptic("light");
     setCreateSongType(btn.getAttribute("data-create-song-type") === "instrumental" ? "instrumental" : "vocal");
+  });
+}
+if (els.btnCreateInstrumentalTick) {
+  els.btnCreateInstrumentalTick.addEventListener("click", () => {
+    const on = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+    haptic("light");
+    setCreateSongType(on ? "vocal" : "instrumental");
   });
 }
 const createSoloTypePills = document.getElementById("createSoloTypePills");

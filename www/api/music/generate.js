@@ -213,7 +213,7 @@ function buildLyriaClipMetaLines(body, lyriaPrompt) {
   if (vocalGender === "m" || vocalGender === "f") {
     lines.push(`Singer: ${vocalGender === "f" ? "Female" : "Male"}`);
   } else if (vocalGender === "duo") {
-    lines.push("Singer: Duo");
+    lines.push("Singer: Duet");
   }
   const chain = body?.nabadVocalChain || body?.nabadVocalToggles;
   if (chain && typeof chain === "object") {
@@ -280,7 +280,7 @@ function buildClipPromptLabel(lyrics, stylePrompt, title, body, lyriaPrompt) {
   if (vocalGender === "m" || vocalGender === "f") {
     bits.push(`Singer: ${vocalGender === "f" ? "Female" : "Male"}`);
   } else if (vocalGender === "duo") {
-    bits.push("Singer: Duo");
+    bits.push("Singer: Duet");
   }
   const catalog = clipVocalProfileById(String(body?.clipVocalProfileId || "").trim());
   if (catalog) bits.push(`Character: ${catalog.label}`);

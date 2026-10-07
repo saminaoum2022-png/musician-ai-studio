@@ -10635,6 +10635,11 @@ html:not([data-theme="light"]) body[data-route="generate"] .btnNewSong{
   font-weight: 750;
   padding: 7px 12px 7px 10px;
 }
+html:not([data-theme="light"]) body[data-route="generate"] .createHeadActions .btnNewSong{
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
 html:not([data-theme="light"]) body[data-route="generate"] .createTab.isActive,
 html:not([data-theme="light"]) body[data-route="generate"] .lyricsModeTab.isActive,
 html:not([data-theme="light"]) body[data-route="generate"] .optChip.isActive,
@@ -10680,15 +10685,22 @@ html:not([data-theme="light"]) body[data-route="generate"] #singerGenderPills .a
   overflow: visible;
 }
 .createSongTypeRow{
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 0 0 10px;
-  min-width: 0;
+  display: none !important;
 }
-.createSongTypeRow .btnNewSong{
-  margin-left: auto;
+body[data-route="generate"] .createHeadRow{
+  margin-bottom: 12px;
+}
+.createHeadActions .btnNewSong{
+  margin-left: 0;
   flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+}
+.createHeadActions .btnNewSong .btnNewSongLabel{
+  display: none;
 }
 .createHeadActions{
   display: inline-flex;
@@ -12271,6 +12283,7 @@ body[data-route="generate"] .createHeadActions .createCreditsChip{
   margin-bottom: 10px;
 }
 .lyriaStudioSoundPrompt{
+  display: none !important;
   margin: 10px 0 4px;
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 12px;
@@ -12303,7 +12316,8 @@ body[data-route="generate"][data-create-layout="simple"] #createTabs,
 body[data-route="generate"][data-create-layout="simple"] .createTabs{
   display: none !important;
 }
-body[data-route="generate"][data-create-layout="simple"] .createSongTypeRow{
+body[data-route="generate"][data-create-layout="simple"] .createSongTypeRow,
+body[data-route="generate"][data-create-layout="simple"] #btnCreateInstrumentalTick{
   display: none !important;
 }
 body[data-route="generate"][data-create-layout="simple"] #createSimpleLangPanel{
@@ -12323,7 +12337,13 @@ body[data-route="generate"][data-create-layout="simple"] #createStyleAdvancedPan
   display: none !important;
 }
 .createSoundPanel .createStudioBlock{
-  margin-bottom: 0;
+  margin: 0;
+  padding: 0;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 .createSoundPanelHead{
   margin-bottom: 8px;
@@ -12334,7 +12354,9 @@ body[data-route="generate"][data-create-layout="simple"] #createStyleAdvancedPan
 .createSoundModeSeg[hidden]{
   display: none !important;
 }
-.createSoundSparkBtn[hidden]{
+.createSoundSparkBtn,
+.createSoundSparkBtn[hidden],
+#btnCreateSoundSpark{
   display: none !important;
 }
 .createStudioActiveStrip{
@@ -12445,6 +12467,10 @@ body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyri
 body[data-route="generate"][data-create-layout="simple"] #lyriaStudioStyleLabel{
   display: none !important;
 }
+body[data-route="generate"][data-create-layout="simple"] #createSimpleLangPanel,
+body[data-route="generate"][data-create-layout="simple"] .lyricsLangBlock{
+  display: none !important;
+}
 body[data-route="generate"][data-create-layout="simple"] .createSimpleStudioToolbar{
   display: flex !important;
   align-items: center;
@@ -12460,6 +12486,7 @@ body[data-route="generate"][data-create-layout="simple"] .createSimpleStudioLabe
   letter-spacing: 0.04em;
 }
 body[data-route="generate"][data-create-layout="simple"] .createSimpleSparkBtn{
+  display: none !important;
   width: 28px;
   height: 28px;
   border-radius: 999px;
@@ -12588,6 +12615,74 @@ body[data-route="generate"][data-create-composer="1"] #lyricsFieldPanel{
 }
 body[data-route="generate"][data-create-composer="1"] #lyricsFieldPanel .lyricsPanelHead.createSimpleCardHead{
   padding-right: 40px;
+}
+.createInstrumentalTick{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  margin-left: auto;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: rgba(231, 238, 255, 0.62);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.createInstrumentalTickBox{
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1.5px solid rgba(231, 238, 255, 0.35);
+  background: rgba(255, 255, 255, 0.04);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+.createInstrumentalTick.isOn{
+  color: #fff;
+}
+.createInstrumentalTick.isOn .createInstrumentalTickBox{
+  border-color: rgba(35, 213, 171, 0.85);
+  background: rgba(35, 213, 171, 0.28);
+}
+.createInstrumentalTick.isOn .createInstrumentalTickBox::after{
+  content: "";
+  width: 9px;
+  height: 5px;
+  border-left: 2px solid #d8fff4;
+  border-bottom: 2px solid #d8fff4;
+  transform: rotate(-45deg) translate(0.5px, -1px);
+}
+#lyricsFieldPanel.lyricsModeLocked .lyricsModeTabs{
+  opacity: 0.35;
+  pointer-events: none;
+}
+body[data-photo-solo-challenge] #btnCreateInstrumentalTick{
+  display: none !important;
+}
+html[data-theme="light"] .createInstrumentalTick{
+  color: rgba(40, 46, 58, 0.62);
+}
+html[data-theme="light"] .createInstrumentalTickBox{
+  border-color: rgba(40, 46, 58, 0.28);
+  background: rgba(0, 0, 0, 0.04);
+}
+html[data-theme="light"] .createInstrumentalTick.isOn{
+  color: #1a2a24;
+}
+html[data-theme="light"] .createInstrumentalTick.isOn .createInstrumentalTickBox{
+  border-color: rgba(18, 140, 112, 0.7);
+  background: rgba(35, 213, 171, 0.28);
+}
+html[data-theme="light"] .createInstrumentalTick.isOn .createInstrumentalTickBox::after{
+  border-color: #0d5c4a;
 }
 .createLyricsAttachMenu{
   position: absolute;
@@ -23385,6 +23480,7 @@ input::placeholder, textarea::placeholder{
   }
   /* Create advanced options: inline accordion under Artwork (not a hidden fullscreen sheet). */
   body[data-route="generate"] #advancedSheet.stepDetails.createOptionsSheet{
+    display: none !important;
     position: relative;
     inset: auto;
     z-index: auto;
@@ -66419,6 +66515,7 @@ body[data-route="generate"] .stylePanelHead > span{
 
 /* Create — Advanced accordion matches Style / Artwork glass (not legacy purple sheet). */
 body[data-route="generate"] #advancedSheet.createAdvancedAccordion{
+  display: none !important;
   margin: 0;
   border: 0;
   padding: 0;

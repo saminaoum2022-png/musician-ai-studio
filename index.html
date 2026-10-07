@@ -1321,9 +1321,38 @@
                 </div>
                 <div class="field grow inputPanel createSimpleCard" id="lyricsFieldPanel" data-lyrics-mode="write">
                   <div id="createLyricsAttachFabWrap" class="createLyricsAttachFabWrap" hidden>
-                    <button id="btnCreateLyricsAttach" class="createLyricsAttachFab" type="button" aria-haspopup="dialog" aria-controls="createLyricsAttachSheet" aria-expanded="false" aria-label="Add photo, hum, or vibe">
+                    <button id="btnCreateLyricsAttach" class="createLyricsAttachFab" type="button" aria-haspopup="menu" aria-controls="createLyricsAttachMenu" aria-expanded="false" aria-label="Add photo, hum, or vibe">
                       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
                     </button>
+                    <div id="createLyricsAttachMenu" class="createLyricsAttachMenu inputPanel" role="menu" hidden>
+                      <button type="button" class="createLyricsAttachMenuItem" role="menuitem" data-create-attach="photo">
+                        <span class="createLyricsAttachMenuIco" aria-hidden="true">
+                          <svg class="createTabIcon" viewBox="0 0 24 24" width="20" height="20" focusable="false"><path fill="currentColor" d="M5 4.5A2.5 2.5 0 0 0 2.5 7v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5H5Zm0 1.5h14c.55 0 1 .45 1 1v7.2l-3.33-3.32a1.8 1.8 0 0 0-2.54 0L10 15.01l-1.63-1.63a1.8 1.8 0 0 0-2.54 0L4 15.21V7c0-.55.45-1 1-1Z"/></svg>
+                        </span>
+                        <span class="createLyricsAttachMenuText">
+                          <span class="createLyricsAttachMenuLabel">Photo</span>
+                          <span class="createLyricsAttachMenuHint">Analyze your photo</span>
+                        </span>
+                      </button>
+                      <button type="button" class="createLyricsAttachMenuItem" role="menuitem" data-create-attach="hum">
+                        <span class="createLyricsAttachMenuIco" aria-hidden="true">
+                          <svg class="createTabIcon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+                        </span>
+                        <span class="createLyricsAttachMenuText">
+                          <span class="createLyricsAttachMenuLabel">Hum</span>
+                          <span class="createLyricsAttachMenuHint">Record a melody</span>
+                        </span>
+                      </button>
+                      <button type="button" class="createLyricsAttachMenuItem createLyricsAttachMenuItem--vibe" role="menuitem" data-create-attach="vibe" hidden>
+                        <span class="createLyricsAttachMenuIco" aria-hidden="true">
+                          <svg class="createTabIcon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M4 14v4"/><path d="M8 10v8"/><path d="M12 6v12"/><path d="M16 10v8"/><path d="M20 14v4"/></svg>
+                        </span>
+                        <span class="createLyricsAttachMenuText">
+                          <span class="createLyricsAttachMenuLabel">Vibe</span>
+                          <span class="createLyricsAttachMenuHint">Read a song’s vibe</span>
+                        </span>
+                      </button>
+                    </div>
                   </div>
                   <div class="label inPanelLabel lyricsPanelHead createSimpleCardHead">
                     <div class="lyricsModeTabs" role="tablist" aria-label="How to start">
@@ -1438,32 +1467,49 @@
 
           <section class="createFlowStep" aria-label="Sound and title">
             <div id="createAdvancedStudioHost" class="createAdvancedStudioHost">
-            <div id="createStudioBlock" class="createStudioBlock field grow inputPanel inputPanel--style">
-              <div id="createSimpleStudioToolbar" class="createSimpleStudioToolbar" hidden>
-                <span class="label inPanelLabel createSimpleStudioLabel">Studio</span>
-                <button type="button" id="btnLyriaStudioSpark" class="createSimpleSparkBtn" aria-label="Surprise style">✦</button>
-              </div>
-              <p id="lyriaStudioStyleLabel" class="label inPanelLabel lyriaStudioStyleLabel" hidden>Studio styles</p>
-              <div id="lyriaStudioStyleRow" class="styleSuggestRow lyriaStudioStyleRow" hidden role="group" aria-label="Studio styles"></div>
-              <details id="lyriaStudioSoundPrompt" class="lyriaStudioSoundPrompt" hidden>
-                <summary class="lyriaStudioSoundPromptSummary">Sound prompt <span class="lyriaStudioSoundPromptSub">(sent to Lyria)</span></summary>
-                <pre id="lyriaStudioSoundPromptText" class="lyriaStudioSoundPromptText"></pre>
-              </details>
-              <p id="lyriaStudioStyleHint" class="hint createInlineHint lyriaStudioStyleHint" hidden>Style is ready — write your idea above, then Generate.</p>
-            </div>
-            </div>
-            <label class="field grow inputPanel inputPanel--style inputPanel--styleAdvanced" id="createStyleAdvancedPanel">
-              <div class="label inPanelLabel stylePanelHead">
-                <span>Style / Tags</span>
-                <div class="stylePanelHeadActions">
+            <div id="createSoundPanel" class="field grow inputPanel inputPanel--style createSoundPanel">
+              <div class="label inPanelLabel stylePanelHead createSoundPanelHead">
+                <span id="createSoundPanelTitle">Sound</span>
+                <div class="stylePanelHeadActions createSoundPanelActions">
+                  <div id="createSoundModeSeg" class="lyricsModeTabs createSoundModeSeg" role="group" aria-label="Sound mode" hidden>
+                    <button type="button" id="btnCreateSoundModeStudio" class="lyricsModeTab isActive" data-sound-mode="studio" aria-pressed="true">Studio</button>
+                    <button type="button" id="btnCreateSoundModeCustom" class="lyricsModeTab" data-sound-mode="custom" aria-pressed="false">Custom</button>
+                  </div>
+                  <button type="button" id="btnCreateSoundSpark" class="createSimpleSparkBtn createSoundSparkBtn" hidden aria-label="Surprise studio style">✦</button>
                   <button id="btnClearStyle" class="styleClearBtn" type="button" hidden aria-label="Clear all style tags">Clear</button>
                   <button id="btnBoostStyle" class="lyricsMagicBtn styleBoostBtn aiAssistBtn" type="button" hidden title="Boost style with AI" aria-label="Boost style with AI"><span class="aiAssistIco" aria-hidden="true">✦</span><span class="aiAssistLabel">Boost</span></button>
                 </div>
               </div>
-              <input id="sunoStyle" type="text" placeholder="Tap a suggestion below — or type your own" />
-              <div id="styleSelectedRow" class="styleSelectedRow" hidden aria-label="Selected style tags"></div>
-              <div id="styleSuggestRow" class="styleSuggestRow" role="group" aria-label="Style suggestions"></div>
-            </label>
+              <div id="createStudioActiveStrip" class="createStudioActiveStrip createContextCard" hidden>
+                <div class="remixSourceBannerRow">
+                  <span class="createStudioActiveStripDot" aria-hidden="true"></span>
+                  <div class="remixSourceBannerBody">
+                    <div class="remixSourceBannerKicker">Using studio preset</div>
+                    <div class="remixSourceBannerTitle" id="createStudioActiveStripLabel">—</div>
+                  </div>
+                  <button type="button" id="btnCreateStudioActiveMore" class="ghost createStudioActiveStripMore" aria-label="Browse studio presets">More</button>
+                </div>
+              </div>
+              <div id="createStudioBlock" class="createStudioBlock">
+                <div id="createSimpleStudioToolbar" class="createSimpleStudioToolbar" hidden>
+                  <span class="label inPanelLabel createSimpleStudioLabel">Studio</span>
+                  <button type="button" id="btnLyriaStudioSpark" class="createSimpleSparkBtn" aria-label="Surprise style">✦</button>
+                </div>
+                <p id="lyriaStudioStyleLabel" class="label inPanelLabel lyriaStudioStyleLabel" hidden>Studio styles</p>
+                <div id="lyriaStudioStyleRow" class="styleSuggestRow lyriaStudioStyleRow" hidden role="group" aria-label="Studio styles"></div>
+                <details id="lyriaStudioSoundPrompt" class="lyriaStudioSoundPrompt" hidden>
+                  <summary class="lyriaStudioSoundPromptSummary">Sound prompt <span class="lyriaStudioSoundPromptSub">(sent to Lyria)</span></summary>
+                  <pre id="lyriaStudioSoundPromptText" class="lyriaStudioSoundPromptText"></pre>
+                </details>
+                <p id="lyriaStudioStyleHint" class="hint createInlineHint lyriaStudioStyleHint" hidden>Style is ready — write your idea above, then Generate.</p>
+              </div>
+              <div id="createSoundCustomFields" class="createSoundCustomFields">
+                <input id="sunoStyle" type="text" placeholder="Tap a suggestion below — or type your own" />
+                <div id="styleSelectedRow" class="styleSelectedRow" hidden aria-label="Selected style tags"></div>
+                <div id="styleSuggestRow" class="styleSuggestRow" role="group" aria-label="Style suggestions"></div>
+              </div>
+            </div>
+            </div>
             <label class="field grow inputPanel inputPanel--style" id="createSongTitleField" hidden>
               <div class="label inPanelLabel">Song title</div>
               <input id="sunoTitle" type="text" placeholder="Optional — blank uses first 2 words of lyrics" autocomplete="off" maxlength="80" />
@@ -1665,17 +1711,6 @@
             <div class="createStudioSheetGrab" aria-hidden="true"></div>
             <p class="label inPanelLabel createStudioSheetTitle">Studio styles</p>
             <div id="createStudioStylesSheetList" class="createStudioSheetList styleSuggestRow createStudioSheetPills"></div>
-          </div>
-
-          <div id="createLyricsAttachBackdrop" class="createStudioSheetBackdrop" hidden aria-hidden="true"></div>
-          <div id="createLyricsAttachSheet" class="createStudioSheet inputPanel" hidden role="dialog" aria-modal="true" aria-label="Add photo, hum, or vibe">
-            <div class="createStudioSheetGrab" aria-hidden="true"></div>
-            <p class="label inPanelLabel createStudioSheetTitle">Add to your song</p>
-            <div id="createLyricsAttachSheetList" class="createStudioSheetList styleSuggestRow createStudioSheetPills" role="menu">
-              <button type="button" class="styleSuggestPill styleSuggestPill--studio" role="menuitem" data-create-attach="photo">Photo</button>
-              <button type="button" class="styleSuggestPill styleSuggestPill--studio" role="menuitem" data-create-attach="hum">Hum</button>
-              <button type="button" class="styleSuggestPill styleSuggestPill--studio createLyricsAttachSheetItem--vibe" role="menuitem" data-create-attach="vibe" hidden>Vibe</button>
-            </div>
           </div>
 
           <div id="humTrackSheet" class="createAltFlow humTrackFlow" hidden aria-hidden="true">

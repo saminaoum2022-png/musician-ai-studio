@@ -6774,9 +6774,7 @@ function applyRoute({ passGen } = {}) {
     try { restoreCreatePageOnRouteEnter(); } catch {}
     try { autoResizeLyricsBox(); } catch {}
     if (prevRoute !== "generate") {
-      armCreateAutofocusGuard();
-      window.setTimeout(blurCreateFieldsQuietly, 80);
-      window.setTimeout(blurCreateFieldsQuietly, 240);
+      scheduleCreateLyricsAutofocus();
     }
   }
   syncGenerateOrbVisibility();
@@ -19769,8 +19767,6 @@ const FIXED_OVERLAY_IDS = [
   "coverRegenSheet",
   "createStudioStylesBackdrop",
   "createStudioStylesSheet",
-  "createLyricsAttachBackdrop",
-  "createLyricsAttachSheet",
 ];
 
 /** Keep full-screen overlays on `body` — `main.grid.routeSwap` transform breaks iOS touch on fixed children. */
@@ -80015,6 +80011,76 @@ function renderVocalStyleRow() {
 let _activeLyriaStudioStyleId = "";
 
 const CREATE_FLOW_MODE_LS_KEY = "nabad_create_flow_mode_v1";
+const CREATE_SOUND_MODE_LS_KEY = "nabad_create_sound_mode_v1";
+
+function lyriaStudioUiEnabled() {
+  const onGenerate = String(document.body.getAttribute("data-route") || "") === "generate";
+  const stagingEnv = String(window.__NABAD_CLIENT_ENV__?.environment || "") === "staging";
+  return onGenerate && (useLyriaMusicProvider() || stagingEnv);
+}
+
+function createSoundPanelUnified() {
+  return (
+    lyriaStudioUiEnabled()
+    && createFlowModeEnabled()
+    && getCreateFlowMode() === "advanced"
+  );
+}
+
+function getCreateSoundMode() {
+  if (!createSoundPanelUnified()) return "custom";
+  try {
+    const saved = String(localStorage.getItem(CREATE_SOUND_MODE_LS_KEY) || "").trim();
+    if (saved === "studio" || saved === "custom") return saved;
+  } catch {}
+  return "studio";
+}
+
+function setCreateSoundMode(mode) {
+  const next = mode === "custom" ? "custom" : "studio";
+  try {
+    localStorage.setItem(CREATE_SOUND_MODE_LS_KEY, next);
+  } catch {}
+  if (next === "custom") {
+    clearLyriaStudioStyleSelection({ clearStyleField: false });
+  }
+  syncCreateSoundPanelUi();
+  syncStyleUi();
+}
+
+function syncCreateSoundPanelUi() {
+  const unified = createSoundPanelUnified();
+  const mode = unified ? getCreateSoundMode() : "custom";
+  if (unified) {
+    document.body.setAttribute("data-create-sound-mode", mode);
+  } else {
+    document.body.removeAttribute("data-create-sound-mode");
+  }
+  const title = document.getElementById("createSoundPanelTitle");
+  if (title) title.textContent = unified ? "Sound" : "Style / Tags";
+  const seg = document.getElementById("createSoundModeSeg");
+  const btnStudio = document.getElementById("btnCreateSoundModeStudio");
+  const btnCustom = document.getElementById("btnCreateSoundModeCustom");
+  const spark = document.getElementById("btnCreateSoundSpark");
+  if (seg) seg.hidden = !unified;
+  if (btnStudio) {
+    const on = mode === "studio";
+    btnStudio.classList.toggle("isActive", on);
+    btnStudio.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+  if (btnCustom) {
+    const on = mode === "custom";
+    btnCustom.classList.toggle("isActive", on);
+    btnCustom.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+  if (spark) spark.hidden = !unified || mode !== "studio";
+  const strip = document.getElementById("createStudioActiveStrip");
+  const stripLabel = document.getElementById("createStudioActiveStripLabel");
+  const preset = getLyriaStudioStyle(_activeLyriaStudioStyleId);
+  const showStrip = unified && mode === "studio" && Boolean(preset);
+  if (strip) strip.hidden = !showStrip;
+  if (stripLabel && preset) stripLabel.textContent = preset.label;
+}
 
 function createFlowModeEnabled() {
   const stagingEnv = String(window.__NABAD_CLIENT_ENV__?.environment || "") === "staging";
@@ -80158,48 +80224,65 @@ function isCreateLyricsComposerLayout() {
   return onGenerate && createFlowModeEnabled() && getCreateFlowMode() === "advanced";
 }
 
-function closeCreateLyricsAttachSheet() {
-  const back = document.getElementById("createLyricsAttachBackdrop");
-  const sheet = document.getElementById("createLyricsAttachSheet");
+function positionCreateLyricsAttachMenu() {
+  const btn = document.getElementById("btnCreateLyricsAttach");
+  const menu = document.getElementById("createLyricsAttachMenu");
+  const wrap = document.getElementById("createLyricsAttachFabWrap");
+  if (!btn || !menu || !wrap) return;
+  if (menu.parentElement !== document.body) {
+    document.body.appendChild(menu);
+  }
+  menu.classList.add("isFixed");
+  const rect = btn.getBoundingClientRect();
+  const gap = 6;
+  menu.style.top = `${Math.round(rect.bottom + gap)}px`;
+  menu.style.right = `${Math.round(window.innerWidth - rect.right)}px`;
+  menu.style.left = "auto";
+  menu.style.width = `${Math.max(212, Math.round(rect.width + 160))}px`;
+}
+
+function restoreCreateLyricsAttachMenuHome() {
+  const menu = document.getElementById("createLyricsAttachMenu");
+  const wrap = document.getElementById("createLyricsAttachFabWrap");
+  if (!menu || !wrap) return;
+  menu.classList.remove("isFixed", "isOpen");
+  menu.style.top = "";
+  menu.style.right = "";
+  menu.style.left = "";
+  menu.style.width = "";
+  if (menu.parentElement !== wrap) wrap.appendChild(menu);
+}
+
+function closeCreateLyricsAttachMenu() {
+  const menu = document.getElementById("createLyricsAttachMenu");
   const btn = document.getElementById("btnCreateLyricsAttach");
   if (btn) btn.setAttribute("aria-expanded", "false");
-  if (back) {
-    back.classList.remove("isOpen");
-    back.setAttribute("aria-hidden", "true");
-    setTimeout(() => { if (back) back.hidden = true; }, 260);
-  }
-  if (sheet) {
-    sheet.classList.remove("isOpen");
-    setTimeout(() => { if (sheet) sheet.hidden = true; }, 320);
+  if (menu) {
+    menu.classList.remove("isOpen");
+    menu.hidden = true;
+    restoreCreateLyricsAttachMenuHome();
   }
 }
 
-function openCreateLyricsAttachSheet() {
-  mountFixedOverlaysToBody();
-  const vibeBtn = document.querySelector("#createLyricsAttachSheetList .createLyricsAttachSheetItem--vibe");
-  if (vibeBtn) vibeBtn.hidden = !nabadVibeEnabled();
-  const back = document.getElementById("createLyricsAttachBackdrop");
-  const sheet = document.getElementById("createLyricsAttachSheet");
+function toggleCreateLyricsAttachMenu() {
+  const menu = document.getElementById("createLyricsAttachMenu");
   const btn = document.getElementById("btnCreateLyricsAttach");
-  if (btn) btn.setAttribute("aria-expanded", "true");
-  if (back) {
-    back.classList.remove("isOpen");
-    back.hidden = false;
-    back.setAttribute("aria-hidden", "false");
+  if (!menu || !btn) return;
+  const vibeItem = menu.querySelector(".createLyricsAttachMenuItem--vibe");
+  if (vibeItem) vibeItem.hidden = !nabadVibeEnabled();
+  const open = menu.hidden;
+  if (!open) {
+    closeCreateLyricsAttachMenu();
+    return;
   }
-  if (sheet) {
-    sheet.classList.remove("isOpen");
-    sheet.hidden = false;
-    sheet.setAttribute("aria-hidden", "false");
-  }
-  requestAnimationFrame(() => {
-    back?.classList.add("isOpen");
-    sheet?.classList.add("isOpen");
-  });
+  menu.hidden = false;
+  btn.setAttribute("aria-expanded", "true");
+  positionCreateLyricsAttachMenu();
+  requestAnimationFrame(() => menu.classList.add("isOpen"));
 }
 
 function handleCreateLyricsAttachChoice(kind) {
-  closeCreateLyricsAttachSheet();
+  closeCreateLyricsAttachMenu();
   haptic("light");
   if (kind === "photo") {
     openImageMoodSheet();
@@ -80350,34 +80433,39 @@ function syncCreateLyricsComposerChrome() {
     try { setActiveCreateTab("lyrics"); } catch {}
   }
   syncCreateLyricsAttachStack();
-  if (!composer) closeCreateLyricsAttachSheet();
+  if (!composer) closeCreateLyricsAttachMenu();
 }
 
 function wireCreateLyricsAttachOnce() {
   if (wireCreateLyricsAttachOnce._done) return;
   wireCreateLyricsAttachOnce._done = true;
   const btn = document.getElementById("btnCreateLyricsAttach");
+  const menu = document.getElementById("createLyricsAttachMenu");
   if (btn) {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       haptic("light");
-      openCreateLyricsAttachSheet();
+      toggleCreateLyricsAttachMenu();
     });
   }
-  const attachBack = document.getElementById("createLyricsAttachBackdrop");
-  if (attachBack && !attachBack.dataset.bound) {
-    attachBack.dataset.bound = "1";
-    attachBack.addEventListener("click", () => closeCreateLyricsAttachSheet());
-  }
-  const attachList = document.getElementById("createLyricsAttachSheetList");
-  if (attachList && !attachList.dataset.bound) {
-    attachList.dataset.bound = "1";
-    attachList.addEventListener("click", (e) => {
+  if (menu && !menu.dataset.bound) {
+    menu.dataset.bound = "1";
+    menu.addEventListener("click", (e) => {
       const item = e.target?.closest?.("[data-create-attach]");
       if (!item) return;
       handleCreateLyricsAttachChoice(String(item.getAttribute("data-create-attach") || ""));
     });
   }
+  document.addEventListener("click", (e) => {
+    if (!menu || menu.hidden) return;
+    const t = e.target;
+    if (t === btn || t?.closest?.("#createLyricsAttachFabWrap") || t?.closest?.("#createLyricsAttachMenu")) return;
+    closeCreateLyricsAttachMenu();
+  });
+  window.addEventListener("scroll", () => {
+    if (!menu || menu.hidden) return;
+    closeCreateLyricsAttachMenu();
+  }, { passive: true });
   document.getElementById("createLyricsAttachPhotoClear")?.addEventListener("click", (e) => {
     e.stopPropagation();
     clearCreateLyricsAttachPhoto();
@@ -80520,6 +80608,7 @@ function syncCreateFlowLayoutUi() {
   }
   syncCreateSimpleChrome();
   syncCreateLyricsComposerChrome();
+  syncCreateSoundPanelUi();
   syncLyriaStudioStyleUi();
   syncLyriaStudioSoundPromptPreview();
 }
@@ -80534,6 +80623,11 @@ function clearLyriaStudioStyleSelection({ clearStyleField = false } = {}) {
 function applyLyriaStudioStyle(id) {
   const preset = getLyriaStudioStyle(id);
   if (!preset) return;
+  if (createSoundPanelUnified()) {
+    try {
+      localStorage.setItem(CREATE_SOUND_MODE_LS_KEY, "studio");
+    } catch {}
+  }
   _activeLyriaStudioStyleId = preset.id;
   if (els.sunoStyle) els.sunoStyle.value = preset.styleLine;
   if ((preset.defaultSinger === "m" || preset.defaultSinger === "f") && els.sunoSingerGender) {
@@ -80580,8 +80674,7 @@ function renderLyriaStudioStyleRow() {
     }
     html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio styleSuggestPill--studioAll" data-lyria-studio-all="1">More</button>`;
   } else {
-    html =
-      `<button type="button" class="styleSuggestPill styleSuggestPill--studioCustom${!active ? " isActive" : ""}" data-lyria-studio-custom="1" aria-pressed="${!active ? "true" : "false"}">Custom</button>`;
+    html = "";
     for (const preset of LYRIA_STUDIO_STYLES) {
       const on = preset.id === active;
       html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio${on ? " isActive" : ""}" data-lyria-studio-id="${escapeHtml(preset.id)}" aria-pressed="${on ? "true" : "false"}" title="${escapeHtml(preset.styleLine.slice(0, 240))}">${escapeHtml(preset.label)}</button>`;
@@ -80592,27 +80685,45 @@ function renderLyriaStudioStyleRow() {
 
 function syncLyriaStudioStyleUi() {
   const row = els.lyriaStudioStyleRow;
-  const onGenerate = String(document.body.getAttribute("data-route") || "") === "generate";
-  const stagingEnv = String(window.__NABAD_CLIENT_ENV__?.environment || "") === "staging";
-  const show = onGenerate && (useLyriaMusicProvider() || stagingEnv);
+  const show = lyriaStudioUiEnabled();
+  const unified = createSoundPanelUnified();
+  const soundMode = unified ? getCreateSoundMode() : "custom";
   if (row) {
-    row.hidden = !show;
+    const showRow = show && (!unified || soundMode === "studio");
+    row.hidden = !showRow;
     if (show) renderLyriaStudioStyleRow();
   }
-  if (els.lyriaStudioStyleLabel) els.lyriaStudioStyleLabel.hidden = !show;
+  if (els.lyriaStudioStyleLabel) els.lyriaStudioStyleLabel.hidden = true;
   const studioActive = Boolean(_activeLyriaStudioStyleId);
-  if (els.lyriaStudioStyleHint) els.lyriaStudioStyleHint.hidden = !show || !studioActive;
-  if (els.styleSuggestRow && show) {
-    els.styleSuggestRow.hidden = studioActive;
-  } else if (els.styleSuggestRow && !show) {
-    els.styleSuggestRow.hidden = false;
+  if (els.lyriaStudioStyleHint) {
+    els.lyriaStudioStyleHint.hidden = !show || !studioActive || unified;
+  }
+  if (els.styleSuggestRow) {
+    if (show && unified && soundMode === "studio") {
+      els.styleSuggestRow.hidden = true;
+    } else if (show && unified && soundMode === "custom") {
+      els.styleSuggestRow.hidden = false;
+    } else if (show && studioActive) {
+      els.styleSuggestRow.hidden = true;
+    } else {
+      els.styleSuggestRow.hidden = false;
+    }
+  }
+  if (els.styleSelectedRow && unified && soundMode === "studio") {
+    els.styleSelectedRow.hidden = true;
   }
   if (els.sunoStyle) {
-    els.sunoStyle.placeholder = studioActive
-      ? "Studio style loaded — edit here or tap Custom"
-      : "Tap a suggestion below — or type your own";
+    els.sunoStyle.placeholder = unified && soundMode === "custom"
+      ? "Tap a suggestion below — or type your own"
+      : (studioActive && !unified
+        ? "Studio style loaded — edit here or tap Custom"
+        : "Tap a suggestion below — or type your own");
   }
-  if (els.btnBoostStyle && studioActive) els.btnBoostStyle.hidden = true;
+  if (els.btnBoostStyle) {
+    if (unified && soundMode === "studio") els.btnBoostStyle.hidden = true;
+    else if (studioActive && !unified) els.btnBoostStyle.hidden = true;
+  }
+  syncCreateSoundPanelUi();
 }
 
 function syncStyleUi() {
@@ -81064,8 +81175,7 @@ function closeStyleLibrary() {
           setCreateFlowMode("advanced");
           try { showToast("Studio full — edit style tags or type your own.", { durationMs: 3200 }); } catch {}
         } else {
-          clearLyriaStudioStyleSelection({ clearStyleField: true });
-          syncStyleUi();
+          setCreateSoundMode("custom");
         }
         try { syncGenerateOrbVisibility(); } catch {}
         return;
@@ -81082,6 +81192,32 @@ function closeStyleLibrary() {
     btnSpark.addEventListener("click", () => {
       haptic("light");
       sparkRandomLyriaStudioStyle();
+    });
+  }
+  const btnSoundSpark = document.getElementById("btnCreateSoundSpark");
+  if (btnSoundSpark && !btnSoundSpark.dataset.bound) {
+    btnSoundSpark.dataset.bound = "1";
+    btnSoundSpark.addEventListener("click", () => {
+      haptic("light");
+      sparkRandomLyriaStudioStyle();
+    });
+  }
+  const soundModeSeg = document.getElementById("createSoundModeSeg");
+  if (soundModeSeg && !soundModeSeg.dataset.bound) {
+    soundModeSeg.dataset.bound = "1";
+    soundModeSeg.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-sound-mode]");
+      if (!btn) return;
+      haptic("light");
+      setCreateSoundMode(String(btn.getAttribute("data-sound-mode") || "studio"));
+    });
+  }
+  const btnStudioActiveMore = document.getElementById("btnCreateStudioActiveMore");
+  if (btnStudioActiveMore && !btnStudioActiveMore.dataset.bound) {
+    btnStudioActiveMore.dataset.bound = "1";
+    btnStudioActiveMore.addEventListener("click", () => {
+      haptic("light");
+      openCreateStudioStylesSheet();
     });
   }
   const studioSheetBack = document.getElementById("createStudioStylesBackdrop");
@@ -81863,6 +81999,12 @@ function armCreateAutofocusGuard() {
 function autoResizeLyricsBox() {
   if (!els.sunoPrompt) return;
   const el = els.sunoPrompt;
+  const composeStack = document.getElementById("createFlow")?.classList.contains("createComposeStack");
+  if (composeStack) {
+    el.style.height = "";
+    try { applyLyricsInputBidi(el); } catch {}
+    return;
+  }
   try { applyLyricsInputBidi(el); } catch {}
   el.style.height = "auto";
   const base = lyricsBoxEmptyBaseHeight();
@@ -81910,6 +82052,58 @@ function setGenerateInputFocus(activePanel) {
   getCreatePageRoot()?.querySelectorAll(".inputPanel").forEach((p) => {
     p.classList.toggle("isFocusCard", p === activePanel && Boolean(activePanel));
   });
+  try { syncCreateComposeLayout(); } catch {}
+}
+
+function shouldAutoFocusCreateLyricsOnEnter() {
+  if (!isGenerateRouteActive()) return false;
+  const flow = getCreateFlow();
+  if (flow && flow !== "song") return false;
+  if (document.body.classList.contains("generateLocked")) return false;
+  if (document.body.classList.contains("createChooserSheetOpen")) return false;
+  if (document.body.hasAttribute("data-photo-solo-challenge")) return false;
+  const editPane = document.querySelector(".createPane--edit");
+  if (editPane && !editPane.hidden) return false;
+  try {
+    if (createSessionHasResultVisible() && !createSessionIsGenerating()) return false;
+  } catch {}
+  const lyricsPane = document.querySelector(".createPane--lyrics");
+  if (lyricsPane?.hidden) return false;
+  if (els.sunoPrompt?.disabled) return false;
+  return true;
+}
+
+function scheduleCreateLyricsAutofocus() {
+  if (!shouldAutoFocusCreateLyricsOnEnter()) return;
+  _createIgnoreAutofocus = false;
+  const attempt = () => {
+    if (!shouldAutoFocusCreateLyricsOnEnter() || _createIgnoreAutofocus) return;
+    const el = els.sunoPrompt;
+    if (!el || el.disabled) return;
+    try {
+      el.focus({ preventScroll: true });
+      setGenerateInputFocus(el.closest(".inputPanel"));
+      autoResizeLyricsBox();
+    } catch {}
+  };
+  window.setTimeout(attempt, 180);
+  window.setTimeout(attempt, 420);
+  window.setTimeout(attempt, 680);
+}
+
+function syncCreateComposeLayout() {
+  const flow = document.getElementById("createFlow");
+  if (!flow || !isGenerateRouteActive()) return;
+  let mobile = false;
+  try {
+    mobile = window.matchMedia("(max-width: 720px)").matches;
+  } catch {}
+  const keyboardOpen = document.body.classList.contains("createKeyboardOpen");
+  const lyricsFocused =
+    flow.classList.contains("focusInput") &&
+    document.getElementById("lyricsFieldPanel")?.classList.contains("isFocusCard");
+  const stack = mobile && (keyboardOpen || lyricsFocused);
+  flow.classList.toggle("createComposeStack", stack);
 }
 
 let _createFocusedField = null;
@@ -81971,15 +82165,14 @@ function scrollCreatePanelAboveKeyboard(field) {
 }
 
 function applyCreateKeyboardOpen(height) {
-  // Mobile web keeps Generate in the page (same as Photo) so the keyboard
-  // cannot fight a floating dock. Native still lifts the dock.
-  if (!isNativeShell()) return;
   if (!isGenerateRouteActive()) return;
   let kb = Math.max(0, Math.round(Number(height) || 0));
   if (!kb) kb = measureCreateViewportKeyboardInset();
   if (kb < 80) return;
   const insetChanged = Math.abs(kb - _createKeyboardInsetLast) > 80;
   if (document.body.classList.contains("createKeyboardOpen") && _createKeyboardInsetLast > 0 && !insetChanged) {
+    syncCreateComposeLayout();
+    try { autoResizeLyricsBox(); } catch {}
     return;
   }
   _createKeyboardHeight = kb;
@@ -81988,6 +82181,14 @@ function applyCreateKeyboardOpen(height) {
   try {
     document.documentElement.style.setProperty("--create-keyboard-inset", `${kb}px`);
   } catch {}
+  try {
+    const vv = window.visualViewport;
+    if (vv) {
+      document.documentElement.style.setProperty("--create-vv-height", `${Math.round(vv.height)}px`);
+    }
+  } catch {}
+  syncCreateComposeLayout();
+  try { autoResizeLyricsBox(); } catch {}
 }
 
 function scheduleCreateKeyboardScroll() {
@@ -82036,9 +82237,14 @@ function clearCreatePageKeyboardInset() {
   try {
     document.documentElement.style.setProperty("--create-keyboard-inset", "0px");
   } catch {}
+  try {
+    document.documentElement.style.removeProperty("--create-vv-height");
+  } catch {}
   getCreatePageRoot()?.querySelectorAll(".inputPanel").forEach((p) => {
     p.style.removeProperty("scroll-margin-bottom");
   });
+  syncCreateComposeLayout();
+  try { autoResizeLyricsBox(); } catch {}
 }
 
 function handleCreateFieldFocus(target) {

@@ -23311,6 +23311,10 @@ body.trackSheetOpen .footer{
     z-index: 120;
     transition: none;
   }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] .mobileTabbar,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .mobileTabbar{
+    transition: none;
+  }
   body[data-route="generate"] input:focus,
   body[data-route="generate"] textarea:focus,
   body[data-route="generate"] select:focus{

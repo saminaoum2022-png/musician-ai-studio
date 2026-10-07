@@ -6929,11 +6929,6 @@ function setLyricsInputMode(mode, opts = {}) {
       pushLyricsUndoSnapshot(current);
       els.sunoPrompt.value = "";
       try { autoResizeLyricsBox(); } catch {}
-      if (!opts.silent) {
-        try {
-          showToast("Describe your idea — then tap Generate.", { icon: "✦", durationMs: 2800 });
-        } catch {}
-      }
     }
   }
   if (els.lyricsModeWrite) {
@@ -76143,18 +76138,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           : "";
       const debugNote = debugSuno || debugGemini ? ` [engine:${debugSuno || "-"} gemini:${debugGemini || "-"}]` : "";
       setStatus(`Lyrics ready${providerNote}${debugNote}.`);
+      const skipLyricsToast = isCreateSimpleCreateLayout();
       if (startedFromIdea) {
         const clipReady = isTemplateSparkClipFlow()
           ? "Lyrics ready on Write — edit, then Generate clip."
           : "Lyrics ready on Write — edit, then Generate.";
         setStatus(clipReady);
-        showToast(clipReady, { icon: "✦", durationMs: 3600 });
+        if (!skipLyricsToast) showToast(clipReady, { icon: "✦", durationMs: 3600 });
       } else if (isTemplateSparkClipFlow()) {
         setStatus("Lyrics ready — review, then Generate clip.");
-        showToast("Lyrics ready — then Generate clip.", { icon: "✦", durationMs: 3600 });
+        if (!skipLyricsToast) showToast("Lyrics ready — then Generate clip.", { icon: "✦", durationMs: 3600 });
       } else if (usingSunoLyrics && provider === "suno") {
-        showToast("Lyrics ready — then Generate song.", { icon: "✦", durationMs: 4200 });
-      } else {
+        if (!skipLyricsToast) showToast("Lyrics ready — then Generate song.", { icon: "✦", durationMs: 4200 });
+      } else if (!skipLyricsToast) {
         showToast("Lyrics ready — plain script (tap تشكيل if you want vowel marks).", {
           icon: "♫",
           durationMs: 3200,
@@ -82001,12 +81997,10 @@ let _createSimpleAutofocusAfterLayout = false;
 // keyboard height we assume this (iPhone portrait) so the stack never jumps.
 let _createSimpleKbAssumed = false;
 const CREATE_SIMPLE_KB_FALLBACK = 336;
-let _createSimpleKbHideTimer = 0;
-function cancelCreateSimpleKeyboardHide() {
-  if (_createSimpleKbHideTimer) {
-    clearTimeout(_createSimpleKbHideTimer);
-    _createSimpleKbHideTimer = 0;
-  }
+let _createLyricsAutofocusTimers = [];
+function cancelCreateLyricsAutofocus() {
+  for (const id of _createLyricsAutofocusTimers) clearTimeout(id);
+  _createLyricsAutofocusTimers = [];
 }
 const CREATE_SIMPLE_DOCK_H = 52;
 const CREATE_SIMPLE_STACK_GAP = 10;
@@ -82019,7 +82013,7 @@ function focusSimpleCreateLyricsIfNeeded() {
   if (!el || el.disabled) return false;
   _createIgnoreAutofocus = false;
   _createSimpleKbAssumed = true;
-  cancelCreateSimpleKeyboardHide();
+  cancelCreateLyricsAutofocus();
   try { syncCreateComposeLayout(); } catch {}
   try { el.focus({ preventScroll: true }); } catch {}
   return document.activeElement === el;
@@ -82177,6 +82171,7 @@ function shouldAutoFocusCreateLyricsOnEnter() {
 function scheduleCreateLyricsAutofocus() {
   if (!shouldAutoFocusCreateLyricsOnEnter()) return;
   _createIgnoreAutofocus = false;
+  cancelCreateLyricsAutofocus();
   const attempt = () => {
     if (!shouldAutoFocusCreateLyricsOnEnter() || _createIgnoreAutofocus) return;
     const el = els.sunoPrompt;
@@ -82187,11 +82182,9 @@ function scheduleCreateLyricsAutofocus() {
       syncCreateComposeLayout();
     } catch {}
   };
-  window.setTimeout(attempt, 120);
-  window.setTimeout(attempt, 320);
-  window.setTimeout(attempt, 560);
-  window.setTimeout(attempt, 900);
-  window.setTimeout(attempt, 1200);
+  for (const ms of [120, 320, 560]) {
+    _createLyricsAutofocusTimers.push(window.setTimeout(attempt, ms));
+  }
 }
 
 function syncCreateComposeLayout() {
@@ -82379,35 +82372,20 @@ function wireCreatePageKeyboardOnce() {
   if (Keyboard?.addListener) {
     Keyboard.addListener("keyboardWillShow", (info) => {
       if (!isGenerateRouteActive()) return;
-      cancelCreateSimpleKeyboardHide();
       applyCreateKeyboardOpen(info?.keyboardHeight);
     });
     Keyboard.addListener("keyboardDidShow", (info) => {
       if (!isGenerateRouteActive()) return;
-      cancelCreateSimpleKeyboardHide();
       applyCreateKeyboardOpen(info?.keyboardHeight);
     });
     const applyKeyboardHidden = () => {
-      _createSimpleKbHideTimer = 0;
       if (!isGenerateRouteActive()) return;
       _createSimpleKbAssumed = false;
       clearCreatePageKeyboardInset();
       setGenerateInputFocus(null);
     };
-    // Simple keeps its keyboard-sized layout for a beat so the tap that dismissed
-    // the keyboard (Idea, Advanced, a Studio chip…) still lands on a steady button.
-    // Write/Idea re-open the keyboard inside that window and cancel the reflow.
-    const onKeyboardHide = () => {
-      if (!isGenerateRouteActive()) return;
-      if (isCreateSimpleMobileFill()) {
-        cancelCreateSimpleKeyboardHide();
-        _createSimpleKbHideTimer = window.setTimeout(applyKeyboardHidden, 450);
-        return;
-      }
-      applyKeyboardHidden();
-    };
-    Keyboard.addListener("keyboardWillHide", onKeyboardHide);
-    Keyboard.addListener("keyboardDidHide", onKeyboardHide);
+    Keyboard.addListener("keyboardWillHide", applyKeyboardHidden);
+    Keyboard.addListener("keyboardDidHide", applyKeyboardHidden);
   } else {
     const vv = window.visualViewport;
     const onViewportResize = () => {
@@ -82428,7 +82406,22 @@ function wireCreatePageKeyboardOnce() {
 
   const root = getCreatePageRoot();
   if (root) {
-    root.addEventListener("pointerdown", () => {
+    root.addEventListener("pointerdown", (e) => {
+      if (isCreateSimpleCreateLayout()) {
+        const t = e.target;
+        if (t?.closest?.("#lyricsFieldPanel") || isCreateFormField(t)) {
+          _createIgnoreAutofocus = false;
+          return;
+        }
+        _createIgnoreAutofocus = true;
+        cancelCreateLyricsAutofocus();
+        const active = document.activeElement;
+        if (active && isCreateFormField(active)) {
+          try { active.blur(); } catch {}
+          try { getNativeKeyboardPlugin()?.hide?.(); } catch {}
+        }
+        return;
+      }
       _createIgnoreAutofocus = false;
     }, { capture: true });
     root.addEventListener("focusin", (e) => {

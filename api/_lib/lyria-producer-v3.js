@@ -80,9 +80,7 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary, no extr
 
 === PREVIOUS TAKE ===
 If previous_take is present:
-- Keep the same section names, order, bar counts, and arrangement wording unless the user's new inputs require a change.
-- Only adapt what actually changed (lyrics, vocal gender, style instruments, idea, or instrumental).
-- Do not invent a new form or new bar counts when previous_take already fits.
+- previous_take is a reference, not a lock. Any field the user changed (arabic_address, vocal_gender, style, lyrics) always wins over previous_take. Rewrite only what that change needs: address change means rewrite the pronouns and endings; singer change means adjust the vocal wording and the gendered lines the singer says about themself; style change means adjust the arrangement. Keep everything else (structure, bars, lines, meaning) the same.
 
 === SECTION PLAN ===
 - You choose the form. A common shape is Intro → Verse 1 → Chorus → Verse 2 → Chorus → optional Bridge → Final Chorus → Outro, but you may drop, add, or reorder sections to fit the lyrics.
@@ -121,6 +119,8 @@ Do not write intensity into any lyric or arrangement string — it is a number f
   - BPM above 115 (dabke, dance, mahraganat): 6-9
 - Every line is a complete small phrase. No 1-2 word fragments, no run-on sentences.
 - No commas, semicolons, colons, dashes, bullets or quotes inside lines. Use line breaks only.
+- Keep every Arabic diacritic (harakat, shadda, sukun) exactly as the user wrote it. Never remove them. If you rewrite a word, add harakat only where needed for correct Lebanese pronunciation, especially the address endings (ـِك for female, ـَك for male).
+- Match ALL pronouns, verb endings and possessives to arabic_address, not only إنتَ/حبيبي. female: إنتِ، عيونِك، ضحكتِك، حبيبتي، بتعرفي. male: إنتَ، عيونَك، ضحكتَك، حبيبي، بتعرف. group: إنتو، عيونكن، بتعرفوا. If the user's lyrics use a different address than arabic_address, adapt them to arabic_address. This is not the singer's gender.
 - Never put timing, BPM, style words, dialect notes or instructions in lyrics.
 - BACKING echoes are optional and rare. Leave "backing": [] unless style_tags explicitly asks for chants, choir, or group vocals. Never invent backing just to fill the chorus.
 
@@ -128,11 +128,13 @@ Do not write intensity into any lyric or arrangement string — it is a number f
 - Write original lyrics in the dialect from dialect_hint (default Levantine/Lebanese colloquial), using natural spoken words, not formal Arabic (fusha).
 - Never copy phrases from idea_brief into the lyrics; express the idea in new words.
 - The chorus is the hook: short, memorable, emotionally clear, and the title-like line comes first or last.
-- arabic_address sets who the song is sung TO: "male" → إنتَ، حبيبي; "female" → إنتِ، حبيبتي; "group" → plural. This is not the singer's gender.
+- Match ALL pronouns, verb endings and possessives to arabic_address, not only إنتَ/حبيبي. female: إنتِ، عيونِك، ضحكتِك، حبيبتي، بتعرفي. male: إنتَ، عيونَك، ضحكتَك، حبيبي، بتعرف. group: إنتو، عيونكن، بتعرفوا. If the user's lyrics use a different address than arabic_address, adapt them to arabic_address. This is not the singer's gender.
 - Script: Arabic script by default. If script_format is "arabizi", write Arabizi using letters only: "a" for ع, "h" for ح, "kh" for خ, "gh" for غ, "'" for ء. No numerals.
 
 === WRITE MODE (lyrics_raw set) ===
 - Keep the meaning of the user's lyrics. Never invent new verses, new story events, or a new message.
+- Keep every Arabic diacritic (harakat, shadda, sukun) exactly as the user wrote it. Never remove them. If you rewrite a word, add harakat only where needed for correct Lebanese pronunciation, especially the address endings (ـِك for female, ـَك for male).
+- Match ALL pronouns, verb endings and possessives to arabic_address, not only إنتَ/حبيبي. female: إنتِ، عيونِك، ضحكتِك، حبيبتي، بتعرفي. male: إنتَ، عيونَك، ضحكتَك، حبيبي، بتعرف. group: إنتو، عيونكن، بتعرفوا. If the user's lyrics use a different address than arabic_address, adapt them to arabic_address.
 - You MAY adapt for singability: split or join lines, place lines into sections, repeat the chorus, and make small wording fixes so the lines sit in the groove.
 - If the user labeled sections, keep their labels. A repeated block is the Chorus.
 - If the lyrics are too long for 180 seconds, drop whole repeated chorus copies first, then a third verse. Never cut inside a section.

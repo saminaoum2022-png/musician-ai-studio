@@ -1544,6 +1544,14 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
+  const leftoverStyle = String(body?.style || "").match(/\{[A-Z][A-Z0-9_]*\}/g);
+  if (leftoverStyle?.length) {
+    return sendJson(res, 400, {
+      error: `Style prompt still has unfilled slots: ${leftoverStyle.join(", ")}`,
+      code: "lyria_unfilled_style_slots",
+    });
+  }
+
   let balanceAfterDebit = null;
   if (!isAdmin) {
     const debit = await callRpc("consume_credits", {

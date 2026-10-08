@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A0A40"/><stop offset="1" stop-color="#0A0618"/></linearGradient>
+    <linearGradient id="pink" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF7AD9" stop-opacity=".0"/><stop offset="1" stop-color="#FF4D9A" stop-opacity=".85"/></linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5AD0FF" stop-opacity=".0"/><stop offset="1" stop-color="#4D7AFF" stop-opacity=".85"/></linearGradient>
+  </defs>
+  <rect width="100" height="100" fill="url(#bg)"/>
+  <path d="M18 -10 L42 110 L8 110z" fill="url(#pink)"/>
+  <path d="M82 -10 L58 110 L92 110z" fill="url(#blue)"/>
+  <path d="M38 -8 L62 110 L38 110z" fill="#fff" opacity=".08"/>
+  <g fill="#fff">
+    <path d="M50 28 l2 6 6 .4-4.6 4 1.4 6L50 41.2 45.2 44.4l1.4-6L42 34.4l6-.4z" opacity=".95"/>
+    <circle cx="22" cy="22" r="1.1"/><circle cx="80" cy="18" r=".9"/><circle cx="70" cy="36" r=".7"/>
+  </g>
+  <rect y="86" width="100" height="14" fill="#12081C"/>
+  <rect y="86" width="100" height="2" fill="#FF4D9A" opacity=".7"/>
+</svg>

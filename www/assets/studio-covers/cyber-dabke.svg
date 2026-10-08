@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#06122A"/><stop offset=".58" stop-color="#1A0B3A"/><stop offset=".59" stop-color="#050A18"/><stop offset="1" stop-color="#03141C"/></linearGradient>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3BF5D6"/><stop offset="1" stop-color="#FF4FD8"/></linearGradient>
+    <radialGradient id="glow" cx="50" cy="44" r="40" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FF4FD8" stop-opacity=".45"/><stop offset="1" stop-color="#FF4FD8" stop-opacity="0"/></radialGradient>
+    <clipPath id="sc"><rect x="0" y="0" width="100" height="58"/></clipPath>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2FE0C0" stop-opacity=".15"/><stop offset="1" stop-color="#2FE0C0" stop-opacity=".9"/></linearGradient>
+  </defs>
+  <rect width="100" height="100" fill="url(#bg)"/>
+  <circle cx="50" cy="44" r="40" fill="url(#glow)"/>
+  <g clip-path="url(#sc)">
+    <circle cx="50" cy="44" r="21" fill="url(#sun)"/>
+    <g fill="#1A0B3A"><rect x="20" y="45" width="60" height="1.6"/><rect x="20" y="49.5" width="60" height="2.2"/><rect x="20" y="54" width="60" height="2.8"/></g>
+  </g>
+  <g stroke="url(#fade)" stroke-width=".7" fill="none">
+    <path d="M50 58 L-30 100M50 58 L0 100M50 58 L20 100M50 58 L40 100M50 58 L60 100M50 58 L80 100M50 58 L100 100M50 58 L130 100"/>
+    <path d="M0 61h100M0 65h100M0 71h100M0 79h100M0 90h100"/>
+  </g>
+  <rect y="57.6" width="100" height=".9" fill="#3BF5D6" opacity=".9"/>
+</svg>

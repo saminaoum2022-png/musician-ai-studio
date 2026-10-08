@@ -10578,7 +10578,8 @@ html:not([data-theme="light"]) body[data-route="generate"] .inputPanel,
 html:not([data-theme="light"]) body[data-route="generate"] .createPaneCta,
 html:not([data-theme="light"]) body[data-route="generate"] .resultCard,
 html:not([data-theme="light"]) body[data-route="generate"] .lyricsModeTabs,
-html:not([data-theme="light"]) body[data-route="generate"] .createSongTypeTabs{
+html:not([data-theme="light"]) body[data-route="generate"] .createSongTypeTabs,
+html:not([data-theme="light"]) body[data-route="generate"] #createFlowModeBar{
   background: rgba(255, 255, 255, 0.075);
   backdrop-filter: blur(24px) saturate(1.2);
   -webkit-backdrop-filter: blur(24px) saturate(1.2);
@@ -10591,7 +10592,8 @@ html:not([data-theme="light"]) body[data-route="generate"] .createTabs{
   box-shadow: none;
 }
 html:not([data-theme="light"]) body[data-route="generate"] .lyricsModeTabs,
-html:not([data-theme="light"]) body[data-route="generate"] .createSongTypeTabs{
+html:not([data-theme="light"]) body[data-route="generate"] .createSongTypeTabs,
+html:not([data-theme="light"]) body[data-route="generate"] #createFlowModeBar{
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
@@ -10611,6 +10613,7 @@ html:not([data-theme="light"]) body[data-route="generate"] .createTabIcon{
 }
 html:not([data-theme="light"]) body[data-route="generate"] .createTab:not(.isActive),
 html:not([data-theme="light"]) body[data-route="generate"] .lyricsModeTab:not(.isActive),
+html:not([data-theme="light"]) body[data-route="generate"] .createFlowModeLink:not(.isActive),
 html:not([data-theme="light"]) body[data-route="generate"] .optChip:not(.isActive),
 html:not([data-theme="light"]) body[data-route="generate"] .styleSuggestPill:not(.isActive),
 html:not([data-theme="light"]) body[data-route="generate"] .addressPill:not(.isActive),
@@ -10661,6 +10664,7 @@ html:not([data-theme="light"]) body[data-route="generate"] .createHeadActions .b
 }
 html:not([data-theme="light"]) body[data-route="generate"] .createTab.isActive,
 html:not([data-theme="light"]) body[data-route="generate"] .lyricsModeTab.isActive,
+html:not([data-theme="light"]) body[data-route="generate"] .createFlowModeLink.isActive,
 html:not([data-theme="light"]) body[data-route="generate"] .optChip.isActive,
 html:not([data-theme="light"]) body[data-route="generate"] .styleSuggestPill.isActive,
 html:not([data-theme="light"]) body[data-route="generate"] .addressPill.isActive,
@@ -12374,6 +12378,9 @@ body[data-route="generate"][data-create-layout="simple"] #createStyleAdvancedPan
 .createSoundModeSeg{
   flex-shrink: 0;
 }
+body[data-route="generate"][data-create-layout] #createSoundModeSeg{
+  display: none !important;
+}
 .createSoundModeSeg[hidden]{
   display: none !important;
 }
@@ -12405,6 +12412,10 @@ body[data-route="generate"][data-create-layout="simple"] #createStyleAdvancedPan
 body[data-route="generate"][data-create-sound-mode="studio"] #createSoundCustomFields{
   display: none !important;
 }
+body[data-route="generate"][data-create-layout="simple"] #createStudioBlock #internationalStyleSlots,
+body[data-route="generate"][data-create-sound-mode="custom"] #createStudioBlock #internationalStyleSlots{
+  display: none !important;
+}
 body[data-route="generate"][data-create-sound-mode="studio"] #lyriaStudioStyleHint{
   display: none !important;
 }
@@ -12427,13 +12438,29 @@ body[data-route="generate"][data-create-layout="simple"] #createArtworkStylePane
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsAssistBar{
   display: flex;
   flex: 0 0 auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 0;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsToolBtn,
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnLyricsSingabilityCheck,
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnLyricsDiacritics,
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnLyricsFixSinging,
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnLyricsPolish{
+  display: none !important;
 }
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsAssistBar[hidden]{
   display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnLyricsMagic{
+  margin-inline-start: 0;
+  height: 32px;
+  padding: 0 14px 0 12px;
+  border-radius: 999px;
+  border: 0;
+  background: linear-gradient(100deg, rgba(47, 224, 192, 0.10), rgba(123, 108, 255, 0.12));
+  color: #f5f5fa;
 }
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel[data-lyrics-mode="write"] #btnLyricsMagic{
   display: inline-flex !important;
@@ -12445,20 +12472,6 @@ body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnL
 body[data-route="generate"][data-create-layout="simple"] #lyricsSingabilityPanel{
   flex: 0 0 auto;
 }
-#createSimpleAura.createSimpleAura{
-  position: absolute;
-  width: min(320px, 85vw);
-  height: 320px;
-  left: 50%;
-  top: 42%;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  filter: blur(72px);
-  opacity: 0.5;
-  pointer-events: none;
-  z-index: 0;
-  transition: background 0.65s ease;
-}
 body[data-route="generate"] #simpleBox.createSimpleLayout{
   position: relative;
   z-index: 1;
@@ -12468,12 +12481,45 @@ body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel.creat
   position: relative;
   z-index: 2;
   margin-bottom: 0;
+  isolation: isolate;
+  overflow: hidden;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel.createSimpleCard > *:not(.createLyricsAura){
+  position: relative;
+  z-index: 1;
+}
+.createLyricsAura{
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+.createLyricsAuraBlob{
+  position: absolute;
+  inset: -55%;
+  pointer-events: none;
+  will-change: transform;
+}
+.createLyricsAuraBlob--a{
+  background: radial-gradient(ellipse 46% 42% at 50% 50%, var(--lyrics-aura-a, rgba(255, 181, 146, 0.38)) 0%, transparent 70%);
+  animation: createWashDriftA 36s ease-in-out infinite;
+}
+.createLyricsAuraBlob--b{
+  background: radial-gradient(ellipse 48% 44% at 50% 50%, var(--lyrics-aura-b, rgba(154, 71, 208, 0.26)) 0%, transparent 72%);
+  animation: createWashDriftB 44s ease-in-out infinite;
 }
 body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost:not([hidden]){
-  margin-top: 14px;
-  padding: 12px 14px 14px;
+  margin-top: 6px;
+  padding: 8px 0 0;
   position: relative;
   z-index: 2;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .createStudioBlock{
   margin: 0;
@@ -12491,7 +12537,7 @@ body[data-route="generate"][data-create-layout="simple"] .createSimpleGenerateWr
   display: none !important;
 }
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsBox textarea{
-  min-height: 140px;
+  min-height: 96px;
   font-size: 17px;
   line-height: 1.45;
 }
@@ -12500,6 +12546,10 @@ body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyri
 }
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsBox{
   margin-top: 0;
+  gap: 0;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .row.imageMoodRow{
+  display: none !important;
 }
 body[data-route="generate"][data-create-layout="simple"] #lyriaStudioStyleLabel{
   display: none !important;
@@ -12508,13 +12558,15 @@ body[data-route="generate"][data-create-layout="simple"] #createSimpleLangPanel,
 body[data-route="generate"][data-create-layout="simple"] .lyricsLangBlock{
   display: none !important;
 }
-body[data-route="generate"][data-create-layout="simple"] .createSimpleStudioToolbar{
+body[data-route="generate"][data-create-layout="simple"] .createSimpleStudioToolbar,
+body[data-route="generate"][data-create-layout="advanced"] .createSimpleStudioToolbar{
   display: flex !important;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 6px;
 }
-body[data-route="generate"][data-create-layout="simple"] .createSimpleStudioToolbar[hidden]{
+body[data-route="generate"][data-create-layout="simple"] .createSimpleStudioToolbar[hidden],
+body[data-route="generate"][data-create-layout="advanced"] .createSimpleStudioToolbar[hidden]{
   display: none !important;
 }
 body[data-route="generate"][data-create-layout="simple"] .createSimpleStudioLabel{
@@ -12522,7 +12574,8 @@ body[data-route="generate"][data-create-layout="simple"] .createSimpleStudioLabe
   font-size: 12px;
   letter-spacing: 0.04em;
 }
-body[data-route="generate"][data-create-layout="simple"] .createSimpleSparkBtn{
+body[data-route="generate"][data-create-layout="simple"] .createSimpleSparkBtn,
+body[data-route="generate"][data-create-layout="advanced"] .createSimpleSparkBtn{
   display: none !important;
   width: 28px;
   height: 28px;
@@ -12535,9 +12588,13 @@ body[data-route="generate"][data-create-layout="simple"] .createSimpleSparkBtn{
   font-family: inherit;
   flex-shrink: 0;
 }
-body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .lyriaStudioStyleRow{
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .lyriaStudioStyleRow,
+body[data-route="generate"][data-create-layout="advanced"] #createSoundPanel .lyriaStudioStyleRow{
   margin-top: 0;
-  gap: 6px;
+  padding: 12px 0 4px;
+  gap: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   mask-image: linear-gradient(90deg, #000 88%, transparent);
   -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
 }
@@ -12546,9 +12603,268 @@ body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost
   font-size: 12px;
 }
 body[data-route="generate"][data-create-layout="simple"] .styleSuggestPill--studioAll{
-  border-style: dashed;
-  opacity: 0.92;
+  display: none !important;
 }
+body[data-route="generate"] .lyriaStudioStyleRow{
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+body[data-route="generate"] .lyriaStudioStyleRow::-webkit-scrollbar{
+  display: none;
+}
+body[data-route="generate"] .studioStyleTile{
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 78px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+body[data-route="generate"] .studioStyleTileCover{
+  display: block;
+  position: relative;
+  width: 78px;
+  height: 78px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.06) center / cover no-repeat;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+}
+body[data-route="generate"] .studioStyleTileGear{
+  display: none;
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 10, 16, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #f7f5fa;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
+  pointer-events: auto;
+}
+body[data-route="generate"] .studioStyleTile.isActive .studioStyleTileGear{
+  display: flex;
+}
+body[data-route="generate"] .studioStyleTileGearIco{
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+body[data-route="generate"] .studioStyleTileGearIco rect{
+  fill: currentColor;
+  stroke: none;
+}
+body[data-route="generate"] .studioStyleTileCover--custom{
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+body[data-route="generate"] .studioStyleTileCustomMark{
+  font-size: 18px;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  color: rgba(247, 245, 250, 0.72);
+}
+body[data-route="generate"].hasCreateCustomStyle #createSoundCustomFields,
+body[data-route="generate"][data-create-layout].hasCreateCustomStyle #createSoundCustomFields,
+body[data-route="generate"][data-create-sound-mode="studio"].hasCreateCustomStyle #createSoundCustomFields{
+  display: block !important;
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+body[data-route="generate"].hasCreateCustomStyle #createSoundCustomFields #styleSuggestRow,
+body[data-route="generate"].hasCreateCustomStyle #createSoundCustomFields #styleSelectedRow{
+  display: none !important;
+}
+body[data-route="generate"].hasCreateCustomStyle #sunoStyle{
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  border-radius: 14px;
+}
+body[data-route="generate"] .studioStyleTile.isActive .studioStyleTileCover{
+  box-shadow: inset 0 0 0 2px #c9a227, 0 8px 18px rgba(201,162,39,0.22);
+}
+body[data-route="generate"] .studioStyleTileName{
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  margin-top: 6px;
+  width: 100%;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+  color: var(--create-icon, rgba(231, 238, 255, 0.62));
+  overflow: hidden;
+}
+body[data-route="generate"] .studioStyleTile.isActive .studioStyleTileName{
+  color: #f7f5fa;
+}
+.createSimpleStyleTabs{
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  min-width: 0;
+}
+.createSimpleStyleTab{
+  border: 0;
+  background: none;
+  padding: 0 0 8px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 750;
+  color: var(--create-icon, rgba(231, 238, 255, 0.55));
+  position: relative;
+  cursor: pointer;
+}
+.createSimpleStyleTab.isActive{
+  color: #f7f5fa;
+}
+.createSimpleStyleTab.isActive::after{
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(100deg, #23d5ab, #7c5cff);
+}
+.createSimpleAllStyles{
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: var(--create-icon, rgba(231, 238, 255, 0.55));
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.createNabadHeard{
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  min-width: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+body[data-route="generate"][data-create-layout="simple"] .createNabadHeard:not([hidden]){
+  display: flex;
+}
+.createNabadHeard[hidden]{ display: none !important; }
+.createNabadHeardText{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.05px;
+  color: rgba(255, 255, 255, 0.52);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.createNabadHeardSpark{
+  flex: 0 0 auto;
+  color: rgba(47, 224, 192, 0.85);
+  font-size: 11px;
+}
+.createNabadHeardDot{
+  color: rgba(255, 255, 255, 0.28);
+  flex: 0 0 auto;
+}
+.createNabadHeardAr{
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.createNabadHeardEdit{
+  border: 0;
+  background: none;
+  color: #23d5ab;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 8px 2px 8px 12px;
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.createLyricsHeardHr{
+  display: none;
+}
+body[data-route="generate"][data-create-layout="simple"] .lyricsBox .createLyricsHeardHr{
+  display: block;
+  height: 1px;
+  margin: 12px -12px 10px;
+  background: rgba(255, 255, 255, 0.075);
+  flex: 0 0 auto;
+}
+body[data-route="generate"][data-create-layout="simple"] .lyricsBox:has(.lyricsAssistBar[hidden]) .createLyricsHeardHr{
+  display: none;
+}
+.createLyricsLineCount{
+  display: none;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.38);
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+body[data-route="generate"][data-create-layout="simple"] .createLyricsLineCount:not([hidden]){
+  display: inline;
+}
+body[data-route="generate"][data-create-layout="simple"] .createSimpleAddressRow{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #createLyricsSettingsSheet #createSimpleLangPanel,
+body[data-route="generate"][data-create-layout="simple"] #createLyricsSettingsSheet .lyricsLangBlock{
+  display: block !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #createLyricsSettingsSheet .lyricsLangGroup:first-child,
+body[data-route="generate"][data-create-layout="simple"] #createLyricsSettingsSheet .createLyricsSettingsInstrumental,
+body[data-route="generate"][data-create-layout="simple"] #createLyricsSettingsSheet .createInlineHint{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #createLyricsSettingsSheet #lyricsDialectGroup:not([hidden]),
+body[data-route="generate"][data-create-layout="simple"] #createLyricsSettingsSheet #lyricsAddressGroup:not([hidden]){
+  display: block !important;
+}
+.createStudioSheetSub{
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--create-icon, rgba(231, 238, 255, 0.62));
+}
+.createStudioSheetSub[hidden]{ display: none !important; }
 body[data-route="generate"][data-create-layout="simple"] #createTabPhoto,
 body[data-route="generate"][data-create-layout="simple"] #createTabHum,
 body[data-route="generate"][data-create-layout="simple"] #createTabVibe,
@@ -12557,6 +12873,91 @@ body[data-route="generate"][data-create-layout="simple"] #createTabEdit{
 }
 body[data-route="generate"][data-create-layout="simple"] #lyriaStudioSoundPrompt,
 body[data-route="generate"][data-create-layout="simple"] .lyriaStudioStyleHint{
+  display: none !important;
+}
+body:not([data-create-layout="simple"]) .createSimpleAddressRow{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] .createSimpleAddressRow{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin: 8px 0 0;
+  min-width: 0;
+}
+body[data-route="generate"][data-create-layout="simple"] .createSimpleAddressRow[hidden]{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] .createSimpleAddressLabel{
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--muted, rgba(231, 238, 255, 0.62));
+  white-space: nowrap;
+}
+body[data-route="generate"][data-create-layout="simple"] .createSimpleAddressPills{
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  justify-content: flex-end;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost #singerVoicePanel{
+  flex: 0 0 auto;
+  margin: 10px 0 0;
+  padding: 0;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .singerVoiceHead{
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0 0;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .singerVoiceHead > .inPanelLabel{
+  font-size: 14px;
+  font-weight: 750;
+}
+body[data-route="generate"][data-create-layout="simple"] #singerGenderPills.addressPills{
+  display: flex;
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 220px;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 2px;
+  margin: 0;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+body[data-route="generate"][data-create-layout="simple"] #singerGenderPills .addressPill{
+  flex: 0 0 auto;
+  justify-content: center;
+  min-width: 0;
+  min-height: 26px;
+  margin: 0;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 700;
+}
+body[data-route="generate"][data-create-layout="simple"] #singerPersonaPill,
+body[data-route="generate"][data-create-layout="simple"] #singerPersonaRow,
+body[data-route="generate"][data-create-layout="simple"] #clipVocalCharacterRow{
   display: none !important;
 }
 /* Advanced Create — lyrics-first composer (+ attach stack) */
@@ -12829,12 +13230,44 @@ body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost
   right: 12px;
   bottom: calc(12px + env(safe-area-inset-bottom, 0));
   z-index: 12001;
-  max-height: min(58vh, 520px);
+  max-height: min(68vh, 620px);
   overflow-y: auto;
   padding: 10px 14px 16px;
   border-radius: 20px;
   transform: translateY(calc(100% + 24px));
   transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.createStudioSheetTabs{
+  margin: 0 0 10px;
+}
+.internationalStyleSlots{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+.internationalStyleSlots[hidden]{
+  display: none !important;
+}
+.internationalStyleSlotRow{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.internationalStyleSlotLabel{
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, rgba(255,255,255,0.55));
+}
+.internationalStyleSlotPills{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.internationalStyleSlotPills .styleSuggestPill{
+  white-space: nowrap;
 }
 html:not([data-theme="light"]) .createStudioSheet{
   background: rgba(255, 255, 255, 0.075);
@@ -12874,11 +13307,262 @@ html:not([data-theme="light"]) .createStudioSheet{
   -webkit-mask-image: none;
   max-height: none;
 }
+#createStudioStylesSheetList.studioStyleSheetTiles{
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  align-items: stretch;
+  gap: 2px;
+  margin-top: 4px;
+  max-height: min(62vh, 560px);
+  overflow-x: hidden !important;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+}
+.studioStyleSheetSec{
+  flex: 0 0 auto;
+  width: 100%;
+  margin: 12px 0 8px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(231, 238, 255, 0.55);
+}
+.studioStyleSheetSec:first-child{
+  margin-top: 4px;
+}
+.studioStyleSheetRow{
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  width: 100%;
+  gap: 10px;
+}
 .createStudioSheetList .styleSuggestPill{
   white-space: normal;
   text-align: left;
   line-height: 1.25;
   max-width: 100%;
+}
+.createStudioSheetHead{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+}
+.createStudioSheetHead .createStudioSheetTitle{
+  margin: 0;
+}
+.createStudioSheetDone{
+  -webkit-appearance: none;
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 4px 2px;
+  margin: 0;
+  color: var(--chip-selected-text, #f7f5fa);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.createStudioSheetBackdrop.isStacked{
+  z-index: 12010;
+}
+.createStudioSheet.isStacked{
+  z-index: 12011;
+}
+.createSoundSettingsSheet{
+  max-height: min(78vh, 720px);
+}
+.createSoundSettingsPickers{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#createStudioBlock #internationalStyleSlots{
+  display: none !important;
+}
+body[data-route="generate"] .createSoundSettingsPickers #internationalStyleSlots,
+.createSoundSettingsPickers #internationalStyleSlots{
+  display: flex !important;
+  flex-direction: column;
+  gap: 10px;
+}
+.createSoundSettingsReset{
+  margin: 12px 0 0;
+  padding: 0;
+  align-self: flex-start;
+}
+.createLyricsSettingsInstrumental{
+  margin-top: 12px;
+}
+#createLyricsSettingsSheet .createSimpleLangPanel,
+#createLyricsSettingsSheet .lyricsLangBlock{
+  margin: 0;
+}
+#createLyricsSettingsSheet .optChipRow{
+  flex-wrap: wrap;
+}
+#createLyricsSettingsSheet .createInstrumentalTick{
+  margin-left: 0;
+  width: 100%;
+  justify-content: flex-start;
+  padding: 8px 0;
+}
+.createSettingsSummaryRow{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.createSettingsSummaryRow[hidden]{
+  display: none !important;
+}
+.createSettingsSummaryPills{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  pointer-events: none;
+}
+.createSettingsSummaryPills .optChip{
+  pointer-events: none;
+  cursor: inherit;
+}
+.createSettingsSummaryChevron{
+  flex: 0 0 auto;
+  opacity: 0.45;
+}
+body[data-route="generate"][data-create-layout="simple"] .createSettingsSummaryRow{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout] .createHeadRow{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  margin-bottom: 8px;
+}
+body[data-route="generate"][data-create-layout] .createHeadTitleGroup{
+  display: flex;
+  align-items: center;
+}
+body[data-route="generate"][data-create-layout] .createHeadTitleGroup .appScreenTitle{
+  flex: 0 0 auto;
+}
+body[data-route="generate"][data-create-layout] .createHeadActions{
+  margin-left: auto;
+  margin-top: 0;
+}
+body[data-route="generate"] #createFlowModeBar,
+body[data-route="generate"][data-create-layout] #createFlowModeBar{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout] #createFlowModeBar .createHeadDivider{
+  display: none;
+}
+body[data-route="generate"][data-create-layout] #createFlowModeBar .createFlowModeLink{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  padding: 0 12px;
+  height: 28px;
+  border-radius: 999px;
+  line-height: 1.2;
+  color: var(--create-icon, rgba(231, 238, 255, 0.55));
+}
+body[data-route="generate"][data-create-layout] #createFlowModeBar .createFlowModeLink.isActive{
+  color: #f7f5fa;
+  background: rgba(255, 255, 255, 0.12);
+  font-weight: 700;
+}
+body[data-route="generate"][data-create-layout="advanced"] #createArtworkStylePanel,
+body[data-route="generate"][data-create-layout="advanced"] #createSongTitleField,
+body[data-route="generate"][data-create-layout="advanced"] #elevenSongLengthPanel{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="advanced"] #createSoundPanel #lyriaStudioStyleRow{
+  display: flex !important;
+}
+body[data-route="generate"][data-create-layout="advanced"] #createSoundCustomFields{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="advanced"][data-create-sound-mode="custom"] #btnCreateSoundSettings,
+body[data-route="generate"][data-create-layout="advanced"][data-create-sound-mode="studio"] #btnClearStyle,
+body[data-route="generate"][data-create-layout="advanced"][data-create-sound-mode="studio"] #btnBoostStyle{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="advanced"] #createSoundPanel #singerVoicePanel{
+  margin: 10px 0 0;
+  padding: 0;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body[data-route="generate"][data-create-layout="advanced"] #createSoundPanel .singerVoiceHead{
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+body[data-route="generate"][data-create-layout="advanced"] #singerGenderPills.addressPills{
+  display: flex;
+  flex: 1 1 auto;
+  width: auto;
+  justify-content: stretch;
+  flex-wrap: nowrap;
+  gap: 2px;
+  margin: 0;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.075);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+}
+body[data-route="generate"][data-create-layout="advanced"] #singerGenderPills .addressPill{
+  flex: 1 1 0;
+  justify-content: center;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+body[data-route="generate"][data-create-layout="advanced"] #singerGenderPills .addressPillSub{
+  display: none;
 }
 .styleSuggestPill--studio.isActive{
   border-color: var(--accent, #c9a227);
@@ -13482,6 +14166,12 @@ html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating .
 }
 #lyricsFieldPanel.lyricsModeSwitching .lyricsBoxMain textarea{
   opacity:0.3;
+}
+body[data-route="generate"][data-create-layout="simple"] .lyricsBoxMain textarea{
+  transition: box-shadow 240ms ease, border-color 200ms ease;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel.lyricsModeSwitching .lyricsBoxMain textarea{
+  opacity: 1;
 }
 .lyricsMagicMenu{
   position:absolute;
@@ -23302,6 +23992,9 @@ body.trackSheetOpen .footer{
     height: auto !important;
     overflow-y: auto;
   }
+  body[data-route="generate"][data-create-layout="advanced"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain textarea{
+    min-height: 120px !important;
+  }
   body[data-route="generate"] #createFlow.createComposeStack > .createFlowStep[aria-label="Sound and title"]{
     flex: 0 0 auto;
     position: relative;
@@ -23406,18 +24099,56 @@ body.trackSheetOpen .footer{
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createPane--lyrics[hidden]{
     display: none;
   }
-  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel{
-    flex: 1 1 auto;
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .resultCard{
+    flex: 0 0 auto;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #simpleBox{
     min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel{
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 148px;
     margin: 0;
+    overflow: hidden;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsPanelHead,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #createNabadHeard,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .createLyricsHeardHr{
+    flex: 0 0 auto;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBox,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain{
+    flex: 1 1 auto;
+    min-height: 96px;
+    overflow: hidden;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain textarea{
+    flex: 1 1 auto;
+    min-height: 96px !important;
+    height: 100% !important;
+    max-height: none !important;
+    overflow-y: auto;
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsAssistBar,
-  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsSingabilityPanel{
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsSingabilityPanel,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .createSimpleAddressRow{
+    flex: 0 0 auto;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #createSimpleStudioHost #singerVoicePanel{
     flex: 0 0 auto;
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
     flex: 0 0 auto;
     margin: 0;
+    padding: 4px 0 10px;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    z-index: 4;
   }
   /* Advanced sound panel + generate step take no room in Simple; the dock floats. */
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack > .createFlowStep[aria-label="Sound and title"]{
@@ -23430,7 +24161,8 @@ body.trackSheetOpen .footer{
     padding: 0;
     overflow: visible;
   }
-  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] .createGenerateDockSpacer{
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] .createGenerateDockSpacer,
+  html.is-native-shell body[data-route="generate"][data-create-layout="advanced"] .createGenerateDockSpacer{
     display: none;
   }
   /* Generate sits right on top of the keyboard (or the tab bar once it is dismissed). */
@@ -49625,6 +50357,7 @@ body[data-route="generate"] .stylePanelHead > span{
 }
 body[data-route="generate"] .createTab:not(.isActive),
 body[data-route="generate"] .lyricsModeTab:not(.isActive),
+body[data-route="generate"] .createFlowModeLink:not(.isActive),
 body[data-route="generate"] .optChip:not(.isActive),
 body[data-route="generate"] .styleSuggestPill:not(.isActive),
 body[data-route="generate"] #singerGenderPills .addressPill:not(.isActive),
@@ -64348,14 +65081,17 @@ html[data-theme="light"] .createPaneCta:hover{
   border-color: rgba(13, 148, 136, 0.35);
   background: var(--card);
 }
-html[data-theme="light"] body[data-route="generate"] .lyricsModeTabs{
+html[data-theme="light"] body[data-route="generate"] .lyricsModeTabs,
+html[data-theme="light"] body[data-route="generate"] #createFlowModeBar{
   border-color: var(--border);
   background: var(--surface-secondary);
 }
-html[data-theme="light"] body[data-route="generate"] .lyricsModeTab{
+html[data-theme="light"] body[data-route="generate"] .lyricsModeTab,
+html[data-theme="light"] body[data-route="generate"] .createFlowModeLink{
   color: var(--text-muted);
 }
-html[data-theme="light"] body[data-route="generate"] .lyricsModeTab.isActive{
+html[data-theme="light"] body[data-route="generate"] .lyricsModeTab.isActive,
+html[data-theme="light"] body[data-route="generate"] .createFlowModeLink.isActive{
   background: var(--card);
   color: var(--text-primary);
   box-shadow:

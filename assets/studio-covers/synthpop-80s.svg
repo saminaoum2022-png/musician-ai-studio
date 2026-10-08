@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A0A4A"/><stop offset=".45" stop-color="#C43B8A"/><stop offset="1" stop-color="#FF8A4A"/></linearGradient>
+    <linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF6D8"/><stop offset=".45" stop-color="#FF8AD8"/><stop offset="1" stop-color="#5AF0FF"/></linearGradient>
+    <clipPath id="tri"><path d="M50 18 L82 72 H18z"/></clipPath>
+  </defs>
+  <rect width="100" height="100" fill="url(#sky)"/>
+  <g fill="none" stroke="#5AF0FF" stroke-opacity=".35" stroke-width=".7">
+    <path d="M0 78h100M0 84h100M0 91h100"/>
+    <path d="M20 78v22M35 78v22M50 78v22M65 78v22M80 78v22"/>
+  </g>
+  <g clip-path="url(#tri)"><rect width="100" height="100" fill="url(#chrome)"/></g>
+  <path d="M50 18 L82 72 H18z" fill="none" stroke="#FFF6D8" stroke-opacity=".55" stroke-width=".8"/>
+  <rect y="71.5" width="100" height="1.2" fill="#5AF0FF" opacity=".8"/>
+</svg>

@@ -78,6 +78,16 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary, no extr
 - idea_brief / lyrics_raw, dialect_hint, arabic_address, script_format, instrumental.
 - previous_take: if present, this is the producer JSON from an earlier take of the same song.
 
+=== LANGUAGE AND DIALECT ===
+- Detect the language from idea_brief / lyrics_raw. Do not assume Arabic. If the text is English or another non-Arabic language, write lyrics in that language.
+- dialect_hint is optional. If the text is Arabic (or mixed with Arabic) and dialect_hint is empty or the dialect is unclear, write Lebanese colloquial — not fusha, and not Egyptian/Gulf/Maghrebi unless the lyrics clearly are.
+- If dialect_hint is set, honor it.
+
+=== ARABIC ADDRESS ===
+- arabic_address is who the lyrics talk TO, not the singer's gender (vocal_gender).
+- If arabic_address is male, female, or group: match ALL pronouns, verb endings and possessives to that address (female: إنتِ، عيونِك، ضحكتِك، حبيبتي، بتعرفي. male: إنتَ، عيونَك، ضحكتَك، حبيبي، بتعرف. group: إنتو، عيونكن، بتعرفوا). If the user's lyrics use a different address, adapt them to arabic_address.
+- If arabic_address is "auto" or empty: infer the addressee from the lyrics (إنتَ / إنتِ / إنتو and matching endings) and stay consistent. If still unclear, pick the most natural address the lyrics imply. Do not invent a different addressee than the lyrics suggest.
+
 === PREVIOUS TAKE ===
 If previous_take is present:
 - previous_take is a reference, not a lock. Any field the user changed (arabic_address, vocal_gender, style, lyrics, dialect / dialect_hint) always wins over previous_take. Rewrite only what that change needs: address change means rewrite the pronouns and endings; singer change means adjust the vocal wording and the gendered lines the singer says about themself; style change means adjust the arrangement; dialect change means rewrite the lyrics into that dialect (Lebanese, Egyptian, Gulf, etc.) while keeping the same meaning. Keep everything else (structure, bars, line count, meaning) the same.
@@ -120,21 +130,21 @@ Do not write intensity into any lyric or arrangement string — it is a number f
 - Every line is a complete small phrase. No 1-2 word fragments, no run-on sentences.
 - No commas, semicolons, colons, dashes, bullets or quotes inside lines. Use line breaks only.
 - Keep every Arabic diacritic (harakat, shadda, sukun) exactly as the user wrote it. Never remove them. If you rewrite a word, add harakat only where needed for correct Lebanese pronunciation, especially the address endings (ـِك for female, ـَك for male).
-- Match ALL pronouns, verb endings and possessives to arabic_address, not only إنتَ/حبيبي. female: إنتِ، عيونِك، ضحكتِك، حبيبتي، بتعرفي. male: إنتَ، عيونَك، ضحكتَك، حبيبي، بتعرف. group: إنتو، عيونكن، بتعرفوا. If the user's lyrics use a different address than arabic_address, adapt them to arabic_address. This is not the singer's gender.
+- Honor arabic_address as in ARABIC ADDRESS above. This is not the singer's gender.
 - Never put timing, BPM, style words, dialect notes or instructions in lyrics.
 - BACKING echoes are optional and rare. Leave "backing": [] unless style_tags explicitly asks for chants, choir, or group vocals. Never invent backing just to fill the chorus.
 
 === IDEA MODE (idea_brief set, lyrics_raw empty) ===
-- Write original lyrics in the dialect from dialect_hint (default Levantine/Lebanese colloquial), using natural spoken words, not formal Arabic (fusha).
+- Write original lyrics in the language you detected. If Arabic, use the dialect from dialect_hint, or Lebanese colloquial when dialect is unclear. Natural spoken words, not formal Arabic (fusha).
 - Never copy phrases from idea_brief into the lyrics; express the idea in new words.
 - The chorus is the hook: short, memorable, emotionally clear, and the title-like line comes first or last.
-- Match ALL pronouns, verb endings and possessives to arabic_address, not only إنتَ/حبيبي. female: إنتِ، عيونِك، ضحكتِك، حبيبتي، بتعرفي. male: إنتَ، عيونَك، ضحكتَك، حبيبي، بتعرف. group: إنتو، عيونكن، بتعرفوا. If the user's lyrics use a different address than arabic_address, adapt them to arabic_address. This is not the singer's gender.
+- Honor arabic_address as in ARABIC ADDRESS above. This is not the singer's gender.
 - Script: Arabic script by default. If script_format is "arabizi", write Arabizi using letters only: "a" for ع, "h" for ح, "kh" for خ, "gh" for غ, "'" for ء. No numerals.
 
 === WRITE MODE (lyrics_raw set) ===
 - Keep the meaning of the user's lyrics. Never invent new verses, new story events, or a new message.
 - Keep every Arabic diacritic (harakat, shadda, sukun) exactly as the user wrote it. Never remove them. If you rewrite a word, add harakat only where needed for correct Lebanese pronunciation, especially the address endings (ـِك for female, ـَك for male).
-- Match ALL pronouns, verb endings and possessives to arabic_address, not only إنتَ/حبيبي. female: إنتِ، عيونِك، ضحكتِك، حبيبتي، بتعرفي. male: إنتَ، عيونَك، ضحكتَك، حبيبي، بتعرف. group: إنتو، عيونكن، بتعرفوا. If the user's lyrics use a different address than arabic_address, adapt them to arabic_address.
+- Honor arabic_address as in ARABIC ADDRESS above.
 - You MAY adapt for singability: split or join lines, place lines into sections, repeat the chorus, and make small wording fixes so the lines sit in the groove.
 - If the user labeled sections, keep their labels. A repeated block is the Chorus.
 - If the lyrics are too long for 180 seconds, drop whole repeated chorus copies first, then a third verse. Never cut inside a section.

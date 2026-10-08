@@ -917,7 +917,6 @@
               </div>
             </div>
           </header>
-          <div id="createSimpleAura" class="createSimpleAura" aria-hidden="true" hidden></div>
           <div class="createFlow" id="createFlow">
           <section class="createFlowStep" aria-label="Start your song">
           <div class="createTabs" role="tablist" aria-label="How to start">
@@ -1320,6 +1319,10 @@
                   </div>
                 </div>
                 <div class="field grow inputPanel createSimpleCard" id="lyricsFieldPanel" data-lyrics-mode="write">
+                  <div class="createLyricsAura" aria-hidden="true">
+                    <span class="createLyricsAuraBlob createLyricsAuraBlob--a"></span>
+                    <span class="createLyricsAuraBlob createLyricsAuraBlob--b"></span>
+                  </div>
                   <div id="createLyricsAttachFabWrap" class="createLyricsAttachFabWrap" hidden>
                     <button id="btnCreateLyricsAttach" class="createLyricsAttachFab" type="button" aria-haspopup="menu" aria-controls="createLyricsAttachMenu" aria-expanded="false" aria-label="Add photo, hum, or vibe">
                       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
@@ -1359,70 +1362,25 @@
                       <button id="lyricsModeWrite" class="lyricsModeTab isActive" type="button" role="tab" aria-selected="true">Write</button>
                       <button id="lyricsModeGenerate" class="lyricsModeTab" type="button" role="tab" aria-selected="false">Idea</button>
                     </div>
-                    <button id="btnCreateInstrumentalTick" class="createInstrumentalTick" type="button" aria-pressed="false">
-                      <span class="createInstrumentalTickBox" aria-hidden="true"></span>
-                      Instrumental
-                    </button>
                   </div>
-                  <div id="createSimpleLangPanel" class="createSimpleLangPanel">
+                  <button type="button" id="btnCreateLyricsSettings" class="createSettingsSummaryRow" hidden aria-haspopup="dialog" aria-controls="createLyricsSettingsSheet">
+                    <span id="createLyricsSettingsPills" class="createSettingsSummaryPills"></span>
+                    <svg class="createSettingsSummaryChevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+                  </button>
                   <label class="ghost lyricsAttachBtn srOnly" title="Attach vocal reference">
                     Insert vocal
                     <input id="sunoVocalUpload" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm" />
                   </label>
                   <button id="btnVocalRefRec" class="ghost srOnly" type="button">Record voice</button>
-                  <div class="lyricsLangBlock">
-                    <div class="lyricsLangGroup">
-                      <span class="lyricsLangLabel">Lyrics language</span>
-                      <div id="lyricsLangRow" class="optChipRow lyricsLangRow" role="group" aria-label="Lyrics language">
-                        <button type="button" class="optChip isActive" data-lyrics-lang="auto" aria-pressed="true">Auto</button>
-                        <button type="button" class="optChip" data-lyrics-lang="english" aria-pressed="false">English</button>
-                        <button type="button" class="optChip" data-lyrics-lang="arabic" aria-pressed="false">Arabic</button>
-                        <button type="button" class="optChip" data-lyrics-lang="french" aria-pressed="false">French</button>
-                        <button type="button" class="optChip optChip--extra" data-lyrics-lang="arabizi" aria-pressed="false" title="Latin-script Lebanese — how it should be sung">Arabizi</button>
-                        <button type="button" class="optChip optChip--extra" data-lyrics-lang="spanish" aria-pressed="false">Spanish</button>
-                        <button type="button" class="optChip optChip--extra" data-lyrics-lang="turkish" aria-pressed="false">Turkish</button>
-                        <button type="button" class="optChip optChip--extra" data-lyrics-lang="italian" aria-pressed="false">Italian</button>
-                        <button type="button" class="optChip optChip--extra" data-lyrics-lang="german" aria-pressed="false">German</button>
-                        <button type="button" class="optChip optChip--more" data-lyrics-lang-more="1">More</button>
-                      </div>
-                    </div>
-                    <div id="lyricsDialectGroup" class="lyricsLangGroup lyricsDialectGroup" hidden>
-                      <span class="lyricsLangLabel">Arabic dialect</span>
-                      <div id="lyricsDialectRow" class="optChipRow lyricsDialectRow" role="group" aria-label="Arabic dialect">
-                        <button type="button" class="optChip" data-lyrics-dialect="lebanese" aria-pressed="false">Lebanese</button>
-                        <button type="button" class="optChip" data-lyrics-dialect="egyptian" aria-pressed="false">Egyptian</button>
-                        <button type="button" class="optChip" data-lyrics-dialect="iraqi" aria-pressed="false">Iraqi</button>
-                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="gulf" aria-pressed="false">Gulf</button>
-                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="moroccan" aria-pressed="false">Moroccan</button>
-                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="syrian" aria-pressed="false">Syrian</button>
-                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="palestinian" aria-pressed="false">Palestinian</button>
-                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="tunisian" aria-pressed="false">Tunisian</button>
-                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="sudanese" aria-pressed="false">Sudanese</button>
-                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="msa" aria-pressed="false">MSA</button>
-                        <button type="button" class="optChip optChip--more" data-lyrics-dialect-more="1">More</button>
-                      </div>
-                    </div>
-                    <div id="lyricsAddressGroup" class="lyricsLangGroup lyricsAddressGroup" hidden>
-                      <span class="lyricsLangLabel">Arabic address <span class="lyricsLangLabelHint">who lyrics talk to</span></span>
-                      <!-- Hidden select is the form state; chips are the visible control. -->
-                      <select id="sunoArabicAddress" hidden aria-hidden="true" tabindex="-1">
-                        <option value="" selected disabled>Choose address</option>
-                        <option value="male">إنتَ · حبيبي</option>
-                        <option value="female">إنتِ · حبيبتي</option>
-                        <option value="group">إنتو · حبايبي</option>
-                      </select>
-                      <div id="lyricsAddressRow" class="optChipRow lyricsAddressRow" role="group" aria-label="Arabic address">
-                        <button type="button" class="optChip" data-address-value="male" lang="ar" dir="rtl" aria-pressed="false">إنتَ · حبيبي</button>
-                        <button type="button" class="optChip" data-address-value="female" lang="ar" dir="rtl" aria-pressed="false">إنتِ · حبيبتي</button>
-                        <button type="button" class="optChip" data-address-value="group" lang="ar" dir="rtl" aria-pressed="false">إنتو · حبايبي</button>
-                      </div>
-                    </div>
-                  </div>
-                  </div>
                   <div class="lyricsBox">
                     <div class="lyricsBoxMain">
                       <textarea id="sunoPrompt" dir="auto" rows="3" placeholder="Write your lyrics…"></textarea>
                     </div>
+                    <div id="createNabadHeard" class="createNabadHeard" hidden>
+                      <span id="createNabadHeardText" class="createNabadHeardText"></span>
+                      <button type="button" id="btnCreateNabadHeardEdit" class="createNabadHeardEdit">Edit</button>
+                    </div>
+                    <div class="createLyricsHeardHr" aria-hidden="true"></div>
                     <div class="lyricsAssistBar" role="toolbar" aria-label="Lyrics assist" hidden>
                       <button id="btnLyricsSingabilityCheck" class="lyricsSingabilityCheckBtn aiAssistBtn" type="button" hidden title="Analyze rhyme, wazen (وزن), and line balance for AI singing" aria-label="Check singability"><span class="lyricsSingabilityCheckIco aiAssistIco" aria-hidden="true">♫</span><span class="lyricsSingabilityCheckLabel aiAssistLabel">Check singability</span></button>
                       <button id="btnLyricsDiacritics" class="lyricsDiacriticsBtn" type="button" hidden title="Add Arabic vowel marks for clearer singing" aria-label="Add Arabic vowel marks"><span class="lyricsDiacriticsLabel">Add vowel marks</span><span class="lyricsDiacriticsLabelAr" lang="ar" dir="rtl">تشكيل</span></button>
@@ -1441,6 +1399,7 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
                       </button>
                       <button id="btnLyricsMagic" class="lyricsMagicBtn aiAssistBtn lyricsActionChip lyricsActionChip--generate" type="button" title="Write AI lyrics" aria-label="Write AI lyrics"><span class="lyricsMagicIco aiAssistIco" aria-hidden="true">✦</span><span class="lyricsMagicLabel aiAssistLabel">AI lyrics</span></button>
+                      <span id="createLyricsLineCount" class="createLyricsLineCount" hidden></span>
                     </div>
                     <div id="lyricsSingabilityPanel" class="lyricsSingabilityPanel" hidden aria-live="polite">
                       <button type="button" id="lyricsSingabilityToggle" class="lyricsSingabilityCardHead" aria-expanded="false">
@@ -1454,6 +1413,14 @@
                         <ul id="lyricsSingabilityList" class="lyricsSingabilityList"></ul>
                         <div id="lyricsSingabilityActions" class="lyricsSingabilityActions" hidden role="toolbar" aria-label="Suggested lyric fixes"></div>
                       </div>
+                    </div>
+                  </div>
+                  <div id="createSimpleAddressRow" class="createSimpleAddressRow" hidden>
+                    <span class="createSimpleAddressLabel">Talking to</span>
+                    <div id="createSimpleAddressPills" class="optChipRow lyricsAddressRow createSimpleAddressPills" role="group" aria-label="Arabic address">
+                      <button type="button" class="optChip" data-address-value="male" lang="ar" dir="rtl" aria-pressed="false">إنتَ</button>
+                      <button type="button" class="optChip" data-address-value="female" lang="ar" dir="rtl" aria-pressed="false">إنتِ</button>
+                      <button type="button" class="optChip" data-address-value="group" lang="ar" dir="rtl" aria-pressed="false">إنتو</button>
                     </div>
                   </div>
                   <div class="row imageMoodRow">
@@ -1484,6 +1451,10 @@
                   <button id="btnBoostStyle" class="lyricsMagicBtn styleBoostBtn aiAssistBtn" type="button" hidden title="Boost style with AI" aria-label="Boost style with AI"><span class="aiAssistIco" aria-hidden="true">✦</span><span class="aiAssistLabel">Boost</span></button>
                 </div>
               </div>
+              <button type="button" id="btnCreateSoundSettings" class="createSettingsSummaryRow" hidden aria-haspopup="dialog" aria-controls="createSoundSettingsSheet">
+                <span id="createSoundSettingsPills" class="createSettingsSummaryPills"></span>
+                <svg class="createSettingsSummaryChevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+              </button>
               <div id="createStudioActiveStrip" class="createStudioActiveStrip createContextCard" hidden>
                 <div class="remixSourceBannerRow">
                   <span class="createStudioActiveStripDot" aria-hidden="true"></span>
@@ -1496,11 +1467,16 @@
               </div>
               <div id="createStudioBlock" class="createStudioBlock">
                 <div id="createSimpleStudioToolbar" class="createSimpleStudioToolbar" hidden>
-                  <span class="label inPanelLabel createSimpleStudioLabel">Sound</span>
+                  <div id="createSimpleStyleTabs" class="createSimpleStyleTabs" role="tablist" aria-label="Style group">
+                    <button type="button" class="createSimpleStyleTab isActive" data-studio-row-tab="arabic" aria-selected="true">Arabic</button>
+                    <button type="button" class="createSimpleStyleTab" data-studio-row-tab="international" aria-selected="false">International</button>
+                  </div>
+                  <button type="button" id="btnCreateSimpleAllStyles" class="createSimpleAllStyles">All styles</button>
                   <button type="button" id="btnLyriaStudioSpark" class="createSimpleSparkBtn" aria-label="Surprise style">✦</button>
                 </div>
                 <p id="lyriaStudioStyleLabel" class="label inPanelLabel lyriaStudioStyleLabel" hidden>Studio styles</p>
                 <div id="lyriaStudioStyleRow" class="styleSuggestRow lyriaStudioStyleRow" hidden role="group" aria-label="Studio styles"></div>
+                <div id="internationalStyleSlots" class="internationalStyleSlots" hidden></div>
                 <details id="lyriaStudioSoundPrompt" class="lyriaStudioSoundPrompt" hidden>
                   <summary class="lyriaStudioSoundPromptSummary">Sound prompt</summary>
                   <pre id="lyriaStudioSoundPromptText" class="lyriaStudioSoundPromptText"></pre>
@@ -1512,12 +1488,6 @@
                 <div id="styleSelectedRow" class="styleSelectedRow" hidden aria-label="Selected style tags"></div>
                 <div id="styleSuggestRow" class="styleSuggestRow" role="group" aria-label="Style suggestions"></div>
               </div>
-            </div>
-            </div>
-            <label class="field grow inputPanel inputPanel--style" id="createSongTitleField" hidden>
-              <div class="label inPanelLabel">Song title</div>
-              <input id="sunoTitle" type="text" placeholder="Optional — blank uses first 2 words of lyrics" autocomplete="off" maxlength="80" />
-            </label>
             <div id="singerVoicePanel" class="field grow inputPanel inputPanel--style">
               <!-- Singer is the section title (same as Style / Artwork). Pills are
                    Male / Female / Persona only; empty gender = default voice. -->
@@ -1554,6 +1524,12 @@
                 <p id="clipVocalCharacterSpec" class="clipVocalCharacterSpec" aria-live="polite"></p>
               </div>
             </div>
+            </div>
+            </div>
+            <label class="field grow inputPanel inputPanel--style" id="createSongTitleField" hidden>
+              <div class="label inPanelLabel">Song title</div>
+              <input id="sunoTitle" type="text" placeholder="Optional — blank uses first 2 words of lyrics" autocomplete="off" maxlength="80" />
+            </label>
             <div id="elevenSongLengthPanel" class="field grow inputPanel inputPanel--style" hidden>
               <div class="label inPanelLabel stylePanelHead">
                 <span>Song length</span>
@@ -1713,8 +1689,94 @@
           <div id="createStudioStylesBackdrop" class="createStudioSheetBackdrop" hidden aria-hidden="true"></div>
           <div id="createStudioStylesSheet" class="createStudioSheet inputPanel" hidden role="dialog" aria-modal="true" aria-label="Studio styles">
             <div class="createStudioSheetGrab" aria-hidden="true"></div>
-            <p class="label inPanelLabel createStudioSheetTitle">Studio styles</p>
+            <p id="createStudioStylesSheetTitle" class="label inPanelLabel createStudioSheetTitle">Studio styles</p>
+            <div id="createStudioStylesSheetTabs" class="lyricsModeTabs createStudioSheetTabs" role="tablist" aria-label="Studio style group">
+              <button type="button" class="lyricsModeTab isActive" data-studio-sheet-tab="arabic" aria-selected="true">Arabic</button>
+              <button type="button" class="lyricsModeTab" data-studio-sheet-tab="international" aria-selected="false">International</button>
+            </div>
             <div id="createStudioStylesSheetList" class="createStudioSheetList styleSuggestRow createStudioSheetPills"></div>
+          </div>
+
+          <div id="createLyricsSettingsBackdrop" class="createStudioSheetBackdrop" hidden aria-hidden="true"></div>
+          <div id="createLyricsSettingsSheet" class="createStudioSheet inputPanel" hidden role="dialog" aria-modal="true" aria-labelledby="createLyricsSettingsTitle">
+            <div class="createStudioSheetGrab" aria-hidden="true"></div>
+            <div class="createStudioSheetHead">
+              <div>
+                <p id="createLyricsSettingsTitle" class="label inPanelLabel createStudioSheetTitle">Lyrics settings</p>
+                <p id="createLyricsSettingsSub" class="createStudioSheetSub" hidden>Change anything that’s off</p>
+              </div>
+              <button type="button" id="btnCreateLyricsSettingsDone" class="createStudioSheetDone">Done</button>
+            </div>
+            <div id="createSimpleLangPanel" class="createSimpleLangPanel">
+              <div class="lyricsLangBlock">
+                <div class="lyricsLangGroup">
+                  <span class="lyricsLangLabel">Language</span>
+                  <div id="lyricsLangRow" class="optChipRow lyricsLangRow" role="group" aria-label="Lyrics language">
+                    <button type="button" class="optChip isActive" data-lyrics-lang="auto" aria-pressed="true">Auto</button>
+                    <button type="button" class="optChip" data-lyrics-lang="english" aria-pressed="false">English</button>
+                    <button type="button" class="optChip" data-lyrics-lang="arabic" aria-pressed="false">Arabic</button>
+                    <button type="button" class="optChip" data-lyrics-lang="french" aria-pressed="false">French</button>
+                    <button type="button" class="optChip optChip--extra" data-lyrics-lang="arabizi" aria-pressed="false" title="Latin-script Lebanese — how it should be sung">Arabizi</button>
+                    <button type="button" class="optChip optChip--extra" data-lyrics-lang="spanish" aria-pressed="false">Spanish</button>
+                    <button type="button" class="optChip optChip--extra" data-lyrics-lang="turkish" aria-pressed="false">Turkish</button>
+                    <button type="button" class="optChip optChip--extra" data-lyrics-lang="italian" aria-pressed="false">Italian</button>
+                    <button type="button" class="optChip optChip--extra" data-lyrics-lang="german" aria-pressed="false">German</button>
+                    <button type="button" class="optChip optChip--more" data-lyrics-lang-more="1">More</button>
+                  </div>
+                </div>
+                <div id="lyricsDialectGroup" class="lyricsLangGroup lyricsDialectGroup" hidden>
+                  <span class="lyricsLangLabel">Arabic dialect</span>
+                  <div id="lyricsDialectRow" class="optChipRow lyricsDialectRow" role="group" aria-label="Arabic dialect">
+                    <button type="button" class="optChip" data-lyrics-dialect="lebanese" aria-pressed="false">Lebanese</button>
+                    <button type="button" class="optChip" data-lyrics-dialect="egyptian" aria-pressed="false">Egyptian</button>
+                    <button type="button" class="optChip" data-lyrics-dialect="iraqi" aria-pressed="false">Iraqi</button>
+                    <button type="button" class="optChip optChip--extra" data-lyrics-dialect="gulf" aria-pressed="false">Gulf</button>
+                    <button type="button" class="optChip optChip--extra" data-lyrics-dialect="moroccan" aria-pressed="false">Moroccan</button>
+                    <button type="button" class="optChip optChip--extra" data-lyrics-dialect="syrian" aria-pressed="false">Syrian</button>
+                    <button type="button" class="optChip optChip--extra" data-lyrics-dialect="palestinian" aria-pressed="false">Palestinian</button>
+                    <button type="button" class="optChip optChip--extra" data-lyrics-dialect="tunisian" aria-pressed="false">Tunisian</button>
+                    <button type="button" class="optChip optChip--extra" data-lyrics-dialect="sudanese" aria-pressed="false">Sudanese</button>
+                    <button type="button" class="optChip optChip--extra" data-lyrics-dialect="msa" aria-pressed="false">MSA</button>
+                    <button type="button" class="optChip optChip--more" data-lyrics-dialect-more="1">More</button>
+                  </div>
+                </div>
+                <div id="lyricsAddressGroup" class="lyricsLangGroup lyricsAddressGroup" hidden>
+                  <span class="lyricsLangLabel">Who the song talks to</span>
+                  <select id="sunoArabicAddress" hidden aria-hidden="true" tabindex="-1">
+                    <option value="" selected disabled>Choose address</option>
+                    <option value="male">إنتَ · حبيبي</option>
+                    <option value="female">إنتِ · حبيبتي</option>
+                    <option value="group">إنتو · حبايبي</option>
+                  </select>
+                  <div id="lyricsAddressRow" class="optChipRow lyricsAddressRow" role="group" aria-label="Arabic address">
+                    <button type="button" class="optChip" data-address-value="male" lang="ar" dir="rtl" aria-pressed="false">إنتَ · حبيبي</button>
+                    <button type="button" class="optChip" data-address-value="female" lang="ar" dir="rtl" aria-pressed="false">إنتِ · حبيبتي</button>
+                    <button type="button" class="optChip" data-address-value="group" lang="ar" dir="rtl" aria-pressed="false">إنتو · حبايبي</button>
+                  </div>
+                </div>
+              </div>
+              <div class="lyricsLangGroup createLyricsSettingsInstrumental">
+                <button id="btnCreateInstrumentalTick" class="createInstrumentalTick" type="button" aria-pressed="false">
+                  <span class="createInstrumentalTickBox" aria-hidden="true"></span>
+                  Instrumental (no vocals)
+                </button>
+              </div>
+              <p class="hint createInlineHint">Dialect and address show only when Arabic is picked.</p>
+            </div>
+          </div>
+
+          <div id="createSoundSettingsBackdrop" class="createStudioSheetBackdrop" hidden aria-hidden="true"></div>
+          <div id="createSoundSettingsSheet" class="createStudioSheet inputPanel createSoundSettingsSheet" hidden role="dialog" aria-modal="true" aria-labelledby="createSoundSettingsTitle">
+            <div class="createStudioSheetGrab" aria-hidden="true"></div>
+            <div class="createStudioSheetHead">
+              <p id="createSoundSettingsTitle" class="label inPanelLabel createStudioSheetTitle">Sound</p>
+              <button type="button" id="btnCreateSoundSettingsDone" class="createStudioSheetDone">Done</button>
+            </div>
+            <div id="createSoundSettingsPickers" class="createSoundSettingsPickers">
+              <p id="createSoundSettingsHint" class="createStudioSheetSub" hidden></p>
+              <p class="internationalStyleSlotLabel" id="createSoundSettingsStyleLabel" hidden>Style</p>
+            </div>
+            <button type="button" id="btnCreateSoundSettingsReset" class="styleClearBtn createSoundSettingsReset">Reset to default</button>
           </div>
 
           <div id="humTrackSheet" class="createAltFlow humTrackFlow" hidden aria-hidden="true">

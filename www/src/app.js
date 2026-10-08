@@ -12,6 +12,17 @@ import { renderArrangementToWav } from "./render.js";
 import { recordHumToMelody } from "./melody/extract.js";
 import { resolveLyriaDisplayTitle } from "./lyria-display-title.js";
 import { LYRIA_STUDIO_STYLES, getLyriaStudioStyle } from "./lyria-studio-styles.js";
+import {
+  getInternationalStyle,
+  listInternationalStyles,
+  internationalStyleUi,
+  defaultInternationalSlots,
+  allowedSlotValues,
+  shortSlotLabel,
+  fillInternationalStylePrompt,
+  leftoverStylePlaceholders,
+  INTERNATIONAL_SLOT_KEYS,
+} from "./lyria-international-styles.mjs";
 import { mixStemsToWav } from "./studio/mixer.js";
 import { encodeWav16 } from "./wav.js";
 import { initMentor, resetMentorSession } from "./mentor.js";
@@ -5258,8 +5269,97 @@ function arabicAddressPronunciationNote(value, _singerGender = "") {
   return "";
 }
 
+function createPromptHasArabicLetters() {
+  return textHasArabicScript(els.sunoPrompt?.value);
+}
+
+/** Simple: picked male/female/group, else "auto" when the text is Arabic. */
+function resolveArabicAddressForPayload() {
+  const picked = String(els.sunoArabicAddress?.value || "").trim().toLowerCase();
+  if (picked === "male" || picked === "female" || picked === "group") return picked;
+  if (isCreateSimpleCreateLayout() && createPromptHasArabicLetters()) return "auto";
+  return "";
+}
+
+function syncSimpleArabicAddressRow() {
+  const row = document.getElementById("createSimpleAddressRow");
+  if (!row) return;
+  row.hidden = true;
+  try { syncArabicAddressPills(); } catch {}
+  try { syncCreateNabadHeard(); } catch {}
+}
+
+function nabadHeardDialectLabel() {
+  const fromChip = String(document.querySelector("#lyricsDialectRow [data-lyrics-dialect].isActive")?.textContent || "").trim();
+  if (fromChip) return fromChip;
+  const rec = studioStyleUiRecord(_activeLyriaStudioStyleId);
+  const key = String(rec?.dialectKey || "").toLowerCase();
+  if (key === "egyptian") return "Egyptian";
+  if (key === "gulf") return "Gulf";
+  if (key === "iraqi") return "Iraqi";
+  return "Lebanese";
+}
+
+function nabadHeardAddressBits() {
+  const v = String(els.sunoArabicAddress?.value || "").trim().toLowerCase();
+  if (v === "male") return { ar: "إنتَ", en: "him" };
+  if (v === "group") return { ar: "إنتو", en: "everyone" };
+  return { ar: "إنتِ", en: "her" };
+}
+
+function nabadHeardMoodLabel() {
+  const rec = studioStyleUiRecord(_activeLyriaStudioStyleId);
+  const sub = String(rec?.subtitle || "");
+  if (/intimate|ballad|slow/i.test(sub)) return "tender";
+  if (/energetic|dance|130|128|122/i.test(sub)) return "energetic";
+  return "tender";
+}
+
+function syncCreateLyricsLineCount() {
+  const el = document.getElementById("createLyricsLineCount");
+  if (!el) return;
+  const simple = isCreateSimpleCreateLayout();
+  const raw = String(els.sunoPrompt?.value || "");
+  const lines = raw.trim() ? raw.split(/\n/).filter((line) => line.trim()).length : 0;
+  el.hidden = !simple || lines < 1;
+  if (lines < 1) return;
+  el.textContent = lines === 1 ? "1 line" : `${lines} lines`;
+}
+
+function syncCreateNabadHeard() {
+  const row = document.getElementById("createNabadHeard");
+  const text = document.getElementById("createNabadHeardText");
+  try { syncCreateLyricsLineCount(); } catch {}
+  if (!row || !text) return;
+  const show = isCreateSimpleCreateLayout() && arabicLyricsNeedDialectAndAddress();
+  row.hidden = !show;
+  if (!show) return;
+  const addr = nabadHeardAddressBits();
+  text.innerHTML = [
+    `<span class="createNabadHeardSpark" aria-hidden="true">✦</span>`,
+    `<span>${escapeHtml(nabadHeardDialectLabel())}</span>`,
+    `<span class="createNabadHeardDot">·</span>`,
+    `<span>to ${escapeHtml(addr.en)}</span>`,
+    `<span class="createNabadHeardDot">·</span>`,
+    `<span class="createNabadHeardAr" lang="ar">${escapeHtml(addr.ar)}</span>`,
+    `<span class="createNabadHeardDot">·</span>`,
+    `<span>${escapeHtml(nabadHeardMoodLabel())}</span>`,
+  ].join("");
+}
+
 /** Dialect + addressee chip for every /api/lyrics call (explicit arabicAddress, not only hint text). */
 function buildLyricApiArabicContext() {
+  if (!isArabicLyricsFlowActive()) {
+    return { dialect: "", dialectHint: "", arabicAddress: "" };
+  }
+  if (isCreateSimpleCreateLayout()) {
+    const arabicAddress = resolveArabicAddressForPayload();
+    const singerGender = resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) });
+    const addressNote = arabicAddress === "auto" ? "" : arabicAddressPronunciationNote(arabicAddress, singerGender);
+    try { applyLyricsLanguageToDialect(); } catch {}
+    const dialect = String(els.sunoDialect?.value || "").trim();
+    return { dialect, dialectHint: addressNote, arabicAddress };
+  }
   try { applyLyricsLanguageToDialect(); } catch {}
   try { apply80sYouArabicLyricsContext(); } catch {}
   const dialect = String(els.sunoDialect?.value || "").trim();
@@ -5276,6 +5376,16 @@ function buildLyricApiArabicContext() {
 
 /** Lyria bare mode: dialect + addressee chips → server weaves Studio-style tags into the style line. */
 function lyriaBareArabicContextFields() {
+  if (!arabicLyricsNeedDialectAndAddress()) return {};
+  if (isCreateSimpleCreateLayout()) {
+    const arabicAddress = resolveArabicAddressForPayload();
+    try { applyLyricsLanguageToDialect(); } catch {}
+    const dialect = String(els.sunoDialect?.value || "").trim();
+    return {
+      ...(dialect ? { dialect } : {}),
+      ...(arabicAddress && arabicAddress !== "auto" ? { arabicAddress } : {}),
+    };
+  }
   try { applyLyricsLanguageToDialect(); } catch {}
   const dialect = String(els.sunoDialect?.value || "").trim();
   const dialectHint = String(els.sunoDialectHint?.value || "").trim();
@@ -6948,7 +7058,8 @@ function setLyricsInputMode(mode, opts = {}) {
   const prev = lyricsInputMode;
   lyricsInputMode = next;
   if (els.lyricsFieldPanel) els.lyricsFieldPanel.setAttribute("data-lyrics-mode", next);
-  if (next === "generate" && prev === "write" && els.sunoPrompt && !opts.preserveText) {
+  const simple = typeof isCreateSimpleCreateLayout === "function" && isCreateSimpleCreateLayout();
+  if (next === "generate" && prev === "write" && els.sunoPrompt && !opts.preserveText && !simple) {
     const current = String(els.sunoPrompt.value || "").trim();
     if (looksLikeSingableLyrics(current) && !isLyricsBriefOrInstructions(current)) {
       pushLyricsUndoSnapshot(current);
@@ -6971,8 +7082,8 @@ function setLyricsInputMode(mode, opts = {}) {
   try { syncLyricsSingabilityCheckVisibility(); } catch {}
   try { syncCreateTabMorph(); } catch {}
   try { syncTemplateSparkClipGenerateReady(); } catch {}
-  // Brief cross-fade of the textarea so the intent change feels smooth.
-  if (!opts.silent && els.lyricsFieldPanel && els.sunoPrompt) {
+  // Simple Create keeps a stable lyrics box — the fade collapses the flex card.
+  if (!simple && !opts.silent && els.lyricsFieldPanel && els.sunoPrompt) {
     els.lyricsFieldPanel.classList.add("lyricsModeSwitching");
     window.setTimeout(() => {
       els.lyricsFieldPanel?.classList.remove("lyricsModeSwitching");
@@ -7126,11 +7237,12 @@ function syncLyricsLangPills() {
   revealExtraChipIfSelected(els.lyricsDialectRow, "[data-lyrics-dialect]");
   syncArabicLyricsControlsVisibility();
   try { syncPhotoSoloVocalSections(); } catch {}
+  try { syncCreateLyricsSettingsSummary(); } catch {}
 }
 
-/** Arabic dialect chips only when the user explicitly picks Arabic. */
+/** Arabic dialect chips only for Arabic / Arabizi lyrics. */
 function shouldShowArabicDialectRow() {
-  return typeof lyricsLanguage !== "undefined" && lyricsLanguage === "arabic";
+  return isArabicLyricsFlowActive();
 }
 
 function shouldShowLyricsDiacritics() {
@@ -7738,12 +7850,16 @@ async function ensureSingabilityBeforeGenerate() {
   return true;
 }
 
+/** Dialect + addressee are required only for Arabic / Arabizi — never English or other languages. */
+function arabicLyricsNeedDialectAndAddress() {
+  return isArabicLyricsFlowActive();
+}
+
 /** True when Arabic flow is active and dialect + address are both chosen. */
 function arabicLyricChoicesReady() {
-  if (isCreateSimpleCreateLayout()) return true;
   const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   if (instrumentalOnly) return true;
-  if (!shouldShowArabicDialectRow() && !shouldShowArabicAddress()) return true;
+  if (!arabicLyricsNeedDialectAndAddress()) return true;
   const dialectOk = Boolean(lyricsDialect && lyricsDialect !== "auto" && LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect]);
   const address = String(els.sunoArabicAddress?.value || "").trim();
   const addressOk = address === "male" || address === "female" || address === "group";
@@ -7755,9 +7871,16 @@ function arabicLyricChoicesBlockReason() {
   const dialectOk = Boolean(lyricsDialect && lyricsDialect !== "auto" && LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect]);
   const address = String(els.sunoArabicAddress?.value || "").trim();
   const addressOk = address === "male" || address === "female" || address === "group";
-  if (!dialectOk && !addressOk) return "Choose an Arabic dialect and who the lyrics talk to.";
-  if (!dialectOk) return "Choose an Arabic dialect first.";
-  return "Choose who the lyrics talk to (إنتَ / إنتِ / إنتو).";
+  if (!dialectOk && !addressOk) return "Choose a dialect and addressee in order to generate.";
+  if (!dialectOk) return "Choose a dialect in order to generate.";
+  return "Choose an addressee in order to generate.";
+}
+
+function toastArabicLyricChoicesRequired() {
+  const reason = arabicLyricChoicesBlockReason();
+  showToast(reason, { icon: "!", durationMs: 4200 });
+  setStatus(reason);
+  try { openCreateLyricsSettingsSheet(); } catch {}
 }
 
 function syncArabicGenerateGate() {
@@ -7842,6 +7965,7 @@ function setLyricsLanguage(lang) {
   lyricsLanguage = lang || "auto";
   if (lyricsLanguage !== "arabic" && !isArabiziLyricsLanguage(lyricsLanguage)) {
     lyricsDialect = "";
+    if (els.sunoArabicAddress) els.sunoArabicAddress.value = "";
   }
   if (isArabiziLyricsLanguage(lyricsLanguage) && !lyricsDialect) {
     lyricsDialect = "lebanese";
@@ -7858,6 +7982,7 @@ function setLyricsDialect(dialect) {
   syncLyricsLangPills();
   applyLyricsLanguageToDialect();
   maybeRedraft80sYouLyricsAfterDialectChange();
+  try { syncCreateNabadHeard(); } catch {}
 }
 
 (function bindLyricsLanguagePills() {
@@ -7962,13 +8087,14 @@ function setGenerateFieldsLocked(locked) {
 /** Mirror the hidden #sunoArabicAddress select onto the dialect-style chips. */
 function syncArabicAddressPills() {
   const v = String(els.sunoArabicAddress?.value || "").trim();
-  const row = els.lyricsAddressRow || document.getElementById("lyricsAddressRow");
-  if (!row) return;
-  row.querySelectorAll("[data-address-value]").forEach((b) => {
-    const on = String(b.getAttribute("data-address-value") || "") === v;
+  document.querySelectorAll("[data-address-value]").forEach((b) => {
+    const on = v === "male" || v === "female" || v === "group"
+      ? String(b.getAttribute("data-address-value") || "") === v
+      : false;
     b.classList.toggle("isActive", on);
     b.setAttribute("aria-pressed", on ? "true" : "false");
   });
+  try { syncCreateLyricsSettingsSummary(); } catch {}
 }
 
 /** True when text contains Arabic-script characters. */
@@ -7976,22 +8102,25 @@ function textHasArabicScript(t) {
   return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(String(t || ""));
 }
 
-/** Arabic address chips only when the user explicitly picks Arabic. */
+/** Arabic address chips only for Arabic / Arabizi lyrics. */
 function shouldShowArabicAddress() {
-  return typeof lyricsLanguage !== "undefined" && lyricsLanguage === "arabic";
+  return isArabicLyricsFlowActive();
 }
 
 function syncArabicAddressVisibility() {
   const group = els.lyricsAddressGroup || document.getElementById("lyricsAddressGroup");
-  if (!group) return;
-  const show = shouldShowArabicAddress();
-  group.hidden = !show;
-  // When hidden, clear address so a stale gendered choice never leaks into
-  // non-Arabic lyrics.
-  if (!show && els.sunoArabicAddress && els.sunoArabicAddress.value) {
-    els.sunoArabicAddress.value = "";
-    try { syncArabicAddressPills(); } catch {}
+  const simple = isCreateSimpleCreateLayout();
+  if (group) {
+    const show = shouldShowArabicAddress();
+    group.hidden = !show;
+    // Advanced: when hidden, clear address so a stale gendered choice never
+    // leaks into non-Arabic lyrics. Simple keeps the pick while the row hides.
+    if (!show && !simple && els.sunoArabicAddress && els.sunoArabicAddress.value) {
+      els.sunoArabicAddress.value = "";
+      try { syncArabicAddressPills(); } catch {}
+    }
   }
+  try { syncSimpleArabicAddressRow(); } catch {}
 }
 
 function syncLyricsDiacriticsVisibility() {
@@ -8212,6 +8341,7 @@ function resetCreateAdvancedPanel() {
 function resetAdvancedOptionsToDefaults() {
   resetCreateAdvancedPanel();
   if (els.sunoProMode) els.sunoProMode.checked = false;
+  _userPickedSinger = false;
   if (els.sunoSingerGender) els.sunoSingerGender.value = "";
   try { syncSingerGenderPills(); } catch {}
   if (els.sunoDialect) els.sunoDialect.value = "";
@@ -19794,6 +19924,10 @@ const FIXED_OVERLAY_IDS = [
   "coverRegenSheet",
   "createStudioStylesBackdrop",
   "createStudioStylesSheet",
+  "createLyricsSettingsBackdrop",
+  "createLyricsSettingsSheet",
+  "createSoundSettingsBackdrop",
+  "createSoundSettingsSheet",
 ];
 
 /** Keep full-screen overlays on `body` — `main.grid.routeSwap` transform breaks iOS touch on fixed children. */
@@ -31925,7 +32059,7 @@ function syncNabadClipCreateUi() {
   }
   const photoSoloChallenge = Boolean(activePhotoSoloChallengeId());
   if (duoPill) {
-    const showDuo = showVocalCharacter && !photoSoloChallenge;
+    const showDuo = (showVocalCharacter || isCreateSimpleCreateLayout()) && !photoSoloChallenge;
     duoPill.hidden = !showDuo;
     duoPill.setAttribute("aria-hidden", showDuo ? "false" : "true");
   }
@@ -54935,6 +55069,7 @@ let _take2Session = null;
 
 function collectCreateInputsFromScreen() {
   const mode = isCreateIdeaMode() ? "idea" : "write";
+  const simple = isCreateSimpleCreateLayout();
   return normalizeCreateInputs({
     mode,
     prompt: String(els.sunoPrompt?.value || "").trim(),
@@ -54943,9 +55078,11 @@ function collectCreateInputsFromScreen() {
     vocalGender: String(els.sunoSingerGender?.value || "").trim(),
     singerGender: String(els.sunoSingerGender?.value || "").trim(),
     personaId: getActivePersonaId(),
-    dialect: String(els.sunoDialect?.value || "").trim(),
-    dialectHint: String(els.sunoDialectHint?.value || "").trim(),
-    arabicAddress: String(els.sunoArabicAddress?.value || "").trim(),
+    dialect: simple ? "" : String(els.sunoDialect?.value || "").trim(),
+    dialectHint: simple ? "" : String(els.sunoDialectHint?.value || "").trim(),
+    arabicAddress: simple
+      ? resolveArabicAddressForPayload()
+      : String(els.sunoArabicAddress?.value || "").trim(),
     instrumental: String(els.vocalInstrumentalOnly?.value || "0") === "1",
     songKey: String(els.sunoSongKey?.value || "").trim(),
     durationPreset: String(els.sunoSongDuration?.value || "").trim(),
@@ -54956,8 +55093,12 @@ function collectCreateInputsFromScreen() {
     avoidTags: String(els.sunoAvoidTags?.value || "").trim(),
     artworkStyle: String(els.sunoArtworkStyle?.value || "").trim(),
     voiceProfile: String(els.sunoVoiceProfile?.value || "").trim(),
-    lyricsLanguage,
-    lyricsDialect,
+    lyricsLanguage: simple ? "" : lyricsLanguage,
+    lyricsDialect: simple ? "" : lyricsDialect,
+    studioStyleId: String(_activeLyriaStudioStyleId || ""),
+    studioSlots: activeInternationalStudioStyle()
+      ? { ..._internationalStyleSlots }
+      : { LEAD: "", RHYTHM: "", MOOD: "", BPM: "", KEY: "" },
   });
 }
 
@@ -54971,10 +55112,15 @@ function applyTake2Prefill(inputs) {
   if (els.sunoStyle) els.sunoStyle.value = next.style;
   if (els.sunoTitle) els.sunoTitle.value = next.title;
   if (els.sunoSingerGender) els.sunoSingerGender.value = next.vocalGender;
+  _userPickedSinger = Boolean(next.vocalGender);
   if (els.sunoVoiceProfile && next.voiceProfile) els.sunoVoiceProfile.value = next.voiceProfile;
-  if (els.sunoDialect) els.sunoDialect.value = next.dialect;
-  if (els.sunoDialectHint) els.sunoDialectHint.value = next.dialectHint;
-  if (els.sunoArabicAddress) els.sunoArabicAddress.value = next.arabicAddress;
+  if (!isCreateSimpleCreateLayout()) {
+    if (els.sunoDialect) els.sunoDialect.value = next.dialect;
+    if (els.sunoDialectHint) els.sunoDialectHint.value = next.dialectHint;
+  }
+  if (els.sunoArabicAddress) {
+    els.sunoArabicAddress.value = next.arabicAddress === "auto" ? "" : next.arabicAddress;
+  }
   if (els.sunoSongKey) els.sunoSongKey.value = next.songKey;
   if (els.sunoSongDuration && next.durationPreset) els.sunoSongDuration.value = next.durationPreset;
   if (els.sunoTiming) els.sunoTiming.value = next.timing;
@@ -54985,16 +55131,32 @@ function applyTake2Prefill(inputs) {
   if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = next.artworkStyle;
   try { savePersonaSelection(next.personaId || ""); } catch {}
   if (els.sunoPersonaId) els.sunoPersonaId.value = next.personaId || "";
-  if (next.lyricsLanguage) {
-    try { setLyricsLanguage(next.lyricsLanguage); } catch {}
-  }
-  if (next.lyricsDialect) {
-    try { setLyricsDialect(next.lyricsDialect); } catch {}
+  if (!isCreateSimpleCreateLayout()) {
+    if (next.lyricsLanguage) {
+      try { setLyricsLanguage(next.lyricsLanguage); } catch {}
+    }
+    if (next.lyricsDialect) {
+      try { setLyricsDialect(next.lyricsDialect); } catch {}
+    }
   }
   try { syncSingerGenderPills(); } catch {}
   try { renderSingerPersonaPill(); } catch {}
   try { syncLyricsPlaceholder(); } catch {}
   try { syncCreateTabMorph(); } catch {}
+  if (next.studioStyleId) {
+    applyLyriaStudioStyle(next.studioStyleId, { keepSinger: true });
+    if (els.sunoSingerGender) els.sunoSingerGender.value = next.vocalGender;
+    try { syncSingerGenderPills(); } catch {}
+    if (getInternationalStyle(next.studioStyleId)) {
+      _internationalStyleSlots = {
+        ...defaultInternationalSlots(getInternationalStyle(next.studioStyleId)),
+        ...next.studioSlots,
+      };
+      writeLockedInternationalStyleLine();
+      renderInternationalStyleSlots();
+    }
+  }
+  try { syncSimpleArabicAddressRow(); } catch {}
 }
 
 async function startTake2FromLibraryTrack(track) {
@@ -74701,6 +74863,7 @@ function hideCreateResultCards() {
   if (els.resultCard) els.resultCard.style.display = "none";
   if (els.resultCard2) els.resultCard2.style.display = "none";
   try { syncGenerateOrbVisibility(); } catch {}
+  try { syncCreateComposeLayout(); } catch {}
 }
 
 function createJobHidesResultCards() {
@@ -74803,6 +74966,7 @@ function restoreCreatePageOnRouteEnter() {
   try { syncGenerateOrbVisibility(); } catch {}
   try { syncCreateTabMorph(); } catch {}
   try { updateBrandPulse(); } catch {}
+  try { syncCreateComposeLayout(); } catch {}
 }
 
 /** Shared parser for GET /api/suno/status bodies (same shape generate polling uses). */
@@ -74895,6 +75059,7 @@ function applyGeneratedLyricsToCreateUi(lyrics, meta) {
   try { setLyricsInputMode("write", { silent: true, preserveText: true }); } catch {}
   try { autoResizeLyricsBox(); } catch {}
   try { snapshotNabadAiLyricsDraft(text); } catch {}
+  try { syncCreateComposeLayout(); } catch {}
 }
 
 function resolveExpectedGenerationVariants(taskId) {
@@ -76154,9 +76319,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   const generateLyricsWithMagic = async () => {
     if (!els.sunoPrompt) return;
     if (!arabicLyricChoicesReady()) {
-      const reason = arabicLyricChoicesBlockReason();
-      showToast(reason, { icon: "!", durationMs: 3600 });
-      setStatus(reason);
+      toastArabicLyricChoicesRequired();
       return;
     }
     const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
@@ -76348,9 +76511,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (!els.sunoPrompt) return;
     if (!requireProForWebFeature("Polish lyrics")) return;
     if (!arabicLyricChoicesReady()) {
-      const reason = arabicLyricChoicesBlockReason();
-      showToast(reason, { icon: "!", durationMs: 3600 });
-      setStatus(reason);
+      toastArabicLyricChoicesRequired();
       return;
     }
     const seed = String(els.sunoPrompt.value || "").trim();
@@ -76427,9 +76588,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (!els.sunoPrompt) return;
     if (!requireProForWebFeature("Fix for singing")) return;
     if (!arabicLyricChoicesReady()) {
-      const reason = arabicLyricChoicesBlockReason();
-      showToast(reason, { icon: "!", durationMs: 3600 });
-      setStatus(reason);
+      toastArabicLyricChoicesRequired();
       return;
     }
     const seed = String(els.sunoPrompt.value || "").trim();
@@ -76508,9 +76667,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (!els.sunoPrompt) return;
     if (!requireProForWebFeature("Add verse/chorus tags")) return;
     if (!arabicLyricChoicesReady()) {
-      const reason = arabicLyricChoicesBlockReason();
-      showToast(reason, { icon: "!", durationMs: 3600 });
-      setStatus(reason);
+      toastArabicLyricChoicesRequired();
       return;
     }
     const seed = String(els.sunoPrompt.value || "").trim();
@@ -76588,9 +76745,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   const addArabicVowelMarksToLyrics = async () => {
     if (!els.sunoPrompt) return;
     if (!arabicLyricChoicesReady()) {
-      const reason = arabicLyricChoicesBlockReason();
-      showToast(reason, { icon: "!", durationMs: 3600 });
-      setStatus(reason);
+      toastArabicLyricChoicesRequired();
       return;
     }
     const seed = String(els.sunoPrompt.value || "").trim();
@@ -76982,14 +77137,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     els.lyricsModeWrite.addEventListener("click", () => {
       if (els.lyricsModeWrite.disabled) return;
       setLyricsInputMode("write");
-      try { if (isCreateSimpleCreateLayout()) focusSimpleCreateLyricsIfNeeded(); } catch {}
+      try { keepSimpleCreateLyricsFocus(); } catch {}
     });
   }
   if (els.lyricsModeGenerate) {
     els.lyricsModeGenerate.addEventListener("click", () => {
       if (els.lyricsModeGenerate.disabled) return;
       setLyricsInputMode("generate");
-      try { if (isCreateSimpleCreateLayout()) focusSimpleCreateLyricsIfNeeded(); } catch {}
+      try { keepSimpleCreateLyricsFocus(); } catch {}
     });
   }
   if (els.btnCloseImageMood) {
@@ -77415,6 +77570,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
     }
     syncGenerateOrbVisibility();
+    try { syncCreateComposeLayout(); } catch {}
   };
   const setGenerateBtn = (label, disabled, mode) => {
     els.btnSunoGenerate.textContent = label;
@@ -77990,19 +78146,27 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   // Arabic address chips — same optChip design as dialect; hidden select
   // #sunoArabicAddress stays the source of truth.
   {
-    const wrap = els.lyricsAddressRow || document.getElementById("lyricsAddressRow");
-    if (wrap && els.sunoArabicAddress) {
+    const bindArabicAddressRow = (wrap) => {
+      if (!wrap || !els.sunoArabicAddress || wrap.dataset.boundAddress) return;
+      wrap.dataset.boundAddress = "1";
       wrap.addEventListener("click", (e) => {
         const btn = e.target?.closest?.("[data-address-value]");
         if (!btn || !wrap.contains(btn)) return;
         haptic("light");
-        els.sunoArabicAddress.value = String(btn.getAttribute("data-address-value") || "");
+        const v = String(btn.getAttribute("data-address-value") || "");
+        const cur = String(els.sunoArabicAddress.value || "");
+        els.sunoArabicAddress.value = isCreateSimpleCreateLayout() && v === cur ? "" : v;
         els.sunoArabicAddress.dispatchEvent(new Event("change", { bubbles: true }));
         try { syncArabicGenerateGate(); } catch {}
       });
+    };
+    bindArabicAddressRow(els.lyricsAddressRow || document.getElementById("lyricsAddressRow"));
+    bindArabicAddressRow(document.getElementById("createSimpleAddressPills"));
+    if (els.sunoArabicAddress) {
       els.sunoArabicAddress.addEventListener("change", () => {
         syncArabicAddressPills();
         try { syncArabicGenerateGate(); } catch {}
+        try { syncCreateNabadHeard(); } catch {}
       });
       syncArabicAddressPills();
     }
@@ -78018,7 +78182,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         haptic("light");
         const v = String(btn.getAttribute("data-singer-value") || "");
         const cur = String(els.sunoSingerGender.value || "").trim();
-        els.sunoSingerGender.value = v && v === cur ? "" : v;
+        const simple = isCreateSimpleCreateLayout();
+        els.sunoSingerGender.value = simple ? v : (v && v === cur ? "" : v);
+        _userPickedSinger = Boolean(els.sunoSingerGender.value);
         // A conflicting Range pick in Options (e.g. Soprano while choosing
         // Male) would fight this — reset the range to Auto.
         const vp = String(els.sunoVoiceProfile?.value || "").trim();
@@ -78033,6 +78199,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         syncSingerGenderPills();
         try { syncClipVocalCharacterUi(); } catch {}
         try { renderReferenceHints(); } catch {}
+        if (activeInternationalStudioStyle()) writeLockedInternationalStyleLine();
       });
       // Keep pills in sync when a Range is picked in Options (its value
       // encodes the gender as an "m|"/"f|" prefix).
@@ -78178,9 +78345,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         return;
       }
       if (!arabicLyricChoicesReady()) {
-        const reason = arabicLyricChoicesBlockReason();
-        showToast(reason, { icon: "!", durationMs: 3600 });
-        setStatus(reason);
+        toastArabicLyricChoicesRequired();
         return;
       }
       const clipPromptText = String(els.sunoPrompt?.value || "").trim();
@@ -78223,9 +78388,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         const userPrompt = (els.sunoPrompt?.value || "").trim();
         const userStyleRaw = String(els.sunoStyle?.value || "").trim();
         const userStyle = lyriaRaw ? userStyleRaw : resolveStyleInputForGeneration(userStyleRaw);
-        const dialect = String(els.sunoDialect?.value || "").trim();
-        const dialectHint = String(els.sunoDialectHint?.value || "").trim();
-        const arabicAddress = String(els.sunoArabicAddress?.value || "").trim();
+        let dialect = String(els.sunoDialect?.value || "").trim();
+        let dialectHint = String(els.sunoDialectHint?.value || "").trim();
+        let arabicAddress = String(els.sunoArabicAddress?.value || "").trim();
+        if (!arabicLyricsNeedDialectAndAddress()) {
+          dialect = "";
+          dialectHint = "";
+          arabicAddress = "";
+        }
         const resolvedSingerGender = resolveSingerGenderForGeneration({});
         const arabicAddressNote = arabicAddressPronunciationNote(arabicAddress, resolvedSingerGender);
         const lyricDialectHint = is80sPhotoSolo
@@ -78492,9 +78662,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       return;
     }
     if (!arabicLyricChoicesReady()) {
-      const reason = arabicLyricChoicesBlockReason();
-      showToast(reason, { icon: "!", durationMs: 3600 });
-      setStatus(reason);
+      toastArabicLyricChoicesRequired();
       return;
     }
     if (!(await ensureSingabilityBeforeGenerate())) return;
@@ -78571,13 +78739,37 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { applyLyricsLanguageToDialect(); } catch {}
       const lyriaRaw = lyriaSendRawBoxesOnly();
       const userPrompt = (els.sunoPrompt?.value || "").trim();
-      const userStyleRaw = String(els.sunoStyle?.value || "").trim();
+      let userStyleRaw = String(els.sunoStyle?.value || "").trim();
+      const intlLock = activeInternationalStudioStyle() ? fillActiveInternationalStyle() : null;
+      if (intlLock && !intlLock.ok) {
+        setLoading(false);
+        setGenerateBtn("Generate song", false, "generate");
+        setGenerateFieldsLocked(false);
+        showToast(intlLock.error || "This style isn’t ready.", { icon: "!", durationMs: 4200 });
+        return;
+      }
+      if (intlLock?.ok) userStyleRaw = intlLock.styleLine;
+      const leftoverStyle = leftoverStylePlaceholders(userStyleRaw);
+      if (leftoverStyle.length) {
+        setLoading(false);
+        setGenerateBtn("Generate song", false, "generate");
+        setGenerateFieldsLocked(false);
+        showToast(`Style prompt still has unfilled slots: ${leftoverStyle.join(", ")}`, { icon: "!", durationMs: 4200 });
+        return;
+      }
       const userStyle = lyriaRaw ? userStyleRaw : resolveStyleInputForGeneration(userStyleRaw);
       const userAvoidTags = trimAvoidTagsForSuno(els.sunoAvoidTags?.value || "");
       const artworkStyle = (els.sunoArtworkStyle?.value || "").trim();
-      const dialect = String(els.sunoDialect?.value || "").trim();
-      const dialectHint = String(els.sunoDialectHint?.value || "").trim();
-      const arabicAddress = String(els.sunoArabicAddress?.value || "").trim();
+      let dialect = String(els.sunoDialect?.value || "").trim();
+      let dialectHint = String(els.sunoDialectHint?.value || "").trim();
+      let arabicAddress = String(els.sunoArabicAddress?.value || "").trim();
+      if (!arabicLyricsNeedDialectAndAddress()) {
+        dialect = "";
+        dialectHint = "";
+        arabicAddress = "";
+      } else if (isCreateSimpleCreateLayout()) {
+        arabicAddress = resolveArabicAddressForPayload();
+      }
       const personaIdSel = getActivePersonaId();
       const resolvedSingerGender = resolveSingerGenderForGeneration({
         personaId: personaIdSel,
@@ -78787,7 +78979,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const lyriaIdeaPayload = lyriaIdeaMode;
       const payload = {
         prompt: ideaPromptToSongAlt || lyriaIdeaPayload ? "" : finalPrompt,
-        style: ideaSimpleMode ? "" : ideaPromptToSongAlt ? mergeIdeaIntoStyle(userPrompt, personaStyleBase) : personaStyleBase,
+        style: ideaSimpleMode
+          ? (intlLock?.ok ? intlLock.styleLine : "")
+          : ideaPromptToSongAlt && !intlLock?.ok
+            ? mergeIdeaIntoStyle(userPrompt, personaStyleBase)
+            : personaStyleBase,
         songKey: mapSolfegeToLetterKey((els.sunoSongKey?.value || "").trim()),
         title: ideaSimpleMode ? "" : (els.sunoTitle?.value || "").trim(),
         customMode: !ideaSimpleMode,
@@ -78856,6 +79052,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       if (useElevenlabsMusicProvider() && !shouldGenerateInstrumental && creditsState.isAdmin) {
         payload.nabadVocalChain = getNabadVocalChainPrefs();
+      }
+      if (intlLock?.ok) {
+        payload.style = intlLock.styleLine;
+        payload.customMode = true;
+        if (intlLock.bpm) payload.bpm = intlLock.bpm;
+        if (intlLock.key) payload.songKey = intlLock.key;
+        const intlSinger = resolveInternationalVocalGenderFromScreen();
+        if (intlSinger === "duo") payload.vocalGender = "duo";
       }
       if (userAvoidTags && !lyriaRaw) payload.negativeTags = userAvoidTags;
       if (!lyriaRaw) payload.style = compactStyleForProvider(payload.style, 980);
@@ -80232,6 +80436,57 @@ function renderVocalStyleRow() {
 
 /** Active Flow/Studio full style line — hides tag chips while set. */
 let _activeLyriaStudioStyleId = "";
+let _userPickedSinger = false;
+let _studioStylesSheetTab = "arabic";
+let _studioCustomPicked = false;
+let _internationalStyleSlots = {
+  LEAD: "",
+  RHYTHM: "",
+  MOOD: "",
+  BPM: "",
+  KEY: "",
+};
+
+const INTERNATIONAL_SLOT_UI = Object.freeze([
+  Object.freeze({ key: "LEAD", label: "Sound" }),
+  Object.freeze({ key: "RHYTHM", label: "Rhythm" }),
+  Object.freeze({ key: "MOOD", label: "Mood" }),
+  Object.freeze({ key: "BPM", label: "Speed" }),
+  Object.freeze({ key: "KEY", label: "Key" }),
+]);
+
+function activeInternationalStudioStyle() {
+  return getInternationalStyle(_activeLyriaStudioStyleId);
+}
+
+function studioStyleUiRecord(id) {
+  const intl = getInternationalStyle(id);
+  if (intl) return internationalStyleUi(intl);
+  return getLyriaStudioStyle(id) || null;
+}
+
+function resolveInternationalVocalGenderFromScreen() {
+  const sg = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
+  if (sg === "m" || sg === "f" || sg === "duo") return sg;
+  return "";
+}
+
+function fillActiveInternationalStyle() {
+  const style = activeInternationalStudioStyle();
+  if (!style) return { ok: false, error: "missing_style", leftover: [] };
+  return fillInternationalStylePrompt({
+    style,
+    vocalGender: resolveInternationalVocalGenderFromScreen(),
+    slots: _internationalStyleSlots,
+  });
+}
+
+function writeLockedInternationalStyleLine() {
+  const filled = fillActiveInternationalStyle();
+  if (!filled.ok) return filled;
+  if (els.sunoStyle) els.sunoStyle.value = filled.styleLine;
+  return filled;
+}
 
 const CREATE_FLOW_MODE_LS_KEY = "nabad_create_flow_mode_v1";
 const CREATE_SOUND_MODE_LS_KEY = "nabad_create_sound_mode_v1";
@@ -80285,7 +80540,7 @@ function syncCreateSoundPanelUi() {
   const btnStudio = document.getElementById("btnCreateSoundModeStudio");
   const btnCustom = document.getElementById("btnCreateSoundModeCustom");
   const spark = document.getElementById("btnCreateSoundSpark");
-  if (seg) seg.hidden = !unified;
+  if (seg) seg.hidden = true;
   if (btnStudio) {
     const on = mode === "studio";
     btnStudio.classList.toggle("isActive", on);
@@ -80308,10 +80563,6 @@ function createFlowModeEnabled() {
 
 function getCreateFlowMode() {
   if (!createFlowModeEnabled()) return "advanced";
-  try {
-    const saved = String(localStorage.getItem(CREATE_FLOW_MODE_LS_KEY) || "").trim();
-    if (saved === "simple" || saved === "advanced") return saved;
-  } catch {}
   return "simple";
 }
 
@@ -80330,36 +80581,172 @@ function syncLyriaStudioSoundPromptPreview() {
   if (details) details.hidden = true;
 }
 
-const LYRIA_STUDIO_AURA = Object.freeze({
-  "cyber-dabke": "rgba(124, 92, 255, 0.28)",
-  "levantine-pop-fusion": "rgba(35, 213, 171, 0.2)",
-  "levantine-folk-dabke": "rgba(35, 213, 171, 0.18)",
-  "traditional-dabke": "rgba(201, 162, 39, 0.18)",
-  "dance-indie-pop": "rgba(109, 77, 245, 0.2)",
-  "arabic-pop": "rgba(124, 92, 255, 0.22)",
-  "acoustic-ballad-ella": "rgba(80, 120, 140, 0.22)",
+const STUDIO_COVER_AURA = Object.freeze({
+  "levantine-pop.svg": Object.freeze({ a: "rgba(255, 181, 146, 0.38)", b: "rgba(154, 71, 208, 0.26)" }),
+  "cyber-dabke.svg": Object.freeze({ a: "rgba(47, 224, 192, 0.34)", b: "rgba(255, 79, 216, 0.24)" }),
+  "tarab-soul.svg": Object.freeze({ a: "rgba(246, 196, 106, 0.34)", b: "rgba(140, 36, 64, 0.26)" }),
+  "khaleeji-night.svg": Object.freeze({ a: "rgba(246, 215, 145, 0.32)", b: "rgba(122, 54, 110, 0.28)" }),
+  "rai.svg": Object.freeze({ a: "rgba(255, 154, 61, 0.34)", b: "rgba(255, 77, 122, 0.24)" }),
+  "synthpop-80s.svg": Object.freeze({ a: "rgba(196, 59, 138, 0.32)", b: "rgba(90, 240, 255, 0.22)" }),
+  "indie-folk.svg": Object.freeze({ a: "rgba(209, 138, 98, 0.32)", b: "rgba(243, 215, 176, 0.20)" }),
+  "contemporary-rnb.svg": Object.freeze({ a: "rgba(224, 122, 200, 0.32)", b: "rgba(90, 40, 120, 0.22)" }),
+  "alt-rock.svg": Object.freeze({ a: "rgba(224, 106, 40, 0.32)", b: "rgba(255, 217, 160, 0.18)" }),
+  "lofi-hiphop.svg": Object.freeze({ a: "rgba(246, 215, 160, 0.30)", b: "rgba(106, 138, 136, 0.24)" }),
+  "rnb-pop.svg": Object.freeze({ a: "rgba(224, 122, 160, 0.32)", b: "rgba(201, 162, 39, 0.20)" }),
+  "latin-dance-pop.svg": Object.freeze({ a: "rgba(255, 90, 58, 0.32)", b: "rgba(31, 138, 90, 0.22)" }),
+  "kpop-dance.svg": Object.freeze({ a: "rgba(255, 77, 154, 0.32)", b: "rgba(77, 122, 255, 0.24)" }),
+  "deep-house.svg": Object.freeze({ a: "rgba(35, 213, 171, 0.32)", b: "rgba(20, 90, 90, 0.22)" }),
+  "melodic-techno.svg": Object.freeze({ a: "rgba(124, 92, 255, 0.32)", b: "rgba(35, 213, 171, 0.20)" }),
+});
+const NABAD_CUSTOM_AURA = Object.freeze({ a: "rgba(35, 213, 171, 0.26)", b: "rgba(124, 92, 255, 0.22)" });
+
+function studioStyleAura(id) {
+  if (!id) return NABAD_CUSTOM_AURA;
+  const file = STUDIO_COVER_FILES[String(id)] || "";
+  return STUDIO_COVER_AURA[file] || NABAD_CUSTOM_AURA;
+}
+
+const SIMPLE_ARABIC_ROW_IDS = Object.freeze([
+  "levantine-pop-fusion",
+  "cyber-dabke",
+  "lebanese-folk-tarab",
+  "modern-khaleeji-pop",
+  "modern-rai",
+]);
+
+const STUDIO_TILE_LABELS = Object.freeze({
+  "levantine-pop-fusion": "Levantine Pop",
+  "cyber-dabke": "Cyber Dabke",
+  "lebanese-folk-tarab": "Tarab Soul",
+  "modern-khaleeji-pop": "Khaleeji Night",
+  "modern-rai": "Rai",
+  synthpop_80s: "80s Synthpop",
+  indie_folk: "Indie Folk",
+  contemporary_rnb: "Contemporary R&B",
+  alt_rock: "Alt Rock",
+  lofi_hiphop: "Lo-fi Hip-Hop",
+  rnb_pop: "R&B Pop",
+  latin_dance_pop: "Latin Dance-Pop",
+  kpop_dance: "K-pop Dance",
+  deep_house_garage: "Deep House",
+  melodic_techno: "Melodic Techno",
 });
 
+const INTERNATIONAL_STYLE_SECTIONS = Object.freeze([
+  Object.freeze({ id: "pop", name: "Pop", ids: Object.freeze(["kpop_dance", "latin_dance_pop"]) }),
+  Object.freeze({ id: "rnb", name: "R&B", ids: Object.freeze(["contemporary_rnb", "rnb_pop"]) }),
+  Object.freeze({ id: "rock", name: "Rock & folk", ids: Object.freeze(["alt_rock", "indie_folk"]) }),
+  Object.freeze({ id: "club", name: "Club", ids: Object.freeze(["deep_house_garage", "melodic_techno"]) }),
+  Object.freeze({ id: "chill", name: "Retro & chill", ids: Object.freeze(["synthpop_80s", "lofi_hiphop"]) }),
+]);
+
 function getSimpleStudioRowPresets() {
-  const active = String(_activeLyriaStudioStyleId || "");
-  const pick = [];
-  if (active) {
-    const cur = getLyriaStudioStyle(active);
-    if (cur) pick.push(cur);
+  const activeId = String(_activeLyriaStudioStyleId || "");
+  const international = _studioStylesSheetTab === "international";
+  if (international) {
+    const pool = listInternationalStyles().map((s) => internationalStyleUi(s));
+    const pick = [];
+    const active = studioStyleUiRecord(activeId);
+    if (active && getInternationalStyle(activeId)) pick.push(active);
+    for (const preset of pool) {
+      if (pick.length >= 5) break;
+      if (pick.some((p) => p.id === preset.id)) continue;
+      pick.push(preset);
+    }
+    return pick.slice(0, 4);
   }
-  for (const preset of LYRIA_STUDIO_STYLES) {
-    if (pick.length >= 3) break;
-    if (pick.some((p) => p.id === preset.id)) continue;
-    pick.push(preset);
+  const pick = SIMPLE_ARABIC_ROW_IDS.map((id) => studioStyleUiRecord(id)).filter(Boolean);
+  const active = studioStyleUiRecord(activeId);
+  if (active && !getInternationalStyle(activeId) && !pick.some((p) => p.id === active.id)) {
+    pick.unshift(active);
   }
-  return pick.slice(0, 3);
+  return pick.slice(0, 4);
+}
+
+const STUDIO_COVER_FILES = Object.freeze({
+  "levantine-pop-fusion": "levantine-pop.svg",
+  "levantine-ballad": "levantine-pop.svg",
+  "arabic-pop": "levantine-pop.svg",
+  "egyptian-pop": "levantine-pop.svg",
+  "cyber-dabke": "cyber-dabke.svg",
+  "mountain-dabke-electronic": "cyber-dabke.svg",
+  "mountain-dabke-folk": "cyber-dabke.svg",
+  "traditional-dabke": "cyber-dabke.svg",
+  "levantine-folk-dabke": "cyber-dabke.svg",
+  "lebanese-folk-tarab": "tarab-soul.svg",
+  "lebanese-mawwal": "tarab-soul.svg",
+  "acoustic-ballad-ella": "tarab-soul.svg",
+  "georges-wassouf-style": "tarab-soul.svg",
+  "modern-khaleeji-pop": "khaleeji-night.svg",
+  "modern-rai": "rai.svg",
+  synthpop_80s: "synthpop-80s.svg",
+  indie_folk: "indie-folk.svg",
+  contemporary_rnb: "contemporary-rnb.svg",
+  alt_rock: "alt-rock.svg",
+  lofi_hiphop: "lofi-hiphop.svg",
+  rnb_pop: "rnb-pop.svg",
+  latin_dance_pop: "latin-dance-pop.svg",
+  kpop_dance: "kpop-dance.svg",
+  deep_house_garage: "deep-house.svg",
+  melodic_techno: "melodic-techno.svg",
+});
+
+function studioCoverUrl(id) {
+  const file = STUDIO_COVER_FILES[String(id || "")] || "levantine-pop.svg";
+  return `assets/studio-covers/${file}`;
+}
+
+const STUDIO_TILE_SLIDERS_SVG = `<svg class="studioStyleTileGearIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M8 5v14"/><path d="M16 5v14"/><rect x="5.1" y="8.2" width="5.8" height="2.6" rx="1.3" fill="currentColor" stroke="none"/><rect x="13.1" y="14.2" width="5.8" height="2.6" rx="1.3" fill="currentColor" stroke="none"/></svg>`;
+
+function studioStyleTileHtml(preset, activeId, opts = {}) {
+  const on = preset.id === activeId;
+  const name = STUDIO_TILE_LABELS[preset.id] || preset.label || preset.name;
+  const sliders = on && !opts.sheet
+    ? `<span class="studioStyleTileGear" data-studio-tile-settings="${escapeHtml(preset.id)}" aria-hidden="true">${STUDIO_TILE_SLIDERS_SVG}</span>`
+    : "";
+  const idAttr = opts.sheet ? "data-lyria-studio-sheet-id" : "data-lyria-studio-id";
+  return `<button type="button" class="studioStyleTile${on ? " isActive" : ""}" ${idAttr}="${escapeHtml(preset.id)}" aria-pressed="${on ? "true" : "false"}" aria-label="${escapeHtml(name)}${on && !opts.sheet ? ", settings" : ""}"><span class="studioStyleTileCover" style="background-image:url('${studioCoverUrl(preset.id)}')">${sliders}</span><span class="studioStyleTileName">${escapeHtml(name)}</span></button>`;
+}
+
+function studioCustomTileHtml(on, opts = {}) {
+  const attr = opts.sheet ? "data-lyria-studio-sheet-custom" : "data-lyria-studio-custom";
+  return `<button type="button" class="studioStyleTile studioStyleTile--custom${on ? " isActive" : ""}" ${attr}="1" aria-pressed="${on ? "true" : "false"}" aria-label="Custom style"><span class="studioStyleTileCover studioStyleTileCover--custom"><span class="studioStyleTileCustomMark" aria-hidden="true">Aa</span></span><span class="studioStyleTileName">Custom</span></button>`;
+}
+
+function isStudioCustomStyleActive() {
+  return Boolean(_studioCustomPicked) && !String(_activeLyriaStudioStyleId || "");
+}
+
+function mountCreateCustomStyleField(show) {
+  const fields = document.getElementById("createSoundCustomFields");
+  const block = document.getElementById("createStudioBlock");
+  if (!fields) return;
+  if (show && block && fields.parentElement !== block) block.appendChild(fields);
+  fields.hidden = !show;
+  document.body.classList.toggle("hasCreateCustomStyle", show);
+  if (els.sunoStyle && show) {
+    els.sunoStyle.placeholder = "Type your own style — instruments, mood, tempo…";
+  }
+}
+
+function enterStudioCustomStyle() {
+  _studioCustomPicked = true;
+  clearLyriaStudioStyleSelection({ clearStyleField: true });
+  mountCreateCustomStyleField(true);
+  renderLyriaStudioStyleRow();
+  try { syncLyriaStudioStyleUi(); } catch {}
+  try { syncCreateSimpleAura(); } catch {}
+  window.setTimeout(() => {
+    try { els.sunoStyle?.focus(); } catch {}
+  }, 80);
 }
 
 function syncCreateSimpleAura() {
-  const aura = document.getElementById("createSimpleAura");
-  if (!aura || aura.hidden) return;
-  const id = String(_activeLyriaStudioStyleId || "");
-  aura.style.background = LYRIA_STUDIO_AURA[id] || "rgba(124, 92, 255, 0.2)";
+  const panel = document.getElementById("lyricsFieldPanel");
+  if (!panel) return;
+  const tone = studioStyleAura(_activeLyriaStudioStyleId);
+  panel.style.setProperty("--lyrics-aura-a", tone.a);
+  panel.style.setProperty("--lyrics-aura-b", tone.b);
 }
 
 function enforceSimpleCreateVocalOnly() {
@@ -80375,22 +80762,21 @@ function syncCreateSimpleChrome() {
   const onGenerate = String(document.body.getAttribute("data-route") || "") === "generate";
   const enabled = onGenerate && createFlowModeEnabled();
   const simple = enabled && getCreateFlowMode() === "simple";
-  const aura = document.getElementById("createSimpleAura");
   const toolbar = document.getElementById("createSimpleStudioToolbar");
   const studioHost = document.getElementById("createSimpleStudioHost");
   const box = document.getElementById("simpleBox");
   const tabs = document.querySelector(".createTabs");
-  if (aura) aura.hidden = !simple;
   if (studioHost) {
     studioHost.hidden = !simple;
     studioHost.classList.toggle("field", simple);
     studioHost.classList.toggle("grow", simple);
-    studioHost.classList.toggle("inputPanel", simple);
+    studioHost.classList.remove("inputPanel", "inputPanel--style");
   }
-  if (toolbar) toolbar.hidden = !simple;
+  if (toolbar) toolbar.hidden = false;
   const langPanel = document.getElementById("createSimpleLangPanel");
-  if (langPanel) langPanel.hidden = simple;
-  const sheetTitle = document.querySelector(".createStudioSheetTitle");
+  if (langPanel && !simple) langPanel.hidden = false;
+  const sheetTitle = document.getElementById("createStudioStylesSheetTitle")
+    || document.querySelector("#createStudioStylesSheet .createStudioSheetTitle");
   if (sheetTitle) sheetTitle.textContent = simple ? "Sound" : "Studio styles";
   if (box) box.classList.toggle("createSimpleLayout", simple);
   if (tabs) {
@@ -80702,24 +81088,114 @@ function wireCreateLyricsAttachOnce() {
   });
 }
 
+function syncCreateStudioStylesSheetTabs() {
+  const tab = _studioStylesSheetTab === "international" ? "international" : "arabic";
+  document.querySelectorAll("[data-studio-sheet-tab]").forEach((btn) => {
+    const on = String(btn.getAttribute("data-studio-sheet-tab") || "") === tab;
+    btn.classList.toggle("isActive", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+}
+
+function syncCreateSimpleStyleTabs() {
+  const tab = _studioStylesSheetTab === "international" ? "international" : "arabic";
+  document.querySelectorAll("[data-studio-row-tab]").forEach((btn) => {
+    const on = String(btn.getAttribute("data-studio-row-tab") || "") === tab;
+    btn.classList.toggle("isActive", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+}
+
 function renderCreateStudioStylesSheet() {
   const list = document.getElementById("createStudioStylesSheetList");
   if (!list) return;
+  syncCreateStudioStylesSheetTabs();
   const active = String(_activeLyriaStudioStyleId || "");
-  let html = "";
-  for (const preset of LYRIA_STUDIO_STYLES) {
-    const on = preset.id === active;
-    html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio${on ? " isActive" : ""}" data-lyria-studio-sheet-id="${escapeHtml(preset.id)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(preset.label)}</button>`;
+  const international = _studioStylesSheetTab === "international";
+  const custom = studioCustomTileHtml(isStudioCustomStyleActive(), { sheet: true });
+  list.classList.remove("styleSuggestRow", "createStudioSheetPills");
+  list.classList.add("studioStyleSheetTiles");
+  if (international) {
+    const byId = Object.fromEntries(listInternationalStyles().map((s) => [s.id, internationalStyleUi(s)]));
+    const seen = new Set();
+    let html = "";
+    for (const section of INTERNATIONAL_STYLE_SECTIONS) {
+      const tiles = section.ids.map((id) => byId[id]).filter(Boolean);
+      tiles.forEach((p) => seen.add(p.id));
+      if (!tiles.length) continue;
+      html += `<p class="studioStyleSheetSec">${escapeHtml(section.name)}</p>`;
+      html += `<div class="studioStyleSheetRow">${tiles.map((p) => studioStyleTileHtml(p, active, { sheet: true })).join("")}</div>`;
+    }
+    const extra = listInternationalStyles()
+      .map((s) => internationalStyleUi(s))
+      .filter((p) => !seen.has(p.id));
+    if (extra.length) {
+      html += `<p class="studioStyleSheetSec">More</p>`;
+      html += `<div class="studioStyleSheetRow">${extra.map((p) => studioStyleTileHtml(p, active, { sheet: true })).join("")}</div>`;
+    }
+    html += `<div class="studioStyleSheetRow">${custom}</div>`;
+    list.innerHTML = html;
+    return;
   }
-  html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio styleSuggestPill--studioCustom" data-lyria-studio-sheet-custom="1">Custom</button>`;
-  list.innerHTML = html;
+  const row = LYRIA_STUDIO_STYLES.map((p) => studioStyleTileHtml(p, active, { sheet: true })).join("");
+  list.innerHTML = `<div class="studioStyleSheetRow">${row}${custom}</div>`;
 }
 
 function openCreateStudioStylesSheet() {
   mountFixedOverlaysToBody();
+  if (getInternationalStyle(_activeLyriaStudioStyleId)) _studioStylesSheetTab = "international";
+  else if (getLyriaStudioStyle(_activeLyriaStudioStyleId)) _studioStylesSheetTab = "arabic";
   renderCreateStudioStylesSheet();
+  const stacked = isCreateSheetOpen("createSoundSettingsSheet");
   const back = document.getElementById("createStudioStylesBackdrop");
   const sheet = document.getElementById("createStudioStylesSheet");
+  if (back) {
+    back.classList.remove("isOpen");
+    back.classList.toggle("isStacked", stacked);
+    back.hidden = false;
+    back.setAttribute("aria-hidden", "false");
+  }
+  if (sheet) {
+    sheet.classList.remove("isOpen");
+    sheet.classList.toggle("isStacked", stacked);
+    sheet.hidden = false;
+    sheet.setAttribute("aria-hidden", "false");
+  }
+  requestAnimationFrame(() => {
+    back?.classList.add("isOpen");
+    sheet?.classList.add("isOpen");
+  });
+}
+
+function closeCreateStudioStylesSheet() {
+  const back = document.getElementById("createStudioStylesBackdrop");
+  const sheet = document.getElementById("createStudioStylesSheet");
+  if (back) {
+    back.classList.remove("isOpen", "isStacked");
+    back.setAttribute("aria-hidden", "true");
+    setTimeout(() => { if (back) back.hidden = true; }, 260);
+  }
+  if (sheet) {
+    sheet.classList.remove("isOpen", "isStacked");
+    setTimeout(() => { if (sheet) sheet.hidden = true; }, 320);
+  }
+}
+
+function isCreateAdvancedLayout() {
+  return String(document.body.getAttribute("data-route") || "") === "generate"
+    && createFlowModeEnabled()
+    && getCreateFlowMode() === "advanced";
+}
+
+function isCreateSheetOpen(id) {
+  const sheet = document.getElementById(id);
+  return Boolean(sheet && !sheet.hidden && sheet.classList.contains("isOpen"));
+}
+
+function openCreateSheetPair(backId, sheetId) {
+  mountFixedOverlaysToBody();
+  const back = document.getElementById(backId);
+  const sheet = document.getElementById(sheetId);
   if (back) {
     back.classList.remove("isOpen");
     back.hidden = false;
@@ -80736,9 +81212,9 @@ function openCreateStudioStylesSheet() {
   });
 }
 
-function closeCreateStudioStylesSheet() {
-  const back = document.getElementById("createStudioStylesBackdrop");
-  const sheet = document.getElementById("createStudioStylesSheet");
+function closeCreateSheetPair(backId, sheetId) {
+  const back = document.getElementById(backId);
+  const sheet = document.getElementById(sheetId);
   if (back) {
     back.classList.remove("isOpen");
     back.setAttribute("aria-hidden", "true");
@@ -80750,9 +81226,159 @@ function closeCreateStudioStylesSheet() {
   }
 }
 
+function createSettingsSummaryChip(text) {
+  const label = String(text || "").trim();
+  if (!label) return "";
+  return `<span class="optChip isActive">${escapeHtml(label)}</span>`;
+}
+
+function syncCreateLyricsSettingsSummary() {
+  const btn = document.getElementById("btnCreateLyricsSettings");
+  const host = document.getElementById("createLyricsSettingsPills");
+  const show = isCreateAdvancedLayout();
+  if (btn) btn.hidden = !show;
+  if (!host) return;
+  if (!show) {
+    host.innerHTML = "";
+    return;
+  }
+  const langBtn = document.querySelector("#lyricsLangRow [data-lyrics-lang].isActive");
+  const parts = [];
+  const langLabel = String(langBtn?.textContent || lyricsLanguage || "Auto").trim();
+  parts.push(createSettingsSummaryChip(langLabel || "Auto"));
+  if (shouldShowArabicDialectRow()) {
+    const dialectBtn = document.querySelector("#lyricsDialectRow [data-lyrics-dialect].isActive");
+    const dialectLabel = String(dialectBtn?.textContent || "").trim();
+    if (dialectLabel) parts.push(createSettingsSummaryChip(dialectLabel));
+  }
+  if (shouldShowArabicAddress()) {
+    const addressBtn = document.querySelector("#lyricsAddressRow [data-address-value].isActive");
+    const addressLabel = String(addressBtn?.textContent || "").trim();
+    if (addressLabel) parts.push(createSettingsSummaryChip(addressLabel));
+  }
+  host.innerHTML = parts.join("");
+}
+
+function openCreateLyricsSettingsSheet() {
+  const simple = isCreateSimpleCreateLayout();
+  if (!simple && !isCreateAdvancedLayout()) return;
+  const langPanel = document.getElementById("createSimpleLangPanel");
+  if (langPanel) langPanel.hidden = false;
+  const title = document.getElementById("createLyricsSettingsTitle");
+  const sub = document.getElementById("createLyricsSettingsSub");
+  if (title) title.textContent = simple ? "Nabad heard" : "Lyrics settings";
+  if (sub) sub.hidden = !simple;
+  try { syncLyricsLangPills(); } catch {}
+  try { syncArabicAddressPills(); } catch {}
+  const langBlock = document.querySelector("#createLyricsSettingsSheet .lyricsLangBlock");
+  const dialectGroup = document.getElementById("lyricsDialectGroup");
+  const addressGroup = document.getElementById("lyricsAddressGroup");
+  const needArabic = simple && arabicLyricsNeedDialectAndAddress();
+  if (langBlock) langBlock.hidden = false;
+  if (dialectGroup) dialectGroup.hidden = !needArabic;
+  if (addressGroup) addressGroup.hidden = !needArabic;
+  openCreateSheetPair("createLyricsSettingsBackdrop", "createLyricsSettingsSheet");
+}
+
+function closeCreateLyricsSettingsSheet() {
+  closeCreateSheetPair("createLyricsSettingsBackdrop", "createLyricsSettingsSheet");
+  try { syncCreateLyricsSettingsSummary(); } catch {}
+  try { syncCreateNabadHeard(); } catch {}
+}
+
+function mountCreateSoundSettingsPickers(inSheet) {
+  const slots = document.getElementById("internationalStyleSlots");
+  const sheetHost = document.getElementById("createSoundSettingsPickers");
+  const block = document.getElementById("createStudioBlock");
+  if (!sheetHost || !block) return;
+  const prompt = document.getElementById("lyriaStudioSoundPrompt");
+  if (inSheet) {
+    if (slots && slots.parentElement !== sheetHost) sheetHost.appendChild(slots);
+  } else if (slots && slots.parentElement !== block) {
+    if (prompt) block.insertBefore(slots, prompt);
+    else block.appendChild(slots);
+  }
+}
+
+function syncCreateSoundSettingsSummary() {
+  const btn = document.getElementById("btnCreateSoundSettings");
+  const host = document.getElementById("createSoundSettingsPills");
+  const title = document.getElementById("createSoundSettingsTitle");
+  const advanced = isCreateAdvancedLayout();
+  const studio = !createSoundPanelUnified() || getCreateSoundMode() === "studio";
+  const rec = studioStyleUiRecord(_activeLyriaStudioStyleId);
+  const show = advanced && studio && Boolean(rec);
+  document.body.classList.remove("hasCreateSoundSummary");
+  if (btn) btn.hidden = true;
+  if (title) title.textContent = rec?.label || rec?.name || "Sound";
+  if (!host) return;
+  if (!show) {
+    host.innerHTML = "";
+    return;
+  }
+  const parts = [createSettingsSummaryChip(rec.label || rec.name || "Style")];
+  const intl = getInternationalStyle(_activeLyriaStudioStyleId);
+  if (intl) {
+    for (const { key } of INTERNATIONAL_SLOT_UI) {
+      const value = String(_internationalStyleSlots[key] || intl.slots?.[key]?.default || "");
+      const label = shortSlotLabel(key, value);
+      if (label) parts.push(createSettingsSummaryChip(label));
+    }
+  }
+  host.innerHTML = parts.join("");
+}
+
+function openCreateSoundSettingsSheet() {
+  if (!isCreateSimpleCreateLayout() && !isCreateAdvancedLayout()) return;
+  const rec = studioStyleUiRecord(_activeLyriaStudioStyleId);
+  if (!rec) return;
+  mountCreateSoundSettingsPickers(true);
+  const title = document.getElementById("createSoundSettingsTitle");
+  if (title) title.textContent = STUDIO_TILE_LABELS[rec.id] || rec.label || rec.name || "Sound";
+  const hint = document.getElementById("createSoundSettingsHint");
+  if (hint) {
+    const sub = String(rec.subtitle || "").trim();
+    const intl = Boolean(getInternationalStyle(rec.id));
+    hint.textContent = intl ? "Tune this style" : (sub || "This is the sound Nabad will use.");
+    hint.hidden = false;
+  }
+  const styleLabel = document.getElementById("createSoundSettingsStyleLabel");
+  if (styleLabel) styleLabel.hidden = true;
+  openCreateSheetPair("createSoundSettingsBackdrop", "createSoundSettingsSheet");
+  const paintSlots = () => {
+    try { renderInternationalStyleSlots(); } catch {}
+  };
+  paintSlots();
+  requestAnimationFrame(paintSlots);
+}
+
+function closeCreateSoundSettingsSheet() {
+  closeCreateSheetPair("createSoundSettingsBackdrop", "createSoundSettingsSheet");
+  mountCreateSoundSettingsPickers(false);
+  try { syncCreateSoundSettingsSummary(); } catch {}
+  try { syncLyriaStudioStyleUi(); } catch {}
+}
+
+function resetActiveStudioStyleDefaults() {
+  const id = String(_activeLyriaStudioStyleId || "");
+  const intl = getInternationalStyle(id);
+  if (intl) {
+    _internationalStyleSlots = defaultInternationalSlots(intl);
+    writeLockedInternationalStyleLine();
+    renderInternationalStyleSlots();
+    try { syncCreateSoundSettingsSummary(); } catch {}
+    return;
+  }
+  if (id) applyLyriaStudioStyle(id, { keepSinger: true });
+}
+
 function sparkRandomLyriaStudioStyle() {
-  if (!LYRIA_STUDIO_STYLES.length) return;
-  const preset = LYRIA_STUDIO_STYLES[Math.floor(Math.random() * LYRIA_STUDIO_STYLES.length)];
+  const international =
+    _studioStylesSheetTab === "international"
+    || Boolean(getInternationalStyle(_activeLyriaStudioStyleId));
+  const pool = international ? listInternationalStyles() : LYRIA_STUDIO_STYLES;
+  if (!pool.length) return;
+  const preset = pool[Math.floor(Math.random() * pool.length)];
   if (preset?.id) applyLyriaStudioStyle(preset.id);
 }
 
@@ -80762,8 +81388,11 @@ function mountCreateStudioBlockForFlowMode(mode) {
   const advancedPanel = document.getElementById("createSoundPanel");
   if (!block || !simpleHost || !advancedPanel) return;
   const simple = mode === "simple";
+  const singer = document.getElementById("singerVoicePanel");
   if (simple) {
     if (block.parentElement !== simpleHost) simpleHost.appendChild(block);
+    if (singer && singer.parentElement !== simpleHost) simpleHost.appendChild(singer);
+    if (singer) singer.classList.remove("grow", "inputPanel", "inputPanel--style", "field");
   } else {
     const customFields = document.getElementById("createSoundCustomFields");
     if (customFields) {
@@ -80773,12 +81402,16 @@ function mountCreateStudioBlockForFlowMode(mode) {
     } else if (block.parentElement !== advancedPanel) {
       advancedPanel.appendChild(block);
     }
+    if (singer) {
+      singer.classList.add("field", "grow", "inputPanel", "inputPanel--style");
+      if (singer.parentElement !== advancedPanel) advancedPanel.appendChild(singer);
+    }
   }
   block.classList.remove("inputPanel", "inputPanel--style", "field", "grow");
   simpleHost.hidden = !simple;
   simpleHost.classList.toggle("field", simple);
   simpleHost.classList.toggle("grow", simple);
-  simpleHost.classList.toggle("inputPanel", simple);
+  simpleHost.classList.remove("inputPanel", "inputPanel--style");
 }
 
 function syncCreateFlowLayoutUi() {
@@ -80790,26 +81423,20 @@ function syncCreateFlowLayoutUi() {
   } else {
     document.body.removeAttribute("data-create-layout");
   }
+  if (!isCreateSheetOpen("createSoundSettingsSheet")) {
+    try { mountCreateSoundSettingsPickers(false); } catch {}
+  }
   mountCreateStudioBlockForFlowMode(mode);
   const simpleWrap = document.getElementById("createSimpleGenerateWrap");
   if (simpleWrap) simpleWrap.hidden = mode !== "simple" || !enabled;
-  if (els.createFlowModeBar) els.createFlowModeBar.hidden = !enabled;
-  if (els.btnCreateFlowSimple) {
-    const on = mode === "simple";
-    els.btnCreateFlowSimple.classList.toggle("isActive", on);
-    els.btnCreateFlowSimple.setAttribute("aria-pressed", on ? "true" : "false");
-  }
-  if (els.btnCreateFlowAdvanced) {
-    const on = mode === "advanced";
-    els.btnCreateFlowAdvanced.classList.toggle("isActive", on);
-    els.btnCreateFlowAdvanced.setAttribute("aria-pressed", on ? "true" : "false");
-  }
+  if (els.createFlowModeBar) els.createFlowModeBar.hidden = true;
   if (mode === "simple" && enabled) {
     try { setActiveCreateTab("lyrics"); } catch {}
     enforceSimpleCreateVocalOnly();
-    if (!_activeLyriaStudioStyleId) {
-      try { applyLyriaStudioStyle("cyber-dabke"); } catch {}
+    if (!_activeLyriaStudioStyleId && !_studioCustomPicked) {
+      try { applyLyriaStudioStyle("levantine-pop-fusion"); } catch {}
     }
+    try { ensureSimpleSingerDefault(); } catch {}
     if (els.sunoPrompt) {
       els.sunoPrompt.placeholder = isCreateIdeaMode()
         ? "A line about home — Arabic or English…"
@@ -80822,10 +81449,14 @@ function syncCreateFlowLayoutUi() {
   syncCreateLyricsComposerChrome();
   syncCreateSoundPanelUi();
   syncLyriaStudioStyleUi();
+  try { syncCreateLyricsSettingsSummary(); } catch {}
+  try { syncCreateSoundSettingsSummary(); } catch {}
   syncLyriaStudioSoundPromptPreview();
   try { syncCreateSongTypeTabs(); } catch {}
   try { syncLyricsToolsBar(); } catch {}
   try { syncCreateComposeLayout(); } catch {}
+  try { syncSimpleArabicAddressRow(); } catch {}
+  try { syncCreateSimpleStyleTabs(); } catch {}
   if (mode === "simple" && enabled && _createSimpleAutofocusAfterLayout) {
     _createSimpleAutofocusAfterLayout = false;
     scheduleCreateLyricsAutofocus();
@@ -80834,14 +81465,63 @@ function syncCreateFlowLayoutUi() {
 
 function clearLyriaStudioStyleSelection({ clearStyleField = false } = {}) {
   _activeLyriaStudioStyleId = "";
+  _internationalStyleSlots = { LEAD: "", RHYTHM: "", MOOD: "", BPM: "", KEY: "" };
   if (clearStyleField && els.sunoStyle) els.sunoStyle.value = "";
   syncLyriaStudioStyleUi();
   syncLyriaStudioSoundPromptPreview();
 }
 
-function applyLyriaStudioStyle(id) {
+function applyInternationalStudioStyle(style, { keepSinger = false } = {}) {
+  _studioCustomPicked = false;
+  mountCreateCustomStyleField(false);
+  if (createSoundPanelUnified()) {
+    try {
+      localStorage.setItem(CREATE_SOUND_MODE_LS_KEY, "studio");
+    } catch {}
+  }
+  _activeLyriaStudioStyleId = style.id;
+  _studioStylesSheetTab = "international";
+  _internationalStyleSlots = defaultInternationalSlots(style);
+  const ui = internationalStyleUi(style);
+  if (!keepSinger && !_userPickedSinger && (ui.defaultSinger === "m" || ui.defaultSinger === "f") && els.sunoSingerGender) {
+    els.sunoSingerGender.value = ui.defaultSinger;
+    try { syncSingerGenderPills(); } catch {}
+  }
+  const filled = writeLockedInternationalStyleLine();
+  if (!filled.ok) {
+    try { showToast(filled.error || "This style isn’t ready.", { icon: "!", durationMs: 3600 }); } catch {}
+  }
+  syncLyriaStudioStyleUi();
+  syncLyriaStudioSoundPromptPreview();
+  syncCreateSimpleAura();
+  syncStyleUi();
+  try { syncGenerateOrbVisibility(); } catch {}
+}
+
+function ensureSimpleSingerDefault() {
+  if (!isCreateSimpleCreateLayout() || !els.sunoSingerGender) return;
+  if (String(els.sunoSingerGender.value || "").trim()) return;
+  const rec = studioStyleUiRecord(_activeLyriaStudioStyleId);
+  const d = rec?.defaultSinger;
+  if (d === "m" || d === "f") {
+    els.sunoSingerGender.value = d;
+    try { syncSingerGenderPills(); } catch {}
+    if (activeInternationalStudioStyle()) writeLockedInternationalStyleLine();
+  }
+}
+
+function applyLyriaStudioStyle(id, { keepSinger = false } = {}) {
+  _studioCustomPicked = false;
+  mountCreateCustomStyleField(false);
+  const international = getInternationalStyle(id);
+  if (international) {
+    applyInternationalStudioStyle(international, { keepSinger });
+    return;
+  }
   const preset = getLyriaStudioStyle(id);
   if (!preset) return;
+  _internationalStyleSlots = { LEAD: "", RHYTHM: "", MOOD: "", BPM: "", KEY: "" };
+  _studioStylesSheetTab = "arabic";
   if (createSoundPanelUnified()) {
     try {
       localStorage.setItem(CREATE_SOUND_MODE_LS_KEY, "studio");
@@ -80849,11 +81529,11 @@ function applyLyriaStudioStyle(id) {
   }
   _activeLyriaStudioStyleId = preset.id;
   if (els.sunoStyle) els.sunoStyle.value = preset.styleLine;
-  if ((preset.defaultSinger === "m" || preset.defaultSinger === "f") && els.sunoSingerGender) {
+  if (!keepSinger && !_userPickedSinger && (preset.defaultSinger === "m" || preset.defaultSinger === "f") && els.sunoSingerGender) {
     els.sunoSingerGender.value = preset.defaultSinger;
     try { syncSingerGenderPills(); } catch {}
   }
-  if (preset.dialectKey) {
+  if (preset.dialectKey && !isCreateSimpleCreateLayout()) {
     try {
       setLyricsLanguage("arabic");
       setLyricsDialect(preset.dialectKey);
@@ -80878,25 +81558,36 @@ function renderLyriaStudioStyleRow() {
   const row = els.lyriaStudioStyleRow;
   if (!row) return;
   const active = String(_activeLyriaStudioStyleId || "");
-  const simple =
-    getCreateFlowMode() === "simple"
-    && createFlowModeEnabled()
-    && String(document.body.getAttribute("data-route") || "") === "generate";
-  let html = "";
-  if (simple) {
-    for (const preset of getSimpleStudioRowPresets()) {
-      const on = preset.id === active;
-      html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio${on ? " isActive" : ""}" data-lyria-studio-id="${escapeHtml(preset.id)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(preset.label)}</button>`;
-    }
-    html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio styleSuggestPill--studioAll" data-lyria-studio-all="1">More</button>`;
-  } else {
-    html = "";
-    for (const preset of LYRIA_STUDIO_STYLES) {
-      const on = preset.id === active;
-      html += `<button type="button" class="styleSuggestPill styleSuggestPill--studio${on ? " isActive" : ""}" data-lyria-studio-id="${escapeHtml(preset.id)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(preset.label)}</button>`;
-    }
+  const presets = getSimpleStudioRowPresets();
+  row.innerHTML = presets.map((preset) => studioStyleTileHtml(preset, active)).join("")
+    + studioCustomTileHtml(isStudioCustomStyleActive());
+  try { syncCreateSimpleStyleTabs(); } catch {}
+  try { syncCreateNabadHeard(); } catch {}
+}
+
+function renderInternationalStyleSlots() {
+  const host = document.getElementById("internationalStyleSlots");
+  if (!host) return;
+  const style = activeInternationalStudioStyle();
+  const sheet = document.getElementById("createSoundSettingsSheet");
+  const show = Boolean(style) && sheet && !sheet.hidden && lyriaStudioUiEnabled();
+  host.hidden = !show;
+  if (!show) {
+    host.innerHTML = "";
+    return;
   }
-  row.innerHTML = html;
+  host.innerHTML = INTERNATIONAL_SLOT_UI.map(({ key, label }) => {
+    const values = allowedSlotValues(style, key);
+    const current = String(_internationalStyleSlots[key] || style.slots?.[key]?.default || "");
+    const pills = values.map((value) => {
+      const on = value === current;
+      return `<button type="button" class="styleSuggestPill${on ? " isActive" : ""}" data-intl-slot="${escapeHtml(key)}" data-intl-slot-value="${escapeHtml(value)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(shortSlotLabel(key, value))}</button>`;
+    }).join("");
+    return `<div class="internationalStyleSlotRow">
+      <p class="internationalStyleSlotLabel">${escapeHtml(label)}</p>
+      <div class="internationalStyleSlotPills" role="group" aria-label="${escapeHtml(label)}">${pills}</div>
+    </div>`;
+  }).join("");
 }
 
 function syncLyriaStudioStyleUi() {
@@ -80904,6 +81595,7 @@ function syncLyriaStudioStyleUi() {
   const show = lyriaStudioUiEnabled();
   const unified = createSoundPanelUnified();
   const soundMode = unified ? getCreateSoundMode() : "custom";
+  const internationalLock = Boolean(activeInternationalStudioStyle());
   if (row) {
     const showRow = show && (!unified || soundMode === "studio");
     row.hidden = !showRow;
@@ -80915,7 +81607,7 @@ function syncLyriaStudioStyleUi() {
     els.lyriaStudioStyleHint.hidden = !show || !studioActive || unified;
   }
   if (els.styleSuggestRow) {
-    if (show && unified && soundMode === "studio") {
+    if (internationalLock || (show && unified && soundMode === "studio")) {
       els.styleSuggestRow.hidden = true;
     } else if (show && unified && soundMode === "custom") {
       els.styleSuggestRow.hidden = false;
@@ -80925,8 +81617,12 @@ function syncLyriaStudioStyleUi() {
       els.styleSuggestRow.hidden = false;
     }
   }
-  if (els.styleSelectedRow && unified && soundMode === "studio") {
+  if (els.styleSelectedRow && (internationalLock || (unified && soundMode === "studio"))) {
     els.styleSelectedRow.hidden = true;
+  }
+  const customFields = document.getElementById("createSoundCustomFields");
+  if (customFields && unified) {
+    customFields.hidden = soundMode === "studio" || internationalLock;
   }
   if (els.sunoStyle) {
     els.sunoStyle.placeholder = unified && soundMode === "custom"
@@ -80939,7 +81635,10 @@ function syncLyriaStudioStyleUi() {
     if (unified && soundMode === "studio") els.btnBoostStyle.hidden = true;
     else if (studioActive && !unified) els.btnBoostStyle.hidden = true;
   }
+  renderInternationalStyleSlots();
+  mountCreateCustomStyleField(isStudioCustomStyleActive());
   syncCreateSoundPanelUi();
+  try { syncCreateSoundSettingsSummary(); } catch {}
 }
 
 function syncStyleUi() {
@@ -81350,10 +82049,14 @@ function closeStyleLibrary() {
   document.getElementById("btnCloseStyleLibrary")?.addEventListener("click", closeStyleLibrary);
   els.sunoStyle?.addEventListener("input", () => {
     if (_activeLyriaStudioStyleId) {
-      const preset = getLyriaStudioStyle(_activeLyriaStudioStyleId);
-      const cur = String(els.sunoStyle?.value || "").trim();
-      if (!preset || cur !== String(preset.styleLine || "").trim()) {
-        _activeLyriaStudioStyleId = "";
+      if (getInternationalStyle(_activeLyriaStudioStyleId)) {
+        writeLockedInternationalStyleLine();
+      } else {
+        const preset = getLyriaStudioStyle(_activeLyriaStudioStyleId);
+        const cur = String(els.sunoStyle?.value || "").trim();
+        if (!preset || cur !== String(preset.styleLine || "").trim()) {
+          _activeLyriaStudioStyleId = "";
+        }
       }
     }
     if (_styleAutoTempoTag) {
@@ -81381,6 +82084,16 @@ function closeStyleLibrary() {
   if (els.lyriaStudioStyleRow && !els.lyriaStudioStyleRow.dataset.boundStudio) {
     els.lyriaStudioStyleRow.dataset.boundStudio = "1";
     els.lyriaStudioStyleRow.addEventListener("click", (e) => {
+      const settings = e.target?.closest?.("[data-studio-tile-settings]");
+      if (settings) {
+        e.preventDefault();
+        e.stopPropagation();
+        haptic("light");
+        const id = String(settings.getAttribute("data-studio-tile-settings") || "");
+        if (id && id !== String(_activeLyriaStudioStyleId || "")) applyLyriaStudioStyle(id);
+        openCreateSoundSettingsSheet();
+        return;
+      }
       const all = e.target?.closest?.("[data-lyria-studio-all]");
       if (all) {
         haptic("light");
@@ -81390,12 +82103,7 @@ function closeStyleLibrary() {
       const custom = e.target?.closest?.("[data-lyria-studio-custom]");
       if (custom) {
         haptic("light");
-        if (getCreateFlowMode() === "simple") {
-          setCreateFlowMode("advanced");
-          try { showToast("Studio full — edit style tags or type your own.", { durationMs: 3200 }); } catch {}
-        } else {
-          setCreateSoundMode("custom");
-        }
+        enterStudioCustomStyle();
         try { syncGenerateOrbVisibility(); } catch {}
         return;
       }
@@ -81444,6 +82152,39 @@ function closeStyleLibrary() {
     studioSheetBack.dataset.bound = "1";
     studioSheetBack.addEventListener("click", () => closeCreateStudioStylesSheet());
   }
+  const studioSheetTabs = document.getElementById("createStudioStylesSheetTabs");
+  if (studioSheetTabs && !studioSheetTabs.dataset.bound) {
+    studioSheetTabs.dataset.bound = "1";
+    studioSheetTabs.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-studio-sheet-tab]");
+      if (!btn) return;
+      haptic("light");
+      const tab = String(btn.getAttribute("data-studio-sheet-tab") || "arabic");
+      _studioStylesSheetTab = tab === "international" ? "international" : "arabic";
+      renderCreateStudioStylesSheet();
+    });
+  }
+  const intlSlots = document.getElementById("internationalStyleSlots");
+  if (intlSlots && !intlSlots.dataset.bound) {
+    intlSlots.dataset.bound = "1";
+    intlSlots.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-intl-slot]");
+      if (!btn) return;
+      const style = activeInternationalStudioStyle();
+      if (!style) return;
+      haptic("light");
+      const key = String(btn.getAttribute("data-intl-slot") || "");
+      const value = String(btn.getAttribute("data-intl-slot-value") || "");
+      if (!INTERNATIONAL_SLOT_KEYS.includes(key)) return;
+      const allowed = allowedSlotValues(style, key);
+      if (!allowed.includes(value)) return;
+      _internationalStyleSlots = { ..._internationalStyleSlots, [key]: value };
+      writeLockedInternationalStyleLine();
+      renderInternationalStyleSlots();
+      try { syncCreateSoundSettingsSummary(); } catch {}
+      try { syncGenerateOrbVisibility(); } catch {}
+    });
+  }
   const studioSheetList = document.getElementById("createStudioStylesSheetList");
   if (studioSheetList && !studioSheetList.dataset.bound) {
     studioSheetList.dataset.bound = "1";
@@ -81452,9 +82193,8 @@ function closeStyleLibrary() {
       if (custom) {
         haptic("light");
         closeCreateStudioStylesSheet();
-        setCreateFlowMode("advanced");
-        clearLyriaStudioStyleSelection({ clearStyleField: true });
-        syncStyleUi();
+        try { closeCreateSoundSettingsSheet(); } catch {}
+        enterStudioCustomStyle();
         return;
       }
       const item = e.target?.closest?.("[data-lyria-studio-sheet-id]");
@@ -81462,6 +82202,85 @@ function closeStyleLibrary() {
       haptic("light");
       applyLyriaStudioStyle(item.getAttribute("data-lyria-studio-sheet-id"));
       closeCreateStudioStylesSheet();
+    });
+  }
+  const lyricsSettingsBtn = document.getElementById("btnCreateLyricsSettings");
+  if (lyricsSettingsBtn && !lyricsSettingsBtn.dataset.bound) {
+    lyricsSettingsBtn.dataset.bound = "1";
+    lyricsSettingsBtn.addEventListener("click", () => {
+      haptic("light");
+      openCreateLyricsSettingsSheet();
+    });
+  }
+  const heardRow = document.getElementById("createNabadHeard");
+  if (heardRow && !heardRow.dataset.bound) {
+    heardRow.dataset.bound = "1";
+    heardRow.addEventListener("click", (e) => {
+      e.preventDefault();
+      haptic("light");
+      openCreateLyricsSettingsSheet();
+    });
+  }
+  const allStylesBtn = document.getElementById("btnCreateSimpleAllStyles");
+  if (allStylesBtn && !allStylesBtn.dataset.bound) {
+    allStylesBtn.dataset.bound = "1";
+    allStylesBtn.addEventListener("click", () => {
+      haptic("light");
+      openCreateStudioStylesSheet();
+    });
+  }
+  const simpleStyleTabs = document.getElementById("createSimpleStyleTabs");
+  if (simpleStyleTabs && !simpleStyleTabs.dataset.bound) {
+    simpleStyleTabs.dataset.bound = "1";
+    simpleStyleTabs.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-studio-row-tab]");
+      if (!btn) return;
+      haptic("light");
+      const tab = String(btn.getAttribute("data-studio-row-tab") || "arabic");
+      _studioStylesSheetTab = tab === "international" ? "international" : "arabic";
+      renderLyriaStudioStyleRow();
+    });
+  }
+  const lyricsSettingsDone = document.getElementById("btnCreateLyricsSettingsDone");
+  if (lyricsSettingsDone && !lyricsSettingsDone.dataset.bound) {
+    lyricsSettingsDone.dataset.bound = "1";
+    lyricsSettingsDone.addEventListener("click", () => {
+      haptic("light");
+      closeCreateLyricsSettingsSheet();
+    });
+  }
+  const lyricsSettingsBack = document.getElementById("createLyricsSettingsBackdrop");
+  if (lyricsSettingsBack && !lyricsSettingsBack.dataset.bound) {
+    lyricsSettingsBack.dataset.bound = "1";
+    lyricsSettingsBack.addEventListener("click", () => closeCreateLyricsSettingsSheet());
+  }
+  const soundSettingsBtn = document.getElementById("btnCreateSoundSettings");
+  if (soundSettingsBtn && !soundSettingsBtn.dataset.bound) {
+    soundSettingsBtn.dataset.bound = "1";
+    soundSettingsBtn.addEventListener("click", () => {
+      haptic("light");
+      openCreateSoundSettingsSheet();
+    });
+  }
+  const soundSettingsDone = document.getElementById("btnCreateSoundSettingsDone");
+  if (soundSettingsDone && !soundSettingsDone.dataset.bound) {
+    soundSettingsDone.dataset.bound = "1";
+    soundSettingsDone.addEventListener("click", () => {
+      haptic("light");
+      closeCreateSoundSettingsSheet();
+    });
+  }
+  const soundSettingsBack = document.getElementById("createSoundSettingsBackdrop");
+  if (soundSettingsBack && !soundSettingsBack.dataset.bound) {
+    soundSettingsBack.dataset.bound = "1";
+    soundSettingsBack.addEventListener("click", () => closeCreateSoundSettingsSheet());
+  }
+  const soundSettingsReset = document.getElementById("btnCreateSoundSettingsReset");
+  if (soundSettingsReset && !soundSettingsReset.dataset.bound) {
+    soundSettingsReset.dataset.bound = "1";
+    soundSettingsReset.addEventListener("click", () => {
+      haptic("light");
+      resetActiveStudioStyleDefaults();
     });
   }
   syncStyleUi();
@@ -81603,9 +82422,7 @@ if (els.btnGenerateOrb && els.btnSunoGenerate) {
       return;
     }
     if (!arabicLyricChoicesReady()) {
-      try {
-        showToast(arabicLyricChoicesBlockReason(), { icon: "!", durationMs: 3200 });
-      } catch {}
+      try { toastArabicLyricChoicesRequired(); } catch {}
       return;
     }
     els.btnSunoGenerate.click();
@@ -82227,6 +83044,15 @@ function focusSimpleCreateLyricsIfNeeded() {
   return document.activeElement === el;
 }
 
+// Keep the lyrics caret after Write/Idea without guessing keyboard height.
+function keepSimpleCreateLyricsFocus() {
+  if (!isCreateSimpleCreateLayout()) return;
+  const el = els.sunoPrompt;
+  if (!el || el.disabled) return;
+  _createIgnoreAutofocus = false;
+  try { el.focus({ preventScroll: true }); } catch {}
+}
+
 // Size the Simple stack to the space above the keyboard + Generate so
 // lyrics fills the free space and Studio sits right above Generate.
 function syncCreateSimpleViewportHeight() {
@@ -82237,24 +83063,30 @@ function syncCreateSimpleViewportHeight() {
     root.style.removeProperty("--create-simple-dock-bottom");
     return;
   }
-  const kb = _createKeyboardHeight > 0
+  const pluginKb = _createKeyboardHeight > 0
     ? _createKeyboardHeight
     : (_createSimpleKbAssumed ? CREATE_SIMPLE_KB_FALLBACK : 0);
+  const layoutH = window.innerHeight;
+  const vv = window.visualViewport;
+  const visibleBottom = vv ? Math.round(vv.offsetTop + vv.height) : layoutH;
+  const fromViewport = Math.max(0, layoutH - visibleBottom);
   let dockBottom;
-  if (kb > 0) {
-    dockBottom = kb + CREATE_SIMPLE_STACK_GAP;
+  if (pluginKb > 0) {
+    // Overlay keyboard: visualViewport shrinks, innerHeight stays. resizes-content:
+    // innerHeight already excludes the keyboard. First frame often has neither yet.
+    dockBottom = (fromViewport >= 80 ? fromViewport : pluginKb) + CREATE_SIMPLE_STACK_GAP;
   } else {
     const tb = document.querySelector(".mobileTabbar");
     const r = tb?.getBoundingClientRect?.();
     dockBottom = r && r.height > 0
-      ? Math.round(window.innerHeight - r.top) + 12
+      ? Math.round(layoutH - r.top) + 12
       : 86;
   }
-  const top = flow.getBoundingClientRect().top + (window.scrollY || 0);
+  const top = flow.getBoundingClientRect().top;
   const h = Math.round(
-    window.innerHeight - top - dockBottom - CREATE_SIMPLE_DOCK_H - CREATE_SIMPLE_STACK_GAP
+    layoutH - top - dockBottom - CREATE_SIMPLE_DOCK_H - CREATE_SIMPLE_STACK_GAP
   );
-  root.style.setProperty("--create-simple-flow-h", `${Math.max(240, h)}px`);
+  root.style.setProperty("--create-simple-flow-h", `${Math.max(180, h)}px`);
   root.style.setProperty("--create-simple-dock-bottom", `${dockBottom}px`);
 }
 
@@ -82476,6 +83308,9 @@ function applyCreateKeyboardOpen(height) {
   if (document.body.classList.contains("createKeyboardOpen") && _createKeyboardInsetLast > 0 && !insetChanged) {
     syncCreateComposeLayout();
     try { autoResizeLyricsBox(); } catch {}
+    window.requestAnimationFrame(() => {
+      try { syncCreateSimpleViewportHeight(); } catch {}
+    });
     return;
   }
   _createKeyboardHeight = kb;
@@ -82492,6 +83327,9 @@ function applyCreateKeyboardOpen(height) {
   } catch {}
   syncCreateComposeLayout();
   try { autoResizeLyricsBox(); } catch {}
+  window.requestAnimationFrame(() => {
+    try { syncCreateSimpleViewportHeight(); } catch {}
+  });
 }
 
 function scheduleCreateKeyboardScroll() {
@@ -82557,6 +83395,9 @@ function handleCreateFieldFocus(target) {
     return;
   }
   _createFocusedField = target;
+  if (isCreateSimpleCreateLayout()) {
+    try { syncCreateComposeLayout(); } catch {}
+  }
   setGenerateInputFocus(target.closest(".inputPanel") || null);
   scheduleCreateMobileWebKeyboardSync();
   if (document.body.classList.contains("createKeyboardOpen") && _createKeyboardHeight > 0) {
@@ -83017,6 +83858,7 @@ els.sunoPrompt?.addEventListener("input", () => {
     lyricsBoxEl.classList.remove("lyricsGenSettled");
   }
   try { syncArabicLyricsControlsVisibility(); } catch {}
+  try { syncSimpleArabicAddressRow(); } catch {}
   try { syncTemplateSparkClipGenerateReady(); } catch {}
   try { invalidateLyricsSingabilityOnEdit(); } catch {}
 });

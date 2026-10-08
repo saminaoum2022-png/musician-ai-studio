@@ -31,6 +31,8 @@ const CREATE_INPUT_KEYS = [
   "voiceProfile",
   "lyricsLanguage",
   "lyricsDialect",
+  "studioStyleId",
+  "studioSlots",
 ];
 
 function svcHeaders(extra) {
@@ -95,6 +97,7 @@ function normalizeCreateInputs(raw) {
   const mode = str(src.mode).toLowerCase() === "idea" ? "idea" : "write";
   const vocal = str(src.vocalGender || src.singerGender).toLowerCase();
   const vocalGender = vocal === "f" || vocal === "m" || vocal === "duo" ? vocal : "";
+  const slotSrc = src.studioSlots && typeof src.studioSlots === "object" ? src.studioSlots : {};
   return {
     mode,
     prompt: str(src.prompt || src.lyrics || src.idea || src.ideaBrief),
@@ -118,6 +121,14 @@ function normalizeCreateInputs(raw) {
     voiceProfile: str(src.voiceProfile),
     lyricsLanguage: str(src.lyricsLanguage) === "auto" ? "" : str(src.lyricsLanguage),
     lyricsDialect: str(src.lyricsDialect),
+    studioStyleId: str(src.studioStyleId),
+    studioSlots: {
+      LEAD: str(slotSrc.LEAD),
+      RHYTHM: str(slotSrc.RHYTHM),
+      MOOD: str(slotSrc.MOOD),
+      BPM: str(slotSrc.BPM),
+      KEY: str(slotSrc.KEY),
+    },
   };
 }
 
@@ -297,6 +308,8 @@ function buildCreateInputsFromBody(body = {}) {
     voiceProfile: body.voiceProfile,
     lyricsLanguage: body.lyricsLanguage || body.scriptFormat,
     lyricsDialect: body.lyricsDialect,
+    studioStyleId: body.studioStyleId,
+    studioSlots: body.studioSlots,
   });
 }
 

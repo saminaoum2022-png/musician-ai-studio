@@ -53,6 +53,7 @@ export function normalizeCreateInputs(raw) {
   const vocalGender = vocal === "f" || vocal === "m" || vocal === "duo" ? vocal : "";
   const str = (v) => String(v == null ? "" : v).trim();
   const bool = (v) => v === true || v === 1 || v === "1" || v === "true";
+  const slotSrc = src.studioSlots && typeof src.studioSlots === "object" ? src.studioSlots : {};
   return {
     mode,
     prompt: str(src.prompt || src.lyrics || src.idea || src.ideaBrief),
@@ -76,6 +77,14 @@ export function normalizeCreateInputs(raw) {
     voiceProfile: str(src.voiceProfile),
     lyricsLanguage: str(src.lyricsLanguage) === "auto" ? "" : str(src.lyricsLanguage),
     lyricsDialect: str(src.lyricsDialect),
+    studioStyleId: str(src.studioStyleId),
+    studioSlots: {
+      LEAD: str(slotSrc.LEAD),
+      RHYTHM: str(slotSrc.RHYTHM),
+      MOOD: str(slotSrc.MOOD),
+      BPM: str(slotSrc.BPM),
+      KEY: str(slotSrc.KEY),
+    },
   };
 }
 
@@ -84,7 +93,7 @@ const INPUT_KEYS = [
   "personaId", "dialect", "dialectHint", "arabicAddress", "instrumental",
   "songKey", "durationPreset", "timing", "groovePace", "prosody",
   "beatStability", "avoidTags", "artworkStyle", "voiceProfile",
-  "lyricsLanguage", "lyricsDialect",
+  "lyricsLanguage", "lyricsDialect", "studioStyleId", "studioSlots",
 ];
 
 export function createInputsEqual(a, b) {

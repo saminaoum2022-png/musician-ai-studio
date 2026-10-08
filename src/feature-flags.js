@@ -37,6 +37,12 @@ export const NABAD_STICKERS_PUBLIC_SHIPPED = false;
  */
 export const NABAD_LIVE_LISTEN_PUBLIC_SHIPPED = true;
 
+/**
+ * When true: Oriental Studio Styles tab is live for users (AB vs Arabic).
+ * Keep false until the AB is approved — staging bake uses nabadOrientalStylesUi.
+ */
+export const NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED = false;
+
 /** When false: hide play counts on Discover cards, charts, and challenge heroes (sorting unchanged). */
 export const DISCOVER_SHOW_PLAY_COUNTS = false;
 

@@ -23,6 +23,14 @@ import {
   leftoverStylePlaceholders,
   INTERNATIONAL_SLOT_KEYS,
 } from "./lyria-international-styles.mjs";
+import {
+  getOrientalStyle,
+  listOrientalStyles,
+  orientalStyleUi,
+  defaultOrientalSlots,
+  fillOrientalStylePrompt,
+  ORIENTAL_STYLE_SECTIONS,
+} from "./lyria-oriental-styles.mjs";
 import { mixStemsToWav } from "./studio/mixer.js";
 import { encodeWav16 } from "./wav.js";
 import { initMentor, resetMentorSession } from "./mentor.js";
@@ -342,7 +350,7 @@ import {
   screenshotProf,
   screenshotSanitizeCopy,
 } from "./screenshot-mode.js";
-import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
+import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED, NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED } from "./feature-flags.js";
 import {
   applyGoldToAvatarWrap,
   applyGoldNameGradient,
@@ -55096,7 +55104,8 @@ function collectCreateInputsFromScreen() {
     lyricsLanguage: simple ? "" : lyricsLanguage,
     lyricsDialect: simple ? "" : lyricsDialect,
     studioStyleId: String(_activeLyriaStudioStyleId || ""),
-    studioSlots: activeInternationalStudioStyle()
+    studioFamily: _studioFamily === "oriental" || _studioFamily === "international" ? _studioFamily : "arabic",
+    studioSlots: activeSlottedStudioStyle()
       ? { ..._internationalStyleSlots }
       : { LEAD: "", RHYTHM: "", MOOD: "", BPM: "", KEY: "" },
   });
@@ -55144,12 +55153,13 @@ function applyTake2Prefill(inputs) {
   try { syncLyricsPlaceholder(); } catch {}
   try { syncCreateTabMorph(); } catch {}
   if (next.studioStyleId) {
-    applyLyriaStudioStyle(next.studioStyleId, { keepSinger: true });
+    applyLyriaStudioStyle(next.studioStyleId, { keepSinger: true, family: next.studioFamily });
     if (els.sunoSingerGender) els.sunoSingerGender.value = next.vocalGender;
     try { syncSingerGenderPills(); } catch {}
-    if (getInternationalStyle(next.studioStyleId)) {
+    const slotted = activeSlottedStudioStyle();
+    if (slotted) {
       _internationalStyleSlots = {
-        ...defaultInternationalSlots(getInternationalStyle(next.studioStyleId)),
+        ...(_studioFamily === "oriental" ? defaultOrientalSlots(slotted) : defaultInternationalSlots(slotted)),
         ...next.studioSlots,
       };
       writeLockedInternationalStyleLine();
@@ -78199,7 +78209,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         syncSingerGenderPills();
         try { syncClipVocalCharacterUi(); } catch {}
         try { renderReferenceHints(); } catch {}
-        if (activeInternationalStudioStyle()) writeLockedInternationalStyleLine();
+        if (activeSlottedStudioStyle()) writeLockedInternationalStyleLine();
       });
       // Keep pills in sync when a Range is picked in Options (its value
       // encodes the gender as an "m|"/"f|" prefix).
@@ -78740,7 +78750,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const lyriaRaw = lyriaSendRawBoxesOnly();
       const userPrompt = (els.sunoPrompt?.value || "").trim();
       let userStyleRaw = String(els.sunoStyle?.value || "").trim();
-      const intlLock = activeInternationalStudioStyle() ? fillActiveInternationalStyle() : null;
+      const intlLock = activeSlottedStudioStyle() ? fillActiveInternationalStyle() : null;
       if (intlLock && !intlLock.ok) {
         setLoading(false);
         setGenerateBtn("Generate song", false, "generate");
@@ -80438,6 +80448,7 @@ function renderVocalStyleRow() {
 let _activeLyriaStudioStyleId = "";
 let _userPickedSinger = false;
 let _studioStylesSheetTab = "arabic";
+let _studioFamily = "arabic";
 let _studioCustomPicked = false;
 let _internationalStyleSlots = {
   LEAD: "",
@@ -80446,6 +80457,27 @@ let _internationalStyleSlots = {
   BPM: "",
   KEY: "",
 };
+
+function orientalStylesUiEnabled() {
+  if (NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED) return true;
+  return Boolean(window.__NABAD_CLIENT_ENV__?.nabadOrientalStylesUi);
+}
+
+function normalizeStudioStylesTab(tab) {
+  const raw = String(tab || "").trim().toLowerCase();
+  if (raw === "oriental" && orientalStylesUiEnabled()) return "oriental";
+  if (raw === "international") return "international";
+  return "arabic";
+}
+
+function syncOrientalStyleTabVisibility() {
+  const show = orientalStylesUiEnabled();
+  document.querySelectorAll("[data-studio-row-tab='oriental'], [data-studio-sheet-tab='oriental']").forEach((btn) => {
+    btn.hidden = !show;
+  });
+  if (!show && _studioStylesSheetTab === "oriental") _studioStylesSheetTab = "arabic";
+  if (!show && _studioFamily === "oriental") _studioFamily = "arabic";
+}
 
 const INTERNATIONAL_SLOT_UI = Object.freeze([
   Object.freeze({ key: "LEAD", label: "Sound" }),
@@ -80459,7 +80491,19 @@ function activeInternationalStudioStyle() {
   return getInternationalStyle(_activeLyriaStudioStyleId);
 }
 
+function activeSlottedStudioStyle() {
+  if (_studioFamily === "oriental" && orientalStylesUiEnabled()) {
+    return getOrientalStyle(_activeLyriaStudioStyleId);
+  }
+  if (_studioFamily === "international") return getInternationalStyle(_activeLyriaStudioStyleId);
+  return null;
+}
+
 function studioStyleUiRecord(id) {
+  if (_studioFamily === "oriental" && orientalStylesUiEnabled()) {
+    const oriental = getOrientalStyle(id);
+    if (oriental) return orientalStyleUi(oriental);
+  }
   const intl = getInternationalStyle(id);
   if (intl) return internationalStyleUi(intl);
   return getLyriaStudioStyle(id) || null;
@@ -80472,9 +80516,10 @@ function resolveInternationalVocalGenderFromScreen() {
 }
 
 function fillActiveInternationalStyle() {
-  const style = activeInternationalStudioStyle();
+  const style = activeSlottedStudioStyle();
   if (!style) return { ok: false, error: "missing_style", leftover: [] };
-  return fillInternationalStylePrompt({
+  const fill = _studioFamily === "oriental" ? fillOrientalStylePrompt : fillInternationalStylePrompt;
+  return fill({
     style,
     vocalGender: resolveInternationalVocalGenderFromScreen(),
     slots: _internationalStyleSlots,
@@ -80620,6 +80665,24 @@ const STUDIO_TILE_LABELS = Object.freeze({
   "lebanese-folk-tarab": "Tarab Soul",
   "modern-khaleeji-pop": "Khaleeji Night",
   "modern-rai": "Rai",
+  "cyber-dabkeh": "Cyber Dabkeh",
+  "levantine-folk": "Levantine Folk",
+  "arabic-pop-acoustic-ballad": "Acoustic ballad",
+  "lebanese-mountain-dabke-electronic": "Mountain electro",
+  "lebanese-mountain-dabke": "Mountain dabke",
+  "egyptian-baladi-electro": "Baladi electro",
+  "greek-arabic-pop-fusion": "Greek–Arabic",
+  "lebanese-dramatic-ballad": "Dramatic ballad",
+  "egyptian-shaabi-mahraganat": "Egyptian Shaabi",
+  "middle-eastern-rnb": "MENA R&B",
+  "middle-eastern-shaabi-lounge": "Shaabi lounge",
+  "modern-levantine-dabke": "Modern dabke",
+  "levantine-indie-folk": "Indie folk",
+  "egyptian-pop-2000s": "Egyptian 2000s",
+  "summer-levantine-dabke-pop": "Summer dabke",
+  "levantine-pop-syrian-folk": "Syrian folk-pop",
+  "dark-levantine-trap": "Dark trap",
+  "mountain-dabke-pop": "Mountain pop",
   synthpop_80s: "80s Synthpop",
   indie_folk: "Indie Folk",
   contemporary_rnb: "Contemporary R&B",
@@ -80643,11 +80706,17 @@ const INTERNATIONAL_STYLE_SECTIONS = Object.freeze([
 function getSimpleStudioRowPresets() {
   const activeId = String(_activeLyriaStudioStyleId || "");
   const international = _studioStylesSheetTab === "international";
-  if (international) {
-    const pool = listInternationalStyles().map((s) => internationalStyleUi(s));
+  const oriental = _studioStylesSheetTab === "oriental" && orientalStylesUiEnabled();
+  if (international || oriental) {
+    const pool = oriental
+      ? listOrientalStyles().map((s) => orientalStyleUi(s))
+      : listInternationalStyles().map((s) => internationalStyleUi(s));
     const pick = [];
     const active = studioStyleUiRecord(activeId);
-    if (active && getInternationalStyle(activeId)) pick.push(active);
+    const activeMatches = oriental
+      ? _studioFamily === "oriental" && getOrientalStyle(activeId)
+      : getInternationalStyle(activeId);
+    if (active && activeMatches) pick.push(active);
     for (const preset of pool) {
       if (pick.length >= 5) break;
       if (pick.some((p) => p.id === preset.id)) continue;
@@ -80655,9 +80724,9 @@ function getSimpleStudioRowPresets() {
     }
     return pick.slice(0, 4);
   }
-  const pick = SIMPLE_ARABIC_ROW_IDS.map((id) => studioStyleUiRecord(id)).filter(Boolean);
-  const active = studioStyleUiRecord(activeId);
-  if (active && !getInternationalStyle(activeId) && !pick.some((p) => p.id === active.id)) {
+  const pick = SIMPLE_ARABIC_ROW_IDS.map((id) => getLyriaStudioStyle(id)).filter(Boolean);
+  const active = _studioFamily === "arabic" ? getLyriaStudioStyle(activeId) : null;
+  if (active && !pick.some((p) => p.id === active.id)) {
     pick.unshift(active);
   }
   return pick.slice(0, 4);
@@ -80668,17 +80737,38 @@ const STUDIO_COVER_FILES = Object.freeze({
   "levantine-ballad": "levantine-pop.svg",
   "arabic-pop": "levantine-pop.svg",
   "egyptian-pop": "levantine-pop.svg",
+  "egyptian-baladi-electro": "levantine-pop.svg",
+  "egyptian-pop-2000s": "levantine-pop.svg",
+  "levantine-pop-syrian-folk": "levantine-pop.svg",
   "cyber-dabke": "cyber-dabke.svg",
+  "cyber-dabkeh": "cyber-dabke.svg",
   "mountain-dabke-electronic": "cyber-dabke.svg",
   "mountain-dabke-folk": "cyber-dabke.svg",
   "traditional-dabke": "cyber-dabke.svg",
   "levantine-folk-dabke": "cyber-dabke.svg",
+  "levantine-folk": "cyber-dabke.svg",
+  "lebanese-mountain-dabke-electronic": "cyber-dabke.svg",
+  "lebanese-mountain-dabke": "cyber-dabke.svg",
+  "modern-levantine-dabke": "cyber-dabke.svg",
+  "mountain-dabke-pop": "cyber-dabke.svg",
   "lebanese-folk-tarab": "tarab-soul.svg",
   "lebanese-mawwal": "tarab-soul.svg",
   "acoustic-ballad-ella": "tarab-soul.svg",
+  "arabic-pop-acoustic-ballad": "tarab-soul.svg",
+  "lebanese-dramatic-ballad": "tarab-soul.svg",
   "georges-wassouf-style": "tarab-soul.svg",
   "modern-khaleeji-pop": "khaleeji-night.svg",
+  "modern-iraqi-pop": "khaleeji-night.svg",
   "modern-rai": "rai.svg",
+  "egyptian-shaabi-mahraganat": "rai.svg",
+  "middle-eastern-shaabi-lounge": "rai.svg",
+  "dance-indie-pop": "latin-dance-pop.svg",
+  "summer-levantine-dabke-pop": "latin-dance-pop.svg",
+  "greek-arabic-pop-fusion": "indie-folk.svg",
+  "levantine-indie-folk": "indie-folk.svg",
+  "middle-eastern-rnb": "contemporary-rnb.svg",
+  "arabic-trap": "lofi-hiphop.svg",
+  "dark-levantine-trap": "lofi-hiphop.svg",
   synthpop_80s: "synthpop-80s.svg",
   indie_folk: "indie-folk.svg",
   contemporary_rnb: "contemporary-rnb.svg",
@@ -81089,7 +81179,8 @@ function wireCreateLyricsAttachOnce() {
 }
 
 function syncCreateStudioStylesSheetTabs() {
-  const tab = _studioStylesSheetTab === "international" ? "international" : "arabic";
+  syncOrientalStyleTabVisibility();
+  const tab = normalizeStudioStylesTab(_studioStylesSheetTab);
   document.querySelectorAll("[data-studio-sheet-tab]").forEach((btn) => {
     const on = String(btn.getAttribute("data-studio-sheet-tab") || "") === tab;
     btn.classList.toggle("isActive", on);
@@ -81098,7 +81189,8 @@ function syncCreateStudioStylesSheetTabs() {
 }
 
 function syncCreateSimpleStyleTabs() {
-  const tab = _studioStylesSheetTab === "international" ? "international" : "arabic";
+  syncOrientalStyleTabVisibility();
+  const tab = normalizeStudioStylesTab(_studioStylesSheetTab);
   document.querySelectorAll("[data-studio-row-tab]").forEach((btn) => {
     const on = String(btn.getAttribute("data-studio-row-tab") || "") === tab;
     btn.classList.toggle("isActive", on);
@@ -81112,23 +81204,26 @@ function renderCreateStudioStylesSheet() {
   syncCreateStudioStylesSheetTabs();
   const active = String(_activeLyriaStudioStyleId || "");
   const international = _studioStylesSheetTab === "international";
+  const oriental = _studioStylesSheetTab === "oriental" && orientalStylesUiEnabled();
   const custom = studioCustomTileHtml(isStudioCustomStyleActive(), { sheet: true });
   list.classList.remove("styleSuggestRow", "createStudioSheetPills");
   list.classList.add("studioStyleSheetTiles");
-  if (international) {
-    const byId = Object.fromEntries(listInternationalStyles().map((s) => [s.id, internationalStyleUi(s)]));
+  if (international || oriental) {
+    const catalog = oriental
+      ? listOrientalStyles().map((s) => orientalStyleUi(s))
+      : listInternationalStyles().map((s) => internationalStyleUi(s));
+    const sections = oriental ? ORIENTAL_STYLE_SECTIONS : INTERNATIONAL_STYLE_SECTIONS;
+    const byId = Object.fromEntries(catalog.map((s) => [s.id, s]));
     const seen = new Set();
     let html = "";
-    for (const section of INTERNATIONAL_STYLE_SECTIONS) {
+    for (const section of sections) {
       const tiles = section.ids.map((id) => byId[id]).filter(Boolean);
       tiles.forEach((p) => seen.add(p.id));
       if (!tiles.length) continue;
       html += `<p class="studioStyleSheetSec">${escapeHtml(section.name)}</p>`;
       html += `<div class="studioStyleSheetRow">${tiles.map((p) => studioStyleTileHtml(p, active, { sheet: true })).join("")}</div>`;
     }
-    const extra = listInternationalStyles()
-      .map((s) => internationalStyleUi(s))
-      .filter((p) => !seen.has(p.id));
+    const extra = catalog.filter((p) => !seen.has(p.id));
     if (extra.length) {
       html += `<p class="studioStyleSheetSec">More</p>`;
       html += `<div class="studioStyleSheetRow">${extra.map((p) => studioStyleTileHtml(p, active, { sheet: true })).join("")}</div>`;
@@ -81143,7 +81238,8 @@ function renderCreateStudioStylesSheet() {
 
 function openCreateStudioStylesSheet() {
   mountFixedOverlaysToBody();
-  if (getInternationalStyle(_activeLyriaStudioStyleId)) _studioStylesSheetTab = "international";
+  if (_studioFamily === "oriental" && orientalStylesUiEnabled()) _studioStylesSheetTab = "oriental";
+  else if (getInternationalStyle(_activeLyriaStudioStyleId)) _studioStylesSheetTab = "international";
   else if (getLyriaStudioStyle(_activeLyriaStudioStyleId)) _studioStylesSheetTab = "arabic";
   renderCreateStudioStylesSheet();
   const stacked = isCreateSheetOpen("createSoundSettingsSheet");
@@ -81317,7 +81413,7 @@ function syncCreateSoundSettingsSummary() {
     return;
   }
   const parts = [createSettingsSummaryChip(rec.label || rec.name || "Style")];
-  const intl = getInternationalStyle(_activeLyriaStudioStyleId);
+  const intl = activeSlottedStudioStyle();
   if (intl) {
     for (const { key } of INTERNATIONAL_SLOT_UI) {
       const value = String(_internationalStyleSlots[key] || intl.slots?.[key]?.default || "");
@@ -81338,8 +81434,8 @@ function openCreateSoundSettingsSheet() {
   const hint = document.getElementById("createSoundSettingsHint");
   if (hint) {
     const sub = String(rec.subtitle || "").trim();
-    const intl = Boolean(getInternationalStyle(rec.id));
-    hint.textContent = intl ? "Tune this style" : (sub || "This is the sound Nabad will use.");
+    const slotted = Boolean(activeSlottedStudioStyle());
+    hint.textContent = slotted ? "Tune this style" : (sub || "This is the sound Nabad will use.");
     hint.hidden = false;
   }
   const styleLabel = document.getElementById("createSoundSettingsStyleLabel");
@@ -81361,25 +81457,32 @@ function closeCreateSoundSettingsSheet() {
 
 function resetActiveStudioStyleDefaults() {
   const id = String(_activeLyriaStudioStyleId || "");
-  const intl = getInternationalStyle(id);
-  if (intl) {
-    _internationalStyleSlots = defaultInternationalSlots(intl);
+  const slotted = activeSlottedStudioStyle();
+  if (slotted) {
+    _internationalStyleSlots = _studioFamily === "oriental"
+      ? defaultOrientalSlots(slotted)
+      : defaultInternationalSlots(slotted);
     writeLockedInternationalStyleLine();
     renderInternationalStyleSlots();
     try { syncCreateSoundSettingsSummary(); } catch {}
     return;
   }
-  if (id) applyLyriaStudioStyle(id, { keepSinger: true });
+  if (id) applyLyriaStudioStyle(id, { keepSinger: true, family: _studioFamily });
 }
 
 function sparkRandomLyriaStudioStyle() {
+  const oriental = _studioStylesSheetTab === "oriental" && orientalStylesUiEnabled();
   const international =
     _studioStylesSheetTab === "international"
     || Boolean(getInternationalStyle(_activeLyriaStudioStyleId));
-  const pool = international ? listInternationalStyles() : LYRIA_STUDIO_STYLES;
+  const pool = oriental
+    ? listOrientalStyles()
+    : international
+      ? listInternationalStyles()
+      : LYRIA_STUDIO_STYLES;
   if (!pool.length) return;
   const preset = pool[Math.floor(Math.random() * pool.length)];
-  if (preset?.id) applyLyriaStudioStyle(preset.id);
+  if (preset?.id) applyLyriaStudioStyle(preset.id, { family: oriental ? "oriental" : (international ? "international" : "arabic") });
 }
 
 function mountCreateStudioBlockForFlowMode(mode) {
@@ -81465,6 +81568,7 @@ function syncCreateFlowLayoutUi() {
 
 function clearLyriaStudioStyleSelection({ clearStyleField = false } = {}) {
   _activeLyriaStudioStyleId = "";
+  _studioFamily = "arabic";
   _internationalStyleSlots = { LEAD: "", RHYTHM: "", MOOD: "", BPM: "", KEY: "" };
   if (clearStyleField && els.sunoStyle) els.sunoStyle.value = "";
   syncLyriaStudioStyleUi();
@@ -81480,6 +81584,7 @@ function applyInternationalStudioStyle(style, { keepSinger = false } = {}) {
     } catch {}
   }
   _activeLyriaStudioStyleId = style.id;
+  _studioFamily = "international";
   _studioStylesSheetTab = "international";
   _internationalStyleSlots = defaultInternationalSlots(style);
   const ui = internationalStyleUi(style);
@@ -81506,21 +81611,67 @@ function ensureSimpleSingerDefault() {
   if (d === "m" || d === "f") {
     els.sunoSingerGender.value = d;
     try { syncSingerGenderPills(); } catch {}
-    if (activeInternationalStudioStyle()) writeLockedInternationalStyleLine();
+    if (activeSlottedStudioStyle()) writeLockedInternationalStyleLine();
   }
 }
 
-function applyLyriaStudioStyle(id, { keepSinger = false } = {}) {
+function applyOrientalStudioStyle(style, { keepSinger = false } = {}) {
   _studioCustomPicked = false;
   mountCreateCustomStyleField(false);
+  if (createSoundPanelUnified()) {
+    try {
+      localStorage.setItem(CREATE_SOUND_MODE_LS_KEY, "studio");
+    } catch {}
+  }
+  _activeLyriaStudioStyleId = style.id;
+  _studioFamily = "oriental";
+  _studioStylesSheetTab = "oriental";
+  _internationalStyleSlots = defaultOrientalSlots(style);
+  const ui = orientalStyleUi(style);
+  if (!keepSinger && !_userPickedSinger && (ui.defaultSinger === "m" || ui.defaultSinger === "f") && els.sunoSingerGender) {
+    els.sunoSingerGender.value = ui.defaultSinger;
+    try { syncSingerGenderPills(); } catch {}
+  }
+  const filled = writeLockedInternationalStyleLine();
+  if (!filled.ok) {
+    try { showToast(filled.error || "This style isn’t ready.", { icon: "!", durationMs: 3600 }); } catch {}
+  }
+  syncLyriaStudioStyleUi();
+  syncLyriaStudioSoundPromptPreview();
+  syncCreateSimpleAura();
+  syncStyleUi();
+  try { syncGenerateOrbVisibility(); } catch {}
+}
+
+function applyLyriaStudioStyle(id, { keepSinger = false, family = "" } = {}) {
+  _studioCustomPicked = false;
+  mountCreateCustomStyleField(false);
+  const preferred = normalizeStudioStylesTab(family || _studioStylesSheetTab);
+  if (preferred === "oriental" && orientalStylesUiEnabled()) {
+    const oriental = getOrientalStyle(id);
+    if (oriental) {
+      applyOrientalStudioStyle(oriental, { keepSinger });
+      return;
+    }
+  }
   const international = getInternationalStyle(id);
-  if (international) {
+  if (international && preferred !== "arabic") {
+    applyInternationalStudioStyle(international, { keepSinger });
+    return;
+  }
+  if (preferred !== "arabic" && preferred !== "oriental" && international) {
     applyInternationalStudioStyle(international, { keepSinger });
     return;
   }
   const preset = getLyriaStudioStyle(id);
-  if (!preset) return;
+  if (!preset) {
+    if (orientalStylesUiEnabled() && getOrientalStyle(id)) {
+      applyOrientalStudioStyle(getOrientalStyle(id), { keepSinger });
+    }
+    return;
+  }
   _internationalStyleSlots = { LEAD: "", RHYTHM: "", MOOD: "", BPM: "", KEY: "" };
+  _studioFamily = "arabic";
   _studioStylesSheetTab = "arabic";
   if (createSoundPanelUnified()) {
     try {
@@ -81568,7 +81719,7 @@ function renderLyriaStudioStyleRow() {
 function renderInternationalStyleSlots() {
   const host = document.getElementById("internationalStyleSlots");
   if (!host) return;
-  const style = activeInternationalStudioStyle();
+  const style = activeSlottedStudioStyle();
   const sheet = document.getElementById("createSoundSettingsSheet");
   const show = Boolean(style) && sheet && !sheet.hidden && lyriaStudioUiEnabled();
   host.hidden = !show;
@@ -81595,7 +81746,7 @@ function syncLyriaStudioStyleUi() {
   const show = lyriaStudioUiEnabled();
   const unified = createSoundPanelUnified();
   const soundMode = unified ? getCreateSoundMode() : "custom";
-  const internationalLock = Boolean(activeInternationalStudioStyle());
+  const internationalLock = Boolean(activeSlottedStudioStyle());
   if (row) {
     const showRow = show && (!unified || soundMode === "studio");
     row.hidden = !showRow;
@@ -82160,7 +82311,7 @@ function closeStyleLibrary() {
       if (!btn) return;
       haptic("light");
       const tab = String(btn.getAttribute("data-studio-sheet-tab") || "arabic");
-      _studioStylesSheetTab = tab === "international" ? "international" : "arabic";
+      _studioStylesSheetTab = normalizeStudioStylesTab(tab);
       renderCreateStudioStylesSheet();
     });
   }
@@ -82170,7 +82321,7 @@ function closeStyleLibrary() {
     intlSlots.addEventListener("click", (e) => {
       const btn = e.target?.closest?.("[data-intl-slot]");
       if (!btn) return;
-      const style = activeInternationalStudioStyle();
+      const style = activeSlottedStudioStyle();
       if (!style) return;
       haptic("light");
       const key = String(btn.getAttribute("data-intl-slot") || "");
@@ -82237,7 +82388,7 @@ function closeStyleLibrary() {
       if (!btn) return;
       haptic("light");
       const tab = String(btn.getAttribute("data-studio-row-tab") || "arabic");
-      _studioStylesSheetTab = tab === "international" ? "international" : "arabic";
+      _studioStylesSheetTab = normalizeStudioStylesTab(tab);
       renderLyriaStudioStyleRow();
     });
   }

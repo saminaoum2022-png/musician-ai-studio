@@ -53,6 +53,14 @@ if (/export\s+const\s+NABAD_GOLD_PUBLIC_SHIPPED\s*=\s*true/.test(text)) {
   failed = true;
 }
 
+if (/export\s+const\s+NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED\s*=\s*true/.test(text)) {
+  console.error(
+    "NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED is true — Oriental styles would go live for users.",
+  );
+  console.error("Set it back to false in src/feature-flags.js before shipping to main.");
+  failed = true;
+}
+
 if (failed) process.exit(1);
 
-console.log("verify-no-producer-ship: OK (Producer + Vibe + Edit + Gold stay hidden — Live Listen is launched)");
+console.log("verify-no-producer-ship: OK (Producer + Vibe + Edit + Gold + Oriental stay hidden — Live Listen is launched)");

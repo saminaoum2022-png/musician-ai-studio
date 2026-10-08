@@ -78,6 +78,9 @@ export function normalizeCreateInputs(raw) {
     lyricsLanguage: str(src.lyricsLanguage) === "auto" ? "" : str(src.lyricsLanguage),
     lyricsDialect: str(src.lyricsDialect),
     studioStyleId: str(src.studioStyleId),
+    studioFamily: ["oriental", "international", "arabic"].includes(str(src.studioFamily))
+      ? str(src.studioFamily)
+      : "",
     studioSlots: {
       LEAD: str(slotSrc.LEAD),
       RHYTHM: str(slotSrc.RHYTHM),
@@ -93,7 +96,7 @@ const INPUT_KEYS = [
   "personaId", "dialect", "dialectHint", "arabicAddress", "instrumental",
   "songKey", "durationPreset", "timing", "groovePace", "prosody",
   "beatStability", "avoidTags", "artworkStyle", "voiceProfile",
-  "lyricsLanguage", "lyricsDialect", "studioStyleId", "studioSlots",
+  "lyricsLanguage", "lyricsDialect", "studioStyleId", "studioFamily", "studioSlots",
 ];
 
 export function createInputsEqual(a, b) {

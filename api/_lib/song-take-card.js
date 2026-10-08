@@ -32,6 +32,7 @@ const CREATE_INPUT_KEYS = [
   "lyricsLanguage",
   "lyricsDialect",
   "studioStyleId",
+  "studioFamily",
   "studioSlots",
 ];
 
@@ -122,6 +123,9 @@ function normalizeCreateInputs(raw) {
     lyricsLanguage: str(src.lyricsLanguage) === "auto" ? "" : str(src.lyricsLanguage),
     lyricsDialect: str(src.lyricsDialect),
     studioStyleId: str(src.studioStyleId),
+    studioFamily: ["oriental", "international", "arabic"].includes(str(src.studioFamily))
+      ? str(src.studioFamily)
+      : "",
     studioSlots: {
       LEAD: str(slotSrc.LEAD),
       RHYTHM: str(slotSrc.RHYTHM),
@@ -309,6 +313,7 @@ function buildCreateInputsFromBody(body = {}) {
     lyricsLanguage: body.lyricsLanguage || body.scriptFormat,
     lyricsDialect: body.lyricsDialect,
     studioStyleId: body.studioStyleId,
+    studioFamily: body.studioFamily,
     studioSlots: body.studioSlots,
   });
 }

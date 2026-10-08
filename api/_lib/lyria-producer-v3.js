@@ -80,7 +80,7 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary, no extr
 
 === PREVIOUS TAKE ===
 If previous_take is present:
-- previous_take is a reference, not a lock. Any field the user changed (arabic_address, vocal_gender, style, lyrics) always wins over previous_take. Rewrite only what that change needs: address change means rewrite the pronouns and endings; singer change means adjust the vocal wording and the gendered lines the singer says about themself; style change means adjust the arrangement. Keep everything else (structure, bars, lines, meaning) the same.
+- previous_take is a reference, not a lock. Any field the user changed (arabic_address, vocal_gender, style, lyrics, dialect / dialect_hint) always wins over previous_take. Rewrite only what that change needs: address change means rewrite the pronouns and endings; singer change means adjust the vocal wording and the gendered lines the singer says about themself; style change means adjust the arrangement; dialect change means rewrite the lyrics into that dialect (Lebanese, Egyptian, Gulf, etc.) while keeping the same meaning. Keep everything else (structure, bars, line count, meaning) the same.
 
 === SECTION PLAN ===
 - You choose the form. A common shape is Intro → Verse 1 → Chorus → Verse 2 → Chorus → optional Bridge → Final Chorus → Outro, but you may drop, add, or reorder sections to fit the lyrics.

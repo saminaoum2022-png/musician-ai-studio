@@ -24153,8 +24153,24 @@ body.trackSheetOpen .footer{
     transform: none !important;
     box-shadow: none !important;
   }
+  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBox{
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain{
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
   body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain textarea{
-    min-height: 160px !important;
+    min-height: 48px !important;
+  }
+  body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsAssistBar{
+    flex: 0 0 auto;
+    flex-shrink: 0;
+    padding-bottom: 2px;
   }
   /* Simple Create (native): lyrics fills free space → Studio → Generate, always
      sized for an open keyboard. Height comes from syncCreateSimpleViewportHeight(). */
@@ -24197,24 +24213,31 @@ body.trackSheetOpen .footer{
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
-    min-height: 148px;
+    min-height: 0;
     margin: 0;
     overflow: hidden;
+    padding-bottom: 16px;
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsPanelHead,
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #createNabadHeard,
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .createLyricsHeardHr{
     flex: 0 0 auto;
   }
-  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBox,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBox{
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain{
     flex: 1 1 auto;
-    min-height: 96px;
+    min-height: 0;
     overflow: hidden;
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain textarea{
     flex: 1 1 auto;
-    min-height: 96px !important;
+    min-height: 48px !important;
     height: 100% !important;
     max-height: none !important;
     overflow-y: auto;
@@ -24223,6 +24246,11 @@ body.trackSheetOpen .footer{
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsSingabilityPanel,
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .createSimpleAddressRow{
     flex: 0 0 auto;
+    flex-shrink: 0;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsAssistBar{
+    padding-top: 8px;
+    padding-bottom: 2px;
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #createSimpleStudioHost #singerVoicePanel{
     flex: 0 0 auto;

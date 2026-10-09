@@ -331,6 +331,11 @@ const LABEL_ALIASES = Object.freeze({
   "a-flat major": "A♭ major",
   "b-flat major": "B♭ major",
   "e phrygian": "E Phrygian",
+  "bright modern synth lead": "Synth",
+  "soft oud": "Soft oud",
+  "soft wahda rhythm in the verses with sparse darbuka and space between hits, switching to a driving maqsum on darbuka and riq in the chorus, baladi in the final chorus": "Wahda → Maqsum",
+  "laid-back modern maqsum, deep 808 kick on the dum, light finger snap on the tak, lots of space; the chorus gets a fuller 808 sub and soft darbuka accents, still minimal and clean": "Modern Maqsum 808",
+  "light malfuf rhythm with soft dums and no bass in the verses; the chorus drops into a modern baladi groove with a deep 808 sub dum, crisp clap tak and open space, sparse melody over a heavy low end": "Modern Baladi 808",
 });
 
 export function getInternationalStyle(id) {

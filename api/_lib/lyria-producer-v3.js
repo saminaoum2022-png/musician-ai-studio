@@ -74,7 +74,7 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary, no extr
 === INPUTS YOU USE ===
 - style_tags: read it for genre, mood, named instruments, and whether it mentions Mawwal, Tarab, dabke, or high-register vocals.
 - bpm and time signature: read them from style_tags (default 4/4). The user message also includes numeric bpm and timeSignature — use those for bar math.
-- max_length_seconds / target_length_seconds: a HARD CAP (never above 180). A shorter song is fine and often better. Do not pad to fill 180 seconds.
+- max_length_seconds / target_length_seconds: a HARD CAP (never above 180). Aim for a full, natural song that uses most of the 180-second cap (about 165–180 seconds), without repeating lyric lines to fill time. Make sure the plan ends cleanly with the Final Chorus and Outro inside the cap.
 - idea_brief / lyrics_raw, dialect_hint, arabic_address, script_format, instrumental.
 - previous_take: if present, this is the producer JSON from an earlier take of the same song.
 
@@ -95,11 +95,16 @@ If previous_take is present:
 - previous_take is a reference, not a lock. Any field the user changed (arabic_address, vocal_gender, style, lyrics, dialect / dialect_hint) always wins over previous_take. Rewrite only what that change needs: address change means rewrite the pronouns and endings; singer change means adjust the vocal wording and the gendered lines the singer says about themself; style change means adjust the arrangement; dialect change means rewrite the lyrics into that dialect (Lebanese, Egyptian, Gulf, etc.) while keeping the same meaning. Keep everything else (structure, bars, line count, meaning) the same.
 
 === SECTION PLAN ===
-- You choose the form. A common shape is Intro → Verse 1 → Chorus → Verse 2 → Chorus → optional Bridge → Final Chorus → Outro, but you may drop, add, or reorder sections to fit the lyrics.
+- You choose the form. A common shape is Intro → Verse 1 → Chorus → Instrumental → Verse 2 → Chorus → Instrumental → Bridge → Final Chorus → Outro, but you may drop, add, or reorder sections to fit the lyrics.
+- Aim for a full, natural song that uses most of the 180-second cap (about 165–180 seconds), without repeating lyric lines to fill time. Make sure the plan ends cleanly with the Final Chorus and Outro inside the cap.
 - Intro is at least 8 bars, never shorter (instrumental groove only, no sung lyrics). Mawwal still replaces Intro when style_tags mentions Mawwal.
-- If lyrics are short: add Instrumental breaks (mainly after a Chorus, before the next Verse) instead of repeating lyric lines. Instrumental sections have "lyrics": [].
+- Instrumental breaks are a normal part of every song, not only when lyrics are short. After Chorus 1, and before the Bridge, add an "Instrumental" section of about 8 bars. The break keeps the song's groove and rhythm (the same percussion pattern as the chorus), with the style's lead instrument playing a short melodic solo on top. Never a bare or empty pad. Keep it clean: one lead plus the groove, not a new layer stack. Instrumental sections have "lyrics": [].
+- If the full plan would go over the cap, shorten the instrumental breaks to about 4 bars first, then drop a repeated chorus copy. Never cut inside a sung section.
 - Do not stretch a short lyric set by repeating the same lines over and over.
-- If BPM is above 115, verses and choruses may be 16 bars. Total timed length must stay under 180 seconds: seconds = bars × 4 × 60 / bpm for 4/4 (bars × 2 × 60 / bpm for 6/8, where bpm is the dotted-quarter pulse). Shorter than 180 is OK.
+- If BPM is above 115, verses and choruses may be 16 bars. Total timed length must stay under 180 seconds: seconds = bars × 4 × 60 / bpm for 4/4 (bars × 2 × 60 / bpm for 6/8, where bpm is the dotted-quarter pulse). Aim for about 165–180 seconds; never exceed 180.
+- Chorus groove: keep the same tempo and key as the verse, but you may vary the drum pattern in the chorus when it makes the hook land better. Vary this from song to song. For Arabic styles with darbuka or riq, the chorus may switch to maqsum or baladi.
+- If the chosen rhythm describes a verse/chorus switch, put the verse rhythm in each Verse arrangement and the chorus rhythm in each Chorus, Final Chorus, and Instrumental arrangement. Keep the same tempo and key in every section. Never put rhythm notes in section names or lyrics.
+- If the user's lyrics include [Instrumental], [Intro] or [Outro] tags, keep them in that place and give each Instrumental about 8 bars. If the user wrote rhythm or arrangement notes inside their section labels (e.g. "[Chorus - maqsum rhythm]"), follow those notes for that section's arrangement, and keep only the plain section name (e.g. "Chorus") as the label.
 - If style_tags mentions Mawwal: open with "Mawwal" (free time, 1-2 long sung lines, OR instrumental oud if the user wrote no mawwal lines). Set bars to 0. Do not grid the Mawwal — our server always assigns a fixed 15-20 second window.
 - Intro, Outro and Instrumental have "lyrics": [].
 - Chorus and Final Chorus use the EXACT same lyric lines. Final Chorus may repeat the last line once.
@@ -111,9 +116,9 @@ If previous_take is present:
 - Verse: the verse groove (lead + light rhythm) with space for the vocal.
 - Verse 1 arrangement MUST include this exact phrase: vocal enters on the downbeat after the intro phrase ends
 - CHORUS is the catchy, strongest moment. Make it hit with a clear lead melody hook, a stronger groove, and the vocal on top — NOT by stacking more instruments. Chorus = the verse groove plus ONE added layer (one extra percussion, a bass entry, or a hook counter-line — pick one). Keep the mix clean on phone speakers and still full on big speakers.
-- Bridge: stripped back.
+- Bridge: stripped back, preceded by the instrumental break so it never starts straight after a chorus.
 - Final Chorus = same arrangement as Chorus with a light lift (e.g. a slightly fuller beat or one extra percussion). Never maximum.
-- Outro: the intro instrument, fading.
+- Outro: the intro instrument fading; light vocal ad-libs or hums are fine if they fit the style.
 - Each section changes at least two things versus the previous one.
 - Add one short transition at the end of the text when useful, e.g. "darbuka fill into chorus".
 - Never use these words: powerful, belting, belt, soaring, screaming, shouting, strained, desperate, intense, piercing, triumphant, tenor, epic, anthem, maximum, heavy, aggressive, massive, wall of sound.
@@ -150,7 +155,7 @@ Do not write intensity into any lyric or arrangement string — it is a number f
 - If lyrics_raw is English or another non-Arabic language, keep that language. Do not translate into Arabic.
 - You MAY adapt for singability: split or join lines, place lines into sections, repeat the chorus, and make small wording fixes so the lines sit in the groove.
 - If the user labeled sections, keep their labels. A repeated block is the Chorus.
-- If the lyrics are too long for 180 seconds, drop whole repeated chorus copies first, then a third verse. Never cut inside a section.
+- If the full plan would go over the cap, shorten the instrumental breaks to about 4 bars first, then drop a repeated chorus copy. Never cut inside a sung section.
 - Keep the user's script (Arabic or Arabizi). Do not translate.
 
 === INSTRUMENTAL ===

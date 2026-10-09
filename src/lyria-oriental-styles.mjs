@@ -24,10 +24,10 @@ export const LYRIA_ORIENTAL_STYLES = [
     "key": "D minor",
     "slots": {
       "LEAD": {
-        "default": "warm acoustic oud solo with resonant nay flute",
+        "default": "bright modern synth lead",
         "options": [
-          "warm acoustic oud solo with resonant nay flute",
-          "bright retro synth lead with a soft oud answer",
+          "bright modern synth lead",
+          "soft oud",
           "solo nay over muted acoustic guitar",
           "qanun melody with warm synth pads"
         ]
@@ -36,9 +36,9 @@ export const LYRIA_ORIENTAL_STYLES = [
         "default": "punchy electronic kick with crisp riq",
         "options": [
           "punchy electronic kick with crisp riq",
-          "driving darbuka locked to an electronic kick",
-          "soft maqsum on frame drum with a light kick",
-          "four-on-the-floor kick and light riq"
+          "soft wahda rhythm in the verses with sparse darbuka and space between hits, switching to a driving maqsum on darbuka and riq in the chorus, baladi in the final chorus",
+          "laid-back modern maqsum, deep 808 kick on the dum, light finger snap on the tak, lots of space; the chorus gets a fuller 808 sub and soft darbuka accents, still minimal and clean",
+          "light malfuf rhythm with soft dums and no bass in the verses; the chorus drops into a modern baladi groove with a deep 808 sub dum, crisp clap tak and open space, sparse melody over a heavy low end"
         ]
       },
       "MOOD": {
@@ -255,11 +255,11 @@ export const LYRIA_ORIENTAL_STYLES = [
     "key": "C major",
     "slots": {
       "LEAD": {
-        "default": "bright oud hooks",
+        "default": "bright modern synth lead",
         "options": [
-          "bright oud hooks",
+          "bright modern synth lead",
+          "soft oud",
           "energetic acoustic guitar hooks",
-          "bright synth and oud together",
           "accordion riffs"
         ]
       },
@@ -267,9 +267,9 @@ export const LYRIA_ORIENTAL_STYLES = [
         "default": "driving darbuka and riq",
         "options": [
           "driving darbuka and riq",
-          "maqsum with darbuka fills",
-          "four-on-the-floor and riq",
-          "derbake and handclaps"
+          "soft wahda rhythm in the verses with sparse darbuka and space between hits, switching to a driving maqsum on darbuka and riq in the chorus, baladi in the final chorus",
+          "laid-back modern maqsum, deep 808 kick on the dum, light finger snap on the tak, lots of space; the chorus gets a fuller 808 sub and soft darbuka accents, still minimal and clean",
+          "light malfuf rhythm with soft dums and no bass in the verses; the chorus drops into a modern baladi groove with a deep 808 sub dum, crisp clap tak and open space, sparse melody over a heavy low end"
         ]
       },
       "MOOD": {
@@ -1461,11 +1461,11 @@ export const LYRIA_ORIENTAL_STYLES = [
     "key": "D major",
     "slots": {
       "LEAD": {
-        "default": "bright acoustic oud with lively mijwiz",
+        "default": "bright modern synth lead",
         "options": [
-          "bright acoustic oud with lively mijwiz",
+          "bright modern synth lead",
+          "soft oud",
           "mijwiz-led dabke hook",
-          "oud and guitar",
           "synth bass and mijwiz"
         ]
       },

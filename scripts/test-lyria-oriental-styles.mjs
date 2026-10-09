@@ -52,7 +52,7 @@ console.log("\n--- a. Oriental Levantine pop fusion, Male, defaults ---");
 console.log(a.styleLine);
 assert.match(a.styleLine, /emotional raspy male baritone/);
 assert.doesNotMatch(a.styleLine, /smoky female/);
-assert.match(a.styleLine, /warm acoustic oud solo with resonant nay flute/);
+assert.match(a.styleLine, /bright modern synth lead/);
 assert.match(a.styleLine, /110 BPM/);
 assert.match(a.styleLine, /D minor/);
 assert.equal(a.bpm, 110);

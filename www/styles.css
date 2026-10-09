@@ -12726,6 +12726,10 @@ body[data-route="generate"] .studioStyleTile.isActive .studioStyleTileName{
   gap: 16px;
   min-width: 0;
 }
+.createSimpleStyleTab[hidden],
+.createStudioSheetTabs .lyricsModeTab[hidden]{
+  display: none !important;
+}
 .createSimpleStyleTab{
   border: 0;
   background: none;

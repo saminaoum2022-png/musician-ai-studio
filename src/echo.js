@@ -2188,6 +2188,7 @@ function dismissEchoComposeSheet() {
     sheet.setAttribute("aria-hidden", "true");
   }
   document.body.classList.remove("echoComposeOpen");
+  try { ctx?.renderHubNowPlaying?.(); } catch {}
   resetEchoCompose();
   _echoReplyToId = "";
 }
@@ -2397,6 +2398,7 @@ export function openEchoComposeSheet({ replyTo = "", haptic: wantHaptic = true }
   sheet.classList.remove("isRecording", "isReleasing", "isProcessing");
   sheet.classList.add("isOpen");
   document.body.classList.add("echoComposeOpen");
+  try { ctx?.renderHubNowPlaying?.(); } catch {}
   paintIdleComposeWave();
   syncEchoComposeUi();
   syncEchoBeatPickerUi();

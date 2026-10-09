@@ -2727,6 +2727,10 @@ function renderHubNowPlaying() {
   const hideOnPlaylist = route === "profile" && _profileSongsSegment === "playlist" && miniSource?.type !== "user_playlist";
   const hideOnPlayer = route === "player";
   const hideOnGenerate = route === "generate" && miniSource?.type === "generateResult";
+  const hideOnOverlay =
+    document.body.classList.contains("echoComposeOpen")
+    || document.body.classList.contains("createChooserSheetOpen")
+    || document.body.classList.contains("friendsComposeSheetOpen");
 
   const audio = audioForMiniStripUi();
   const hasMeta = Boolean(hubNowMeta && String(hubNowMeta.title || "").trim());
@@ -2755,7 +2759,8 @@ function renderHubNowPlaying() {
     !hideOnVocals &&
     !hideOnPlaylist &&
     !hideOnPlayer &&
-    !hideOnGenerate;
+    !hideOnGenerate &&
+    !hideOnOverlay;
   const miniShowsPause = stripPlaying;
 
   document.body.classList.toggle("hasMiniStrip", Boolean(showMini));
@@ -2771,6 +2776,9 @@ function renderHubNowPlaying() {
       stripGlass.classList.toggle("isVisible", floatGlass);
       if (!floatGlass) stripGlass.classList.remove("isDockSettling");
     }
+  } catch {}
+  try {
+    if (route === "generate") syncCreateComposeLayout();
   } catch {}
   if (audible || !hasMeta) hubStripUserPaused = false;
   if (audible || !pausedKeep) {
@@ -5018,7 +5026,7 @@ function tabbarDockBlocked() {
   if (document.body.classList.contains("echoComposeOpen")) return true;
   if (document.body.classList.contains("isDiscoverReelPlayer")) return true;
   const route = String(document.body.getAttribute("data-route") || "").trim();
-  if (route === "player" || route === "studio" || route === "nabad-producer") return true;
+  if (route === "player" || route === "studio" || route === "nabad-producer" || route === "generate") return true;
   try {
     if (typeof isCreateChooserOpen === "function" && isCreateChooserOpen()) return true;
   } catch {}
@@ -9326,6 +9334,7 @@ try {
     toAudioProxyUrl,
     normalizeAudioUrlForPlayback,
     primeAudioElementInGesture,
+    renderHubNowPlaying,
   });
 } catch {}
 try {
@@ -19898,10 +19907,12 @@ async function postFriendsStatus(payload, opts = {}) {
 
 function lockPageForFriendsComposeSheet() {
   document.body.classList.add("friendsComposeSheetOpen");
+  try { renderHubNowPlaying(); } catch {}
 }
 
 function unlockPageForFriendsComposeSheet() {
   document.body.classList.remove("friendsComposeSheetOpen");
+  try { renderHubNowPlaying(); } catch {}
 }
 
 function shouldAutofocusFriendsComposeInput() {
@@ -19991,10 +20002,12 @@ function isCreateChooserOpen() {
 
 function lockPageForCreateChooserSheet() {
   document.body.classList.add("createChooserSheetOpen");
+  try { renderHubNowPlaying(); } catch {}
 }
 
 function unlockPageForCreateChooserSheet() {
   document.body.classList.remove("createChooserSheetOpen");
+  try { renderHubNowPlaying(); } catch {}
 }
 
 function openCreateChooserSheet() {
@@ -38412,12 +38425,30 @@ function closeVideoSaveModal() {
 }
 
 /** Fallback only: if iOS blocks a deferred share sheet, ask for one fresh tap. */
-function openVideoSaveModal({ filePath, title }) {
+function openVideoSaveModal({ filePath, title, isVideo = true }) {
   const path = normalizeFilePathForIosShare(filePath);
-  if (!/^file:\/\//i.test(path)) throw new Error("Could not access the rendered video.");
-  pendingNativeVideoSave = { filePath: path, title: String(title || "song").trim() || "song" };
+  if (!/^file:\/\//i.test(path)) throw new Error("Could not access the file.");
+  const video = Boolean(isVideo);
+  pendingNativeVideoSave = {
+    filePath: path,
+    title: String(title || "song").trim() || "song",
+    isVideo: video,
+  };
   if (els.videoSaveTitle) els.videoSaveTitle.textContent = pendingNativeVideoSave.title;
-  if (els.videoSaveModal) els.videoSaveModal.style.display = "";
+  const kicker = els.videoSaveModal?.querySelector(".songDetailsKicker");
+  if (kicker) kicker.textContent = video ? "Video ready" : "Audio ready";
+  const lead = els.videoSaveModal?.querySelector(".videoSaveLead");
+  if (lead) {
+    lead.innerHTML = video
+      ? "Tap <strong>Save Video</strong> to open the iOS share sheet — choose <strong>Save Video</strong> to add it to Photos (iOS will ask for Photos access the first time)."
+      : "Tap <strong>Save audio</strong> to open the iOS share sheet — choose <strong>Save to Files</strong> (Photos cannot store audio).";
+  }
+  const btnLabel = els.btnOpenVideoSaveSheet?.querySelector("span");
+  if (btnLabel) btnLabel.textContent = video ? "Save Video" : "Save audio";
+  if (els.videoSaveModal) {
+    els.videoSaveModal.setAttribute("aria-label", video ? "Save video" : "Save audio");
+    els.videoSaveModal.style.display = "";
+  }
   try { document.body.style.overflow = "hidden"; } catch {}
   try { haptic("success"); } catch {}
 }
@@ -38427,16 +38458,16 @@ function openVideoSaveModal({ filePath, title }) {
  * the file is ready. If the OS blocks a deferred sheet, fall back to our
  * one-tap “Save Video” sheet so a fresh gesture can present it.
  */
-async function presentNativeVideoSaveWhenReady({ filePath, title } = {}) {
+async function presentNativeVideoSaveWhenReady({ filePath, title, isVideo = true } = {}) {
   const path = normalizeFilePathForIosShare(filePath);
-  if (!/^file:\/\//i.test(path)) throw new Error("Could not access the rendered video.");
+  if (!/^file:\/\//i.test(path)) throw new Error("Could not access the file.");
   try { hideToast(); } catch {}
   try {
     await presentNativeIosShareSheetForFile(path);
     return { usedSystemSheet: true };
   } catch (e) {
     if (shareSheetCanceledError(e)) return { usedSystemSheet: true, canceled: true };
-    openVideoSaveModal({ filePath: path, title });
+    openVideoSaveModal({ filePath: path, title, isVideo });
     return { usedSystemSheet: false };
   }
 }
@@ -38444,7 +38475,7 @@ async function presentNativeVideoSaveWhenReady({ filePath, title } = {}) {
 async function triggerPendingNativeVideoSave() {
   const ctx = pendingNativeVideoSave;
   if (!ctx?.filePath) {
-    showToast("No video ready to save.", { icon: "!", durationMs: 2800 });
+    showToast(pendingNativeVideoSave?.isVideo === false ? "No audio ready to save." : "No video ready to save.", { icon: "!", durationMs: 2800 });
     return;
   }
   try { haptic("light"); } catch {}
@@ -38512,11 +38543,7 @@ async function deliverDownloadBlobToDevice(blob, { filename, title, isVideo } = 
   if (isCapacitorNativeAuth()) {
     try {
       const { filePath } = await writeBlobToNativeCache(blob, safeName);
-      if (isVideo) {
-        await presentNativeVideoSaveWhenReady({ filePath, title: trackTitle });
-      } else {
-        await presentNativeIosShareSheetForFile(filePath);
-      }
+      await presentNativeVideoSaveWhenReady({ filePath, title: trackTitle, isVideo: Boolean(isVideo) });
     } catch (nativeErr) {
       if (shareSheetCanceledError(nativeErr)) {
         showToast("Cancelled.", { durationMs: 1600 });
@@ -67256,7 +67283,6 @@ async function downloadLibraryAudioTrack(track) {
   if (!t?.url) throw new Error("Missing audio URL");
 
   const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
-  let fetchUrl = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
   const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
   if (refreshed?.url) {
     const freshInner = String(refreshed.url).trim();
@@ -67265,15 +67291,30 @@ async function downloadLibraryAudioTrack(track) {
       const updated = patchLibraryRowWithRefreshedUrl(String(t.id), newProx, freshInner, t);
       if (updated) t = updated;
     }
-    fetchUrl = newProx;
   }
 
+  // Private song_archive drafts 403 without a signed stream (or JWT). Published
+  // rows can stream with songId alone — that's why public downloads already worked.
+  let fetchUrl = await resolvePlayableAudioUrl(t.url, t);
+  if (!isHttpUrl(fetchUrl)) {
+    fetchUrl = normalizeAudioUrlForPlayback(
+      toAudioProxyUrl(unwrapInnermostHttpAudioUrl(t.url) || t.url, trackCloudShareId(t) || t.id)
+      || t.url,
+    );
+  }
   if (!isHttpUrl(fetchUrl)) throw new Error("This song isn't downloadable from this device.");
 
   const trackTitle = String(t?.title || "song").trim() || "song";
   const baseSlug = trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song";
 
-  const r = await fetch(fetchUrl, { method: "GET", cache: "no-store" });
+  await prepareApiAuthForFetch();
+  const token = getSupabaseAuthToken();
+  const ourStream = /\/api\/songs\/stream\?/i.test(fetchUrl);
+  const headers = {};
+  if (token && ourStream && !isSignedSongStreamPlaybackUrl(fetchUrl)) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const r = await fetch(fetchUrl, { method: "GET", cache: "no-store", headers });
   if (!r.ok) {
     let detail = "";
     try {
@@ -67283,9 +67324,17 @@ async function downloadLibraryAudioTrack(track) {
         detail = (await r.text()).slice(0, 160);
       } catch {}
     }
-    throw new Error(detail ? String(detail).slice(0, 120) : `HTTP ${r.status}`);
+    const denied = r.status === 401 || r.status === 403;
+    throw new Error(
+      detail
+        ? String(detail).slice(0, 120)
+        : denied
+          ? "Couldn't reach this private draft. Try again while signed in."
+          : `HTTP ${r.status}`,
+    );
   }
   const blob = await r.blob();
+  if (!blob?.size || blob.size < 1024) throw new Error("Audio file is empty");
   const cdName = parseFilenameFromContentDisposition(r.headers.get("content-disposition"));
   const safeCd =
     cdName &&
@@ -67719,7 +67768,6 @@ async function fetchTrackAudioBlobForVideoExport(track) {
   let t = track;
   if (!t?.url) throw new Error("Missing audio URL");
   const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
-  let fetchUrl = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
   const refreshed = await withTimeout(tryRefreshLibraryTrackAudioFromSuno(t), 5000, null);
   if (refreshed?.url) {
     const freshInner = String(refreshed.url).trim();
@@ -67728,10 +67776,19 @@ async function fetchTrackAudioBlobForVideoExport(track) {
       const updated = patchLibraryRowWithRefreshedUrl(String(t.id), newProx, freshInner, t);
       if (updated) t = updated;
     }
-    fetchUrl = newProx;
+  }
+  let fetchUrl = await resolvePlayableAudioUrl(t.url, t);
+  if (!isHttpUrl(fetchUrl)) {
+    fetchUrl = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
   }
   if (!isHttpUrl(fetchUrl)) throw new Error("This song isn't downloadable from this device.");
-  const r = await fetch(fetchUrl, { method: "GET", cache: "no-store" });
+  await prepareApiAuthForFetch();
+  const token = getSupabaseAuthToken();
+  const headers = {};
+  if (token && /\/api\/songs\/stream\?/i.test(fetchUrl) && !isSignedSongStreamPlaybackUrl(fetchUrl)) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const r = await fetch(fetchUrl, { method: "GET", cache: "no-store", headers });
   if (!r.ok) {
     let detail = "";
     try { detail = (await r.json())?.error || ""; } catch {}
@@ -83239,6 +83296,19 @@ function cancelCreateLyricsAutofocus() {
 }
 const CREATE_SIMPLE_DOCK_H = 52;
 const CREATE_SIMPLE_STACK_GAP = 10;
+const MINI_STRIP_STACK_H = 54;
+
+function miniStripStacksOnTabbar() {
+  const body = document.body;
+  return Boolean(
+    body.classList.contains("hasMiniStrip")
+    && !body.classList.contains("tabbarCollapsed")
+    && !body.classList.contains("createKeyboardOpen")
+    && !body.classList.contains("echoComposeOpen")
+    && !body.classList.contains("createChooserSheetOpen")
+    && !body.classList.contains("friendsComposeSheetOpen")
+  );
+}
 
 // Focus the lyrics box synchronously (must run inside the tap that opened Create,
 // otherwise iOS refuses to raise the keyboard).
@@ -83291,6 +83361,8 @@ function syncCreateSimpleViewportHeight() {
     dockBottom = r && r.height > 0
       ? Math.round(layoutH - r.top) + 12
       : 86;
+    // Tabbar layout box does not include the mini strip; the capsule grows via ::after.
+    if (miniStripStacksOnTabbar()) dockBottom += MINI_STRIP_STACK_H;
   }
   const top = flow.getBoundingClientRect().top;
   const h = Math.round(

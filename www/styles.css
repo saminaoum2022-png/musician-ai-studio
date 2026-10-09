@@ -23777,7 +23777,11 @@ body.trackSheetOpen .footer{
   body[data-route="generate"] .app{
     padding-bottom: calc(198px + env(safe-area-inset-bottom));
   }
-  body[data-route="generate"][data-create-layout="simple"] .app{
+  body[data-route="generate"].hasMiniStrip:not(.tabbarCollapsed):not(.createKeyboardOpen) .app{
+    padding-bottom: calc(252px + env(safe-area-inset-bottom));
+  }
+  body[data-route="generate"][data-create-layout="simple"] .app,
+  body[data-route="generate"][data-create-layout="simple"].hasMiniStrip:not(.tabbarCollapsed):not(.createKeyboardOpen) .app{
     padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   }
   body[data-route="generate"][data-create-layout="simple"] .card.wide[data-route="generate"]{
@@ -24166,10 +24170,10 @@ body.trackSheetOpen .footer{
   html.is-native-shell body[data-route="generate"][data-create-layout="advanced"] .createGenerateDockSpacer{
     display: none;
   }
-  /* Generate sits right on top of the keyboard (or the tab bar once it is dismissed). */
+  /* Generate sits right on top of the keyboard (or the tab bar / mini strip once it is dismissed). */
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createGenerateDock,
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createGenerateDock{
-    bottom: var(--create-simple-dock-bottom, 86px);
+    bottom: var(--create-simple-dock-bottom, calc(var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 12px));
     padding-right: 16px;
     z-index: 120;
     transition: none;
@@ -42897,7 +42901,7 @@ body.messagesThreadHeadCollapsed .messagesThreadHeadCopy{
 .liveListenChipRow{
   position: fixed;
   left: 50%;
-  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 10px);
   transform: translateX(-50%);
   z-index: 90;
   display: inline-flex;
@@ -73054,7 +73058,7 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay:active{ backgrou
 
 /* ===== Now-playing strip: the mini player lives inside the tab-bar capsule. Collapses beside the dock when the bar collapses on scroll. ===== */
 @media (max-width: 720px){
-  body.hasMiniStrip:not(.tabbarCollapsed){ --tabbar-h: calc(62px + 54px + env(safe-area-inset-bottom, 0px)); }
+  body.hasMiniStrip:not(.tabbarCollapsed):not(.createKeyboardOpen){ --tabbar-h: calc(62px + 54px + env(safe-area-inset-bottom, 0px)); }
 
   /* the capsule grows upward to hold the strip */
   body.hasMiniStrip:not(.tabbarCollapsed) .mobileTabbar::after{
@@ -73244,6 +73248,18 @@ body[data-route="user"] #userPublicFollowRow #btnUserPublicPlay:active{ backgrou
   body.tabbarCollapsed[data-route="generate"] .hubNowPlaying:not(.isPlaced){ bottom: calc(13px + var(--strip-m)); }
 
   body.imageMoodSheetOpen .hubNowPlaying, body.vibeReadSheetOpen .hubNowPlaying{ opacity: .35; pointer-events: none; }
+
+  /* Full-screen sheets hide the tab bar — park the strip with it. */
+  body.echoComposeOpen .hubNowPlaying,
+  body.echoComposeOpen .hubNowStripGlass,
+  body.createChooserSheetOpen .hubNowPlaying,
+  body.createChooserSheetOpen .hubNowStripGlass,
+  body.friendsComposeSheetOpen .hubNowPlaying,
+  body.friendsComposeSheetOpen .hubNowStripGlass{
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+  }
 
   /* Chats hide the tab bar, so the strip must sit as a pill above the composer —
      not at the collapsed-dock bottom (which covers the input). */

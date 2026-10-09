@@ -12828,7 +12828,9 @@ body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .cre
 }
 body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createSimpleStudioHost .lyriaStudioStyleRow{
   padding: 4px 0 0;
-  gap: 8px;
+  gap: 6px;
+  mask-image: none;
+  -webkit-mask-image: none;
 }
 body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .studioStyleTile,
 body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .studioStyleTileCover{

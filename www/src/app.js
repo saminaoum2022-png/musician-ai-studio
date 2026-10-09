@@ -81088,6 +81088,59 @@ function getSimpleStudioRowPresets() {
   );
 }
 
+let _studioRowKbExtraSlots = 0;
+let _studioRowKbMeasureTries = 0;
+
+function isCreateKeyboardStyleRow() {
+  return document.body.classList.contains("createKeyboardOpen") && isCreateSimpleCreateLayout();
+}
+
+function measureKeyboardStudioExtraSlots() {
+  const row = els.lyriaStudioStyleRow;
+  if (!row || !isCreateKeyboardStyleRow()) return 0;
+  const w = Math.round(row.clientWidth || 0);
+  if (w < 80) return _studioRowKbExtraSlots || 1;
+  const tile = 56;
+  const gap = 6;
+  const slots = Math.floor((w + gap) / (tile + gap));
+  return Math.max(0, Math.min(2, slots - 4));
+}
+
+function keyboardStudioRowFillPresets(tab, home) {
+  const n = _studioRowKbExtraSlots;
+  if (n <= 0) return [];
+  const taken = new Set((home || []).map((p) => p && p.id));
+  const pack = (list, family) => list
+    .filter((p) => p && p.id && !taken.has(p.id))
+    .slice(0, n)
+    .map((p) => Object.assign({}, p, { studioFamily: family }));
+  if (tab === "oriental") {
+    return pack(listInternationalStyles().map((s) => internationalStyleUi(s)), "international");
+  }
+  if (tab === "international" && orientalStylesUiEnabled()) {
+    return pack(listOrientalStyles().map((s) => orientalStyleUi(s)), "oriental");
+  }
+  return pack(listInternationalStyles().map((s) => internationalStyleUi(s)), "international");
+}
+
+function refreshSimpleStudioKeyboardRow() {
+  const row = els.lyriaStudioStyleRow;
+  if (!row) return;
+  const kb = isCreateKeyboardStyleRow();
+  const w = row.clientWidth || 0;
+  const next = kb ? measureKeyboardStudioExtraSlots() : 0;
+  if (next !== _studioRowKbExtraSlots) {
+    _studioRowKbExtraSlots = next;
+    renderLyriaStudioStyleRow();
+  }
+  if (kb && w < 80 && _studioRowKbMeasureTries < 8) {
+    _studioRowKbMeasureTries += 1;
+    window.requestAnimationFrame(refreshSimpleStudioKeyboardRow);
+    return;
+  }
+  _studioRowKbMeasureTries = 0;
+}
+
 const STUDIO_COVER_FILES = Object.freeze({
   "levantine-pop-fusion": "levantine-pop.svg",
   "levantine-ballad": "levantine-pop.svg",
@@ -81151,7 +81204,9 @@ function studioStyleTileHtml(preset, activeId, opts = {}) {
     ? `<span class="studioStyleTileGear" data-studio-tile-settings="${escapeHtml(preset.id)}" aria-hidden="true">${STUDIO_TILE_SLIDERS_SVG}</span>`
     : "";
   const idAttr = opts.sheet ? "data-lyria-studio-sheet-id" : "data-lyria-studio-id";
-  return `<button type="button" class="studioStyleTile${on ? " isActive" : ""}" ${idAttr}="${escapeHtml(preset.id)}" aria-pressed="${on ? "true" : "false"}" aria-label="${escapeHtml(name)}${on && !opts.sheet ? ", settings" : ""}"><span class="studioStyleTileCover" style="background-image:url('${studioCoverUrl(preset.id)}')">${sliders}</span><span class="studioStyleTileName">${escapeHtml(name)}</span></button>`;
+  const family = String(opts.family || preset.studioFamily || "").trim();
+  const familyAttr = family ? ` data-studio-family="${escapeHtml(family)}"` : "";
+  return `<button type="button" class="studioStyleTile${on ? " isActive" : ""}" ${idAttr}="${escapeHtml(preset.id)}"${familyAttr} aria-pressed="${on ? "true" : "false"}" aria-label="${escapeHtml(name)}${on && !opts.sheet ? ", settings" : ""}"><span class="studioStyleTileCover" style="background-image:url('${studioCoverUrl(preset.id)}')">${sliders}</span><span class="studioStyleTileName">${escapeHtml(name)}</span></button>`;
 }
 
 function studioCustomTileHtml(on, opts = {}) {
@@ -82089,9 +82144,14 @@ function renderLyriaStudioStyleRow() {
   const row = els.lyriaStudioStyleRow;
   if (!row) return;
   const active = String(_activeLyriaStudioStyleId || "");
-  const presets = getSimpleStudioRowPresets();
-  row.innerHTML = presets.map((preset) => studioStyleTileHtml(preset, active)).join("")
-    + studioCustomTileHtml(isStudioCustomStyleActive());
+  const tab = normalizeStudioStylesTab(_studioStylesSheetTab);
+  const home = getSimpleStudioRowPresets();
+  const kb = isCreateKeyboardStyleRow();
+  const fill = kb ? keyboardStudioRowFillPresets(tab, home) : [];
+  const homeFamily = tab === "international" ? "international" : tab === "oriental" ? "oriental" : "arabic";
+  row.innerHTML = home.map((preset) => studioStyleTileHtml(preset, active, { family: homeFamily })).join("")
+    + fill.map((preset) => studioStyleTileHtml(preset, active, { family: preset.studioFamily })).join("")
+    + (kb ? "" : studioCustomTileHtml(isStudioCustomStyleActive()));
   try { syncCreateSimpleStyleTabs(); } catch {}
   try { syncCreateNabadHeard(); } catch {}
 }
@@ -82621,8 +82681,10 @@ function closeStyleLibrary() {
         e.stopPropagation();
         haptic("light");
         const id = String(settings.getAttribute("data-studio-tile-settings") || "");
+        const tile = settings.closest("[data-lyria-studio-id]");
+        const family = String(tile?.getAttribute("data-studio-family") || _studioStylesSheetTab);
         if (id && id !== String(_activeLyriaStudioStyleId || "")) {
-          applyLyriaStudioStyle(id, { family: _studioStylesSheetTab });
+          applyLyriaStudioStyle(id, { family });
         }
         openCreateSoundSettingsSheet();
         return;
@@ -82648,7 +82710,7 @@ function closeStyleLibrary() {
         openCreateSoundSettingsSheet();
         return;
       }
-      applyLyriaStudioStyle(id, { family: _studioStylesSheetTab });
+      applyLyriaStudioStyle(id, { family: String(btn.getAttribute("data-studio-family") || _studioStylesSheetTab) });
     });
   }
   const btnSpark = document.getElementById("btnLyriaStudioSpark");
@@ -83880,8 +83942,10 @@ function applyCreateKeyboardOpen(height) {
   } catch {}
   syncCreateComposeLayout();
   try { autoResizeLyricsBox(); } catch {}
+  try { refreshSimpleStudioKeyboardRow(); } catch {}
   window.requestAnimationFrame(() => {
     try { syncCreateSimpleViewportHeight(); } catch {}
+    try { refreshSimpleStudioKeyboardRow(); } catch {}
   });
 }
 
@@ -83939,6 +84003,7 @@ function clearCreatePageKeyboardInset() {
   });
   syncCreateComposeLayout();
   try { autoResizeLyricsBox(); } catch {}
+  try { refreshSimpleStudioKeyboardRow(); } catch {}
 }
 
 function handleCreateFieldFocus(target) {

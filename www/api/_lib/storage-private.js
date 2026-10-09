@@ -212,19 +212,22 @@ function mintArchiveStreamQuery(key, ttlSec = 3600) {
   return { key: k, exp, sig };
 }
 
-async function streamStorageObject(res, { bucket, key, sendJson }) {
+async function streamStorageObject(res, { bucket, key, sendJson, range = "" }) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return sendJson(res, 500, { ok: false, error: "Server not configured" });
   }
   const encKey = key.split("/").map((s) => encodeURIComponent(s)).join("/");
+  const headers = {
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+  };
+  const rangeHeader = String(range || "").trim();
+  if (rangeHeader) headers.Range = rangeHeader;
   const upstream = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${encKey}`, {
     method: "GET",
-    headers: {
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-    },
+    headers,
   });
-  if (!upstream.ok || !upstream.body) {
+  if ((!upstream.ok && upstream.status !== 206) || !upstream.body) {
     const txt = await upstream.text().catch(() => "");
     return sendJson(res, upstream.status === 404 ? 404 : 502, {
       ok: false,
@@ -232,11 +235,15 @@ async function streamStorageObject(res, { bucket, key, sendJson }) {
       details: txt.slice(0, 200),
     });
   }
-  res.statusCode = 200;
-  res.setHeader("Content-Type", upstream.headers.get("content-type") || "application/octet-stream");
+  res.statusCode = upstream.status === 206 ? 206 : 200;
+  res.setHeader("Content-Type", upstream.headers.get("content-type") || "audio/mpeg");
   res.setHeader("Cache-Control", "private, max-age=300");
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges");
   const cl = upstream.headers.get("content-length");
   if (cl) res.setHeader("Content-Length", cl);
+  const cr = upstream.headers.get("content-range");
+  if (cr) res.setHeader("Content-Range", cr);
   try {
     const nodeStream = Readable.fromWeb(upstream.body);
     nodeStream.on("error", () => {

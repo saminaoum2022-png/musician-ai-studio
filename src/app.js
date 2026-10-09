@@ -32274,17 +32274,17 @@ function libraryTrackForPlaybackSource(source) {
 function libraryPlaybackUrl(raw) {
   const s = String(raw?.url || raw || "").trim();
   if (!s) return "";
-  if (isArchivedSongStorageUrl(s)) {
-    const sid = String(raw?.cloudSongId || raw?.songId || "").trim();
-    return songArchiveStreamPlaybackUrl(s, isShareUuid(sid) ? sid : "");
+  const sid = String(raw?.cloudSongId || raw?.songId || "").trim();
+  const leaf = unwrapInnermostHttpAudioUrl(s) || s;
+  if (isArchivedSongStorageUrl(s) || isArchivedSongStorageUrl(leaf) || /\/api\/songs\/stream\b/i.test(leaf)) {
+    return songArchiveStreamPlaybackUrl(leaf, isShareUuid(sid) ? sid : "");
   }
   if (s.startsWith("blob:") || s.startsWith("data:")) return s;
-  const leaf = unwrapInnermostHttpAudioUrl(s) || s;
+  if (isCapacitorNativeAuth() && /^https?:\/\//i.test(leaf) && !leaf.includes("/api/suno/audio")) {
+    return toAudioProxyUrl(leaf, sid) || leaf;
+  }
   if (isLikelySunoOriginCdnUrl(leaf)) {
     return inlinePlaybackUrl(leaf) || normalizeAudioUrlForPlayback(s);
-  }
-  if (isCapacitorNativeAuth() && /^https?:\/\//i.test(leaf) && !leaf.includes("/api/suno/audio")) {
-    return leaf;
   }
   return inlinePlaybackUrl(s) || normalizeAudioUrlForPlayback(s);
 }
@@ -32292,8 +32292,12 @@ function libraryPlaybackUrl(raw) {
 function playbackUrlForSource(url, source) {
   const passed = String(url || "").trim();
   const sid = String(source?.cloudSongId || source?.songId || source?.id || "").trim();
-  if (isArchivedSongStorageUrl(passed)) {
-    return songArchiveStreamPlaybackUrl(passed, isShareUuid(sid) ? sid : "");
+  const leaf = unwrapInnermostHttpAudioUrl(passed) || passed;
+  if (isSignedSongStreamPlaybackUrl(leaf) || isSignedSongStreamPlaybackUrl(passed)) {
+    return normalizeAudioUrlForPlayback(isSignedSongStreamPlaybackUrl(passed) ? passed : leaf);
+  }
+  if (isArchivedSongStorageUrl(passed) || isArchivedSongStorageUrl(leaf) || /\/api\/songs\/stream\b/i.test(leaf)) {
+    return songArchiveStreamPlaybackUrl(leaf, isShareUuid(sid) ? sid : "");
   }
   const track = libraryTrackForPlaybackSource(source);
   if (source?.type === "generateResult") {
@@ -60126,7 +60130,13 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     ? Number(opts.feedHookSec)
     : feedHookStartFromTrack(publicTrackMeta || { meta: currentPlayerTrackRef.meta, url: playableRaw });
   if (pinnedHook > 0) publicSource.feedHookSec = pinnedHook;
-  const prox = playbackUrlForSource(playableRaw, publicSource);
+  const prox = await resolvePlayableAudioUrl(playableRaw, {
+    ...publicSource,
+    url: playableRaw,
+    songId: currentPlayerTrackRef.songId,
+    cloudSongId: currentPlayerTrackRef.songId,
+    ownerUserId: currentPlayerTrackRef.ownerUserId,
+  });
   if (opts?.liveListenJoin || isLiveListenActive()) {
     publicSource.applyFeedHook = false;
     delete publicSource.feedHookSec;
@@ -73051,12 +73061,9 @@ async function resolveArchivePlaybackUrl(track) {
     return playbackUrlForSource(url, track);
   }
   const sid = trackCloudShareId(track) || "";
-  const uid = String(authSession?.user?.id || "").trim();
-  const ownerId = String((key || "").split("/")[0] || "").trim();
-  const isOwner = Boolean(uid && ownerId && uid === ownerId);
-
-  // Owner playback: always prefer signed URL (works for drafts; no JWT on <audio>).
-  if (isOwner && key) {
+  // <audio src> cannot send JWT. Sign whenever we are logged in (own drafts
+  // and other people's public playlist/Discover tracks).
+  if (key) {
     const signed = await trySignArchiveStreamUrl(key, sid);
     if (signed) return signed;
   }
@@ -73066,6 +73073,22 @@ async function resolveArchivePlaybackUrl(track) {
   }
 
   return songArchiveStreamPlaybackUrl(leaf, "");
+}
+
+/** Playlist / Discover / profile play: sign private archive URLs the same way Library does. */
+async function resolvePlayableAudioUrl(url, trackLike) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("blob:") || raw.startsWith("data:")) return raw;
+  if (isSignedSongStreamPlaybackUrl(raw)) return normalizeAudioUrlForPlayback(raw);
+  const leaf = unwrapInnermostHttpAudioUrl(raw) || raw;
+  const archiveLike =
+    isArchivedSongStorageUrl(leaf) || /\/api\/songs\/stream\b/i.test(leaf);
+  if (archiveLike) {
+    const signed = await resolveArchivePlaybackUrl({ ...(trackLike && typeof trackLike === "object" ? trackLike : {}), url: leaf });
+    if (signed) return signed;
+  }
+  return playbackUrlForSource(raw, trackLike);
 }
 
 const _songArchiveInflight = new Map();
@@ -74433,7 +74456,7 @@ function audioLoadFailureMessage(a) {
 async function playInline(url, label, source, opts = {}) {
   if (!url) return false;
   if (String(source?.type || "") !== "studio_vocal" && !isSignedSongStreamPlaybackUrl(url)) {
-    url = playbackUrlForSource(url, source);
+    url = await resolvePlayableAudioUrl(url, source);
     queueArchiveForPlaybackSource(source);
   }
   const throwOnError = opts?.throwOnError === true;

@@ -20,7 +20,9 @@ const BUCKET = "song_archive";
 
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
-  if (req.method !== "GET") return sendJson(res, 405, { error: "Method not allowed" });
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    return sendJson(res, 405, { error: "Method not allowed" });
+  }
 
   let key = "";
   let songId = "";
@@ -39,8 +41,16 @@ module.exports = async function handler(req, res) {
     exp = String(u.searchParams.get("exp") || "");
     sig = String(u.searchParams.get("sig") || "");
   } catch {}
+  const range = String(req.headers.range || req.headers.Range || "");
   if (exp && sig && verifyStreamSig(`archive:${key}`, exp, sig)) {
-    await streamStorageObject(res, { bucket: BUCKET, key, sendJson });
+    if (req.method === "HEAD") {
+      res.statusCode = 200;
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.end();
+      return;
+    }
+    await streamStorageObject(res, { bucket: BUCKET, key, sendJson, range });
     return;
   }
 
@@ -54,5 +64,12 @@ module.exports = async function handler(req, res) {
   });
   if (!allowed) return sendJson(res, 403, { ok: false, error: "Forbidden" });
 
-  await streamStorageObject(res, { bucket: BUCKET, key, sendJson });
+  if (req.method === "HEAD") {
+    res.statusCode = 200;
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.end();
+    return;
+  }
+  await streamStorageObject(res, { bucket: BUCKET, key, sendJson, range });
 };

@@ -12,7 +12,7 @@ const {
   resolveLyriaArabicAddress,
   resolveLyriaDialectLabel,
 } = require("./lyria-upstream");
-const { isArabiziScript } = require("./arabizi");
+const { isArabiziScript, looksLikeArabizi } = require("./arabizi");
 
 function lyriaLegacyPromptsEnabled() {
   return /^(1|true|yes|on)$/i.test(String(process.env.LYRIA_LEGACY_PROMPTS || "").trim());
@@ -25,6 +25,33 @@ function isLyriaIdeaPromptBody(body = {}) {
     || String(body?.ideaPrompt || "").trim() === "1"
     || String(body?.ideaPrompt || "").toLowerCase() === "true"
   );
+}
+
+function lyriaSeedLooksNonArabicLatin(text) {
+  const s = String(text || "").trim();
+  if (!s) return false;
+  if (/[\u0600-\u06FF]/.test(s)) return false;
+  if (looksLikeArabizi(s)) return false;
+  return (s.match(/[A-Za-z]/g) || []).length >= 8;
+}
+
+/** Drop dialect/addressee when the box is clearly not Arabic (English, French, etc.). */
+function stripArabicLyricContextIfUnused(body = {}, { lyrics = "" } = {}) {
+  const idea = isLyriaIdeaPromptBody(body);
+  const seed = idea
+    ? String(body?.ideaBrief || lyrics || body?.prompt || "").trim()
+    : String(lyrics || body?.prompt || "").trim();
+  const lang = String(body?.lyricsLanguage || "").trim().toLowerCase();
+  if (idea && (lang === "arabic" || lang === "arabizi")) return body;
+  if (!lyriaSeedLooksNonArabicLatin(seed)) return body;
+  const next = { ...body };
+  delete next.dialect;
+  delete next.dialectHint;
+  delete next.arabicAddress;
+  delete next.address;
+  if (String(next.scriptFormat || "").toLowerCase() === "arabic") next.scriptFormat = "auto";
+  if (lang === "arabic") delete next.lyricsLanguage;
+  return next;
 }
 
 /** One short line from the Singer chip — Lyria only sees the text prompt. */
@@ -61,6 +88,14 @@ function buildBareStudioStyleSuffixes(body = {}, { seedText = "" } = {}) {
     suffixes.push("French lyrics");
   } else if (lyricsLanguage === "spanish" && !styleContainsAny(style, [/\bspanish lyrics\b/i])) {
     suffixes.push("Spanish lyrics");
+  } else if (
+    lyriaSeedLooksNonArabicLatin(lyricsSeed)
+    && lyricsLanguage !== "arabic"
+    && lyricsLanguage !== "arabizi"
+    && scriptFormat !== "arabic"
+    && scriptFormat !== "arabizi"
+  ) {
+    /* Non-Arabic Latin lyrics: do not append dialect / colloquial-Arabic vocal tags. */
   } else {
     const dialectLabel = resolveLyriaDialectLabel(body);
     if (dialectLabel) {
@@ -79,7 +114,12 @@ function buildBareStudioStyleSuffixes(body = {}, { seedText = "" } = {}) {
     }
   }
 
-  const addr = String(resolveLyriaArabicAddress(body) || "").trim().toLowerCase();
+  const latinNonArabic = lyriaSeedLooksNonArabicLatin(lyricsSeed)
+    && lyricsLanguage !== "arabic"
+    && lyricsLanguage !== "arabizi"
+    && scriptFormat !== "arabic"
+    && scriptFormat !== "arabizi";
+  const addr = latinNonArabic ? "" : String(resolveLyriaArabicAddress(body) || "").trim().toLowerCase();
   if (addr === "female" && !styleContainsAny(style, [/singing to a (woman|girl|her)\b/i, /addressed to a woman/i])) {
     suffixes.push("singing to a woman");
   } else if (addr === "male" && !styleContainsAny(style, [/singing to a man\b/i, /addressed to a man/i])) {
@@ -219,4 +259,6 @@ module.exports = {
   composeBareStyleLine,
   resolveBareLyriaPrompt,
   isLyriaIdeaPromptBody,
+  lyriaSeedLooksNonArabicLatin,
+  stripArabicLyricContextIfUnused,
 };

@@ -5406,7 +5406,7 @@ function lyriaBareArabicContextFields() {
 }
 
 function lyriaBareLyricsLanguageField() {
-  const lang = String(lyricsLanguage || "auto").trim().toLowerCase();
+  const lang = effectiveLyricsLanguage();
   if (!lang || lang === "auto") return {};
   return { lyricsLanguage: lang };
 }
@@ -7180,9 +7180,42 @@ function resolveLyricsTargetForMusicProvider() {
   return "suno";
 }
 
+function isExplicitNonArabicLyricsLanguage(lang = lyricsLanguage) {
+  return Boolean(LYRICS_LANGUAGE_VALUE[String(lang || "").trim().toLowerCase()]);
+}
+
+function promptLooksArabicOrArabizi(text = els.sunoPrompt?.value) {
+  const t = String(text || "");
+  if (textHasArabicScript(t)) return true;
+  return looksLikeArabizi(t);
+}
+
+/**
+ * Simple Create hides the language chips, so a leftover Arabic pick from
+ * first-song / a previous generate must not force dialect + addressee onto
+ * English lyrics. Detect from the lyrics box instead.
+ */
+function effectiveLyricsLanguage() {
+  const lang = String(lyricsLanguage || "auto").trim().toLowerCase() || "auto";
+  if (isCreateSimpleCreateLayout()) {
+    const text = String(els.sunoPrompt?.value || "");
+    if (promptLooksArabicOrArabizi(text)) {
+      if (isArabiziLyricsLanguage(lang) || (!textHasArabicScript(text) && looksLikeArabizi(text))) {
+        return "arabizi";
+      }
+      return "arabic";
+    }
+    if (isExplicitNonArabicLyricsLanguage(lang)) return lang;
+    return "auto";
+  }
+  return lang;
+}
+
 function resolveLyricsScriptFormat() {
-  if (isArabiziLyricsLanguage(lyricsLanguage)) return "arabizi";
-  if (lyricsLanguage === "arabic") return "arabic";
+  const lang = effectiveLyricsLanguage();
+  if (isArabiziLyricsLanguage(lang)) return "arabizi";
+  if (isExplicitNonArabicLyricsLanguage(lang)) return lang;
+  if (lang === "arabic") return "arabic";
   const text = String(els.sunoPrompt?.value || "");
   if (textHasArabicScript(text)) return "arabic";
   if (looksLikeArabizi(text)) return "arabizi";
@@ -7190,25 +7223,25 @@ function resolveLyricsScriptFormat() {
 }
 
 function isArabicLyricsFlowActive() {
-  if (isArabiziLyricsLanguage(lyricsLanguage)) return true;
-  if (lyricsLanguage === "arabic") return true;
-  if (lyricsLanguage === "auto" && (textHasArabicScript(els.sunoPrompt?.value) || looksLikeArabizi(els.sunoPrompt?.value))) {
-    return true;
-  }
-  return false;
+  const lang = effectiveLyricsLanguage();
+  if (isExplicitNonArabicLyricsLanguage(lang)) return false;
+  if (isArabiziLyricsLanguage(lang)) return true;
+  if (lang === "arabic") return true;
+  return lang === "auto" && promptLooksArabicOrArabizi();
 }
 
 function applyLyricsLanguageToDialect() {
   let val = "";
   let hint = "";
-  if (lyricsLanguage === "arabic" || isArabiziLyricsLanguage(lyricsLanguage)) {
+  const lang = effectiveLyricsLanguage();
+  if (lang === "arabic" || isArabiziLyricsLanguage(lang)) {
     val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "";
     hint = LYRICS_ARABIC_DIALECT_HINT[lyricsDialect] || "";
-    if (isArabiziLyricsLanguage(lyricsLanguage)) {
+    if (isArabiziLyricsLanguage(lang)) {
       hint = [hint, "Output Arabizi (Latin phonetic spelling for Lebanese singing)."].filter(Boolean).join(" ");
     }
-  } else if (lyricsLanguage !== "auto") {
-    val = LYRICS_LANGUAGE_VALUE[lyricsLanguage] || "";
+  } else if (lang !== "auto") {
+    val = LYRICS_LANGUAGE_VALUE[lang] || "";
   } else if (textHasArabicScript(els.sunoPrompt?.value) && lyricsDialect) {
     val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "";
     hint = LYRICS_ARABIC_DIALECT_HINT[lyricsDialect] || "";
@@ -7966,7 +7999,13 @@ function syncArabicLyricsControlsVisibility() {
     const showPanelExtras = shouldShowArabicAddress() || showDialect || shouldShowLyricsDiacritics();
     els.lyricsFieldPanel.classList.toggle("showArabicLyricControls", showPanelExtras);
   }
+  if (!arabicLyricsNeedDialectAndAddress()) {
+    if (lyricsDialect) lyricsDialect = "";
+    if (els.sunoDialect) els.sunoDialect.value = "";
+    if (els.sunoDialectHint) els.sunoDialectHint.value = "";
+  }
   try { syncArabicGenerateGate(); } catch {}
+  try { syncCreateNabadHeard(); } catch {}
 }
 
 function setLyricsLanguage(lang) {
@@ -8117,13 +8156,10 @@ function shouldShowArabicAddress() {
 
 function syncArabicAddressVisibility() {
   const group = els.lyricsAddressGroup || document.getElementById("lyricsAddressGroup");
-  const simple = isCreateSimpleCreateLayout();
   if (group) {
     const show = shouldShowArabicAddress();
     group.hidden = !show;
-    // Advanced: when hidden, clear address so a stale gendered choice never
-    // leaks into non-Arabic lyrics. Simple keeps the pick while the row hides.
-    if (!show && !simple && els.sunoArabicAddress && els.sunoArabicAddress.value) {
+    if (!show && els.sunoArabicAddress && els.sunoArabicAddress.value) {
       els.sunoArabicAddress.value = "";
       try { syncArabicAddressPills(); } catch {}
     }

@@ -80,11 +80,13 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary, no extr
 
 === LANGUAGE AND DIALECT ===
 - Detect the language from idea_brief / lyrics_raw. Do not assume Arabic. If the text is English or another non-Arabic language, write lyrics in that language.
+- dialect_hint and arabic_address apply ONLY when the lyrics (or the language you are writing) are Arabic or Arabizi. Ignore both fields for English, French, Spanish, and any other non-Arabic language.
 - dialect_hint is optional. If the text is Arabic (or mixed with Arabic) and dialect_hint is empty or the dialect is unclear, write Lebanese colloquial — not fusha, and not Egyptian/Gulf/Maghrebi unless the lyrics clearly are.
-- If dialect_hint is set, honor it.
+- If dialect_hint is set and you are writing Arabic, honor it.
 
 === ARABIC ADDRESS ===
-- arabic_address is who the lyrics talk TO, not the singer's gender (vocal_gender).
+- arabic_address is who the lyrics talk TO, not the singer's gender (vocal_gender). Use it only for Arabic or Arabizi lyrics.
+- If the lyrics are not Arabic, ignore arabic_address completely. Do not rewrite English (or other non-Arabic) lyrics into Arabic to satisfy it.
 - If arabic_address is male, female, or group: match ALL pronouns, verb endings and possessives to that address (female: إنتِ، عيونِك، ضحكتِك، حبيبتي، بتعرفي. male: إنتَ، عيونَك، ضحكتَك، حبيبي، بتعرف. group: إنتو، عيونكن، بتعرفوا). If the user's lyrics use a different address, adapt them to arabic_address.
 - If arabic_address is "auto" or empty: infer the addressee from the lyrics (إنتَ / إنتِ / إنتو and matching endings) and stay consistent. If still unclear, pick the most natural address the lyrics imply. Do not invent a different addressee than the lyrics suggest.
 
@@ -138,13 +140,14 @@ Do not write intensity into any lyric or arrangement string — it is a number f
 - Write original lyrics in the language you detected. If Arabic, use the dialect from dialect_hint, or Lebanese colloquial when dialect is unclear. Natural spoken words, not formal Arabic (fusha).
 - Never copy phrases from idea_brief into the lyrics; express the idea in new words.
 - The chorus is the hook: short, memorable, emotionally clear, and the title-like line comes first or last.
-- Honor arabic_address as in ARABIC ADDRESS above. This is not the singer's gender.
-- Script: Arabic script by default. If script_format is "arabizi", write Arabizi using letters only: "a" for ع, "h" for ح, "kh" for خ, "gh" for غ, "'" for ء. No numerals.
+- Honor arabic_address as in ARABIC ADDRESS above — only if you are writing Arabic or Arabizi. This is not the singer's gender.
+- Script: follow the language of idea_brief. Do not default to Arabic. If script_format is "arabic", write Arabic script. If script_format is "arabizi", write Arabizi using letters only: "a" for ع, "h" for ح, "kh" for خ, "gh" for غ, "'" for ء. No numerals. If script_format is "english", "auto", empty, or any other non-Arabic value, write in the language of the idea.
 
 === WRITE MODE (lyrics_raw set) ===
 - Keep the meaning of the user's lyrics. Never invent new verses, new story events, or a new message.
 - Keep every Arabic diacritic (harakat, shadda, sukun) exactly as the user wrote it. Never remove them. If you rewrite a word, add harakat only where needed for correct Lebanese pronunciation, especially the address endings (ـِك for female, ـَك for male).
-- Honor arabic_address as in ARABIC ADDRESS above.
+- Honor arabic_address as in ARABIC ADDRESS above — only if the lyrics are Arabic or Arabizi.
+- If lyrics_raw is English or another non-Arabic language, keep that language. Do not translate into Arabic.
 - You MAY adapt for singability: split or join lines, place lines into sections, repeat the chorus, and make small wording fixes so the lines sit in the groove.
 - If the user labeled sections, keep their labels. A repeated block is the Chorus.
 - If the lyrics are too long for 180 seconds, drop whole repeated chorus copies first, then a third verse. Never cut inside a section.

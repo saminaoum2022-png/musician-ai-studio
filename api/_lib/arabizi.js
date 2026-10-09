@@ -6,7 +6,7 @@ const ARABIZI_DIGIT_IN_WORD_RE = /(?:^|[\s'(\[])[a-zA-Z]*[253789][a-zA-Z][\w']*/
 const ARABIZI_MARKER_RE =
   /\b(?:shou|shu|chou|kif|keef|habib[iy]|7abib[iy]|yalla|mafi|ma\s+fi|b7k|b7ke|2elt|2alb|3ala|7ay|mesh|mish|mnih|minih|khalas|khallas)\w*/i;
 const ARABIZI_PARTICLE_RE =
-  /\b(?:ana|ente|inti|int[aie]|ma\s|fi\s|min\s|hal|hay|w\s|ya\s)\b/i;
+  /\b(?:ana|ente|inti|inta|wallah|walla|lesh|leish|shu|shou|keefak|kifak)\b/gi;
 
 function latinLetterCount(text) {
   return (String(text || "").match(/[a-zA-Z]/g) || []).length;
@@ -30,7 +30,8 @@ function looksLikeArabizi(text) {
   if (latin < 8) return false;
   if (ARABIZI_DIGIT_IN_WORD_RE.test(s)) return true;
   if (ARABIZI_MARKER_RE.test(s)) return true;
-  if (ARABIZI_PARTICLE_RE.test(s) && latin >= 20) return true;
+  const particleHits = s.match(ARABIZI_PARTICLE_RE) || [];
+  if (particleHits.length >= 2 && latin >= 20) return true;
   return false;
 }
 

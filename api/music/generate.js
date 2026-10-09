@@ -104,6 +104,7 @@ const {
   lyriaLegacyPromptsEnabled,
   resolveBareLyriaPrompt,
   isLyriaIdeaPromptBody,
+  stripArabicLyricContextIfUnused,
 } = require("../_lib/lyria-bare-passthrough");
 const { uploadObject } = require("../_lib/supabase-storage");
 const { queueCacheTimestampedLyrics } = require("../_lib/music-timestamped-lyrics-cache");
@@ -555,6 +556,7 @@ async function runLyriaGenerationJob({
   stylePrompt = "",
   fallbackLyriaPrompt = "",
 }) {
+  body = stripArabicLyricContextIfUnused(body || {}, { lyrics });
   const fail = async (msg, requestDetailOverride) => {
     if (!isAdmin) {
       await refund(userId, FULL_SONG_COST, "refund_full_song", "lyria_upstream").catch(() => null);
@@ -1524,6 +1526,9 @@ async function handleMinimaxGenerate(req, res, { user, isAdmin, body }) {
 }
 
 async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
+  body = stripArabicLyricContextIfUnused(body || {}, {
+    lyrics: String(body?.prompt || "").trim(),
+  });
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
   if (!apiKey) return sendJson(res, 500, { error: "Missing GEMINI_API_KEY on server" });
 

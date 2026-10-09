@@ -7,8 +7,7 @@
 const LAST_KEY = "nabad_challenge_prompt_last_v1";
 export const CHALLENGE_LANG_STORAGE_KEY = "nabadai_challenge_lang_v1";
 
-const ARABIC_SPARK_IDS = new Set(["dabke-drop", "arabic-trend-byte", "oud-loop"]);
-const ARABIC_GENRE_IDS = new Set(["arabic-pop", "lev-dabke"]);
+const ARABIC_SCRIPT_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
 export function readStoredChallengeLanguageId() {
   try {
@@ -28,9 +27,32 @@ export function resolveChallengePromptLang(languageId, extras = {}) {
   const id = String(languageId || "auto").trim().toLowerCase();
   if (id === "english") return "english";
   if (id === "levantine" || id === "neutral-arabic" || id === "arabic") return "arabic";
-  if (ARABIC_SPARK_IDS.has(String(extras.sparkId || "").trim())) return "arabic";
-  if (ARABIC_GENRE_IDS.has(String(extras.genreId || "").trim())) return "arabic";
-  return "english";
+
+  const userText = String(extras.userText || extras.person || "").trim();
+  if (userText) {
+    if (ARABIC_SCRIPT_RE.test(userText)) return "arabic";
+    if (/[A-Za-z]/.test(userText)) {
+      const createLang = String(extras.createLang || extras.appLang || "").trim().toLowerCase();
+      if (createLang === "arabic" || createLang === "arabizi") return "arabic";
+      if (createLang === "english") return "english";
+    }
+  }
+
+  const createLang = String(extras.createLang || extras.appLang || "").trim().toLowerCase();
+  if (createLang === "arabic" || createLang === "arabizi") return "arabic";
+  if (createLang === "english") return "english";
+  if (String(extras.createDialect || "").trim()) return "arabic";
+
+  // Auto with no user text: follow app language, never force Sparks to English.
+  return "arabic";
+}
+
+export function withShelfScriptRule(text, lang) {
+  const body = String(text || "").trim();
+  const rule = scriptRule(lang);
+  if (!body) return rule;
+  if (body.includes(rule)) return body;
+  return `${body}\n${rule}`;
 }
 
 export function mapChallengeLangToCreate(promptLang, languageId) {
@@ -247,6 +269,70 @@ const SPARK_IDEAS = {
       "كلمات هادية عن سهر أو شوق، مع هوك عربي قصير. الأسلوب عود حديث.",
     ],
   },
+  "hook-rush": {
+    english: [
+      "Write original lyrics for a cold-open pop hook. No intro — the first sung line is already the chorus people replay. One short verse (2 lines) naming a now-or-never moment, then a chorus (3–4 lines) with one sticky phrase repeated. Specific, not generic party talk. End on a complete held last word.",
+    ],
+    arabic: [
+      "اكتب كلمات أصليّة لهوك بوب يفتح على طول. بلا مقدمة — أول جملة هي الكورس اللي بينعاد. بيت قصير (سطرين) عن لحظة هلق أو أبداً، وبعدين كورس (3–4 أسطر) فيه جملة لاصقة تتكرر. محددة، مش كلام حفلة عام. نهاية مكتملة.",
+    ],
+  },
+  "roast-song": {
+    english: [
+      "Write a playful roast for a friend — funny, never cruel. Verse: 4 original lines of affectionate teasing (habits, timing, excuses), not a stock joke. Chorus: 3–4 lines that land the roast with a smile, then make it clear you still love them. Light, singable, finished.",
+    ],
+    arabic: [
+      "اكتب روست مرح لرفيق — مضحك، مش جارح. البيت: 4 أسطر أصليّة عن عادة أو تأخير أو حجة، مش نكتة جاهزة. الكورس: 3–4 أسطر بنكتة وضحكة، وبعدين واضح إنك بعدك بتحبّو. خفيفة، سهلة تغنّى، مكتملة.",
+    ],
+  },
+  "three-word-hook": {
+    english: [
+      "Write original lyrics whose chorus uses only three words, repeated. Verse: 2 short lines that set a scene. Chorus: those three words only, sung as a huge chantable hook. Pick three vivid words (not \"I love you\"). Impossible to forget. End cleanly.",
+    ],
+    arabic: [
+      "اكتب كلمات أصليّة الكورس فيها ثلاث كلمات بس، تتكرر. البيت: سطرين قصار يرسموا مشهد. الكورس: هالثلاث كلمات بس، هوك كبير ينهدّ. اختار ثلاث كلمات حيّة (مش بحبّك). ما بتنتسى. نهاية نظيفة.",
+    ],
+  },
+  "wrong-genre-party": {
+    english: [
+      "Write original lyrics for a collision: a heavy, stormy verse and a sweet, sugary chorus. Verse: 4 lines that lean into dark vs bright without naming genres. Chorus: 3–4 catchy joyful lines that win the argument. Personal story. Complete last phrase.",
+    ],
+    arabic: [
+      "اكتب كلمات أصليّة لتصادم: بيت ثقيل وعاصف، وكورس حلو وخفيف. البيت: 4 أسطر عن غامق مقابل مشرق من دون تسمية ستايلات. الكورس: 3–4 أسطر فرحة لاصقة بتكسب الجدال. قصة شخصية. جملة أخيرة مكتملة.",
+    ],
+  },
+  "last-photo-song": {
+    english: [
+      "Write original lyrics inspired by a personal photo — a real moment in a frame, not a generic memories song. Verse: 2 close specific lines (light, a face, a place). Chorus: 3–4 lines with one repeatable hook that holds that picture. Intimate and finished.",
+    ],
+    arabic: [
+      "اكتب كلمات أصليّة من صورة شخصية — لحظة حقيقية بالإطار، مش أغنية ذكريات عامة. البيت: سطرين قريبين (ضو، وجه، مكان). الكورس: 3–4 أسطر وهوك يتكرر يمسك هالصورة. حميمة ومكتملة.",
+    ],
+  },
+  "sad-to-dance-challenge": {
+    english: [
+      "Write original lyrics that flip a sad feeling into dance without losing the emotion. Verse: 2–3 quiet honest lines, like a text you never sent. Pre-chorus: let the feeling lift. Chorus: 3–4 lines with one repeatable hook — dance through it. Personal and finished.",
+    ],
+    arabic: [
+      "اكتب كلمات أصليّة تقلب حزن لرقص من دون ما تضيع الشعور. البيت: 2–3 أسطر هادية وصادقة، مثل رسالة ما انبعتت. قبل الكورس: الشعور بيرتفع. الكورس: 3–4 أسطر وهوك يتكرر — ارقص بالحزن. شخصية ومكتملة.",
+    ],
+  },
+  "one-line-reply": {
+    english: [
+      "Write a ~25 second reply-song to a text or DM. Verse: 2 lines reacting to what they said. Chorus: 2–4 lines — the line you'd actually send back. Short words. End on a complete phrase.",
+    ],
+    arabic: [
+      "اكتب أغنية رد قصيرة (~25 ثانية) على رسالة. البيت: سطرين ردّ فعل. الكورس: 2–4 أسطر — الجملة اللي كنت بدك تبعتها. كلمات قصيرة. نهاية مكتملة.",
+    ],
+  },
+  "whisper-to-hook": {
+    english: [
+      "Start quiet, land loud — keep it ~25 seconds. Verse: 2 whisper-soft personal lines. Chorus: 3–4 bigger lines, not shouty; end on a held final word. No bridge. Must feel finished.",
+    ],
+    arabic: [
+      "ابدأ هادي وخلّص قوي — حوالي 25 ثانية. البيت: سطرين همس شخصيين. الكورس: 3–4 أسطر أكبر، مش صراخ؛ نهاية على كلمة ممسوكة. بلا جسر. حسّ مكتمل.",
+    ],
+  },
 };
 
 export function pickOccasionLyricPrompt({
@@ -255,19 +341,40 @@ export function pickOccasionLyricPrompt({
   genreId = "",
   person = "",
   variant = "anthem",
+  createLang = "",
+  createDialect = "",
+  extraBrief = "",
 } = {}) {
-  const lang = resolveChallengePromptLang(languageId, { genreId });
+  const lang = resolveChallengePromptLang(languageId, {
+    genreId,
+    person,
+    userText: person,
+    createLang,
+    createDialect,
+  });
   const who = String(person || "").trim() || (lang === "arabic" ? "شخص غالي" : "someone special");
   const pool = OCCASION_IDEAS[String(occasionId || "").trim()] || OCCASION_IDEAS.birthday;
   const idea = pickFromPool(`occ:${occasionId}:${lang}`, pool[lang] || pool.english)
     .replaceAll("{name}", who);
-  return [idea, variantLine(lang, variant), scriptRule(lang)].filter(Boolean).join("\n");
+  const extra = String(extraBrief || "").trim().replaceAll("{name}", who);
+  return [idea, extra, variantLine(lang, variant), scriptRule(lang)].filter(Boolean).join("\n");
 }
 
-export function pickSparkLyricPrompt({ sparkId, languageId = "auto" } = {}) {
+export function pickSparkLyricPrompt({
+  sparkId,
+  languageId = "auto",
+  createLang = "",
+  createDialect = "",
+  userText = "",
+} = {}) {
   const pool = SPARK_IDEAS[String(sparkId || "").trim()];
   if (!pool) return "";
-  const lang = resolveChallengePromptLang(languageId, { sparkId });
+  const lang = resolveChallengePromptLang(languageId, {
+    sparkId,
+    createLang,
+    createDialect,
+    userText,
+  });
   const idea = pickFromPool(`spark:${sparkId}:${lang}`, pool[lang] || pool.english);
   if (!idea) return "";
   return [idea, scriptRule(lang)].filter(Boolean).join("\n");

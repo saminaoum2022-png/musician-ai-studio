@@ -105,17 +105,47 @@ export function createInputsEqual(a, b) {
   return JSON.stringify(INPUT_KEYS.map((k) => left[k])) === JSON.stringify(INPUT_KEYS.map((k) => right[k]));
 }
 
+function isLyriaTake2Task(track) {
+  return String(track?.taskId || "").trim().startsWith("lyr_");
+}
+
+function createInputsFromTrackMeta(track, card) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const fromCard = card?.createInputs && typeof card.createInputs === "object" ? card.createInputs : {};
+  return normalizeCreateInputs({
+    ...fromCard,
+    prompt: fromCard.prompt || meta.lyricsInput || meta.finalPrompt || "",
+    style: fromCard.style || meta.styleSent || meta.styleInput || "",
+    title: fromCard.title || track?.title || "",
+    dialect: fromCard.dialect || meta.dialect || "",
+    dialectHint: fromCard.dialectHint || meta.dialectHint || "",
+    arabicAddress: fromCard.arabicAddress || meta.arabicAddress || "",
+    vocalGender: fromCard.vocalGender || fromCard.singerGender || meta.singerGender || "",
+    singerGender: fromCard.singerGender || fromCard.vocalGender || meta.singerGender || "",
+  });
+}
+
+function takeCardHasUsableInputs(inputs) {
+  const next = normalizeCreateInputs(inputs);
+  return Boolean(next.style || next.prompt);
+}
+
 export function takeCardFromTrack(track) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
-  const card = meta.takeCard && typeof meta.takeCard === "object" ? meta.takeCard : null;
+  const stored = meta.takeCard && typeof meta.takeCard === "object" ? meta.takeCard : null;
+  const lyria = isLyriaTake2Task(track);
+  const card = stored || (lyria ? { createInputs: {} } : null);
   if (!card) return null;
-  const finalPrompt = String(card.finalPrompt || "").trim();
-  const hasCard = card.hasCard === true || Boolean(finalPrompt);
+  const createInputs = createInputsFromTrackMeta(track, card);
+  const finalPrompt = String(card.finalPrompt || meta.finalPrompt || "").trim();
+  const hasCard = card.hasCard === true
+    || Boolean(finalPrompt)
+    || (lyria && takeCardHasUsableInputs(createInputs));
   if (!hasCard) return null;
   return {
     ...card,
     hasCard: true,
-    createInputs: normalizeCreateInputs(card.createInputs || {}),
+    createInputs,
     producerJson: card.producerJson && typeof card.producerJson === "object" ? card.producerJson : null,
     finalPrompt,
     taskId: String(card.taskId || track?.taskId || "").trim(),

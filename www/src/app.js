@@ -197,6 +197,7 @@ import {
   mapChallengeLangToCreate,
   pickOccasionLyricPrompt,
   pickSparkLyricPrompt,
+  withShelfScriptRule,
 } from "./challenge-prompt-seeds.js";
 import {
   configureCoverArt,
@@ -9743,7 +9744,8 @@ const CHALLENGE_IDEAS = [
     title: "Hook Rush",
     styleLyria: "instant pop hook, tight drums, bright melody, sticky chorus, 112 bpm",
     style: "Instant viral hook, no intro, punchy drums, bright lead melody, sticky chorus, 112 bpm",
-    lyrics: "[Intro]\nRight now, right now, we light it up\nNo waiting for the night to start\n\n[Chorus]\nThis is the moment, don't let it go\nSay it again till everybody knows\nRight now, right now, we light it up\nThis little spark is more than enough",
+    lyricsMode: "instructions",
+    lyrics: "Write original lyrics for a cold-open pop hook. No intro — the first sung line is already the chorus people replay. One short verse (2 lines) naming a now-or-never moment, then a chorus (3–4 lines) with one sticky phrase repeated. Specific, not generic party talk. End on a complete held last word.",
     prompt: "Make the first 15 seconds the whole reason someone replays the song.",
     tags: ["Hook", "Replay", "Fast"],
   },
@@ -9771,7 +9773,7 @@ const CHALLENGE_IDEAS = [
     id: "dabke-drop",
     title: "Dabke Drop",
     styleLyria: "Levantine dabke pop, mijwiz accents, festive 6/8 rhythm, clap-ready chorus, 126 bpm",
-    style: "Levantine dabke pop, mijwiz and oud accents, ktakufti 6/8 dabkeh rhythm, wedding energy, 126 bpm",
+    style: "Levantine dabke pop, mijwiz and oud accents, ktakufti 6/8 dabkeh rhythm, 126 bpm",
     lyricsMode: "instructions",
     lyrics: "Write a short clip about any personal idea — reunion, summer, pride, missing someone.\nSTYLE is Levantine dabke. Do not write lyrics about dabke or weddings.",
     prompt: "Any idea. Dabke is the style, not the story.",
@@ -9783,7 +9785,7 @@ const CHALLENGE_IDEAS = [
     styleLyria: "bittersweet dance pop, minor piano, warm bass, uplifting chorus, 118 bpm",
     style: "Bittersweet dance pop, minor-key piano intro, warm bass, emotional vocal, uplifting drop, 118 bpm",
     lyricsMode: "instructions",
-    lyrics: "Challenge: flip a sad feeling into dance — keep the emotion.\n\nVerse: quiet and honest, like a text you never sent.\nPre-chorus: let the feeling lift.\nChorus: dance through the sadness — one repeatable hook line.\n\nMake it personal. Tap ✦ when ready for a short lyric draft (not a full song).",
+    lyrics: "Challenge: flip a sad feeling into dance — keep the emotion.\n\nVerse: quiet and honest, like a text you never sent.\nPre-chorus: let the feeling lift.\nChorus: dance through the sadness — one repeatable hook line.\n\nMake it personal and finished.",
     prompt: "Flip a sad idea into motion without losing the emotion.",
     tags: ["Mood flip", "Dance", "Heart"],
   },
@@ -9802,7 +9804,8 @@ const CHALLENGE_IDEAS = [
     title: "Roast Song",
     styleLyria: "playful comedy pop, talk-sing verse, catchy roast chorus, 118 bpm",
     style: "playful comedy pop, punchy brass stabs, talk-sing verse, catchy roast chorus, 118 bpm",
-    lyrics: "[Verse]\nYou said you would be on time again\nYour excuses got a perfect ten\nI am not mad, I am impressed\nYou turned lateness into art, I guess\n\n[Chorus]\nThis is your roast, keep it light\nWe still love you tonight\nSay it with a smile, not a fight\nFunny but it feels alright",
+    lyricsMode: "instructions",
+    lyrics: "Write a playful roast for a friend — funny, never cruel. Verse: 4 original lines of affectionate teasing (habits, timing, excuses), not a stock joke. Chorus: 3–4 lines that land the roast with a smile, then make it clear you still love them. Light, singable, finished.",
     prompt: "Write a playful roast song for a friend — funny, never cruel.",
     tags: ["Roast", "Fun", "Friends"],
   },
@@ -9811,7 +9814,8 @@ const CHALLENGE_IDEAS = [
     title: "3-Word Hook",
     styleLyria: "minimal pop hook, huge chorus feel, clap stack, 110 bpm",
     style: "hyper-catchy pop, minimal lyrics, huge chorus, clap stack, 110 bpm",
-    lyrics: "[Chorus]\nLights go up now\nFeel it right now\nSay it out loud\nLights go up now",
+    lyricsMode: "instructions",
+    lyrics: "Write original lyrics whose chorus uses only three words, repeated. Verse: 2 short lines that set a scene. Chorus: those three words only, sung as a huge chantable hook. Pick three vivid words (not \"I love you\"). Impossible to forget. End cleanly.",
     prompt: "Only three words in the chorus — make them impossible to forget.",
     tags: ["Short", "Hook", "Minimal"],
   },
@@ -9820,7 +9824,8 @@ const CHALLENGE_IDEAS = [
     title: "Last Photo Song",
     styleLyria: "photo-inspired pop, warm textures, intimate vocal, 98 bpm",
     style: "Photo-inspired pop, emotional snapshot, warm textures, intimate vocal, 98 bpm",
-    lyrics: "[Verse]\nThis moment in a frame\nA little light, a little name\n\n[Chorus]\nHold it close, let it sing\nOne small photo, everything",
+    lyricsMode: "instructions",
+    lyrics: "Write original lyrics inspired by a personal photo — a real moment in a frame, not a generic memories song. Verse: 2 close specific lines (light, a face, a place). Chorus: 3–4 lines with one repeatable hook that holds that picture. Intimate and finished.",
     prompt: "Turn the feeling in your photo into a short personal hook — any photo you choose.",
     tags: ["Photo", "Personal", "Mood"],
   },
@@ -9859,7 +9864,8 @@ const CHALLENGE_IDEAS = [
     title: "Wrong Genre",
     styleLyria: "genre contrast pop, ironic verse texture, sugary chorus, 132 bpm",
     style: "death metal drums with sugary K-pop chorus, ironic contrast, 132 bpm",
-    lyrics: "[Verse]\nYou wanted soft and sweet and slow\nI brought thunder just for show\nThe verse sounds like a battle cry\nThen the chorus floats up to the sky\n\n[Chorus]\nWrong genre, right feeling\nStill dancing on the ceiling\nIf it should not work, it works tonight\nWrong genre, holding tight",
+    lyricsMode: "instructions",
+    lyrics: "Write original lyrics for a collision: a heavy, stormy verse and a sweet, sugary chorus. Verse: 4 lines that lean into dark vs bright without naming genres. Chorus: 3–4 catchy joyful lines that win the argument. Personal story. Complete last phrase.",
     prompt: "Pick two genres that should not match — make the chorus win anyway.",
     tags: ["Weird", "Contrast", "Fun"],
   },
@@ -10789,11 +10795,13 @@ function applyDiscoveryIdeaToCreate(idea) {
     searchTemplateId: `idea:${String(idea.id || title).trim()}`,
     searchTemplateTitle: title,
     challengePromptPending: Boolean(idea.challenge),
+    catalogStyle: String(els.sunoStyle?.value || idea.style || "").trim(),
     ...(idea.lyricsMode ? { lyricsMode: idea.lyricsMode } : {}),
     ...(idea.challenge ? { challenge: idea.challenge } : {}),
   };
   if (idea.challenge) persistCreateChallengeContext(pendingSearchRemixMeta);
   else clearCreateChallengeContext();
+  keepShelfCatalogStyleInCreate();
   const challenge = challengePromptContext();
   const quickTemplateClip =
     !challenge &&
@@ -10880,19 +10888,32 @@ let _challengeOccasionId = "";
 let _challengeGenreId = "";
 let _challengeLanguageId = readStoredChallengeLanguageId();
 
+function shelfPromptLangExtras(extra = {}) {
+  return {
+    sparkId: extra.sparkId || "",
+    genreId: extra.genreId || "",
+    userText: extra.userText || extra.person || "",
+    person: extra.person || extra.userText || "",
+    createLang: String(typeof lyricsLanguage !== "undefined" ? lyricsLanguage : "auto"),
+    createDialect: String(typeof lyricsDialect !== "undefined" ? lyricsDialect : ""),
+  };
+}
+
 function applyChallengeLanguageToCreate(challenge, extras = {}) {
   const languageId = String(
     extras.languageId || challenge?.languageId || _challengeLanguageId || "auto",
   ).trim();
+  if (!languageId || languageId === "auto") return;
   const promptLang = resolveChallengePromptLang(languageId, {
     sparkId: extras.sparkId || (challenge?.type === "spark" ? challenge?.id : ""),
     genreId: extras.genreId || challenge?.genreId || "",
+    ...shelfPromptLangExtras(extras),
   });
   const mapped = mapChallengeLangToCreate(promptLang, languageId);
   if (!mapped) return;
   try { setLyricsLanguage(mapped.lyricsLanguage); } catch {}
   if (mapped.lyricsLanguage === "arabic") {
-    try { setLyricsDialect(mapped.dialect || "lebanese"); } catch {}
+    try { setLyricsDialect(mapped.dialect || lyricsDialect || "lebanese"); } catch {}
   }
 }
 
@@ -11143,24 +11164,28 @@ function applyChallengeStartById(id, challengesMap) {
   haptic("light");
   const focus = challengeCreateFocusForId(challenge.id);
   const languageId = _challengeLanguageId || readStoredChallengeLanguageId();
+  const langExtras = shelfPromptLangExtras({ sparkId: challenge.id });
+  const promptLang = resolveChallengePromptLang(languageId, langExtras);
   const localizedLyrics = isVoiceClipChallengeId(challenge.id)
     ? ""
-    : pickSparkLyricPrompt({ sparkId: challenge.id, languageId });
+    : pickSparkLyricPrompt({ sparkId: challenge.id, languageId, ...langExtras });
+  const catalogBrief = isVoiceClipChallengeId(challenge.id)
+    ? ""
+    : String(challenge.lyrics || challenge.prompt || "").trim();
+  const lyrics = localizedLyrics || (catalogBrief ? withShelfScriptRule(catalogBrief, promptLang) : "");
   const idea = {
     ...challenge,
     id: `challenge:${challenge.id}`,
     title: String(challenge.title || "Spark").trim(),
     prompt: String(challenge.prompt || "").trim(),
-    lyrics: localizedLyrics || (isVoiceClipChallengeId(challenge.id) ? "" : String(challenge.lyrics || challenge.prompt || "").trim()),
+    lyrics,
     style: templateStyleForProvider(
       `${String(challenge.style || "").trim()}, ${challengeDurationStyleClause(challenge.id)}`,
       challenge.id,
     ),
-    dialect: "",
-    dialectHint: "",
     avoidTags: templateAvoidTagsForProvider(),
     createFocus: focus,
-    lyricsMode: challenge.lyricsMode || (localizedLyrics ? "instructions" : ""),
+    lyricsMode: "instructions",
     challenge: {
       id: challenge.id,
       title: challenge.title,
@@ -11170,9 +11195,11 @@ function applyChallengeStartById(id, challengesMap) {
       languageId,
       personName: "",
       variant: "spark",
-      lyricsMode: challenge.lyricsMode || (localizedLyrics ? "instructions" : ""),
+      lyricsMode: "instructions",
     },
   };
+  delete idea.dialect;
+  delete idea.dialectHint;
   if (!authSession?.user?.id) {
     stashPendingDiscoveryIdea(idea);
     setPostAuthReturnHash("#/generate");
@@ -11186,7 +11213,7 @@ function applyChallengeStartById(id, challengesMap) {
 }
 
 function sparksDeckCardsHtml() {
-  const sparks = CHALLENGE_IDEAS.filter((c) => c.id !== "hook-rush");
+  const sparks = CHALLENGE_IDEAS.filter((c) => c.id !== "hook-rush" && c.id !== "hum-track");
   return sparks.map((c, i) => {
     const tone = CHALLENGE_SPARK_TONES[i % CHALLENGE_SPARK_TONES.length];
     const kicker = CHALLENGE_SPARK_KICKERS[c.id] || "Spark";
@@ -12016,7 +12043,12 @@ function startCampaignCreate() {
   const langCfg = campaignLangConfigForTeam(team.id);
   const lyricLang = _campaignLang === "ar" ? "ar" : "en";
   const teamDisplay = lyricLang === "ar" ? team.ar : team.name;
-  const lyrics = String(vibe[lyricLang] || vibe.en || "").replaceAll("{team}", teamDisplay);
+  const lyrics = withShelfScriptRule(
+    lyricLang === "ar"
+      ? `اكتب كلمات أنشودة أصليّة لـ ${teamDisplay} — مش هتاف جاهز.\nبيت: صورة واحدة من الملعب أو الجمهور أو ذكرى.\nكورس: هوك يتكرر فيه اسم الفريق، سهل يتغنّى.\nخلّيها شخصية ومكتملة.`
+      : `Write original match-day anthem lyrics for ${teamDisplay} — not a generic chant.\nVerse: one specific image of the fans, the pitch, or a memory.\nChorus: a repeatable hook with the team name, easy to shout back.\nKeep it personal, studio-sung, and finished.`,
+    lyricLang === "ar" ? "arabic" : "english",
+  );
   const style = withTemplateStyleGuard(campaignStyleForTeamVibe(team.id, vibe.id));
   const useArabicDialect = lyricLang === "ar";
   closeCampaignSheet();
@@ -12026,6 +12058,7 @@ function startCampaignCreate() {
     style,
     lyrics,
     prompt: lyrics,
+    lyricsMode: "instructions",
     dialect: useArabicDialect ? langCfg.dialect : "",
     dialectHint: useArabicDialect ? langCfg.dialectHint : "",
     avoidTags: TEMPLATE_GENERATION_AVOID_TAGS,
@@ -12041,6 +12074,7 @@ function startCampaignCreate() {
       genre: vibe.id === "dabke" ? campaignRootsLabelForTeam(team.id) : vibe.label,
       personName: "",
       variant: vibe.id,
+      lyricsMode: "instructions",
     },
   });
 }
@@ -13220,19 +13254,6 @@ function discoverFeaturedHeroArtUrl(challengeId) {
 
 const DISCOVER_LIVE_CHALLENGES = [
   {
-    id: "worldcup2026",
-    emoji: "🏆",
-    title: "World Cup Anthem",
-    blurb: "Pick your team. Drop your anthem.",
-    tone: "gold",
-    participants: 2847,
-    submissions: 412,
-    daysLeft: 32,
-    totalDays: 45,
-    progressGoal: 500,
-    action: "campaign",
-  },
-  {
     id: "80s-you",
     emoji: "📼",
     title: "80s You",
@@ -13245,21 +13266,6 @@ const DISCOVER_LIVE_CHALLENGES = [
     progressGoal: 200,
     action: "challenge",
     challengeId: "80s-you",
-    featured: true,
-  },
-  {
-    id: "hum-track",
-    emoji: "🎙",
-    title: "Hum Track",
-    blurb: "Hum a melody. Get a solo instrumental.",
-    tone: "cyan",
-    participants: 612,
-    submissions: 88,
-    daysLeft: 18,
-    totalDays: 21,
-    progressGoal: 160,
-    action: "challenge",
-    challengeId: "hum-track",
     featured: true,
   },
   {
@@ -13344,7 +13350,6 @@ const DISCOVER_SUGGESTED_CREATORS = [
 
 const DISCOVER_NEW_THIS_WEEK = [
   { id: "80s-you", emoji: "📼", kicker: "Trending", title: "80s You", blurb: "Photo → your personal 80s anthem.", tone: "violet", action: "challenge", challengeId: "80s-you" },
-  { id: "hum-track", emoji: "🎙", kicker: "New", title: "Hum Track", blurb: "Hum a melody → solo instrumental.", tone: "cyan", action: "challenge", challengeId: "hum-track" },
   { id: "graduation", emoji: "🎓", kicker: "New template", title: "Graduation Song", blurb: "Celebrate the milestone.", tone: "gold", action: "occasion", occasionId: "congrats" },
   { id: "ramadan", emoji: "🌙", kicker: "Seasonal", title: "Ramadan Glow", blurb: "Warm spiritual vibes.", tone: "violet", action: "occasion", occasionId: "christmas" },
   { id: "roast-week", emoji: "😄", kicker: "Fun challenge", title: "Roast Song", blurb: "Playful roast for a friend — funny, never cruel.", tone: "gold", action: "challenge", challengeId: "roast-song" },
@@ -15865,14 +15870,22 @@ function applyDiscoverOccasionStart(occasionId, liveChallenge) {
   haptic("light");
   const live = liveChallenge && typeof liveChallenge === "object" ? liveChallenge : null;
   const languageId = _challengeLanguageId || readStoredChallengeLanguageId();
-  const lyrics = pickOccasionLyricPrompt({ occasionId: occ.id, languageId });
+  const genre = CHALLENGE_GENRES.find((g) => g.id === "arabic-pop") || CHALLENGE_GENRES[0];
+  const lyrics = pickOccasionLyricPrompt({
+    occasionId: occ.id,
+    languageId,
+    extraBrief: occ.angle
+      ? `Challenge brief: ${occ.angle}. Keep the lyrics personal and avoid generic lines.`
+      : "",
+    ...shelfPromptLangExtras(),
+  });
   applyDiscoveryIdeaToCreate({
     id: live?.id ? `live:${live.id}` : `occasion:${occ.id}`,
     title: live?.title || occ.title,
     prompt: lyrics,
     lyrics,
     lyricsMode: "instructions",
-    style: "",
+    style: withTemplateStyleGuard(`${genre?.style || "modern Arabic pop"}, mid-tempo, polished, emotional but catchy`),
     tags: occ.tags || [],
     challenge: {
       id: occ.id,
@@ -15880,7 +15893,7 @@ function applyDiscoverOccasionStart(occasionId, liveChallenge) {
       type: "occasion",
       liveChallengeId: String(live?.id || "").trim(),
       occasion: occ.label,
-      genre: "",
+      genre: genre?.label || "Arabic pop",
       languageId,
       personName: "",
       variant: "occasion",
@@ -16393,17 +16406,26 @@ function bindChallengesPageOnce() {
     return false;
   };
   const buildChallengeLyricPrompt = (occasion, genre, language, person, variant) => {
+    const extra = [
+      occasion?.angle ? `Challenge brief: ${occasion.angle}. Dedicated to ${person}. Keep the lyrics personal and avoid generic lines.` : "",
+      String(occasion?.lyricSeed || "").trim(),
+    ].filter(Boolean).join("\n");
     return pickOccasionLyricPrompt({
       occasionId: occasion?.id,
       languageId: language?.id || _challengeLanguageId,
       genreId: genre?.id,
       person,
       variant,
+      extraBrief: extra,
+      ...shelfPromptLangExtras({ person, genreId: genre?.id }),
     });
   };
   const buildPresetIdea = (occasion, genre, variant = "anthem") => {
     const language = selected(CHALLENGE_LANGUAGES, _challengeLanguageId);
-    const promptLang = resolveChallengePromptLang(language?.id, { genreId: genre.id });
+    const promptLang = resolveChallengePromptLang(language?.id, shelfPromptLangExtras({
+      person: nameForPrompt(),
+      genreId: genre.id,
+    }));
     const person = nameForPrompt() || (promptLang === "arabic" ? "شخص غالي" : "someone special");
     const variantLabel = variant === "dance"
       ? "Dance version"
@@ -16416,12 +16438,11 @@ function bindChallengesPageOnce() {
       : variant === "cinematic"
         ? "slow cinematic intro into a memorable chorus"
         : "mid-tempo, polished, emotional but catchy";
-    const challengeBrief = `Challenge brief: ${occasion.angle}. Dedicated to ${person}. Keep the lyrics personal and avoid generic lines.`;
     const lyricPrompt = buildChallengeLyricPrompt(occasion, genre, language, person, variant);
     return {
       id: `occasion:${occasion.id}:${genre.id}:${variant}`,
       title,
-      style: withTemplateStyleGuard(`${genre.style}, ${tempoHint}, personalized for ${person}. ${challengeBrief}`),
+      style: withTemplateStyleGuard(`${genre.style}, ${tempoHint}, personalized for ${person}`),
       prompt: lyricPrompt,
       lyrics: lyricPrompt,
       lyricsMode: "instructions",
@@ -16820,7 +16841,9 @@ function applyRemixTemplateToCreate(tpl, name) {
     searchTemplateId: String(tpl.id || "").trim(),
     searchTemplateTitle: String(tpl.title || "").trim(),
     searchRemixPersonalizedFor: cleanName,
+    catalogStyle: String(els.sunoStyle?.value || tpl.style || "").trim(),
   };
+  keepShelfCatalogStyleInCreate();
   setCreateTemplateLoadedHint(tpl.title);
   try {
     setStatus?.(
@@ -31745,6 +31768,11 @@ function activeTemplateSparkShelfMeta() {
   const bareId = tplId.replace(/^idea:/, "");
   if (isVoiceClipChallengeId(bareId) || isPhotoSoloChallengeId(bareId)) return null;
   return meta;
+}
+
+/** Templates / Sparks / Challenges keep their catalog style; studio tiles must not replace it. */
+function shelfCatalogStyleLocked() {
+  return Boolean(activeTemplateSparkShelfMeta());
 }
 
 function templateSparkClipSourceKind() {
@@ -54758,10 +54786,14 @@ function renderTrackSheetLibrary(track) {
   const quickListen = !profilePublic && nabadLiveListenEnabled() && String(track?.url || "").trim()
     ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--live" data-track-sheet-action="library_listen"><span class="discoverTrackSheetLiveDot" aria-hidden="true"></span><span>Listen together</span></button>`
     : "";
+  const quickTake2 = nabadTake2Enabled() && trackHasTakeCard(track)
+    ? `<button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_take2">Take 2</button>`
+    : "";
   const pinLabel = isFeaturedOnProfile(track) ? "Remove featured track" : "Feature on profile";
   q.innerHTML = `
     ${quickRemix}
     ${quickMashup}
+    ${quickTake2}
     ${quickListen}
     ${quickShare}
   `;
@@ -55364,6 +55396,8 @@ async function ensureTakeCardForOpenSheet(track) {
       if (next) refreshOpenTake2Sheet(next);
       return;
     }
+    if (trackHasTakeCard(track)) return;
+    if (String(taskId).startsWith("lyr_")) return;
     _take2MissTaskIds.add(taskId);
   } catch {
     _take2MissTaskIds.add(taskId);
@@ -66568,6 +66602,22 @@ function mergeLibraryCloudWithLocal(cloudRow, localCopy) {
     meta: {
       ...(cloudRow.meta || {}),
       ...(localCopy.meta || {}),
+      ...(() => {
+        const localCard = localCopy.meta?.takeCard && typeof localCopy.meta.takeCard === "object"
+          ? localCopy.meta.takeCard
+          : null;
+        const cloudCard = cloudRow.meta?.takeCard && typeof cloudRow.meta.takeCard === "object"
+          ? cloudRow.meta.takeCard
+          : null;
+        const score = (card) => {
+          if (!card) return 0;
+          return (card.hasCard === true ? 2 : 0)
+            + (String(card.finalPrompt || "").trim() ? 2 : 0)
+            + (card.createInputs ? 1 : 0);
+        };
+        const takeCard = score(localCard) >= score(cloudCard) ? (localCard || cloudCard) : cloudCard;
+        return takeCard ? { takeCard } : {};
+      })(),
       ...(localImgIsCustom
         ? {
             imageUrl: localCopy.meta.imageUrl,
@@ -77961,7 +78011,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       finishedAudioUrl: pickSunoFinishedAudioUrl(first),
       durationSec: Number(first?.duration || first?.durationSec || first?.duration_sec || 0) || 0,
       providerLyrics,
-      takeCard: data?._takeCard && typeof data._takeCard === "object" ? data._takeCard : null,
+      takeCard: [data?._takeCard, inner?._takeCard, data?.data?._takeCard]
+        .find((card) => card && typeof card === "object") || null,
     };
   };
 
@@ -78081,17 +78132,34 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 : photoCoverMeta;
             }
             genMeta = mergeGeneratedLyricsIntoMeta(genMeta, state.providerLyrics);
-            if (state.takeCard && typeof state.takeCard === "object") {
-              genMeta = {
-                ...(genMeta || {}),
-                takeCard: { ...(genMeta?.takeCard || {}), ...state.takeCard, hasCard: true },
-              };
-              try {
-                lastGenerationMeta = {
-                  ...(lastGenerationMeta || {}),
-                  takeCard: genMeta.takeCard,
+            {
+              const prevCard = genMeta?.takeCard && typeof genMeta.takeCard === "object" ? genMeta.takeCard : {};
+              const incoming = state.takeCard && typeof state.takeCard === "object" ? state.takeCard : {};
+              const createInputs = incoming.createInputs || prevCard.createInputs || {};
+              const finalPrompt = String(incoming.finalPrompt || prevCard.finalPrompt || "").trim();
+              const hasRecipe = incoming.hasCard === true
+                || Boolean(finalPrompt)
+                || Boolean(createInputs.style || createInputs.prompt)
+                || String(sunoTaskId || "").startsWith("lyr_");
+              if (hasRecipe) {
+                genMeta = {
+                  ...(genMeta || {}),
+                  takeCard: {
+                    ...prevCard,
+                    ...incoming,
+                    hasCard: true,
+                    taskId: incoming.taskId || prevCard.taskId || sunoTaskId || "",
+                    createInputs,
+                    finalPrompt,
+                  },
                 };
-              } catch {}
+                try {
+                  lastGenerationMeta = {
+                    ...(lastGenerationMeta || {}),
+                    takeCard: genMeta.takeCard,
+                  };
+                } catch {}
+              }
             }
             try { applyGeneratedLyricsToCreateUi(state.providerLyrics, genMeta); } catch {}
             try {
@@ -78124,6 +78192,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               }
             }
             const take2Saved = savedEntries[0];
+            if (take2Saved && genMeta?.takeCard) {
+              stampLibraryTakeCardFlag(take2Saved, genMeta.takeCard);
+            }
             if (take2Saved?.taskId && nabadTake2Enabled()) {
               void apiFetch("/api/music/take-card", {
                 method: "POST",
@@ -79001,7 +79072,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const lyriaRaw = lyriaSendRawBoxesOnly();
       const userPrompt = (els.sunoPrompt?.value || "").trim();
       let userStyleRaw = String(els.sunoStyle?.value || "").trim();
-      const intlLock = activeSlottedStudioStyle() ? fillActiveInternationalStyle() : null;
+      const lockShelfStyle = shelfCatalogStyleLocked();
+      if (lockShelfStyle && !userStyleRaw) {
+        userStyleRaw = String(pendingSearchRemixMeta?.catalogStyle || "").trim();
+      }
+      const intlLock = lockShelfStyle ? null : (activeSlottedStudioStyle() ? fillActiveInternationalStyle() : null);
       if (intlLock && !intlLock.ok) {
         setLoading(false);
         setGenerateBtn("Generate song", false, "generate");
@@ -79241,7 +79316,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const payload = {
         prompt: ideaPromptToSongAlt || lyriaIdeaPayload ? "" : finalPrompt,
         style: ideaSimpleMode
-          ? (intlLock?.ok ? intlLock.styleLine : "")
+          ? (intlLock?.ok ? intlLock.styleLine : (lockShelfStyle ? userStyleRaw : ""))
           : ideaPromptToSongAlt && !intlLock?.ok
             ? mergeIdeaIntoStyle(userPrompt, personaStyleBase)
             : personaStyleBase,
@@ -79416,7 +79491,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         }
       }
       lastGenerationMeta.takeCard = {
-        hasCard: false,
+        hasCard: Boolean(useLyriaForThisGenerate() || shelfLyriaFull),
         createInputs: createInputsSnap,
         parentSongId: _take2Session?.parentSongId || "",
         parentTaskId: _take2Session?.parentTaskId || "",
@@ -80796,6 +80871,9 @@ function fillActiveInternationalStyle() {
 }
 
 function writeLockedInternationalStyleLine() {
+  if (shelfCatalogStyleLocked()) {
+    return { ok: true, skipped: true, styleLine: String(els.sunoStyle?.value || "").trim() };
+  }
   const filled = fillActiveInternationalStyle();
   if (!filled.ok) return filled;
   if (els.sunoStyle) els.sunoStyle.value = filled.styleLine;
@@ -81816,7 +81894,7 @@ function syncCreateFlowLayoutUi() {
   if (mode === "simple" && enabled) {
     try { setActiveCreateTab("lyrics"); } catch {}
     enforceSimpleCreateVocalOnly();
-    if (!_activeLyriaStudioStyleId && !_studioCustomPicked) {
+    if (!_activeLyriaStudioStyleId && !_studioCustomPicked && !shelfCatalogStyleLocked()) {
       try { applyLyriaStudioStyle("levantine-pop-fusion", { family: defaultStudioStylesTab() }); } catch {}
     }
     try { ensureSimpleSingerDefault(); } catch {}
@@ -81853,6 +81931,12 @@ function clearLyriaStudioStyleSelection({ clearStyleField = false } = {}) {
   if (clearStyleField && els.sunoStyle) els.sunoStyle.value = "";
   syncLyriaStudioStyleUi();
   syncLyriaStudioSoundPromptPreview();
+}
+
+function keepShelfCatalogStyleInCreate() {
+  if (!shelfCatalogStyleLocked()) return;
+  _studioCustomPicked = true;
+  clearLyriaStudioStyleSelection({ clearStyleField: false });
 }
 
 function applyInternationalStudioStyle(style, { keepSinger = false } = {}) {
@@ -81964,7 +82048,7 @@ function applyLyriaStudioStyle(id, { keepSinger = false, family = "" } = {}) {
     } catch {}
   }
   _activeLyriaStudioStyleId = preset.id;
-  if (els.sunoStyle) els.sunoStyle.value = preset.styleLine;
+  if (els.sunoStyle && !shelfCatalogStyleLocked()) els.sunoStyle.value = preset.styleLine;
   if (!keepSinger && !_userPickedSinger && (preset.defaultSinger === "m" || preset.defaultSinger === "f") && els.sunoSingerGender) {
     els.sunoSingerGender.value = preset.defaultSinger;
     try { syncSingerGenderPills(); } catch {}

@@ -17,7 +17,7 @@ function extractMarkedBlock(text, name) {
     const rest = src.slice(header.index + header[0].length).replace(/^\r?\n/, "");
     const end = new RegExp(`^end_${name}\\s*$`, "im").exec(rest);
     if (end) return rest.slice(0, end.index).replace(/\s+$/, "");
-    const next = rest.search(/^(producer|producer_reason|lyrics_mode|original_lyrics|adapted_lyrics|lyria_prompt|flow|model|api|pipeline):/im);
+    const next = rest.search(/^(producer|producer_reason|lyrics_mode|lyrics_by|original_lyrics|adapted_lyrics|lyria_prompt|flow|model|api|pipeline):/im);
     return (next >= 0 ? rest.slice(0, next) : rest).replace(/\s+$/, "");
   }
   const same = new RegExp(`^${name}:\\s+(.+)$`, "im").exec(src);
@@ -104,6 +104,8 @@ function parseGenerationProducerDetail(requestDetail) {
   const producerReason = inferProducerReason(text, producerStatus);
   let lyricsMode = lineValue(text, "lyrics_mode").toLowerCase();
   if (lyricsMode !== "write" && lyricsMode !== "idea") lyricsMode = "";
+  let lyricsBy = lineValue(text, "lyrics_by").toLowerCase();
+  if (lyricsBy !== "gemini" && lyricsBy !== "lyria") lyricsBy = "";
   const originalLyrics = extractMarkedBlock(text, "original_lyrics");
   const adaptedLyrics = extractMarkedBlock(text, "adapted_lyrics");
   const lyriaPrompt = extractLyriaPrompt(text);
@@ -111,6 +113,7 @@ function parseGenerationProducerDetail(requestDetail) {
     producerStatus,
     producerReason,
     lyricsMode,
+    lyricsBy,
     originalLyrics,
     adaptedLyrics,
     lyriaPrompt,

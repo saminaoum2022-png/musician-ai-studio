@@ -163,6 +163,40 @@ If instrumental is true, every section has "lyrics": [] and "backing": [] and no
 
 Return ONLY the JSON object.`;
 
+const LYRIA_PRODUCER_V3_LYRICS_BY_LYRIA_OVERRIDE = `
+=== LYRICS BY LYRIA (OVERRIDES LYRICS WRITING ONLY) ===
+This request is lyrics_by=lyria. Do NOT write sung lyric lines.
+
+Keep every SECTION PLAN, ARRANGEMENT, INTENSITY, bar-count, timestamp, instrumentation, instrumental-break, and rhythm-switching rule above unchanged.
+
+For each vocal section, put ONE short story brief in lyrics[0] (what the section is about). Not sung words. Not rhymes. Not line-by-line lyrics.
+- Write the story beat in the same language as idea_brief.
+- Do not write the actual chorus or verse lines Lyria should sing.
+- Chorus and Final Chorus MUST share the EXACT same brief.
+- Intro, Outro, and Instrumental have "lyrics": [].
+
+The server will prefix dialect, addressee (إنتَ / إنتِ / إنتو), and singer onto each brief. You only write the story beat.
+
+Lyria will write and sing the lyrics from these briefs.
+`;
+
+function resolveLyricsBy(body = {}, isAdmin = false) {
+  if (!isAdmin) return "gemini";
+  if (!isLyriaIdeaPromptBody(body)) return "gemini";
+  return String(body?.lyricsBy || "").trim().toLowerCase() === "lyria" ? "lyria" : "gemini";
+}
+
+function isLyricsByLyria(body = {}, isAdmin = false) {
+  return resolveLyricsBy(body, isAdmin) === "lyria";
+}
+
+function resolveLyriaProducerV3SystemPrompt({ lyricsBy } = {}) {
+  if (String(lyricsBy || "").trim().toLowerCase() === "lyria") {
+    return `${LYRIA_PRODUCER_V3_SYSTEM_PROMPT}\n${LYRIA_PRODUCER_V3_LYRICS_BY_LYRIA_OVERRIDE}`;
+  }
+  return LYRIA_PRODUCER_V3_SYSTEM_PROMPT;
+}
+
 const LYRIA_PRODUCER_V3_RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
@@ -409,7 +443,42 @@ function compactPreviousTake(raw) {
   return sections.length ? { sections } : null;
 }
 
-function buildLyriaProducerV3Input(body = {}, { lyrics = "", durationSec = 0 } = {}) {
+function sectionBriefPrefix(body = {}) {
+  const dialect = resolveLyriaDialectLabel(body);
+  const addr = String(resolveLyriaArabicAddress(body) || "").trim().toLowerCase();
+  const vocal = String(body?.vocalGender || "").trim().toLowerCase();
+  const parts = [];
+  if (dialect) {
+    parts.push(/modern standard|msa/i.test(dialect)
+      ? "Modern Standard Arabic"
+      : `${dialect} dialect`);
+  }
+  if (addr === "female") parts.push("singing to a woman (إنتِ)");
+  else if (addr === "male") parts.push("singing to a man (إنتَ)");
+  else if (addr === "group") parts.push("singing to a group (إنتو)");
+  if (vocal === "m") parts.push("male singer");
+  else if (vocal === "f") parts.push("female singer");
+  else if (vocal === "duo") parts.push("duet");
+  return parts.join(", ");
+}
+
+function cleanBriefLine(line) {
+  return capWords(String(line || "").replace(/\s+/g, " ").trim(), 40);
+}
+
+function formatSectionBriefLine(section, body = {}) {
+  const name = String(section?.name || "").trim();
+  const brief = cleanBriefLine(Array.isArray(section?.lyrics) ? section.lyrics[0] : "");
+  if (!name || !brief) return "";
+  const prefix = sectionBriefPrefix(body);
+  const head = prefix ? `[${name}] ${prefix}: ${brief}` : `[${name}] ${brief}`;
+  if (isChorusName(name)) {
+    return `${head}\nRepeat this chorus with the same words.`;
+  }
+  return head;
+}
+
+function buildLyriaProducerV3Input(body = {}, { lyrics = "", durationSec = 0, lyricsBy = "" } = {}) {
   const idea = isLyriaIdeaPromptBody(body);
   const rawPrompt = String(lyrics || body?.prompt || "").trim();
   const ideaBrief = String(body?.ideaBrief || (idea ? rawPrompt : "")).trim();
@@ -421,10 +490,14 @@ function buildLyriaProducerV3Input(body = {}, { lyrics = "", durationSec = 0 } =
     ? Math.max(60, Math.min(maxSec, Math.round(durationSec)))
     : maxSec;
   const previousTake = compactPreviousTake(body?.previousTake || body?.previous_take);
+  const lyricsByMode = String(lyricsBy || body?.lyricsBy || "").trim().toLowerCase() === "lyria"
+    ? "lyria"
+    : "gemini";
   return {
     title: String(body?.title || "").trim(),
     lyrics_raw: idea ? "" : rawPrompt,
     idea_brief: idea ? ideaBrief : "",
+    lyrics_by: lyricsByMode,
     style_tags: style,
     instruments: String(body?.instruments || "").trim(),
     song_key: String(body?.songKey || "").trim(),
@@ -444,12 +517,13 @@ function buildLyriaProducerV3Input(body = {}, { lyrics = "", durationSec = 0 } =
   };
 }
 
-function normalizeLyriaProducerV3Output(raw, { instrumental = false, input = {} } = {}) {
+function normalizeLyriaProducerV3Output(raw, { instrumental = false, input = {}, lyricsBy = "" } = {}) {
   if (!raw || typeof raw !== "object") return null;
   const list = Array.isArray(raw.sections) ? raw.sections : [];
   if (!list.length) return null;
   const style = String(input?.style_tags || "").trim();
   const mawwal = styleMentionsMawwal(style);
+  const briefsOnly = String(lyricsBy || input?.lyrics_by || "").trim().toLowerCase() === "lyria";
   const sections = [];
   for (const item of list) {
     const name = normalizeSectionName(item?.name);
@@ -466,12 +540,12 @@ function normalizeLyriaProducerV3Output(raw, { instrumental = false, input = {} 
     let intensity = Math.round(Number(item?.intensity) || 0);
     if (!Number.isFinite(intensity) || intensity < 1) intensity = 4;
     intensity = Math.max(1, Math.min(10, intensity));
+    const rawLines = Array.isArray(item?.lyrics) ? item.lyrics : [];
     const lyrics = instrumental
       ? []
-      : (Array.isArray(item?.lyrics) ? item.lyrics : [])
-        .map(cleanLyricLine)
-        .filter(Boolean)
-        .slice(0, 16);
+      : briefsOnly
+        ? [cleanBriefLine(rawLines[0])].filter(Boolean)
+        : rawLines.map(cleanLyricLine).filter(Boolean).slice(0, 16);
     const backing = instrumental || !isChorusName(name)
       ? []
       : (Array.isArray(item?.backing) ? item.backing : [])
@@ -599,6 +673,7 @@ function validateLyriaPromptV3({
   lyricsRaw = "",
   ideaMode = false,
   instrumental = false,
+  lyricsBy = "",
 } = {}) {
   const text = String(prompt || "");
   if (!text) return { ok: false, error: "empty_prompt" };
@@ -635,6 +710,7 @@ function buildLyriaPromptV3({
   producerResult,
   instrumental = false,
   lyricsRaw = "",
+  lyricsBy = "",
 } = {}) {
   const sectionsIn = producerResult?.sections;
   if (!Array.isArray(sectionsIn) || !sectionsIn.length) {
@@ -680,8 +756,25 @@ function buildLyriaPromptV3({
   });
 
   const blocks = [head.join(" ").replace(/\.\s*\./g, ".").trim(), "", ...arrLines];
+  const lyricsByMode = String(lyricsBy || body?.lyricsBy || "").trim().toLowerCase() === "lyria"
+    ? "lyria"
+    : "gemini";
 
-  if (!instrumental) {
+  if (!instrumental && lyricsByMode === "lyria") {
+    const briefLines = [];
+    for (const s of timed) {
+      const line = formatSectionBriefLine(s, body);
+      if (line) briefLines.push(line);
+    }
+    if (briefLines.length) {
+      blocks.push(
+        "",
+        "Write and sing original lyrics from these section briefs. Do not treat the briefs as sung lines. The chorus must repeat with the same words.",
+        "",
+        ...briefLines,
+      );
+    }
+  } else if (!instrumental) {
     const lyricBlocks = [];
     for (const s of timed) {
       if (!s.lyrics?.length) continue;
@@ -707,6 +800,7 @@ function buildLyriaPromptV3({
     lyricsRaw,
     ideaMode,
     instrumental,
+    lyricsBy: lyricsByMode,
   });
   if (!check.ok) return { ok: false, error: check.error };
 
@@ -718,7 +812,10 @@ function buildLyriaPromptV3({
     meter,
     bpmAppended,
     sections: timed,
-    displayLyrics: displayLyricsFromSections(timed, { instrumental }),
+    lyricsBy: lyricsByMode,
+    displayLyrics: lyricsByMode === "lyria"
+      ? ""
+      : displayLyricsFromSections(timed, { instrumental }),
   };
 }
 
@@ -750,7 +847,11 @@ function appendLyriaProducerV3AdminDetail(producerResult, stitch) {
 
 module.exports = {
   LYRIA_PRODUCER_V3_SYSTEM_PROMPT,
+  LYRIA_PRODUCER_V3_LYRICS_BY_LYRIA_OVERRIDE,
   LYRIA_PRODUCER_V3_RESPONSE_SCHEMA,
+  resolveLyricsBy,
+  isLyricsByLyria,
+  resolveLyriaProducerV3SystemPrompt,
   resolveLyriaProducerV3Enabled,
   lyriaProducerV3EnvEnabled,
   extractBpmFromText,

@@ -1008,6 +1008,9 @@ const els = {
   lyricsFieldPanel: document.getElementById("lyricsFieldPanel"),
   lyricsModeWrite: document.getElementById("lyricsModeWrite"),
   lyricsModeGenerate: document.getElementById("lyricsModeGenerate"),
+  createLyricsByRow: document.getElementById("createLyricsByRow"),
+  lyricsByGemini: document.getElementById("lyricsByGemini"),
+  lyricsByLyria: document.getElementById("lyricsByLyria"),
   btnCreateInstrumentalTick: document.getElementById("btnCreateInstrumentalTick"),
   imageMoodSummary: document.getElementById("imageMoodSummary"),
   imageMoodModal: document.getElementById("imageMoodModal"),
@@ -6972,9 +6975,36 @@ function updateBrandPulse() {
 /* Lyrics input mode — "write" (manual lyrics) or "generate" (Idea tab).
    Idea text is a song prompt: Generate turns it into lyrics + music. */
 let lyricsInputMode = "write";
+let lyricsByPref = "gemini";
 
 function isCreateIdeaMode() {
   return String(lyricsInputMode || "write") === "generate";
+}
+
+function resolveCreateLyricsBy() {
+  if (!creditsState.isAdmin || !isCreateIdeaMode()) return "gemini";
+  return lyricsByPref === "lyria" ? "lyria" : "gemini";
+}
+
+function setLyricsByPref(next) {
+  lyricsByPref = String(next || "").trim().toLowerCase() === "lyria" ? "lyria" : "gemini";
+  syncCreateLyricsByRow();
+}
+
+function syncCreateLyricsByRow() {
+  const row = els.createLyricsByRow;
+  if (!row) return;
+  const show = Boolean(creditsState.isAdmin) && isCreateIdeaMode();
+  row.hidden = !show;
+  const lyria = lyricsByPref === "lyria";
+  if (els.lyricsByGemini) {
+    els.lyricsByGemini.classList.toggle("isActive", !lyria);
+    els.lyricsByGemini.setAttribute("aria-pressed", lyria ? "false" : "true");
+  }
+  if (els.lyricsByLyria) {
+    els.lyricsByLyria.classList.toggle("isActive", lyria);
+    els.lyricsByLyria.setAttribute("aria-pressed", lyria ? "true" : "false");
+  }
 }
 
 function promptIsSongIdeaNotLyrics(text) {
@@ -7099,6 +7129,7 @@ function setLyricsInputMode(mode, opts = {}) {
   try { syncLyricsSingabilityCheckVisibility(); } catch {}
   try { syncCreateTabMorph(); } catch {}
   try { syncTemplateSparkClipGenerateReady(); } catch {}
+  try { syncCreateLyricsByRow(); } catch {}
   // Simple Create keeps a stable lyrics box — the fade collapses the flex card.
   if (!simple && !opts.silent && els.lyricsFieldPanel && els.sunoPrompt) {
     els.lyricsFieldPanel.classList.add("lyricsModeSwitching");
@@ -36239,6 +36270,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     try { syncPhotoSoloChallengeCreateUi(); } catch {}
     try { syncLyriaStudioStyleUi(); } catch {}
     try { syncCreateFlowLayoutUi(); } catch {}
+    try { syncCreateLyricsByRow(); } catch {}
     if (document.body.getAttribute("data-route") === "first-song") {
       try { onFirstSongRouteActive(); } catch {}
     }
@@ -55229,6 +55261,7 @@ function collectCreateInputsFromScreen() {
     studioSlots: activeSlottedStudioStyle()
       ? { ..._internationalStyleSlots }
       : { LEAD: "", RHYTHM: "", MOOD: "", BPM: "", KEY: "" },
+    lyricsBy: resolveCreateLyricsBy(),
   });
 }
 
@@ -55288,6 +55321,7 @@ function applyTake2Prefill(inputs) {
     }
   }
   try { syncSimpleArabicAddressRow(); } catch {}
+  setLyricsByPref(next.lyricsBy);
 }
 
 const _take2MissTaskIds = new Set();
@@ -77458,6 +77492,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { keepSimpleCreateLyricsFocus(); } catch {}
     });
   }
+  if (els.lyricsByGemini) {
+    els.lyricsByGemini.addEventListener("click", () => setLyricsByPref("gemini"));
+  }
+  if (els.lyricsByLyria) {
+    els.lyricsByLyria.addEventListener("click", () => setLyricsByPref("lyria"));
+  }
   if (els.btnCloseImageMood) {
     els.btnCloseImageMood.addEventListener("click", closeImageMoodModal);
   }
@@ -79336,6 +79376,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
         ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
         ...(ideaPromptToSongAlt || lyriaIdeaPayload ? { ideaPrompt: true, ideaBrief: userPrompt } : {}),
+        ...(creditsState.isAdmin && (ideaPromptToSongAlt || lyriaIdeaPayload)
+          ? { lyricsBy: resolveCreateLyricsBy() }
+          : {}),
         ...(isTemplateSparkLyriaFullFlow()
           ? { lyriaModel: "lyria-3.5", templateSparkFull: "1" }
           : {}),
@@ -79452,6 +79495,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         musicProvider: shelfLyriaFull ? "lyria" : getMusicProviderPref(),
         templateSparkFull: shelfLyriaFull || undefined,
         geminiProducer: creditsState.isAdmin ? getGeminiProducerPref() : undefined,
+        lyricsBy: creditsState.isAdmin ? resolveCreateLyricsBy() : undefined,
         imageOnlyInstrumental,
         instrumentalSelected,
         referenceInstrumentalOnly,
@@ -81928,6 +81972,7 @@ function syncCreateFlowLayoutUi() {
   try { syncLyricsToolsBar(); } catch {}
   try { syncCreateComposeLayout(); } catch {}
   try { syncSimpleArabicAddressRow(); } catch {}
+  try { syncCreateLyricsByRow(); } catch {}
   try { syncCreateSimpleStyleTabs(); } catch {}
   if (mode === "simple" && enabled && _createSimpleAutofocusAfterLayout) {
     _createSimpleAutofocusAfterLayout = false;

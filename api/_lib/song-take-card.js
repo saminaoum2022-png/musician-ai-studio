@@ -34,6 +34,7 @@ const CREATE_INPUT_KEYS = [
   "studioStyleId",
   "studioFamily",
   "studioSlots",
+  "lyricsBy",
 ];
 
 function svcHeaders(extra) {
@@ -133,6 +134,7 @@ function normalizeCreateInputs(raw) {
       BPM: str(slotSrc.BPM),
       KEY: str(slotSrc.KEY),
     },
+    lyricsBy: str(src.lyricsBy).toLowerCase() === "lyria" ? "lyria" : "gemini",
   };
 }
 
@@ -333,6 +335,7 @@ function buildCreateInputsFromBody(body = {}) {
     studioStyleId: body.studioStyleId,
     studioFamily: body.studioFamily,
     studioSlots: body.studioSlots,
+    lyricsBy: body.lyricsBy,
   });
 }
 

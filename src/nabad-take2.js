@@ -88,6 +88,7 @@ export function normalizeCreateInputs(raw) {
       BPM: str(slotSrc.BPM),
       KEY: str(slotSrc.KEY),
     },
+    lyricsBy: str(src.lyricsBy).toLowerCase() === "lyria" ? "lyria" : "gemini",
   };
 }
 
@@ -97,6 +98,7 @@ const INPUT_KEYS = [
   "songKey", "durationPreset", "timing", "groovePace", "prosody",
   "beatStability", "avoidTags", "artworkStyle", "voiceProfile",
   "lyricsLanguage", "lyricsDialect", "studioStyleId", "studioFamily", "studioSlots",
+  "lyricsBy",
 ];
 
 export function createInputsEqual(a, b) {
@@ -122,6 +124,7 @@ function createInputsFromTrackMeta(track, card) {
     arabicAddress: fromCard.arabicAddress || meta.arabicAddress || "",
     vocalGender: fromCard.vocalGender || fromCard.singerGender || meta.singerGender || "",
     singerGender: fromCard.singerGender || fromCard.vocalGender || meta.singerGender || "",
+    lyricsBy: fromCard.lyricsBy || meta.lyricsBy || "",
   });
 }
 

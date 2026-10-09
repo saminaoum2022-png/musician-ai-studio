@@ -3272,6 +3272,7 @@ function parseLyriaRequestDetail(detail) {
     producerStatus: String(gProducerStatusFromDetail(text) || ""),
     producerReason: lineValue("producer_reason") || lineValue("lyria_producer_v3_error") || lineValue("gemini_producer_error"),
     lyricsMode: lineValue("lyrics_mode").toLowerCase(),
+    lyricsBy: lineValue("lyrics_by").toLowerCase(),
     originalLyrics: extractMarked("original_lyrics"),
     adaptedLyrics: extractMarked("adapted_lyrics"),
   };
@@ -3385,9 +3386,13 @@ function renderGenerationDetail(data) {
   const producerStatus = g.producerStatus || parsed?.producerStatus || "";
   const producerReason = g.producerReason || parsed?.producerReason || "";
   const lyricsMode = String(g.lyricsMode || parsed?.lyricsMode || "").toLowerCase();
+  const lyricsBy = String(g.lyricsBy || parsed?.lyricsBy || "").toLowerCase();
   const originalLyrics = String(g.originalLyrics || parsed?.originalLyrics || "").trim();
   const adaptedLyrics = String(g.adaptedLyrics || parsed?.adaptedLyrics || "").trim();
   const producerHead = producerBadgeHtml(producerStatus, producerReason);
+  const lyricsByHead = lyricsBy === "lyria" || lyricsBy === "gemini"
+    ? `<span class="badge">LYRICS BY: ${escapeHtml(lyricsBy.toUpperCase())}</span>`
+    : "";
 
   const promptBlock = g.prompt
     ? `<pre class="genDetailPrompt">${escapeHtml(g.prompt)}</pre>`
@@ -3521,7 +3526,7 @@ function renderGenerationDetail(data) {
         <div class="userDetailActions">${userBtn}</div>
       </div>
       ${errorBlock}
-      ${producerHead ? `<div class="genProducerHead">${producerHead}</div>` : ""}
+      ${producerHead || lyricsByHead ? `<div class="genProducerHead">${producerHead}${lyricsByHead ? ` ${lyricsByHead}` : ""}</div>` : ""}
       <div class="detailHeroMain">
         <h3 class="detailHeroTitle">
           <span class="badge ${escapeHtml(g.status || "")}">${escapeHtml(g.status || "—")}</span>
@@ -4138,9 +4143,13 @@ function renderGenerations(data) {
         adaptedLyrics: g.adaptedLyrics,
       });
       const badge = producerBadgeHtml(g.producerStatus, g.producerReason);
+      const lyricsBy = String(g.lyricsBy || "").toLowerCase();
+      const lyricsByBadge = lyricsBy === "lyria" || lyricsBy === "gemini"
+        ? `<span class="badge">LYRICS BY: ${escapeHtml(lyricsBy.toUpperCase())}</span>`
+        : "";
       return `
       <article class="genCard rowClickable${ledgerRecovery ? " rowRecovered" : ""}" tabindex="0" role="link" data-generation-view="${gidEsc}" data-return-view="generations" aria-label="Open generation">
-        <div class="genProducerHead">${badge || `<span class="badge genProducerUnknown">PRODUCER: —</span>`}</div>
+        <div class="genProducerHead">${badge || `<span class="badge genProducerUnknown">PRODUCER: —</span>`}${lyricsByBadge ? ` ${lyricsByBadge}` : ""}</div>
         <div class="genCardMeta">
           <strong>${escapeHtml(g.userLabel || "—")}</strong>
           · ${escapeHtml(g.kind || "—")}

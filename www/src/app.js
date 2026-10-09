@@ -80819,33 +80819,36 @@ const INTERNATIONAL_STYLE_SECTIONS = Object.freeze([
   Object.freeze({ id: "chill", name: "Retro & chill", ids: Object.freeze(["synthpop_80s", "lofi_hiphop"]) }),
 ]);
 
+function simpleStudioRowFromPool(pool, active) {
+  const pick = (pool || []).filter(Boolean);
+  if (active && !pick.some((p) => p.id === active.id)) pick.unshift(active);
+  return pick.slice(0, 4);
+}
+
 function getSimpleStudioRowPresets() {
   const activeId = String(_activeLyriaStudioStyleId || "");
   const international = _studioStylesSheetTab === "international";
   const oriental = _studioStylesSheetTab === "oriental" && orientalStylesUiEnabled();
-  if (international || oriental) {
-    const pool = oriental
-      ? listOrientalStyles().map((s) => orientalStyleUi(s))
-      : listInternationalStyles().map((s) => internationalStyleUi(s));
-    const pick = [];
-    const active = studioStyleUiRecord(activeId);
-    const activeMatches = oriental
-      ? _studioFamily === "oriental" && getOrientalStyle(activeId)
-      : getInternationalStyle(activeId);
-    if (active && activeMatches) pick.push(active);
-    for (const preset of pool) {
-      if (pick.length >= 5) break;
-      if (pick.some((p) => p.id === preset.id)) continue;
-      pick.push(preset);
-    }
-    return pick.slice(0, 4);
+  // Keep the default carousel order. Only pin a style to the front when it
+  // was picked from All styles and is not already in this row (Arabic behavior).
+  if (international) {
+    return simpleStudioRowFromPool(
+      listInternationalStyles().slice(0, 5).map((s) => internationalStyleUi(s)),
+      getInternationalStyle(activeId) ? studioStyleUiRecord(activeId) : null,
+    );
   }
-  const pick = SIMPLE_ARABIC_ROW_IDS.map((id) => getLyriaStudioStyle(id)).filter(Boolean);
-  const active = _studioFamily === "arabic" ? getLyriaStudioStyle(activeId) : null;
-  if (active && !pick.some((p) => p.id === active.id)) {
-    pick.unshift(active);
+  if (oriental) {
+    return simpleStudioRowFromPool(
+      listOrientalStyles().slice(0, 5).map((s) => orientalStyleUi(s)),
+      _studioFamily === "oriental" && getOrientalStyle(activeId)
+        ? studioStyleUiRecord(activeId)
+        : null,
+    );
   }
-  return pick.slice(0, 4);
+  return simpleStudioRowFromPool(
+    SIMPLE_ARABIC_ROW_IDS.map((id) => getLyriaStudioStyle(id)),
+    _studioFamily === "arabic" ? getLyriaStudioStyle(activeId) : null,
+  );
 }
 
 const STUDIO_COVER_FILES = Object.freeze({

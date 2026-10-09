@@ -81850,11 +81850,22 @@ function mountCreateStudioBlockForFlowMode(mode) {
   if (!block || !simpleHost || !advancedPanel) return;
   const simple = mode === "simple";
   const singer = document.getElementById("singerVoicePanel");
+  const singerPills = document.getElementById("singerGenderPills");
+  const singerSlot = document.getElementById("createSimpleSingerSlot");
+  const singerHead = singer?.querySelector?.(".singerVoiceHead");
   if (simple) {
     if (block.parentElement !== simpleHost) simpleHost.appendChild(block);
     if (singer && singer.parentElement !== simpleHost) simpleHost.appendChild(singer);
     if (singer) singer.classList.remove("grow", "inputPanel", "inputPanel--style", "field");
+    if (singerPills && singerSlot && singerPills.parentElement !== singerSlot) {
+      singerSlot.appendChild(singerPills);
+    }
+    if (singerSlot) singerSlot.hidden = false;
   } else {
+    if (singerPills && singerHead && singerPills.parentElement !== singerHead) {
+      singerHead.appendChild(singerPills);
+    }
+    if (singerSlot) singerSlot.hidden = true;
     const customFields = document.getElementById("createSoundCustomFields");
     if (customFields) {
       if (block.parentElement !== advancedPanel || block.nextElementSibling !== customFields) {

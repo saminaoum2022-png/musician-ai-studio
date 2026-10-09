@@ -12306,6 +12306,26 @@ body[data-route="generate"] .createHeadActions{
 body[data-route="generate"] .createHeadActions .createCreditsChip{
   margin-right: 0;
 }
+body[data-route="generate"][data-create-layout="simple"] .createHeadTitleGroup .createCreditsChip{
+  margin: 0 0 0 10px;
+  padding: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: rgba(232, 238, 247, 0.58);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0;
+  gap: 5px;
+}
+body[data-route="generate"][data-create-layout="simple"] .createHeadTitleGroup .createCreditsChipIco{
+  width: 11px;
+  height: 11px;
+}
 .createStudioBlock{
   margin-bottom: 10px;
 }
@@ -12488,6 +12508,7 @@ body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnL
   border: 0;
   background: linear-gradient(100deg, rgba(47, 224, 192, 0.10), rgba(123, 108, 255, 0.12));
   color: #f5f5fa;
+  flex: 0 0 auto;
 }
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel[data-lyrics-mode="write"] #btnLyricsMagic{
   display: inline-flex !important;
@@ -12936,39 +12957,49 @@ body[data-route="generate"][data-create-layout="simple"] .createSimpleAddressPil
   justify-content: flex-end;
 }
 body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost #singerVoicePanel{
-  flex: 0 0 auto;
-  margin: 10px 0 0;
-  padding: 0;
-  border: none !important;
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] .createSimpleSingerSlot:not([hidden]){
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-inline-start: auto;
+  min-width: 0;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsModeTabs,
+html:not([data-theme="light"]) body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsModeTabs{
   background: transparent !important;
+  border: 0 !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  padding: 0;
+  gap: 2px;
 }
-body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .singerVoiceHead{
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 6px 0 0;
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsModeTab{
+  background: transparent;
+  box-shadow: none;
+  color: rgba(232, 238, 247, 0.46);
+  padding: 6px 12px;
 }
-body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .singerVoiceHead > .inPanelLabel{
-  font-size: 14px;
-  font-weight: 750;
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsModeTab.isActive{
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
+  box-shadow: none;
 }
 body[data-route="generate"][data-create-layout="simple"] #singerGenderPills.addressPills{
   display: flex;
   flex: 0 0 auto;
   width: auto;
-  max-width: 220px;
+  max-width: none;
   justify-content: flex-end;
   flex-wrap: nowrap;
   gap: 2px;
   margin: 0;
-  padding: 2px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -12977,15 +13008,21 @@ body[data-route="generate"][data-create-layout="simple"] #singerGenderPills .add
   flex: 0 0 auto;
   justify-content: center;
   min-width: 0;
-  min-height: 26px;
+  min-height: 28px;
   margin: 0;
   padding: 4px 10px;
   border: 0;
   border-radius: 999px;
   background: transparent;
   box-shadow: none;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 700;
+  color: rgba(232, 238, 247, 0.46);
+}
+body[data-route="generate"][data-create-layout="simple"] #singerGenderPills .addressPill.isActive{
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
+  border: 0;
 }
 body[data-route="generate"][data-create-layout="simple"] #singerPersonaPill,
 body[data-route="generate"][data-create-layout="simple"] #singerPersonaRow,
@@ -67291,6 +67328,22 @@ html.is-native-shell .playerCard[data-discover-reel="1"].isReelAnimating .player
 .createCreditsChipIco{
   flex: 0 0 auto;
   color: var(--brand-teal);
+}
+body[data-route="generate"][data-create-layout="simple"] .createHeadTitleGroup .createCreditsChip{
+  margin: 0 0 0 10px;
+  padding: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: rgba(232, 238, 247, 0.58);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0;
+  gap: 5px;
 }
 
 /* Placeholders carry the only guidance on an empty Create — keep them readable (~3:1). */

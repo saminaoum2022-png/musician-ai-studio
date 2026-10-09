@@ -81259,7 +81259,7 @@ function isCreateLyricsComposerLayout() {
     if (typeof is80sYouCreateFlow === "function" && is80sYouCreateFlow()) return false;
   } catch {}
   const onGenerate = String(document.body.getAttribute("data-route") || "") === "generate";
-  return onGenerate && createFlowModeEnabled() && getCreateFlowMode() === "advanced";
+  return onGenerate && createFlowModeEnabled();
 }
 
 function positionCreateLyricsAttachMenu() {
@@ -81331,7 +81331,7 @@ function handleCreateLyricsAttachChoice(kind) {
       requireProFeature("Hum");
       return;
     }
-    openVocalRecorderModal();
+    openHumTrackFlow();
     return;
   }
   if (kind === "vibe") {

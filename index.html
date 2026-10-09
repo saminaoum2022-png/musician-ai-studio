@@ -1323,44 +1323,55 @@
                     <span class="createLyricsAuraBlob createLyricsAuraBlob--a"></span>
                     <span class="createLyricsAuraBlob createLyricsAuraBlob--b"></span>
                   </div>
-                  <div id="createLyricsAttachFabWrap" class="createLyricsAttachFabWrap" hidden>
-                    <button id="btnCreateLyricsAttach" class="createLyricsAttachFab" type="button" aria-haspopup="menu" aria-controls="createLyricsAttachMenu" aria-expanded="false" aria-label="Add photo, hum, or vibe">
-                      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
-                    </button>
-                    <div id="createLyricsAttachMenu" class="createLyricsAttachMenu inputPanel" role="menu" hidden>
-                      <button type="button" class="createLyricsAttachMenuItem" role="menuitem" data-create-attach="photo">
-                        <span class="createLyricsAttachMenuIco" aria-hidden="true">
-                          <svg class="createTabIcon" viewBox="0 0 24 24" width="20" height="20" focusable="false"><path fill="currentColor" d="M5 4.5A2.5 2.5 0 0 0 2.5 7v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5H5Zm0 1.5h14c.55 0 1 .45 1 1v7.2l-3.33-3.32a1.8 1.8 0 0 0-2.54 0L10 15.01l-1.63-1.63a1.8 1.8 0 0 0-2.54 0L4 15.21V7c0-.55.45-1 1-1Z"/></svg>
-                        </span>
-                        <span class="createLyricsAttachMenuText">
-                          <span class="createLyricsAttachMenuLabel">Photo</span>
-                          <span class="createLyricsAttachMenuHint">Analyze your photo</span>
-                        </span>
-                      </button>
-                      <button type="button" class="createLyricsAttachMenuItem" role="menuitem" data-create-attach="hum">
-                        <span class="createLyricsAttachMenuIco" aria-hidden="true">
-                          <svg class="createTabIcon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
-                        </span>
-                        <span class="createLyricsAttachMenuText">
-                          <span class="createLyricsAttachMenuLabel">Hum</span>
-                          <span class="createLyricsAttachMenuHint">Record a melody</span>
-                        </span>
-                      </button>
-                      <button type="button" class="createLyricsAttachMenuItem createLyricsAttachMenuItem--vibe" role="menuitem" data-create-attach="vibe" hidden>
-                        <span class="createLyricsAttachMenuIco" aria-hidden="true">
-                          <svg class="createTabIcon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M4 14v4"/><path d="M8 10v8"/><path d="M12 6v12"/><path d="M16 10v8"/><path d="M20 14v4"/></svg>
-                        </span>
-                        <span class="createLyricsAttachMenuText">
-                          <span class="createLyricsAttachMenuLabel">Vibe</span>
-                          <span class="createLyricsAttachMenuHint">Read a song’s vibe</span>
-                        </span>
-                      </button>
-                    </div>
-                  </div>
                   <div class="label inPanelLabel lyricsPanelHead createSimpleCardHead">
                     <div class="lyricsModeTabs" role="tablist" aria-label="How to start">
                       <button id="lyricsModeWrite" class="lyricsModeTab isActive" type="button" role="tab" aria-selected="true">Write</button>
                       <button id="lyricsModeGenerate" class="lyricsModeTab" type="button" role="tab" aria-selected="false">Idea</button>
+                    </div>
+                    <div class="lyricsWriteIconTools" id="lyricsWriteIconTools">
+                      <button id="btnLyricsCopy" class="lyricsToolBtn" type="button" hidden title="Copy lyrics" aria-label="Copy lyrics">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      </button>
+                      <button id="btnLyricsNew" class="lyricsToolBtn" type="button" hidden title="Clear lyrics" aria-label="Clear lyrics">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+                      </button>
+                      <button id="btnLyricsDone" class="lyricsToolBtn" type="button" hidden title="Check how these lyrics will sing" aria-label="Check singability">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                      </button>
+                    </div>
+                    <div id="createLyricsAttachFabWrap" class="createLyricsAttachFabWrap" hidden>
+                      <button id="btnCreateLyricsAttach" class="createLyricsAttachFab" type="button" aria-haspopup="menu" aria-controls="createLyricsAttachMenu" aria-expanded="false" aria-label="Add photo, hum, or vibe">
+                        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+                      </button>
+                      <div id="createLyricsAttachMenu" class="createLyricsAttachMenu inputPanel" role="menu" hidden>
+                        <button type="button" class="createLyricsAttachMenuItem" role="menuitem" data-create-attach="photo">
+                          <span class="createLyricsAttachMenuIco" aria-hidden="true">
+                            <svg class="createTabIcon" viewBox="0 0 24 24" width="20" height="20" focusable="false"><path fill="currentColor" d="M5 4.5A2.5 2.5 0 0 0 2.5 7v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5H5Zm0 1.5h14c.55 0 1 .45 1 1v7.2l-3.33-3.32a1.8 1.8 0 0 0-2.54 0L10 15.01l-1.63-1.63a1.8 1.8 0 0 0-2.54 0L4 15.21V7c0-.55.45-1 1-1Z"/></svg>
+                          </span>
+                          <span class="createLyricsAttachMenuText">
+                            <span class="createLyricsAttachMenuLabel">Photo Mood</span>
+                            <span class="createLyricsAttachMenuHint">Analyze your photo</span>
+                          </span>
+                        </button>
+                        <button type="button" class="createLyricsAttachMenuItem" role="menuitem" data-create-attach="hum">
+                          <span class="createLyricsAttachMenuIco" aria-hidden="true">
+                            <svg class="createTabIcon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+                          </span>
+                          <span class="createLyricsAttachMenuText">
+                            <span class="createLyricsAttachMenuLabel">Hum Track</span>
+                            <span class="createLyricsAttachMenuHint">Hum a melody</span>
+                          </span>
+                        </button>
+                        <button type="button" class="createLyricsAttachMenuItem createLyricsAttachMenuItem--vibe" role="menuitem" data-create-attach="vibe" hidden>
+                          <span class="createLyricsAttachMenuIco" aria-hidden="true">
+                            <svg class="createTabIcon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M4 14v4"/><path d="M8 10v8"/><path d="M12 6v12"/><path d="M16 10v8"/><path d="M20 14v4"/></svg>
+                          </span>
+                          <span class="createLyricsAttachMenuText">
+                            <span class="createLyricsAttachMenuLabel">Vibe</span>
+                            <span class="createLyricsAttachMenuHint">Read a song’s vibe</span>
+                          </span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <button type="button" id="btnCreateLyricsSettings" class="createSettingsSummaryRow" hidden aria-haspopup="dialog" aria-controls="createLyricsSettingsSheet">
@@ -1388,15 +1399,6 @@
                       <button id="btnLyricsPolish" class="lyricsPolishBtn aiAssistBtn" type="button" hidden title="Tighten rhyme and line flow without changing the story" aria-label="Polish lyrics"><span class="lyricsPolishIco aiAssistIco" aria-hidden="true">✦</span><span class="lyricsPolishLabel aiAssistLabel">Polish lyrics</span></button>
                       <button id="btnLyricsUndo" class="lyricsToolBtn" type="button" hidden title="Undo last lyrics change" aria-label="Undo lyrics">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7H5v4"/><path d="M5 11c1.5-3 4.5-5 8-5 4.4 0 8 3.6 8 8s-3.6 8-8 8"/></svg>
-                      </button>
-                      <button id="btnLyricsCopy" class="lyricsToolBtn" type="button" hidden title="Copy lyrics" aria-label="Copy lyrics">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                      </button>
-                      <button id="btnLyricsNew" class="lyricsToolBtn" type="button" hidden title="Clear lyrics" aria-label="Clear lyrics">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
-                      </button>
-                      <button id="btnLyricsDone" class="lyricsToolBtn" type="button" hidden title="Check how these lyrics will sing" aria-label="Check singability">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
                       </button>
                       <button id="btnLyricsMagic" class="lyricsMagicBtn aiAssistBtn lyricsActionChip lyricsActionChip--generate" type="button" title="Write AI lyrics" aria-label="Write AI lyrics"><span class="lyricsMagicIco aiAssistIco" aria-hidden="true">✦</span><span class="lyricsMagicLabel aiAssistLabel">AI lyrics</span></button>
                       <span id="createLyricsLineCount" class="createLyricsLineCount" hidden></span>

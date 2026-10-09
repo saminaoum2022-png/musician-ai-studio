@@ -12440,15 +12440,42 @@ body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyri
   flex: 0 0 auto;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 4px;
   margin-top: 0;
 }
-body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsToolBtn,
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnLyricsSingabilityCheck,
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnLyricsDiacritics,
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnLyricsFixSinging,
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnLyricsPolish{
   display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsWriteIconTools{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+  margin-inline-start: auto;
+  min-width: 0;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsToolBtn:not([hidden]){
+  display: inline-flex !important;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(232, 238, 247, 0.62);
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsToolBtn:not([hidden]):hover,
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsToolBtn:not([hidden]):active{
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsPanelHead.createSimpleCardHead{
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 0;
 }
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsAssistBar[hidden]{
   display: none !important;
@@ -12482,7 +12509,7 @@ body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel.creat
   z-index: 2;
   margin-bottom: 0;
   isolation: isolate;
-  overflow: hidden;
+  overflow: visible;
 }
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel.createSimpleCard > *:not(.createLyricsAura){
   position: relative;
@@ -13030,9 +13057,8 @@ body[data-route="generate"][data-create-composer="1"] #lyricsFieldPanel{
   background-position: center;
 }
 .createLyricsAttachFabWrap{
-  position: absolute;
-  top: 4px;
-  right: 2px;
+  position: relative;
+  flex: 0 0 auto;
   z-index: 12;
 }
 .createLyricsAttachFabWrap[hidden]{
@@ -13042,22 +13068,36 @@ body[data-route="generate"][data-create-composer="1"] #lyricsFieldPanel{
   -webkit-appearance: none;
   appearance: none;
   margin: 0;
-  padding: 10px 12px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   border: none;
+  border-radius: 10px;
   background: transparent;
   box-shadow: none;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.72);
   display: grid;
   place-items: center;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
+body[data-route="generate"][data-create-layout="simple"] .createLyricsAttachFab{
+  color: rgba(232, 238, 247, 0.7);
+}
 .createLyricsAttachFab:active{
   transform: scale(0.92);
-  color: rgba(255, 255, 255, 0.95);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 body[data-route="generate"][data-create-composer="1"] #lyricsFieldPanel .lyricsPanelHead.createSimpleCardHead{
-  padding-right: 40px;
+  padding-right: 0;
+}
+.lyricsWriteIconTools{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+  margin-inline-start: auto;
 }
 .createInstrumentalTick{
   display: inline-flex;

@@ -19261,6 +19261,7 @@ async function mergeCloudSongsIntoLocalLibrary(opts = {}) {
   mergedDeduped.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
   const nextPublicSig = profilePublicPostsSig(mergedDeduped);
   saveLibrary(mergedDeduped);
+  void hydrateLibraryTake2Flags();
   if (prevPublicSig !== nextPublicSig) {
     invalidateProfileActivitiesCache();
     invalidateOwnerPublicPostsCache();
@@ -36167,6 +36168,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     creditsState.bucketsReady = Boolean(d?.bucketsReady);
     creditsState.ledger = Array.isArray(d?.ledger) ? d.ledger : [];
     creditsState.isAdmin = Boolean(d?.isAdmin);
+    if (creditsState.isAdmin) void hydrateLibraryTake2Flags();
     applyProSubscriptionState(d?.pro);
     if (creditsState.proActive) {
       void reconcileProSubscriptionFromDevice();
@@ -39546,8 +39548,8 @@ async function fetchUserSongsFromNetwork(reason = "unknown") {
   // happens to be a legacy `data:` URL*, same trick we use on `hub_posts`
   // for cover_url / creator_avatar. The cheap `art_url is null` branch
   // covers freshly inserted rows where we deliberately wrote null.
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_thumb_frame:meta->thumbFrame,meta_photo_mode:meta->photoMode,meta_nabad_abstract_cover:meta->nabadAbstractCover";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_thumb_frame:meta->thumbFrame,meta_photo_mode:meta->photoMode,meta_nabad_abstract_cover:meta->nabadAbstractCover";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_thumb_frame:meta->thumbFrame,meta_photo_mode:meta->photoMode,meta_nabad_abstract_cover:meta->nabadAbstractCover,meta_take_has:meta->takeCard->hasCard,meta_take_prompt:meta->takeCard->>finalPrompt";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_thumb_frame:meta->thumbFrame,meta_photo_mode:meta->photoMode,meta_nabad_abstract_cover:meta->nabadAbstractCover,meta_take_has:meta->takeCard->hasCard,meta_take_prompt:meta->takeCard->>finalPrompt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -39574,6 +39576,21 @@ async function fetchUserSongsFromNetwork(reason = "unknown") {
           signal: ctrl.signal,
           cache: "no-store",
         });
+      }
+      if (!r.ok) {
+        const takeTxt = await r.clone().text().catch(() => txt);
+        if (/takeCard|take_has|take_prompt|42703|column/i.test(takeTxt)) {
+          const colsSafe = (selectedPublishedAt ? colsWithPublished : colsLegacy)
+            .replace(/,meta_take_has:meta->takeCard->hasCard,meta_take_prompt:meta->takeCard->>finalPrompt$/, "");
+          r = await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=${colsSafe}&order=created_at.desc&limit=500${artUrlGuard}`, {
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${token}`,
+            },
+            signal: ctrl.signal,
+            cache: "no-store",
+          });
+        }
       }
     }
   } catch (e) {
@@ -39638,6 +39655,9 @@ async function fetchUserSongsFromNetwork(reason = "unknown") {
         ...(s.meta_photo_mode === true || s.meta_photo_mode === "true" ? { photoMode: true } : {}),
         ...(s.meta_nabad_abstract_cover === true || s.meta_nabad_abstract_cover === "true"
           ? { nabadAbstractCover: true }
+          : {}),
+        ...(s.meta_take_has === true || s.meta_take_has === "true" || String(s.meta_take_prompt || "").trim()
+          ? { takeCard: { hasCard: true, taskId: String(s.task_id || "").trim() } }
           : {}),
       },
       publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
@@ -54955,6 +54975,7 @@ function openLibraryTrackOptionsFromMenuButton(id) {
   if (!t) return;
   _trackSheetCtx = { mode: "library", libraryId: t.id };
   renderTrackSheetLibrary(t);
+  void ensureTakeCardForOpenSheet(t);
   const art =
     String((t.meta && (t.meta.imageThumb || t.meta.imageUrl)) || t.artUrl || "").trim() ||
     "./assets/icons/splash-mark.png";
@@ -54970,6 +54991,7 @@ function openProfilePublicTrackSheet(id) {
   if (!t) return;
   _trackSheetCtx = { mode: "profile_lib", libraryId: t.id };
   renderTrackSheetProfileLib(t);
+  void ensureTakeCardForOpenSheet(t);
   const art =
     String((t.meta && (t.meta.imageThumb || t.meta.imageUrl)) || t.artUrl || "").trim() ||
     "./assets/icons/splash-mark.png";
@@ -55234,6 +55256,118 @@ function applyTake2Prefill(inputs) {
     }
   }
   try { syncSimpleArabicAddressRow(); } catch {}
+}
+
+const _take2MissTaskIds = new Set();
+let _take2FlagHydrateInFlight = false;
+let _take2FlagHydrateQueued = false;
+
+function take2SheetStillOpen(track) {
+  const id = String(track?.id || "").trim();
+  if (!id || !_trackSheetCtx) return false;
+  if (_trackSheetCtx.libraryId && String(_trackSheetCtx.libraryId) === id) return true;
+  return false;
+}
+
+function refreshOpenTake2Sheet(track) {
+  if (!track || !take2SheetStillOpen(track)) return;
+  if (_trackSheetCtx?.mode === "profile_lib") renderTrackSheetProfileLib(track);
+  else renderTrackSheetLibrary(track);
+}
+
+function stampLibraryTakeCardFlag(track, card) {
+  const id = String(track?.id || "").trim();
+  if (!id) return null;
+  const items = loadLibrary();
+  const idx = items.findIndex((row) => String(row.id) === id);
+  if (idx < 0) return null;
+  const prev = items[idx];
+  const nextCard = {
+    ...(prev.meta && typeof prev.meta.takeCard === "object" ? prev.meta.takeCard : {}),
+    ...(card && typeof card === "object" ? card : {}),
+    hasCard: true,
+    taskId: String(card?.taskId || prev.taskId || track.taskId || "").trim(),
+  };
+  items[idx] = {
+    ...prev,
+    meta: { ...(prev.meta || {}), takeCard: nextCard },
+  };
+  saveLibrary(items);
+  return items[idx];
+}
+
+async function hydrateLibraryTake2Flags() {
+  if (!nabadTake2Enabled()) return;
+  if (_take2FlagHydrateInFlight) {
+    _take2FlagHydrateQueued = true;
+    return;
+  }
+  _take2FlagHydrateInFlight = true;
+  try {
+    const r = await apiFetch("/api/music/take-card?list=1");
+    const data = await r.json().catch(() => ({}));
+    const ids = new Set(
+      (Array.isArray(data?.taskIds) ? data.taskIds : [])
+        .map((id) => String(id || "").trim())
+        .filter(Boolean),
+    );
+    if (!ids.size) return;
+    const items = loadLibrary();
+    let changed = false;
+    const next = items.map((track) => {
+      if (String(track?.kind || "full") === "sound") return track;
+      const taskId = String(track?.taskId || "").trim();
+      if (!taskId || !ids.has(taskId) || trackHasTakeCard(track)) return track;
+      changed = true;
+      return {
+        ...track,
+        meta: {
+          ...(track.meta || {}),
+          takeCard: {
+            ...(track.meta && typeof track.meta.takeCard === "object" ? track.meta.takeCard : {}),
+            hasCard: true,
+            taskId,
+          },
+        },
+      };
+    });
+    if (changed) {
+      saveLibrary(next);
+      const openId = String(_trackSheetCtx?.libraryId || "").trim();
+      if (openId) {
+        const openTrack = next.find((row) => String(row.id) === openId);
+        if (openTrack && trackHasTakeCard(openTrack)) refreshOpenTake2Sheet(openTrack);
+      }
+    }
+  } catch {
+    /* Take 2 flags are optional; the sheet can still fetch one card. */
+  } finally {
+    _take2FlagHydrateInFlight = false;
+    if (_take2FlagHydrateQueued) {
+      _take2FlagHydrateQueued = false;
+      void hydrateLibraryTake2Flags();
+    }
+  }
+}
+
+async function ensureTakeCardForOpenSheet(track) {
+  if (!nabadTake2Enabled() || !track) return;
+  if (String(track?.kind || "full") === "sound") return;
+  if (trackHasTakeCard(track)) return;
+  const taskId = String(track?.taskId || "").trim();
+  if (!taskId || _take2MissTaskIds.has(taskId)) return;
+  try {
+    const r = await apiFetch(`/api/music/take-card?taskId=${encodeURIComponent(taskId)}`);
+    const data = await r.json().catch(() => ({}));
+    if (r.ok && (data?.takeCard?.hasCard || data?.hasCard)) {
+      const next = stampLibraryTakeCardFlag(track, data.takeCard || { hasCard: true, taskId });
+      if (next) refreshOpenTake2Sheet(next);
+      return;
+    }
+    _take2MissTaskIds.add(taskId);
+  } catch {
+    _take2MissTaskIds.add(taskId);
+  }
 }
 
 async function startTake2FromLibraryTrack(track) {
@@ -67049,6 +67183,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud, opts = {}) {
   _libraryHydrateCompleted = true;
   clearTimeout(safetyTimer);
   saveLibrary(mergedDeduped);
+  void hydrateLibraryTake2Flags();
   backfillNabadVerificationInLibrary();
   scheduleDeferredCoverBackfill(mergedDeduped);
   void backfillPendingCoverUploads(mergedDeduped);

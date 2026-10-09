@@ -1,5 +1,6 @@
 /**
  * GET  /api/music/take-card?taskId=...
+ * GET  /api/music/take-card?list=1
  * POST /api/music/take-card { action: "attach", taskId, songId?, localSongId? }
  *
  * Admin-only. Provider-neutral path for Take 2 take cards.
@@ -11,6 +12,7 @@ const { applyCors } = require("../_lib/cors");
 const { readJson, sendJson } = require("../_lib/suno-upstream");
 const {
   fetchTakeCardByTaskId,
+  listTakeCardTaskIds,
   attachTakeCardSong,
   countChildTakes,
 } = require("../_lib/song-take-card");
@@ -25,6 +27,10 @@ module.exports = async function handler(req, res) {
 
     if (req.method === "GET") {
       const url = new URL(req.url, "http://localhost");
+      if (String(url.searchParams.get("list") || "").trim() === "1") {
+        const listed = await listTakeCardTaskIds({ userId: user.userId });
+        return sendJson(res, 200, { ok: true, taskIds: listed.taskIds || [] });
+      }
       const taskId = String(url.searchParams.get("taskId") || "").trim();
       const parentSongId = String(url.searchParams.get("parentSongId") || "").trim();
       const parentTaskId = String(url.searchParams.get("parentTaskId") || "").trim();

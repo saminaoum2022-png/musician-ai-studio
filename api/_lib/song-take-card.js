@@ -229,6 +229,24 @@ async function insertTakeCard({
   return { ok: true, card: publicTakeCard(saved) || publicTakeCard(row) };
 }
 
+async function listTakeCardTaskIds({ userId } = {}) {
+  const uid = str(userId);
+  if (!uid) return { ok: false, error: "missing_ids", taskIds: [] };
+  const res = await svcFetch(
+    `song_take_cards?user_id=eq.${encodeURIComponent(uid)}&select=task_id,final_prompt&limit=1000`,
+  );
+  if (isTableMissing(res)) return { ok: false, error: "table_missing", taskIds: [] };
+  if (!res.ok) return { ok: false, error: res.text || `http_${res.status}`, taskIds: [] };
+  const rows = Array.isArray(res.data) ? res.data : [];
+  const taskIds = [...new Set(
+    rows
+      .filter((row) => str(row?.final_prompt))
+      .map((row) => str(row?.task_id))
+      .filter(Boolean),
+  )];
+  return { ok: true, taskIds };
+}
+
 async function fetchTakeCardByTaskId({ userId, taskId } = {}) {
   const uid = str(userId);
   const tid = encodeURIComponent(str(taskId));
@@ -362,6 +380,7 @@ module.exports = {
   applyTake2Title,
   publicTakeCard,
   insertTakeCard,
+  listTakeCardTaskIds,
   fetchTakeCardByTaskId,
   countChildTakes,
   attachTakeCardSong,

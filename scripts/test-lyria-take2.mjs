@@ -91,6 +91,10 @@ assert.ok(
   "v3 system prompt documents previous_take",
 );
 
+assert.equal(typeof take.listTakeCardTaskIds, "function", "listTakeCardTaskIds is exported");
+assert.equal(take.publicTakeCard({ task_id: "t1", final_prompt: "hello" })?.hasCard, true, "public card needs prompt");
+assert.equal(take.publicTakeCard({ task_id: "t1", final_prompt: "" })?.hasCard, false, "empty prompt is not a card");
+
 console.log("OK take2 unit");
 console.log("--- replay prompt (no change) ---");
 console.log(replayPrompt);

@@ -125,7 +125,6 @@ const {
 } = require("../_lib/clip-gemini-producer");
 const {
   resolveLyriaProducerV3Enabled,
-  resolveLyricsBy,
   buildLyriaProducerV3Input,
   buildLyriaPromptV3,
   appendLyriaProducerV3AdminDetail,
@@ -533,7 +532,6 @@ function buildLyriaFullSongAdminExtra({
     ...(model ? [`lyria_model: ${model}`] : []),
     ...producerLines,
     `lyrics_mode: ${idea ? "idea" : "write"}`,
-    `lyrics_by: ${resolveLyricsBy(body, isAdmin)}`,
     ...adminMultilineField("original_lyrics", idea ? "" : originalLyrics),
     ...adminMultilineField("adapted_lyrics", idea ? "" : adaptedLyrics),
     ...(dialectLabel ? [`dialect: ${dialectLabel}`] : []),
@@ -605,7 +603,6 @@ async function runLyriaGenerationJob({
           .join("\n")
         : "";
     }
-    const lyricsBy = resolveLyricsBy(body, isAdmin);
     const useProducerV3 =
       !take2.replay
       && !lyriaLegacyPromptsEnabled()
@@ -613,7 +610,7 @@ async function runLyriaGenerationJob({
     if (useProducerV3) {
       const v3input = buildLyriaProducerV3Input(
         take2.previousTake ? { ...body, previousTake: take2.previousTake } : body,
-        { lyrics, durationSec, lyricsBy },
+        { lyrics, durationSec },
       );
       const v3MaxAttempts = 3;
       let v3LastError = "plan_failed";
@@ -622,7 +619,6 @@ async function runLyriaGenerationJob({
           apiKey,
           enabled: true,
           input: v3input,
-          lyricsBy,
         });
         producerResult.v3 = true;
         producerResult.v3Attempts = attempt;
@@ -633,7 +629,6 @@ async function runLyriaGenerationJob({
             producerResult,
             instrumental,
             lyricsRaw: lyrics,
-            lyricsBy,
           });
           if (stitched.ok) {
             lyriaPrompt = stitched.prompt;

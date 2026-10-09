@@ -91,14 +91,6 @@ assert.ok(
   "v3 system prompt documents previous_take",
 );
 
-assert.equal(take.normalizeCreateInputs({}).lyricsBy, "gemini");
-assert.equal(take.normalizeCreateInputs({ lyricsBy: "lyria" }).lyricsBy, "lyria");
-assert.equal(
-  take.createInputsEqual({ ...baseInputs, lyricsBy: "gemini" }, { ...baseInputs, lyricsBy: "lyria" }),
-  false,
-  "lyricsBy change is a delta",
-);
-
 assert.equal(typeof take.listTakeCardTaskIds, "function", "listTakeCardTaskIds is exported");
 assert.equal(take.publicTakeCard({ task_id: "t1", final_prompt: "hello" })?.hasCard, true, "public card needs prompt");
 assert.equal(take.publicTakeCard({ task_id: "t1", final_prompt: "" })?.hasCard, false, "empty prompt is not a card");

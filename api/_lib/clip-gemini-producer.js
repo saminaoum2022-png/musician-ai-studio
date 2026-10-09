@@ -6,9 +6,9 @@
 const { buildLyriaVocalProfile, clipVocalProfileById, sanitizeLyriaLyricsForSinging, normalizeLyriaArrangementLines } = require("./lyria-upstream");
 const { stripInlinePunctuationFromLyrics } = require("./sung-lyrics-punctuation");
 const {
+  LYRIA_PRODUCER_V3_SYSTEM_PROMPT,
   LYRIA_PRODUCER_V3_RESPONSE_SCHEMA,
   normalizeLyriaProducerV3Output,
-  resolveLyriaProducerV3SystemPrompt,
 } = require("./lyria-producer-v3");
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
@@ -616,17 +616,14 @@ async function enrichLyriaSongWithGeminiProducer({ apiKey, input, enabled } = {}
 }
 
 /** Lyria 3.5 full song — v3 section plan. Does not rewrite style. */
-async function enrichLyriaSongWithGeminiProducerV3({ apiKey, input, enabled, lyricsBy } = {}) {
-  const lyricsByMode = String(lyricsBy || input?.lyrics_by || "").trim().toLowerCase() === "lyria"
-    ? "lyria"
-    : "gemini";
+async function enrichLyriaSongWithGeminiProducerV3({ apiKey, input, enabled } = {}) {
   const shared = {
     apiKey,
     input,
-    systemPrompt: resolveLyriaProducerV3SystemPrompt({ lyricsBy: lyricsByMode }),
+    systemPrompt: LYRIA_PRODUCER_V3_SYSTEM_PROMPT,
     timeoutMs: SONG_PRODUCER_TIMEOUT_MS,
     enabled,
-    normalizeFn: (parsed, ctx) => normalizeLyriaProducerV3Output(parsed, { ...ctx, lyricsBy: lyricsByMode }),
+    normalizeFn: (parsed, ctx) => normalizeLyriaProducerV3Output(parsed, ctx),
   };
   const withSchema = await enrichWithGeminiProducer({
     ...shared,

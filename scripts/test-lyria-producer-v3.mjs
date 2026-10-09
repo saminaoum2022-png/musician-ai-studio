@@ -182,62 +182,7 @@ const mawwalAdmin = v3.appendLyriaProducerV3AdminDetail(
 assert.ok(/producer: applied/.test(mawwalAdmin));
 assert.ok(/Mawwal:\d+s/.test(mawwalAdmin), mawwalAdmin);
 
-assert.equal(v3.resolveLyricsBy({ ideaPrompt: true, lyricsBy: "lyria" }, false), "gemini");
-assert.equal(v3.resolveLyricsBy({ ideaPrompt: true, lyricsBy: "lyria" }, true), "lyria");
-assert.equal(v3.resolveLyricsBy({ ideaPrompt: true, lyricsBy: "gemini" }, true), "gemini");
-assert.equal(v3.resolveLyricsBy({ lyricsBy: "lyria" }, true), "gemini");
-assert.ok(v3.resolveLyriaProducerV3SystemPrompt({ lyricsBy: "lyria" }).includes("LYRICS BY LYRIA"));
-assert.equal(
-  v3.resolveLyriaProducerV3SystemPrompt({ lyricsBy: "gemini" }).includes("LYRICS BY LYRIA"),
-  false,
-);
-
-const lyriaBriefs = v3.normalizeLyriaProducerV3Output({
-  sections: [
-    { name: "Intro", bars: 8, arrangement: "soft opening", intensity: 2, lyrics: ["should clear"], backing: [] },
-    { name: "Verse 1", bars: 8, arrangement: "lead and light rhythm", intensity: 4, lyrics: ["he wants a new life after the city wore him down"], backing: [] },
-    { name: "Chorus", bars: 8, arrangement: "full arrangement", intensity: 7, lyrics: ["the hook is starting over tonight"], backing: [] },
-    { name: "Final Chorus", bars: 8, arrangement: "full one step bigger", intensity: 8, lyrics: ["a different chorus brief"], backing: [] },
-    { name: "Outro", bars: 4, arrangement: "opening color fading", intensity: 2, lyrics: ["no"], backing: [] },
-  ],
-}, { input: { style_tags: "Levantine pop", lyrics_by: "lyria" }, lyricsBy: "lyria" });
-assert.deepEqual(lyriaBriefs.sections.find((s) => s.name === "Intro").lyrics, []);
-assert.deepEqual(lyriaBriefs.sections.find((s) => s.name === "Outro").lyrics, []);
-assert.equal(
-  lyriaBriefs.sections.find((s) => s.name === "Chorus").lyrics[0],
-  lyriaBriefs.sections.find((s) => s.name === "Final Chorus").lyrics[0],
-);
-
-const lyriaStitch = v3.buildLyriaPromptV3({
-  body: {
-    style: "Levantine pop, 105 BPM",
-    vocalGender: "f",
-    dialect: "Lebanese",
-    arabicAddress: "female",
-    ideaPrompt: true,
-    ideaBrief: "someone who wants to change his life",
-    lyricsBy: "lyria",
-  },
-  producerResult: lyriaBriefs,
-  lyricsRaw: "",
-  lyricsBy: "lyria",
-});
-if (!lyriaStitch.ok) fail(`lyria briefs stitch: ${lyriaStitch.error}`);
-assert.equal(lyriaStitch.prompt.includes("\nLyrics:\n"), false, "lyria mode must not send sung Lyrics block");
-assert.ok(lyriaStitch.prompt.includes("Write and sing original lyrics from these section briefs"));
-assert.ok(lyriaStitch.prompt.includes("Repeat this chorus with the same words."));
-assert.ok(lyriaStitch.prompt.includes("Lebanese dialect"));
-assert.ok(lyriaStitch.prompt.includes("singing to a woman (إنتِ)"));
-assert.ok(lyriaStitch.prompt.includes("female singer"));
-assert.equal(lyriaStitch.displayLyrics, "");
-assert.ok(lebaneseStitch.prompt.includes("\nLyrics:\n"), "gemini idea still writes sung lines");
-
-const adminDetail = require("../api/_lib/generation-admin-detail.js");
-const parsedBy = adminDetail.parseGenerationProducerDetail("lyrics_mode: idea\nlyrics_by: lyria\n");
-assert.equal(parsedBy.lyricsBy, "lyria");
-
 console.log("--- Greek-Arabic pop ---\n" + popStitch.prompt.slice(0, 900) + "\n");
 console.log("--- Lebanese Mawwal ---\n" + lebaneseStitch.prompt.slice(0, 1100) + "\n");
 console.log("--- Khaleeji pop ---\n" + khStitch.prompt.slice(0, 900) + "\n");
-console.log("--- Lyrics by Lyria ---\n" + lyriaStitch.prompt.slice(0, 1100) + "\n");
 console.log("lyria-producer-v3 tests ok");

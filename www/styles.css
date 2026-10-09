@@ -12812,6 +12812,41 @@ body[data-route="generate"] .studioStyleTile.isActive .studioStyleTileName{
   font-weight: 650;
   cursor: pointer;
 }
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createSimpleStudioHost:not([hidden]){
+  margin-top: 0;
+  padding: 2px 0 4px;
+}
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .createSimpleStudioToolbar{
+  margin-bottom: 2px;
+}
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .createSimpleStyleTab{
+  padding-bottom: 4px;
+  font-size: 13px;
+}
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .createSimpleAllStyles{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createSimpleStudioHost .lyriaStudioStyleRow{
+  padding: 4px 0 0;
+  gap: 8px;
+}
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .studioStyleTile,
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .studioStyleTileCover{
+  width: 56px;
+}
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .studioStyleTileCover{
+  height: 56px;
+  border-radius: 12px;
+}
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .studioStyleTileName{
+  margin-top: 4px;
+  font-size: 10px;
+  -webkit-line-clamp: 1;
+}
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .studioStyleTileGear{
+  width: 22px;
+  height: 22px;
+}
 .createNabadHeard{
   display: none;
   align-items: center;
@@ -24263,6 +24298,9 @@ body.trackSheetOpen .footer{
     border: none !important;
     box-shadow: none !important;
     z-index: 4;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
+    padding: 2px 0 4px;
   }
   /* Advanced sound panel + generate step take no room in Simple; the dock floats. */
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack > .createFlowStep[aria-label="Sound and title"]{

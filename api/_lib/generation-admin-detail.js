@@ -107,6 +107,10 @@ function parseGenerationProducerDetail(requestDetail) {
   const originalLyrics = extractMarkedBlock(text, "original_lyrics");
   const adaptedLyrics = extractMarkedBlock(text, "adapted_lyrics");
   const lyriaPrompt = extractLyriaPrompt(text);
+  const arabiziRaw = lineValue(text, "arabizi_instruction_used").toLowerCase();
+  let arabiziInstructionUsed = null;
+  if (arabiziRaw === "true" || arabiziRaw === "1" || arabiziRaw === "yes") arabiziInstructionUsed = true;
+  else if (arabiziRaw === "false" || arabiziRaw === "0" || arabiziRaw === "no") arabiziInstructionUsed = false;
   return {
     producerStatus,
     producerReason,
@@ -114,6 +118,7 @@ function parseGenerationProducerDetail(requestDetail) {
     originalLyrics,
     adaptedLyrics,
     lyriaPrompt,
+    arabiziInstructionUsed,
   };
 }
 

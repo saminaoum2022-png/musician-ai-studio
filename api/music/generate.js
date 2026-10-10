@@ -142,6 +142,12 @@ const {
   resolveLyriaDisplayTitle,
   resolveLyriaStoredDisplayTitle,
 } = require("../_lib/lyria-display-title");
+const {
+  maybeAppendArabiziInstruction,
+  shouldApplyArabiziDigitInstruction,
+  promptHasArabiziDigitInstruction,
+} = require("../_lib/arabizi");
+const { isArabiziInstructionEnabled } = require("../_lib/admin-runtime-settings");
 
 const LYRIA_FULL_SONG_FLOW = "lyria_full_song";
 const FULL_SONG_COST = 15;
@@ -516,6 +522,7 @@ function buildLyriaFullSongAdminExtra({
   isAdmin = false,
   originalLyrics = "",
   adaptedLyrics = "",
+  arabiziInstructionUsed = false,
 } = {}) {
   const dialectHintLine = sanitizeDialectHintForLyriaPrompt(mergeLyriaDialectHint(body));
   const dialectLabel = resolveLyriaDialectLabel(body);
@@ -537,7 +544,24 @@ function buildLyriaFullSongAdminExtra({
     ...(dialectLabel ? [`dialect: ${dialectLabel}`] : []),
     ...(dialectHintLine ? [`dialect_hint: ${dialectHintLine.slice(0, 400)}`] : []),
     ...buildLyriaClipMetaLines(body, lyriaPrompt),
+    `arabizi_instruction_used: ${arabiziInstructionUsed ? "true" : "false"}`,
   ];
+}
+
+function applyArabiziInstructionToPrompt({
+  prompt,
+  body,
+  lyrics = "",
+  displayLyrics = "",
+  enabled = false,
+} = {}) {
+  return maybeAppendArabiziInstruction({
+    prompt,
+    body,
+    lyrics,
+    displayLyrics,
+    enabled,
+  });
 }
 
 async function runLyriaGenerationJob({
@@ -557,6 +581,7 @@ async function runLyriaGenerationJob({
   fallbackLyriaPrompt = "",
 }) {
   body = stripArabicLyricContextIfUnused(body || {}, { lyrics });
+  const arabiziEnabled = await isArabiziInstructionEnabled();
   const fail = async (msg, requestDetailOverride) => {
     if (!isAdmin) {
       await refund(userId, FULL_SONG_COST, "refund_full_song", "lyria_upstream").catch(() => null);
@@ -619,6 +644,11 @@ async function runLyriaGenerationJob({
           apiKey,
           enabled: true,
           input: v3input,
+          preserveArabizi: shouldApplyArabiziDigitInstruction({
+            enabled: arabiziEnabled,
+            body,
+            lyrics,
+          }),
         });
         producerResult.v3 = true;
         producerResult.v3Attempts = attempt;
@@ -669,6 +699,7 @@ async function runLyriaGenerationJob({
             isAdmin,
             originalLyrics: isLyriaIdeaPromptBody(body) ? "" : String(lyrics || "").trim(),
             adaptedLyrics: "",
+            arabiziInstructionUsed: false,
           }),
         });
         await fail(`Producer couldn't plan this song (${v3LastError}). Try again.`, failDetail);
@@ -717,6 +748,16 @@ async function runLyriaGenerationJob({
       : take2.previousTake
         ? "take2: previous_take"
         : "";
+    const arabiziApplied = take2.replay
+      ? { prompt: lyriaPrompt, used: promptHasArabiziDigitInstruction(lyriaPrompt) }
+      : applyArabiziInstructionToPrompt({
+        prompt: lyriaPrompt,
+        body,
+        lyrics,
+        displayLyrics: v3DisplayLyrics,
+        enabled: arabiziEnabled,
+      });
+    lyriaPrompt = arabiziApplied.prompt;
     let requestDetail = buildLyriaRequestDetail({
       flow: LYRIA_FULL_SONG_FLOW,
       model,
@@ -734,6 +775,7 @@ async function runLyriaGenerationJob({
           adaptedLyrics: isLyriaIdeaPromptBody(body)
             ? ""
             : String(v3DisplayLyrics || producerResult?.structured_lyrics || "").trim(),
+          arabiziInstructionUsed: arabiziApplied.used,
         }),
       ].filter(Boolean),
     });
@@ -897,6 +939,15 @@ async function runLyriaClipGenerationJob({
       }
     }
 
+    const arabiziEnabled = await isArabiziInstructionEnabled();
+    const arabiziApplied = applyArabiziInstructionToPrompt({
+      prompt: lyriaPrompt,
+      body,
+      lyrics,
+      enabled: arabiziEnabled,
+    });
+    lyriaPrompt = arabiziApplied.prompt;
+
     let requestDetail = buildLyriaRequestDetail({
       flow: clipFlowLabel,
       model,
@@ -904,6 +955,7 @@ async function runLyriaClipGenerationJob({
       photoCount: photoImages.length,
       extraLines: [
         ...buildLyriaClipMetaLines(body, lyriaPrompt),
+        `arabizi_instruction_used: ${arabiziApplied.used ? "true" : "false"}`,
         ...String(appendProducerAdminDetail("", producerResult) || "")
           .split("\n")
           .filter(Boolean),
@@ -1778,14 +1830,21 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     }
   }
 
-  const lyriaPrompt = buildLyriaPromptFromBody(body, {
-    stylePrompt,
+  const arabiziEnabled = await isArabiziInstructionEnabled();
+  const arabiziApplied = applyArabiziInstructionToPrompt({
+    prompt: buildLyriaPromptFromBody(body, {
+      stylePrompt,
+      lyrics,
+      title,
+      instrumental,
+      clip: true,
+      isAdmin,
+    }),
+    body,
     lyrics,
-    title,
-    instrumental,
-    clip: true,
-    isAdmin,
+    enabled: arabiziEnabled,
   });
+  const lyriaPrompt = arabiziApplied.prompt;
 
   const clipFlowLabel = templateSpark
     ? "template_spark_clip"
@@ -1800,7 +1859,10 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     model,
     lyriaPrompt,
     photoCount: photoImages.length,
-    extraLines: [...buildLyriaClipMetaLines(body, lyriaPrompt)].filter(Boolean),
+    extraLines: [
+      ...buildLyriaClipMetaLines(body, lyriaPrompt),
+      `arabizi_instruction_used: ${arabiziApplied.used ? "true" : "false"}`,
+    ].filter(Boolean),
   });
 
   await logMusicGeneration({

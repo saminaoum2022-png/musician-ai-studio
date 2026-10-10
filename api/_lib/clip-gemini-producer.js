@@ -6,8 +6,8 @@
 const { buildLyriaVocalProfile, clipVocalProfileById, sanitizeLyriaLyricsForSinging, normalizeLyriaArrangementLines } = require("./lyria-upstream");
 const { stripInlinePunctuationFromLyrics } = require("./sung-lyrics-punctuation");
 const {
-  LYRIA_PRODUCER_V3_SYSTEM_PROMPT,
   LYRIA_PRODUCER_V3_RESPONSE_SCHEMA,
+  lyriaProducerV3SystemPrompt,
   normalizeLyriaProducerV3Output,
 } = require("./lyria-producer-v3");
 
@@ -616,11 +616,16 @@ async function enrichLyriaSongWithGeminiProducer({ apiKey, input, enabled } = {}
 }
 
 /** Lyria 3.5 full song — v3 section plan. Does not rewrite style. */
-async function enrichLyriaSongWithGeminiProducerV3({ apiKey, input, enabled } = {}) {
+async function enrichLyriaSongWithGeminiProducerV3({
+  apiKey,
+  input,
+  enabled,
+  preserveArabizi = false,
+} = {}) {
   const shared = {
     apiKey,
     input,
-    systemPrompt: LYRIA_PRODUCER_V3_SYSTEM_PROMPT,
+    systemPrompt: lyriaProducerV3SystemPrompt({ preserveArabizi }),
     timeoutMs: SONG_PRODUCER_TIMEOUT_MS,
     enabled,
     normalizeFn: (parsed, ctx) => normalizeLyriaProducerV3Output(parsed, ctx),

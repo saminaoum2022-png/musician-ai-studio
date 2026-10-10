@@ -1311,6 +1311,20 @@ td.num { font-variant-numeric: tabular-nums; }
 
 .checkRow input { width: auto; }
 
+.runtimeSettingRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.runtimeSettingRow .sectionNote { margin: 4px 0 0; }
+.runtimeSettingToggles { display: inline-flex; gap: 8px; flex-shrink: 0; }
+.btnGhost.isActive {
+  color: var(--text);
+  border-color: rgba(35, 213, 171, 0.45);
+  background: rgba(35, 213, 171, 0.12);
+}
+
 @media (max-width: 1024px) {
   .appShell { grid-template-columns: 1fr; }
   .sidebar {

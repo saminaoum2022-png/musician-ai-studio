@@ -1574,6 +1574,32 @@ function firstAllowedView() {
   return "overview";
 }
 
+async function runtimeSettingsFetch(options = {}) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const r = await fetch("/api/admin/runtime-settings", {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    writeSession(null);
+    throw new Error("Session expired — sign in again");
+  }
+  if (r.status === 403) {
+    throw new Error(data?.error || "Only Owner / Admin can change runtime settings.");
+  }
+  if (!r.ok) {
+    throw new Error(data?.error || `Request failed (${r.status})`);
+  }
+  return data;
+}
+
 async function teamFetch(path = "", options = {}) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
@@ -3274,6 +3300,12 @@ function parseLyriaRequestDetail(detail) {
     lyricsMode: lineValue("lyrics_mode").toLowerCase(),
     originalLyrics: extractMarked("original_lyrics"),
     adaptedLyrics: extractMarked("adapted_lyrics"),
+    arabiziInstructionUsed: (() => {
+      const raw = lineValue("arabizi_instruction_used").toLowerCase();
+      if (/^(true|1|yes)$/.test(raw)) return true;
+      if (/^(false|0|no)$/.test(raw)) return false;
+      return null;
+    })(),
   };
 }
 
@@ -3290,6 +3322,12 @@ function gProducerStatusFromDetail(text) {
   if (/lyria_producer_v3\s*→\s*lyria/i.test(pipe) && !/fallback/i.test(pipe)) return "applied";
   if (/gemini_producer off/i.test(pipe)) return "fallback";
   if (/gemini_producer\s*→/i.test(pipe)) return "applied";
+  return "";
+}
+
+function arabiziInstructionBadge(used) {
+  if (used === true) return ` · <span class="badge active">Arabizi instruction: used</span>`;
+  if (used === false) return ` · <span class="badge">Arabizi instruction: not used</span>`;
   return "";
 }
 
@@ -3402,6 +3440,7 @@ function renderGenerationDetail(data) {
          · API: <code class="promoCode">${escapeHtml(lyriaMeta?.api || "interactions (default)")}</code>
          ${lyriaMeta?.photoInput ? ` · Photo: ${escapeHtml(lyriaMeta.photoInput)}` : ""}
          ${lyriaMeta?.flow ? ` · ${escapeHtml(lyriaMeta.flow)}` : ""}
+         ${arabiziInstructionBadge(g.arabiziInstructionUsed ?? parsed?.arabiziInstructionUsed)}
        </p>`
     : "";
 
@@ -4149,6 +4188,7 @@ function renderGenerations(data) {
           · ${escapeHtml(fmtDateCompact(g.createdAt))}
           · ${fmtNum(g.creditsUsed, 1)} cr
           ${g.providerCostUsd != null ? ` · ${fmtUsd(g.providerCostUsd)}` : ""}
+          ${arabiziInstructionBadge(g.arabiziInstructionUsed)}
         </div>
         ${failReason ? `<p class="genCardError">${escapeHtml(failReason)}</p>` : ""}
         <p class="genCardSummary">${escapeHtml(g.prompt || "—")}</p>
@@ -4394,7 +4434,29 @@ function renderSettings(data) {
       <p class="sectionNote">Only <strong>Owner / Admin</strong> can invite teammates. Your role is <strong>${escapeHtml(state.adminSession?.roleLabel || "—")}</strong>.</p>
     </section>`;
 
+  const arabiziOn = data.runtimeSettings?.arabiziInstruction !== false;
+  const lyriaFlagsCard = canManage ? `
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Lyria prompts</h3>
+        <p class="sectionNote">Kill switches for prompt extras. Off restores the previous Lyria prompt with no deploy.</p>
+      </div>
+      <div class="runtimeSettingRow">
+        <div>
+          <strong>Arabizi instruction</strong>
+          <p class="sectionNote">Adds the Franco-Arabic digit map when an Arabic song has words like 3ayni or 7abibi.</p>
+        </div>
+        <div class="runtimeSettingToggles" role="group" aria-label="Arabizi instruction">
+          <button type="button" class="btnGhost${arabiziOn ? " isActive" : ""}" data-arabizi-instruction="1" aria-pressed="${arabiziOn ? "true" : "false"}">On</button>
+          <button type="button" class="btnGhost${!arabiziOn ? " isActive" : ""}" data-arabizi-instruction="0" aria-pressed="${arabiziOn ? "false" : "true"}">Off</button>
+        </div>
+      </div>
+      ${data.runtimeSettingsError ? `<p class="grantMsg isErr">${escapeHtml(data.runtimeSettingsError)}</p>` : ""}
+      <p id="runtimeSettingsMsg" class="grantMsg" hidden></p>
+    </section>` : "";
+
   els.panels.settings.innerHTML = adminPageStack(`
+    ${lyriaFlagsCard}
     ${inviteForm}
     ${canManage ? dataPanel({
       title: "Current team",
@@ -7144,6 +7206,13 @@ async function loadView({ force = false } = {}) {
         data.teamError = e?.message || String(e);
         data.teamRoles = data.roles || [];
       }
+      try {
+        const runtime = await runtimeSettingsFetch();
+        data.runtimeSettings = runtime.settings || {};
+      } catch (e) {
+        data.runtimeSettingsError = e?.message || String(e);
+        data.runtimeSettings = { arabiziInstruction: true };
+      }
     }
     state.cache[cacheKey] = data;
     if (view === "support-inbox" && !state.inboxMessageId && els.pageSub) {
@@ -8466,6 +8535,39 @@ document.body.addEventListener("click", (e) => {
         showError(err?.message || "Save failed");
       } finally {
         marketingSaveBtn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const arabiziBtn = e.target.closest("[data-arabizi-instruction]");
+  if (arabiziBtn) {
+    const enabled = arabiziBtn.getAttribute("data-arabizi-instruction") === "1";
+    const msg = document.getElementById("runtimeSettingsMsg");
+    void (async () => {
+      arabiziBtn.disabled = true;
+      try {
+        const saved = await runtimeSettingsFetch({
+          method: "PATCH",
+          body: JSON.stringify({ key: "arabizi_instruction", enabled }),
+        });
+        clearSettingsCache();
+        if (state.view === "settings") await loadView({ force: true });
+        if (msg) {
+          msg.hidden = false;
+          msg.className = "grantMsg";
+          msg.textContent = saved.message || (enabled ? "Arabizi instruction is on." : "Arabizi instruction is off.");
+        }
+        showError("");
+      } catch (err) {
+        if (msg) {
+          msg.hidden = false;
+          msg.className = "grantMsg isErr";
+          msg.textContent = err?.message || "Could not save setting.";
+        }
+        showError(err?.message || "Could not save setting");
+      } finally {
+        arabiziBtn.disabled = false;
       }
     })();
     return;

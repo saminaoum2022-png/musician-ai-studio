@@ -12,7 +12,7 @@ const {
   resolveLyriaDialectLabel,
   resolveLyriaArabicAddress,
 } = require("./lyria-upstream");
-const { isArabiziScript } = require("./arabizi");
+const { isArabiziScript, ARABIZI_V3_PRESERVE_BLOCK } = require("./arabizi");
 
 const MAWWAL_SECONDS = 18;
 const MAWWAL_SECONDS_MIN = 15;
@@ -162,6 +162,11 @@ Do not write intensity into any lyric or arrangement string — it is a number f
 If instrumental is true, every section has "lyrics": [] and "backing": [] and no vocal words in the arrangement text.
 
 Return ONLY the JSON object.`;
+
+function lyriaProducerV3SystemPrompt({ preserveArabizi = false } = {}) {
+  if (!preserveArabizi) return LYRIA_PRODUCER_V3_SYSTEM_PROMPT;
+  return `${LYRIA_PRODUCER_V3_SYSTEM_PROMPT}${ARABIZI_V3_PRESERVE_BLOCK}`;
+}
 
 const LYRIA_PRODUCER_V3_RESPONSE_SCHEMA = {
   type: "OBJECT",
@@ -750,6 +755,7 @@ function appendLyriaProducerV3AdminDetail(producerResult, stitch) {
 
 module.exports = {
   LYRIA_PRODUCER_V3_SYSTEM_PROMPT,
+  lyriaProducerV3SystemPrompt,
   LYRIA_PRODUCER_V3_RESPONSE_SCHEMA,
   resolveLyriaProducerV3Enabled,
   lyriaProducerV3EnvEnabled,

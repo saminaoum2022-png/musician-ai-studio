@@ -1,5 +1,7 @@
 /** Lebanese / Levantine Arabizi detection + prompt helpers (server). */
 
+const { dialectFlags } = require("./arabic-dialect-lyrics");
+
 const ARABIC_SCRIPT_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 const LATIN_LETTER_RE = /[A-Za-z\u00C0-\u024F\u1E00-\u1EFF]/;
 const ARABIZI_DIGIT_IN_WORD_RE = /(?:^|[\s'(\[])[a-zA-Z]*[253789][a-zA-Z][\w']*/;
@@ -196,6 +198,140 @@ function isArabiziScript({ scriptFormat = "", lyrics = "" } = {}) {
   return looksLikeArabizi(lyrics);
 }
 
+const ARABIZI_INSTRUCTION_MARKER = "Some lyrics are Arabic written in Arabizi. Read them as Arabic, never as English";
+const ARABIZI_DIGIT_CHARS = "235679";
+
+function tokenizeLyricWords(text) {
+  return String(text || "")
+    .split(/[^\p{L}\p{N}'’éÉ]+/u)
+    .map((w) => w.replace(/^[^\p{L}\p{N}éÉ]+|[^\p{L}\p{N}éÉ]+$/gu, ""))
+    .filter(Boolean);
+}
+
+/** Latin letters mixed with 2/3/5/6/7/9, or Latin + é (7elwé, ma3é, kelmé). */
+function isArabiziDigitWord(word) {
+  const w = String(word || "");
+  if (!w) return false;
+  const hasLatin = /[A-Za-z\u00C0-\u024F]/.test(w);
+  if (!hasLatin) return false;
+  if (new RegExp(`[${ARABIZI_DIGIT_CHARS}]`).test(w)) return true;
+  return /[éÉ]/.test(w);
+}
+
+function findArabiziDigitWords(text) {
+  return tokenizeLyricWords(text).filter(isArabiziDigitWord);
+}
+
+function hasArabiziDigitWord(text) {
+  return findArabiziDigitWords(text).length > 0;
+}
+
+function isPlainNonArabicLanguage(lang) {
+  const l = String(lang || "").trim().toLowerCase();
+  return l === "english" || l === "french" || l === "spanish";
+}
+
+function isArabicSongForArabiziInstruction({ body = {}, lyrics = "" } = {}) {
+  const seed = String(lyrics || body?.prompt || body?.ideaBrief || "");
+  const lang = String(body?.lyricsLanguage || "").trim().toLowerCase();
+  const fmt = String(body?.scriptFormat || "").trim().toLowerCase();
+  if (isPlainNonArabicLanguage(lang) && !ARABIC_SCRIPT_RE.test(seed)) return false;
+  if (fmt === "arabic" || fmt === "arabizi") return true;
+  if (lang === "arabic" || lang === "arabizi") return true;
+  if (ARABIC_SCRIPT_RE.test(seed)) return true;
+  const flags = dialectFlags(body?.dialect || "", body?.dialectHint || body?.dialect || "");
+  if (
+    flags.isMsa
+    || flags.isLebanese
+    || flags.isEgyptian
+    || flags.isIraqi
+    || flags.isGulf
+    || flags.isMaghrebi
+    || flags.isLevantineColloquial
+  ) {
+    return true;
+  }
+  return /arabic|egyptian|iraqi|gulf|maghrebi|syrian|palestinian|tunisian|sudanese|darija|msa|lebanese|levantine|فصحى|محك/.test(
+    flags.blob || "",
+  );
+}
+
+function arabiziInstructionDialectName(body = {}) {
+  const blob = `${body?.dialect || ""} ${body?.dialectHint || ""}`.trim();
+  const flags = dialectFlags(body?.dialect || "", blob);
+  if (flags.isLebanese) return "Lebanese";
+  if (flags.isEgyptian) return "Egyptian";
+  if (flags.isIraqi) return "Iraqi";
+  if (flags.isGulf) return "Khaleeji";
+  if (flags.isMaghrebi) return "Maghrebi";
+  if (flags.isLevantineColloquial) return "Levantine";
+  if (flags.isMsa) return "Modern Standard";
+  const direct = String(body?.dialect || "").trim();
+  if (direct) return direct.replace(/\s*arabic\s*/i, "").trim() || "colloquial";
+  return "colloquial";
+}
+
+function buildLyriaArabiziDigitInstruction({ dialect = "colloquial" } = {}) {
+  const name = String(dialect || "colloquial").trim() || "colloquial";
+  return [
+    `${ARABIZI_INSTRUCTION_MARKER}:`,
+    "2 = ء (hamza; in Lebanese it often replaces ق, e.g. 2albi)",
+    "3 = ع",
+    "5 or kh = خ",
+    "6 = ط",
+    "7 = ح",
+    "9 = ق",
+    "gh = غ",
+    "sh = ش",
+    "é = the light Lebanese \"e\" (imala), as in French \"é\" (e.g. 7elwé, ma3é). Never pronounce it as \"a\" or as a long \"ee\".",
+    "i or ee = long \"ee\" (e.g. 7abibi).",
+    `Sing everything with native ${name} Arabic pronunciation, no foreign accent. Arabic-script and Arabizi words in the same song share the same accent.`,
+  ].join("\n");
+}
+
+function promptHasArabiziDigitInstruction(prompt) {
+  return String(prompt || "").includes(ARABIZI_INSTRUCTION_MARKER);
+}
+
+function shouldApplyArabiziDigitInstruction({
+  enabled = true,
+  body = {},
+  lyrics = "",
+  displayLyrics = "",
+} = {}) {
+  if (!enabled) return false;
+  const seed = [lyrics, displayLyrics, body?.prompt, body?.ideaBrief].filter(Boolean).join("\n");
+  if (!isArabicSongForArabiziInstruction({ body, lyrics: seed })) return false;
+  return hasArabiziDigitWord(seed);
+}
+
+function maybeAppendArabiziInstruction({
+  prompt = "",
+  body = {},
+  lyrics = "",
+  displayLyrics = "",
+  enabled = true,
+} = {}) {
+  const current = String(prompt || "");
+  if (!enabled) return { prompt: current, used: false };
+  if (promptHasArabiziDigitInstruction(current)) {
+    return { prompt: current, used: true };
+  }
+  const detectText = [lyrics, displayLyrics].filter(Boolean).join("\n");
+  if (!shouldApplyArabiziDigitInstruction({ enabled, body, lyrics: detectText })) {
+    return { prompt: current, used: false };
+  }
+  const instruction = buildLyriaArabiziDigitInstruction({
+    dialect: arabiziInstructionDialectName(body),
+  });
+  const next = current.trim() ? `${current.trim()}\n\n${instruction}` : instruction;
+  return { prompt: next, used: true };
+}
+
+const ARABIZI_V3_PRESERVE_BLOCK = `
+=== ARABIZI WORDS ===
+- Keep every Arabizi word exactly as the user wrote it (Latin letters mixed with 2, 3, 5, 6, 7, 9, and é). Never convert, translate, or respell them — same rule as harakat. Mixed Arabic-script and Arabizi words in the same song are allowed.`;
+
 /** @deprecated Use buildToArabiziConversionLines — kept for importers. */
 const TO_ARABIZI_LINES = buildToArabiziConversionLines();
 
@@ -209,5 +345,16 @@ module.exports = {
   buildToArabiziConversionLines,
   buildLevantineFrancoConversionRules,
   buildLyriaArabiziPerformanceNote,
+  isArabiziDigitWord,
+  hasArabiziDigitWord,
+  findArabiziDigitWords,
+  isArabicSongForArabiziInstruction,
+  arabiziInstructionDialectName,
+  buildLyriaArabiziDigitInstruction,
+  promptHasArabiziDigitInstruction,
+  shouldApplyArabiziDigitInstruction,
+  maybeAppendArabiziInstruction,
+  ARABIZI_INSTRUCTION_MARKER,
+  ARABIZI_V3_PRESERVE_BLOCK,
   TO_ARABIZI_LINES,
 };

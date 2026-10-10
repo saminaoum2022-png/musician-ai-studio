@@ -67684,6 +67684,12 @@ body[data-route="generate"] #createTabHum .webProFeaturePill--pill{
   letter-spacing: 0.06em;
 }
 
+/* Finished songs live in Profile → Library. Never park a second card on Create. */
+body[data-route="generate"] #resultCard,
+body[data-route="generate"] #resultCard2{
+  display: none !important;
+}
+
 /* Result card — same surface family as the input panels (radius 18, panel glass). */
 body[data-route="generate"] .resultCard{
   border-radius: 18px;

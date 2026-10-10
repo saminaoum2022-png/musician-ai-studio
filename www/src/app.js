@@ -9858,8 +9858,8 @@ const CHALLENGE_IDEAS = [
   {
     id: "spell-you",
     title: "Spell You",
-    styleLyria: "late-night dark synth pop, mysterious midnight atmosphere, dark synth pads, soft church-organ or bell motif intro, deep 808, dark choir hint in the chorus, cinematic intimate vocal, not jump-scare, not kids Halloween, no pumpkins, 102 bpm",
-    style: "late-night dark synth pop, mysterious midnight atmosphere, dark synth pads, soft church-organ or bell motif intro, deep 808, dark choir hint in the chorus, cinematic intimate vocal, not jump-scare, not kids Halloween, no pumpkins, 102 bpm",
+    styleLyria: "80s synthpop, dark atmospheric electronic pop",
+    style: "80s synthpop, dark atmospheric electronic pop",
     lyricsMode: "instructions",
     lyrics: "Spell You — the name is the idea. One harmless annoyance makes the spell.",
     prompt: "Put a spell on someone. Make it a song.",
@@ -20476,8 +20476,13 @@ async function draft80sYouLyricsForGenerate(mood) {
   return _80sLyricsGenInFlight;
 }
 
-const SPELL_YOU_STYLE =
-  "late-night dark synth pop, mysterious midnight atmosphere, dark synth pads, soft church-organ or bell motif intro, deep 808, dark choir hint in the chorus, cinematic intimate vocal, not jump-scare, not kids Halloween, no pumpkins, 102 bpm";
+const SPELL_YOU_STYLE_AR = "arabic-trap";
+const SPELL_YOU_STYLE_EN = "synthpop_80s";
+function spellYouLockedStyleFallback() {
+  return spellYouLanguageValue() === "arabic"
+    ? "Arabic trap, melodic hip-hop, Middle Eastern trap, heavy 808 sub-bass, short lead hook under the 808"
+    : "80s synthpop, dark atmospheric electronic pop, punchy LinnDrum beat, warm pulsing analog bassline";
+}
 const SPELL_YOU_HARSH_RE =
   /\b(kill|murder|rape|suicide|ugly|fat|slut|whore|bitch|stupid|idiot|retard|hate you|hurt|beat|family|mother|father|mom|dad|religion|islam|christian|jew|cancer|disease|disabled|cripple)\b|لعنة|اللعنة|أهلك|دينك|بموت|شتم|يلعن/i;
 
@@ -20612,7 +20617,6 @@ function syncSpellYouCardUi() {
   const sub = document.getElementById("createSpellYouSummarySub");
   if (title) title.textContent = name ? `Spell on ${name}` : "Spell You";
   if (sub) sub.textContent = annoyance ? `${annoyance} · tap to edit` : "Tap to edit name or annoyance.";
-  try { applySpellYouLockedStyle(); } catch {}
   try { persistSpellYouChallengePerson(); } catch {}
 }
 function syncSpellYouContinueState() {
@@ -20623,12 +20627,20 @@ function syncSpellYouContinueState() {
   btn.classList.toggle("isReady", ready);
 }
 function applySpellYouLockedStyle() {
-  if (!isSpellYouCreateFlow() || !els.sunoStyle) return;
+  if (!isSpellYouCreateFlow()) return;
+  const arabic = spellYouLanguageValue() === "arabic";
+  if (arabic) {
+    const oriental = getOrientalStyle(SPELL_YOU_STYLE_AR);
+    if (oriental) applyOrientalStudioStyle(oriental, { keepSinger: true });
+  } else {
+    const intl = getInternationalStyle(SPELL_YOU_STYLE_EN);
+    if (intl) applyInternationalStudioStyle(intl, { keepSinger: true });
+  }
+  if (!els.sunoStyle) return;
   const clause = challengeDurationStyleClause("spell-you");
-  els.sunoStyle.value = templateStyleForProvider(
-    `${SPELL_YOU_STYLE}, ${clause}`,
-    "spell-you",
-  );
+  let base = String(els.sunoStyle.value || "").trim() || spellYouLockedStyleFallback();
+  if (clause && !base.includes(clause)) base = `${base}, ${clause}`;
+  els.sunoStyle.value = templateStyleForProvider(base, "spell-you");
 }
 function ensureSpellYouArabicDefaults() {
   if (!isSpellYouCreateFlow()) return;
@@ -20682,7 +20694,7 @@ async function draftSpellYouLyricsForGenerate() {
     try { applyLyricsLanguageToDialect(); } catch {}
     try { ensureSpellYouArabicDefaults(); } catch {}
     applySpellYouLockedStyle();
-    const style = String(els.sunoStyle?.value || SPELL_YOU_STYLE).trim();
+    const style = String(els.sunoStyle?.value || spellYouLockedStyleFallback()).trim();
     const dialect = String(els.sunoDialect?.value || "").trim();
     const challenge = challengePromptContext();
     const brief = buildSpellYouLyricsBrief();
@@ -20844,6 +20856,9 @@ function wireSpellYouCardOnce() {
     }
     syncSpellYouContinueState();
     try { syncSpellYouCardUi(); } catch {}
+    if (isSpellYouCreateFlow()) {
+      try { applySpellYouIdeaIntoCreate(); } catch {}
+    }
     try { syncGenerateOrbVisibility(); } catch {}
   };
   nameEl?.addEventListener("input", onChange);
@@ -20886,6 +20901,9 @@ function wireSpellYouCardOnce() {
       b.setAttribute("aria-pressed", on ? "true" : "false");
     });
     onChange();
+    if (isSpellYouCreateFlow()) {
+      try { applySpellYouLockedStyle(); } catch {}
+    }
   });
   document.getElementById("btnCloseSpellYouSheet")?.addEventListener("click", closeSpellYouSheet);
   sheet.querySelector("[data-spell-you-dismiss]")?.addEventListener("click", closeSpellYouSheet);
@@ -78348,80 +78366,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
     });
   }
-  const showResultCard = (show) => {
-    if (!els.resultCard) return;
-    if (!show) {
-      hideCreateResultCards();
-      return;
-    }
-    els.resultCard.style.display = "";
-    if (els.resultCard2) {
-      els.resultCard2.style.display = (lastSunoFullUrl2 || lastSunoProxyUrl2) ? "" : "none";
-    }
-    if (els.resultTitle) els.resultTitle.textContent = lastSunoTitle || "Generated song";
-    const metaLine = buildGeneratedResultMetaLine();
-    const rm = document.getElementById("resultMetaLine");
-    const rm2 = document.getElementById("resultMetaLine2");
-    if (rm) rm.textContent = metaLine;
-    if (rm2) rm2.textContent = metaLine;
-    if (els.resultArt) {
-      const resultArtSrc =
-        resolvePendingPhotoCoverDataUrl() ||
-        (lastGenerationMeta?.photoMode ? lastSunoArtUrl : "") ||
-        placeholderCoverDataUrl();
-      setCoverImageSrc(els.resultArt, resultArtSrc || brokenCoverPlaceholderUrl());
-      els.resultArt.alt = lastSunoTitle ? `Cover: ${lastSunoTitle}` : "Song cover";
-      els.resultArt.style.display = "";
-    }
-    if (els.resultDownload) {
-      const downloadUrl = lastSunoCachedUrl || lastSunoProxyUrl || lastSunoFullUrl;
-      if (downloadUrl) {
-        els.resultDownload.href = downloadUrl;
-        els.resultDownload.classList.remove("disabled");
-      } else {
-        els.resultDownload.href = "#";
-        els.resultDownload.classList.add("disabled");
-      }
-    }
-    if (els.btnResultOpenDirect) {
-      if (lastSunoProxyUrl || lastSunoFullUrl) {
-        els.btnResultOpenDirect.href = lastSunoProxyUrl || lastSunoFullUrl;
-        els.btnResultOpenDirect.classList.remove("disabled");
-      } else {
-        els.btnResultOpenDirect.href = "#";
-        els.btnResultOpenDirect.classList.add("disabled");
-      }
-    }
-    if (els.resultTitle2) els.resultTitle2.textContent = lastSunoTitle2 || "Generated song B";
-    if (els.resultArt2) {
-      const resultArt2Src =
-        resolvePendingPhotoCoverDataUrl() ||
-        (lastGenerationMeta?.photoMode ? (lastSunoArtUrl2 || lastSunoArtUrl) : "") ||
-        placeholderCoverDataUrl();
-      setCoverImageSrc(els.resultArt2, resultArt2Src || brokenCoverPlaceholderUrl());
-      els.resultArt2.alt = lastSunoTitle2 ? `Cover: ${lastSunoTitle2}` : "Song cover B";
-      els.resultArt2.style.display = "";
-    }
-    if (els.resultDownload2) {
-      const downloadUrl2 = lastSunoCachedUrl2 || lastSunoProxyUrl2 || lastSunoFullUrl2;
-      if (downloadUrl2) {
-        els.resultDownload2.href = downloadUrl2;
-        els.resultDownload2.classList.remove("disabled");
-      } else {
-        els.resultDownload2.href = "#";
-        els.resultDownload2.classList.add("disabled");
-      }
-    }
-    if (els.btnResultOpenDirect2) {
-      if (lastSunoProxyUrl2 || lastSunoFullUrl2) {
-        els.btnResultOpenDirect2.href = lastSunoProxyUrl2 || lastSunoFullUrl2;
-        els.btnResultOpenDirect2.classList.remove("disabled");
-      } else {
-        els.btnResultOpenDirect2.href = "#";
-        els.btnResultOpenDirect2.classList.add("disabled");
-      }
-    }
-    syncGenerateOrbVisibility();
+  const showResultCard = (_show) => {
+    hideCreateResultCards();
+    try { syncGenerateOrbVisibility(); } catch {}
     try { syncCreateComposeLayout(); } catch {}
   };
   const setGenerateBtn = (label, disabled, mode) => {
@@ -79289,7 +79236,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (ideaClip || lyriaIdeaClip) finalPrompt = "";
         if (isSpellPhotoSolo) applySpellYouLockedStyle();
         const clipStyle = isSpellPhotoSolo
-          ? String(els.sunoStyle?.value || SPELL_YOU_STYLE).trim()
+          ? String(els.sunoStyle?.value || spellYouLockedStyleFallback()).trim()
           : lyriaIdeaClip
             ? userStyleRaw
             : lyriaRaw

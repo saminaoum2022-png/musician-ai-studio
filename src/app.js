@@ -83842,6 +83842,7 @@ function syncCreateComposeLayout() {
     mobile = window.matchMedia("(max-width: 720px)").matches;
   } catch {}
   const simpleFill = isCreateSimpleMobileFill();
+  try { syncCreateKeyboardStyleVisibility(); } catch {}
   const keyboardOpen = document.body.classList.contains("createKeyboardOpen");
   const lyricsFocused =
     flow.classList.contains("focusInput") &&
@@ -83914,6 +83915,19 @@ function scrollCreatePanelAboveKeyboard(field) {
   } catch {}
 }
 
+function isCreateLyricsKeyboardField(field) {
+  const el = field || _createFocusedField || document.activeElement;
+  if (!el || !el.closest) return false;
+  return Boolean(el.closest("#lyricsFieldPanel"));
+}
+
+function syncCreateKeyboardStyleVisibility() {
+  const lyricsKb = document.body.classList.contains("createKeyboardOpen")
+    && isCreateSimpleCreateLayout()
+    && isCreateLyricsKeyboardField();
+  document.body.classList.toggle("createLyricsKeyboard", lyricsKb);
+}
+
 function applyCreateKeyboardOpen(height) {
   if (!isGenerateRouteActive()) return;
   let kb = Math.max(0, Math.round(Number(height) || 0));
@@ -83923,6 +83937,7 @@ function applyCreateKeyboardOpen(height) {
   if (document.body.classList.contains("createKeyboardOpen") && _createKeyboardInsetLast > 0 && !insetChanged) {
     syncCreateComposeLayout();
     try { autoResizeLyricsBox(); } catch {}
+    try { syncCreateKeyboardStyleVisibility(); } catch {}
     window.requestAnimationFrame(() => {
       try { syncCreateSimpleViewportHeight(); } catch {}
     });
@@ -83931,6 +83946,7 @@ function applyCreateKeyboardOpen(height) {
   _createKeyboardHeight = kb;
   _createKeyboardInsetLast = kb;
   document.body.classList.add("createKeyboardOpen");
+  try { syncCreateKeyboardStyleVisibility(); } catch {}
   try {
     document.documentElement.style.setProperty("--create-keyboard-inset", `${kb}px`);
   } catch {}
@@ -83991,7 +84007,7 @@ function clearCreatePageKeyboardInset() {
     cancelAnimationFrame(_createKeyboardViewportRaf);
     _createKeyboardViewportRaf = 0;
   }
-  document.body.classList.remove("createKeyboardOpen");
+  document.body.classList.remove("createKeyboardOpen", "createLyricsKeyboard");
   try {
     document.documentElement.style.setProperty("--create-keyboard-inset", "0px");
   } catch {}
@@ -84015,6 +84031,7 @@ function handleCreateFieldFocus(target) {
   _createFocusedField = target;
   if (isCreateSimpleCreateLayout()) {
     try { syncCreateComposeLayout(); } catch {}
+    try { syncCreateKeyboardStyleVisibility(); } catch {}
   }
   setGenerateInputFocus(target.closest(".inputPanel") || null);
   scheduleCreateMobileWebKeyboardSync();

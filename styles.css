@@ -12812,6 +12812,9 @@ body[data-route="generate"] .studioStyleTile.isActive .studioStyleTileName{
   font-weight: 650;
   cursor: pointer;
 }
+body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createSimpleStudioHost:not([hidden]){
+  display: none !important;
+}
 body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createSimpleStudioHost:not([hidden]){
   margin-top: 0;
   padding: 2px 0 4px;
@@ -13324,6 +13327,9 @@ html:not([data-theme="light"]) .createLyricsAttachMenu{
 }
 body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost:not([hidden]){
   display: block;
+}
+body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createSimpleStudioHost:not([hidden]){
+  display: none !important;
 }
 #createSimpleStudioHost[hidden]{
   display: none !important;
@@ -24300,6 +24306,9 @@ body.trackSheetOpen .footer{
     border: none !important;
     box-shadow: none !important;
     z-index: 4;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
+    display: none !important;
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
     padding: 2px 0 4px;

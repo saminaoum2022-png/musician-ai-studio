@@ -12584,10 +12584,29 @@ body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost
 body[data-route="generate"][data-create-layout="simple"] .createSimpleGenerateWrap{
   display: none !important;
 }
-body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsBox textarea{
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel,
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsBox,
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsBoxMain,
+body[data-route="generate"][data-create-layout="simple"] #sunoPrompt{
+  -webkit-tap-highlight-color: transparent;
+}
+body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsBox textarea,
+body[data-route="generate"][data-create-layout="simple"] #sunoPrompt{
+  -webkit-appearance: none;
+  appearance: none;
   min-height: 96px;
   font-size: 17px;
   line-height: 1.45;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  -webkit-touch-callout: none;
+}
+body[data-route="generate"][data-create-layout="simple"] #sunoPrompt::selection{
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
 }
 body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel .lyricsPanelHead{
   margin-bottom: 8px;
@@ -12812,8 +12831,11 @@ body[data-route="generate"] .studioStyleTile.isActive .studioStyleTileName{
   font-weight: 650;
   cursor: pointer;
 }
-body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createSimpleStudioHost:not([hidden]),
-body[data-route="generate"][data-create-layout="simple"]:has(#sunoPrompt:focus) #createSimpleStudioHost:not([hidden]){
+body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard:not(.createKeyboardOpen) #createSimpleStudioHost:not([hidden]){
+  visibility: hidden;
+  pointer-events: none;
+}
+body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard.createKeyboardOpen #createSimpleStudioHost:not([hidden]){
   display: none !important;
 }
 body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createSimpleStudioHost:not([hidden]){
@@ -13329,8 +13351,11 @@ html:not([data-theme="light"]) .createLyricsAttachMenu{
 body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost:not([hidden]){
   display: block;
 }
-body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createSimpleStudioHost:not([hidden]),
-body[data-route="generate"][data-create-layout="simple"]:has(#sunoPrompt:focus) #createSimpleStudioHost:not([hidden]){
+body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard:not(.createKeyboardOpen) #createSimpleStudioHost:not([hidden]){
+  visibility: hidden;
+  pointer-events: none;
+}
+body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard.createKeyboardOpen #createSimpleStudioHost:not([hidden]){
   display: none !important;
 }
 #createSimpleStudioHost[hidden]{
@@ -24286,6 +24311,8 @@ body.trackSheetOpen .footer{
     height: 100% !important;
     max-height: none !important;
     overflow-y: auto;
+    background: transparent !important;
+    -webkit-tap-highlight-color: transparent;
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsAssistBar,
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsSingabilityPanel,
@@ -24309,8 +24336,14 @@ body.trackSheetOpen .footer{
     box-shadow: none !important;
     z-index: 4;
   }
-  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]),
-  html.is-native-shell body[data-route="generate"][data-create-layout="simple"]:has(#sunoPrompt:focus) #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel{
+    background: var(--surface-panel);
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard:not(.createKeyboardOpen) #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
+    visibility: hidden;
+    pointer-events: none;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard.createKeyboardOpen #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
     display: none !important;
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){

@@ -83618,10 +83618,6 @@ function lyricsBoxEmptyBaseHeight() {
 
 let _createIgnoreAutofocus = false;
 let _createLyricsKeyboardIntent = false;
-// Until iOS reports the real keyboard height after they tap lyrics, assume this
-// (iPhone portrait) so the stack does not jump.
-let _createSimpleKbAssumed = false;
-const CREATE_SIMPLE_KB_FALLBACK = 336;
 let _createLyricsAutofocusTimers = [];
 function cancelCreateLyricsAutofocus() {
   for (const id of _createLyricsAutofocusTimers) clearTimeout(id);
@@ -83650,7 +83646,6 @@ function focusSimpleCreateLyricsIfNeeded() {
   const el = els.sunoPrompt;
   if (!el || el.disabled) return false;
   _createIgnoreAutofocus = false;
-  _createSimpleKbAssumed = true;
   cancelCreateLyricsAutofocus();
   try { syncCreateComposeLayout(); } catch {}
   try { el.focus({ preventScroll: true }); } catch {}
@@ -83676,9 +83671,7 @@ function syncCreateSimpleViewportHeight() {
     root.style.removeProperty("--create-simple-dock-bottom");
     return;
   }
-  const pluginKb = _createKeyboardHeight > 0
-    ? _createKeyboardHeight
-    : (_createSimpleKbAssumed ? CREATE_SIMPLE_KB_FALLBACK : 0);
+  const pluginKb = _createKeyboardHeight > 0 ? _createKeyboardHeight : 0;
   const layoutH = window.innerHeight;
   const vv = window.visualViewport;
   const visibleBottom = vv ? Math.round(vv.offsetTop + vv.height) : layoutH;
@@ -84034,14 +84027,22 @@ function handleCreateFieldFocus(target) {
   }
   _createFocusedField = target;
   if (isCreateSimpleCreateLayout()) {
-    if (isCreateLyricsKeyboardField(target)) {
-      _createLyricsKeyboardIntent = true;
-      _createSimpleKbAssumed = true;
-    } else {
-      _createLyricsKeyboardIntent = false;
+    const lyrics = isCreateLyricsKeyboardField(target);
+    if (lyrics && target === els.sunoPrompt) {
+      try {
+        const pos = target.selectionEnd ?? String(target.value || "").length;
+        if (target.selectionStart !== target.selectionEnd) {
+          target.setSelectionRange(pos, pos);
+        }
+      } catch {}
     }
+    _createLyricsKeyboardIntent = lyrics;
     try { syncCreateKeyboardStyleVisibility(); } catch {}
-    try { syncCreateComposeLayout(); } catch {}
+    const alreadyOpen = document.body.classList.contains("createKeyboardOpen")
+      && document.body.classList.contains("createLyricsKeyboard");
+    if (!alreadyOpen) {
+      try { syncCreateComposeLayout(); } catch {}
+    }
   }
   setGenerateInputFocus(target.closest(".inputPanel") || null);
   scheduleCreateMobileWebKeyboardSync();
@@ -84066,7 +84067,6 @@ function wireCreatePageKeyboardOnce() {
     });
     const applyKeyboardHidden = () => {
       if (!isGenerateRouteActive()) return;
-      _createSimpleKbAssumed = false;
       clearCreatePageKeyboardInset();
       setGenerateInputFocus(null);
     };
@@ -84095,13 +84095,16 @@ function wireCreatePageKeyboardOnce() {
     root.addEventListener("pointerdown", (e) => {
       if (isCreateSimpleCreateLayout()) {
         const t = e.target;
-        if (t?.closest?.("#lyricsFieldPanel") || isCreateFormField(t)) {
+        if (t?.closest?.("#sunoPrompt, .lyricsBoxMain, .lyricsBox")) {
           _createIgnoreAutofocus = false;
-          if (t?.closest?.("#lyricsFieldPanel")) {
+          if (!document.body.classList.contains("createLyricsKeyboard")) {
             _createLyricsKeyboardIntent = true;
-            _createSimpleKbAssumed = true;
             try { syncCreateKeyboardStyleVisibility(); } catch {}
           }
+          return;
+        }
+        if (t?.closest?.("#lyricsFieldPanel") || isCreateFormField(t)) {
+          _createIgnoreAutofocus = false;
           return;
         }
         _createIgnoreAutofocus = true;

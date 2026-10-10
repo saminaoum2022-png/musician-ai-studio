@@ -10314,10 +10314,12 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 body:not([data-photo-solo-challenge]) #createSoloInstrumentalRow,
 body:not([data-photo-solo-challenge]) #createSoloLangRow,
 body:not([data-photo-solo-challenge]) #createSoloDialectRow,
-body:not([data-photo-solo-challenge="spell-you"]) #createSpellYouCard{
+body:not([data-photo-solo-challenge="spell-you"]) #createSpellYouSummary{
   display: none !important;
 }
-body[data-photo-solo-challenge="spell-you"] #createSoloInstrumentalRow{
+body[data-photo-solo-challenge="spell-you"] #createSoloInstrumentalRow,
+body[data-photo-solo-challenge="spell-you"] #createSoloLangRow,
+body[data-photo-solo-challenge="spell-you"] #createSoloDialectRow{
   display: none !important;
 }
 body[data-photo-solo-challenge] .createSoloInstrumentalRow{
@@ -10354,7 +10356,7 @@ body[data-photo-solo-challenge] .createPane--vibe,
 body[data-photo-solo-challenge] .createPane--edit{
   display: none !important;
 }
-body[data-photo-solo-challenge] .createPane--lyrics{
+body[data-photo-solo-challenge]:not([data-photo-solo-challenge="spell-you"]) .createPane--lyrics{
   display: none !important;
 }
 body[data-photo-solo-challenge] .createFlowStep .inputPanel--style:has(#sunoStyle),
@@ -10476,35 +10478,49 @@ body[data-photo-solo-challenge="spell-you"] button.createPhotoSoloBanner{
 body[data-photo-solo-challenge="spell-you"] .createPhotoSoloBannerBg{
   background-position: 72% 18%;
 }
-.createSpellYouCard[hidden]{
+.createSpellYouSummary[hidden]{
   display: none !important;
 }
-.createSpellYouCard{
+.createSpellYouSummary{
   display: grid;
-  gap: 14px;
+  gap: 3px;
+  width: 100%;
   margin: 0 0 12px;
-  padding: 14px 14px 16px;
+  padding: 14px;
   border-radius: 18px;
   border: 1px solid rgba(167, 139, 250, 0.18);
-  background:
-    linear-gradient(180deg, rgba(28, 16, 48, 0.55) 0%, rgba(8, 8, 16, 0.72) 100%);
+  background: linear-gradient(180deg, rgba(28, 16, 48, 0.55) 0%, rgba(8, 8, 16, 0.72) 100%);
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
 }
-.createSpellYouKicker{
-  margin: 0;
+.createSpellYouSummaryKicker{
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: rgba(216, 180, 254, 0.78);
 }
+.createSpellYouSummary strong{
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+.createSpellYouSummary small{
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 12px;
+}
 .createSpellYouField{
   display: grid;
   gap: 8px;
+  margin-top: 12px;
 }
 .createSpellYouField .inPanelLabel{
   margin: 0;
 }
-.createSpellYouCard input{
+.spellYouSheet .createSpellYouField input,
+.spellYouSheet #spellYouName,
+.spellYouSheet #spellYouAnnoyanceCustom{
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -10516,6 +10532,12 @@ body[data-photo-solo-challenge="spell-you"] .createPhotoSoloBannerBg{
 }
 .createSpellYouChips{
   flex-wrap: wrap;
+}
+.spellYouSheetBody{
+  padding-bottom: 8px;
+}
+.spellYouPreviewWrap{
+  margin-top: 10px;
 }
 .discoverPlaylistTryNow{
   display: inline-flex;
@@ -12380,6 +12402,16 @@ body[data-route="generate"][data-create-layout="simple"] .createHeadTitleGroup .
 }
 .createStudioBlock{
   margin-bottom: 10px;
+}
+body.hasCreateAttachedStyle #createStudioBlock,
+body.hasCreateAttachedStyle #createSimpleStudioToolbar,
+body.hasCreateAttachedStyle #lyriaStudioStyleRow,
+body.hasCreateAttachedStyle #lyriaStudioStyleLabel,
+body.hasCreateAttachedStyle #lyriaStudioStyleHint,
+body.hasCreateAttachedStyle #createStudioActiveStrip,
+body.hasCreateAttachedStyle #createSoundCustomFields,
+body.hasCreateAttachedStyle #btnCreateSimpleAllStyles{
+  display: none !important;
 }
 .lyriaStudioSoundPrompt{
   display: none !important;

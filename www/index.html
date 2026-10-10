@@ -1170,24 +1170,11 @@
                 <span class="createPhotoSoloBannerCta">Try now</span>
               </span>
             </button>
-            <div id="createSpellYouCard" class="createSpellYouCard" hidden>
-              <p class="createSpellYouKicker">The spell</p>
-              <label class="createSpellYouField">
-                <span class="inPanelLabel">Who are you putting a spell on?</span>
-                <input id="spellYouName" type="text" maxlength="40" autocomplete="off" placeholder="Their name" />
-              </label>
-              <div class="createSpellYouField">
-                <span class="inPanelLabel">One harmless annoyance</span>
-                <div id="spellYouAnnoyanceChips" class="optChipRow createSpellYouChips" role="group" aria-label="Harmless annoyance">
-                  <button type="button" class="optChip" data-spell-annoyance="always late" aria-pressed="false">always late</button>
-                  <button type="button" class="optChip" data-spell-annoyance="leaves me on seen" aria-pressed="false">leaves me on seen</button>
-                  <button type="button" class="optChip" data-spell-annoyance="steals my charger" aria-pressed="false">steals my charger</button>
-                  <button type="button" class="optChip" data-spell-annoyance="spoils every series" aria-pressed="false">spoils every series</button>
-                  <button type="button" class="optChip" data-spell-annoyance="eats my food" aria-pressed="false">eats my food</button>
-                </div>
-                <input id="spellYouAnnoyanceCustom" type="text" maxlength="80" autocomplete="off" placeholder="or type one" />
-              </div>
-            </div>
+            <button id="createSpellYouSummary" type="button" class="createSpellYouSummary" hidden>
+              <span class="createSpellYouSummaryKicker">The spell</span>
+              <strong id="createSpellYouSummaryTitle">Spell You</strong>
+              <small id="createSpellYouSummarySub">Tap to edit photo, name, or annoyance.</small>
+            </button>
             <div class="createPanes" data-mode="lyrics">
               <div class="createPane createPane--photo" data-mode="photo" hidden>
                 <button id="createPhotoCta" class="createPaneCta" type="button" aria-label="Add a photo">
@@ -1897,6 +1884,62 @@
                 <div class="photoMoodActions imageMoodActions">
                   <button id="btnAnalyzeImageMood" class="photoMoodPrimary primary" type="button">Analyze</button>
                   <button id="btnApplyImageMood" class="photoMoodSecondary ghost" type="button" disabled>Use as cover</button>
+                </div>
+              </footer>
+            </div>
+          </div>
+
+          <div id="spellYouSheet" class="imageMoodSheet photoMoodSheet spellYouSheet" hidden aria-hidden="true">
+            <div class="imageMoodSheetBackdrop photoMoodBackdrop" data-spell-you-dismiss="1"></div>
+            <div class="imageMoodCard photoMoodCard modalCard spellYouCard" role="dialog" aria-modal="true" aria-labelledby="spellYouSheetTitle">
+              <header class="photoMoodHead">
+                <button type="button" id="btnCloseSpellYouSheet" class="nabadBackBtn photoMoodBack" aria-label="Back">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
+                </button>
+                <div class="photoMoodHeadCopy">
+                  <p class="photoMoodKicker">Spell You</p>
+                  <h2 class="photoMoodTitle" id="spellYouSheetTitle">Put a spell on someone</h2>
+                  <p class="photoMoodSub">Photo, name, one annoyance. Then edit the song before you generate.</p>
+                </div>
+              </header>
+              <div class="photoMoodBody imageMoodBody spellYouSheetBody">
+                <label class="photoMoodPick imageMoodPick field spellYouPhotoPick">
+                  <span class="photoMoodPickLabel imageMoodPickLabel" id="spellYouPhotoPickLabel">Add a photo — it becomes the cover</span>
+                  <input id="spellYouPhotoUpload" class="imageMoodUploadInput" type="file" accept="image/*" />
+                </label>
+                <div class="imageMoodPreviewWrap spellYouPreviewWrap">
+                  <img id="spellYouPhotoPreview" alt="Spell cover preview" hidden />
+                </div>
+                <label class="createSpellYouField">
+                  <span class="inPanelLabel">Who are you putting a spell on?</span>
+                  <input id="spellYouName" type="text" maxlength="40" autocomplete="off" placeholder="Their name" />
+                  <div id="spellYouAddressChips" class="optChipRow createSpellYouChips" role="group" aria-label="Him or her">
+                    <button type="button" class="optChip isActive" data-spell-address="male" aria-pressed="true">Him</button>
+                    <button type="button" class="optChip" data-spell-address="female" aria-pressed="false">Her</button>
+                  </div>
+                </label>
+                <div class="createSpellYouField">
+                  <span class="inPanelLabel">One harmless annoyance</span>
+                  <div id="spellYouAnnoyanceChips" class="optChipRow createSpellYouChips" role="group" aria-label="Harmless annoyance">
+                    <button type="button" class="optChip" data-spell-annoyance="always late" aria-pressed="false">always late</button>
+                    <button type="button" class="optChip" data-spell-annoyance="leaves me on seen" aria-pressed="false">leaves me on seen</button>
+                    <button type="button" class="optChip" data-spell-annoyance="steals my charger" aria-pressed="false">steals my charger</button>
+                    <button type="button" class="optChip" data-spell-annoyance="spoils every series" aria-pressed="false">spoils every series</button>
+                    <button type="button" class="optChip" data-spell-annoyance="eats my food" aria-pressed="false">eats my food</button>
+                  </div>
+                  <input id="spellYouAnnoyanceCustom" type="text" maxlength="80" autocomplete="off" placeholder="or type one" />
+                </div>
+                <div class="createSpellYouField">
+                  <span class="inPanelLabel">Song language</span>
+                  <div id="spellYouLangChips" class="optChipRow createSpellYouChips" role="group" aria-label="Song language">
+                    <button type="button" class="optChip isActive" data-spell-lang="english" aria-pressed="true">English</button>
+                    <button type="button" class="optChip" data-spell-lang="arabic" aria-pressed="false">Arabic</button>
+                  </div>
+                </div>
+              </div>
+              <footer class="photoMoodFoot imageMoodFooter">
+                <div class="photoMoodActions imageMoodActions">
+                  <button id="btnSpellYouContinue" class="photoMoodPrimary primary" type="button" disabled>Continue to Create</button>
                 </div>
               </footer>
             </div>

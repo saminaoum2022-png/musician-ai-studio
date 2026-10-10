@@ -12812,7 +12812,8 @@ body[data-route="generate"] .studioStyleTile.isActive .studioStyleTileName{
   font-weight: 650;
   cursor: pointer;
 }
-body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createSimpleStudioHost:not([hidden]){
+body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createSimpleStudioHost:not([hidden]),
+body[data-route="generate"][data-create-layout="simple"]:has(#sunoPrompt:focus) #createSimpleStudioHost:not([hidden]){
   display: none !important;
 }
 body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createSimpleStudioHost:not([hidden]){
@@ -13328,7 +13329,8 @@ html:not([data-theme="light"]) .createLyricsAttachMenu{
 body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost:not([hidden]){
   display: block;
 }
-body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createSimpleStudioHost:not([hidden]){
+body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createSimpleStudioHost:not([hidden]),
+body[data-route="generate"][data-create-layout="simple"]:has(#sunoPrompt:focus) #createSimpleStudioHost:not([hidden]){
   display: none !important;
 }
 #createSimpleStudioHost[hidden]{
@@ -24307,7 +24309,8 @@ body.trackSheetOpen .footer{
     box-shadow: none !important;
     z-index: 4;
   }
-  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]),
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"]:has(#sunoPrompt:focus) #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
     display: none !important;
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){

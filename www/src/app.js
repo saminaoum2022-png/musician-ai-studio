@@ -81123,6 +81123,11 @@ function keyboardStudioRowFillPresets(tab, home) {
 }
 
 function refreshSimpleStudioKeyboardRow() {
+  if (document.body.classList.contains("createLyricsKeyboard")) {
+    _studioRowKbExtraSlots = 0;
+    _studioRowKbMeasureTries = 0;
+    return;
+  }
   const row = els.lyriaStudioStyleRow;
   if (!row) return;
   const kb = isCreateKeyboardStyleRow();
@@ -83612,6 +83617,7 @@ function lyricsBoxEmptyBaseHeight() {
 }
 
 let _createIgnoreAutofocus = false;
+let _createLyricsKeyboardIntent = false;
 // Until iOS reports the real keyboard height after they tap lyrics, assume this
 // (iPhone portrait) so the stack does not jump.
 let _createSimpleKbAssumed = false;
@@ -83902,11 +83908,24 @@ function isCreateLyricsKeyboardField(field) {
   return Boolean(el.closest("#lyricsFieldPanel"));
 }
 
+function isCreateCustomStyleField(field) {
+  const el = field || _createFocusedField || document.activeElement;
+  if (!el || !el.closest) return false;
+  return Boolean(el.closest("#createSoundCustomFields, #sunoStyle"));
+}
+
 function syncCreateKeyboardStyleVisibility() {
-  const lyricsKb = document.body.classList.contains("createKeyboardOpen")
-    && isCreateSimpleCreateLayout()
-    && isCreateLyricsKeyboardField();
-  document.body.classList.toggle("createLyricsKeyboard", lyricsKb);
+  if (!isCreateSimpleCreateLayout()) {
+    document.body.classList.remove("createLyricsKeyboard");
+    return;
+  }
+  const lyricsFocus = _createLyricsKeyboardIntent || isCreateLyricsKeyboardField();
+  const customFocus = isCreateCustomStyleField();
+  const kbOpen = document.body.classList.contains("createKeyboardOpen");
+  // iOS often raises the keyboard before focusin. Hide the style rail unless
+  // they are clearly typing a Custom style, so the old compact row never flashes.
+  const hide = lyricsFocus || (kbOpen && !customFocus);
+  document.body.classList.toggle("createLyricsKeyboard", hide);
 }
 
 function applyCreateKeyboardOpen(height) {
@@ -83926,6 +83945,9 @@ function applyCreateKeyboardOpen(height) {
   }
   _createKeyboardHeight = kb;
   _createKeyboardInsetLast = kb;
+  if (isCreateSimpleCreateLayout() && !isCreateCustomStyleField()) {
+    document.body.classList.add("createLyricsKeyboard");
+  }
   document.body.classList.add("createKeyboardOpen");
   try { syncCreateKeyboardStyleVisibility(); } catch {}
   try {
@@ -83970,6 +83992,7 @@ function scheduleCreateMobileWebKeyboardSync() {
 
 function clearCreatePageKeyboardInset() {
   _createFocusedField = null;
+  _createLyricsKeyboardIntent = false;
   _createKeyboardHeight = 0;
   _createKeyboardInsetLast = 0;
   if (_createKeyboardScrollTimer) {
@@ -84011,9 +84034,14 @@ function handleCreateFieldFocus(target) {
   }
   _createFocusedField = target;
   if (isCreateSimpleCreateLayout()) {
-    if (isCreateLyricsKeyboardField(target)) _createSimpleKbAssumed = true;
-    try { syncCreateComposeLayout(); } catch {}
+    if (isCreateLyricsKeyboardField(target)) {
+      _createLyricsKeyboardIntent = true;
+      _createSimpleKbAssumed = true;
+    } else {
+      _createLyricsKeyboardIntent = false;
+    }
     try { syncCreateKeyboardStyleVisibility(); } catch {}
+    try { syncCreateComposeLayout(); } catch {}
   }
   setGenerateInputFocus(target.closest(".inputPanel") || null);
   scheduleCreateMobileWebKeyboardSync();
@@ -84069,6 +84097,11 @@ function wireCreatePageKeyboardOnce() {
         const t = e.target;
         if (t?.closest?.("#lyricsFieldPanel") || isCreateFormField(t)) {
           _createIgnoreAutofocus = false;
+          if (t?.closest?.("#lyricsFieldPanel")) {
+            _createLyricsKeyboardIntent = true;
+            _createSimpleKbAssumed = true;
+            try { syncCreateKeyboardStyleVisibility(); } catch {}
+          }
           return;
         }
         _createIgnoreAutofocus = true;

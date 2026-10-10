@@ -5494,10 +5494,12 @@ function setCreateChallengeHint(challenge) {
       els.createChallengeHintSub.textContent = "Drop your anthem — edit the lyrics, then tap Generate.";
     } else if (voiceClip) {
       els.createChallengeHintSub.textContent = "Record on Hum. Optional: type what you sang on Lyrics — or leave empty and Generate.";
-    } else if (["last-photo-song", "80s-you"].includes(String(c.id || ""))) {
+    } else if (["last-photo-song", "80s-you", "spell-you"].includes(String(c.id || ""))) {
       els.createChallengeHintSub.textContent = String(c.id || "") === "80s-you"
         ? "Upload your portrait — we write your 80s lyrics. Pick singer & vocal character, then Generate."
-        : "Upload a photo on Photo — Analyze mood, then Generate.";
+        : String(c.id || "") === "spell-you"
+          ? "Add a photo (it becomes the cover), name who you're spelling, pick one annoyance, then Generate."
+          : "Upload a photo on Photo — Analyze mood, then Generate.";
     } else {
       els.createChallengeHintSub.textContent = `${details ? `${details}. ` : ""}Edit the idea, then Generate — no need to write lyrics first.`;
     }
@@ -8026,9 +8028,14 @@ function setLyricsLanguage(lang) {
     lyricsDialect = "lebanese";
   }
   ensure80sYouArabicDefaults();
+  ensureSpellYouArabicDefaults();
   syncLyricsLangPills();
   applyLyricsLanguageToDialect();
   maybeRedraft80sYouLyricsAfterDialectChange();
+  if (isSpellYouCreateFlow() && els.sunoPrompt && _lyricsGeneratedInNabad) {
+    _lyricsGeneratedInNabad = false;
+    els.sunoPrompt.value = "";
+  }
 }
 
 function setLyricsDialect(dialect) {
@@ -8037,6 +8044,10 @@ function setLyricsDialect(dialect) {
   syncLyricsLangPills();
   applyLyricsLanguageToDialect();
   maybeRedraft80sYouLyricsAfterDialectChange();
+  if (isSpellYouCreateFlow() && els.sunoPrompt && _lyricsGeneratedInNabad) {
+    _lyricsGeneratedInNabad = false;
+    els.sunoPrompt.value = "";
+  }
   try { syncCreateNabadHeard(); } catch {}
 }
 
@@ -9839,6 +9850,16 @@ const CHALLENGE_IDEAS = [
     tags: ["80s", "Photo", "Trend"],
   },
   {
+    id: "spell-you",
+    title: "Spell You",
+    styleLyria: "late-night dark synth pop, mysterious midnight atmosphere, dark synth pads, soft church-organ or bell motif intro, deep 808, dark choir hint in the chorus, cinematic intimate vocal, not jump-scare, not kids Halloween, no pumpkins, 102 bpm",
+    style: "late-night dark synth pop, mysterious midnight atmosphere, dark synth pads, soft church-organ or bell motif intro, deep 808, dark choir hint in the chorus, cinematic intimate vocal, not jump-scare, not kids Halloween, no pumpkins, 102 bpm",
+    lyricsMode: "instructions",
+    lyrics: "Spell You — lyrics written from the name and one harmless annoyance after you add a photo.",
+    prompt: "Put a spell on someone. Make it a song.",
+    tags: ["Spell", "Photo", "Halloween"],
+  },
+  {
     id: "hum-track",
     title: "Hum Track",
     styleLyria: "solo instrumental from hummed melody, one instrument, intimate studio, 100 bpm",
@@ -10005,6 +10026,7 @@ const CHALLENGE_SPARK_KICKERS = {
   "roast-song": "Roast",
   "last-photo-song": "Photo",
   "80s-you": "Trending",
+  "spell-you": "Spell",
   "hum-track": "Hum",
   "roast-song": "Roast",
 };
@@ -10877,6 +10899,13 @@ function applyDiscoveryIdeaToCreate(idea) {
   }
   if (photoSoloChallenge) {
     try { setActiveCreateTab("photo"); } catch {}
+    if (isSpellYouCreateFlow()) {
+      resetSpellYouCardFields();
+      applySpellYouLockedStyle();
+      try { syncSpellYouCardUi(); } catch {}
+    }
+  } else {
+    resetSpellYouCardFields();
   }
 }
 
@@ -13060,11 +13089,12 @@ const DISCOVER_CHALLENGE_AVATAR_SEEDS = {
   "sad-to-dance": ["D", "M", "S", "K"],
   "last-photo-song": ["P", "H", "O", "T"],
   "80s-you": ["8", "0", "S", "U"],
+  "spell-you": ["S", "P", "L", "L"],
   "hum-track": ["H", "U", "M", "T"],
   "roast-song": ["R", "O", "A", "S"],
 };
 
-const DISCOVER_CHALLENGE_ART_VERSION = "20260919hum1";
+const DISCOVER_CHALLENGE_ART_VERSION = "20261010spell1";
 const DISCOVER_CHALLENGE_ART = {
   worldcup2026: "./assets/discover/challenges/worldcup-anthem.svg",
   "one-line-reply": "./assets/discover/challenges/remix-battle.svg",
@@ -13075,6 +13105,7 @@ const DISCOVER_CHALLENGE_ART = {
   "sad-to-dance": "./assets/discover/challenges/remix-battle.svg",
   "last-photo-song": "./assets/discover/challenges/birthday-song.svg",
   "80s-you": "./assets/discover/challenges/love-song.svg",
+  "spell-you": "./assets/discover/challenges/spell-you-hero.jpg",
   "hum-track": "./assets/discover/challenges/hum-track-hero.png",
   "roast-song": "./assets/discover/challenges/remix-battle.svg",
   birthday: "./assets/discover/challenges/birthday-song.svg",
@@ -13091,11 +13122,13 @@ function discoverChallengeArtUrl(challengeId) {
 const DISCOVER_FEATURED_HERO_ART = {
   worldcup2026: "./assets/discover/challenges/worldcup-hero.png",
   "80s-you": "./assets/discover/challenges/80s-you-hero.png",
+  "spell-you": "./assets/discover/challenges/spell-you-hero.jpg",
   "hum-track": "./assets/discover/challenges/hum-track-hero.png",
 };
 
 const PHOTO_SOLO_CHALLENGE_ART = {
   "80s-you": "./assets/discover/challenges/80s-you-hero.png",
+  "spell-you": "./assets/discover/challenges/spell-you-hero.jpg",
 };
 
 function bundleAssetUrl(relativePath) {
@@ -13207,8 +13240,8 @@ function syncPhotoSoloBannerUi(challenge) {
   let id = "";
   if (challenge && isPhotoSoloChallengeId(challenge.id)) {
     id = String(challenge.id).trim();
-  } else if (is80sYouCreateFlow()) {
-    id = "80s-you";
+  } else {
+    id = activePhotoSoloChallengeId();
   }
   // Do not auto-feature 80s You on normal Create — only when that challenge is active.
   if (!isPhotoSoloChallengeId(id)) {
@@ -13227,14 +13260,24 @@ function syncPhotoSoloBannerUi(challenge) {
     bg.style.backgroundImage = `url("${artUrl}")`;
   }
   const spark = CHALLENGE_IDEAS.find((row) => String(row.id) === id);
-  if (kicker) kicker.textContent = id === "80s-you" ? "80s You · Trending" : "Challenge";
+  if (kicker) {
+    kicker.textContent = id === "80s-you"
+      ? "80s You · Trending"
+      : id === "spell-you"
+        ? "Spell You · Trending"
+        : "Challenge";
+  }
   if (title) {
-    title.textContent = String(challenge?.title || spark?.title || "Challenge").trim();
+    title.textContent = id === "spell-you"
+      ? "Spell You"
+      : String(challenge?.title || spark?.title || "Challenge").trim();
   }
   if (sub) {
     sub.textContent = id === "80s-you"
       ? "Your portrait becomes a synth-pop anthem."
-      : String(spark?.prompt || "Add a photo to start.").trim();
+      : id === "spell-you"
+        ? "This photo becomes the song cover."
+        : String(spark?.prompt || "Add a photo to start.").trim();
   }
   if (cta) {
     const changePhoto = imageMoodAppliedForNextGen && activePhotoSoloChallengeId() === id;
@@ -13253,6 +13296,21 @@ function discoverFeaturedHeroArtUrl(challengeId) {
 
 const DISCOVER_LIVE_CHALLENGES = [
   {
+    id: "spell-you",
+    emoji: "✦",
+    title: "Spell You",
+    blurb: "Put a spell on someone. Make it a song.",
+    tone: "violet",
+    participants: 0,
+    submissions: 0,
+    daysLeft: 22,
+    totalDays: 22,
+    progressGoal: 200,
+    action: "challenge",
+    challengeId: "spell-you",
+    featured: true,
+  },
+  {
     id: "80s-you",
     emoji: "📼",
     title: "80s You",
@@ -13265,7 +13323,7 @@ const DISCOVER_LIVE_CHALLENGES = [
     progressGoal: 200,
     action: "challenge",
     challengeId: "80s-you",
-    featured: true,
+    featured: false,
   },
   {
     id: "dabke-drop",
@@ -13348,6 +13406,7 @@ const DISCOVER_SUGGESTED_CREATORS = [
 ];
 
 const DISCOVER_NEW_THIS_WEEK = [
+  { id: "spell-you", emoji: "✦", kicker: "Trending", title: "Spell You", blurb: "Put a spell on someone. Make it a song.", tone: "violet", action: "challenge", challengeId: "spell-you" },
   { id: "80s-you", emoji: "📼", kicker: "Trending", title: "80s You", blurb: "Photo → your personal 80s anthem.", tone: "violet", action: "challenge", challengeId: "80s-you" },
   { id: "graduation", emoji: "🎓", kicker: "New template", title: "Graduation Song", blurb: "Celebrate the milestone.", tone: "gold", action: "occasion", occasionId: "congrats" },
   { id: "ramadan", emoji: "🌙", kicker: "Seasonal", title: "Ramadan Glow", blurb: "Warm spiritual vibes.", tone: "violet", action: "occasion", occasionId: "christmas" },
@@ -13485,6 +13544,7 @@ function discoverChallengeMatchesTrack(c, track) {
   if (c.id === "sad-to-dance" && (chId === "sad-to-dance-challenge" || chTitle.includes("sad") || chTitle.includes("dance"))) return true;
   if (c.id === "last-photo-song" && (chId === "last-photo-song" || chTitle.includes("photo"))) return true;
   if (c.id === "80s-you" && (chId === "80s-you" || chTitle.includes("80s") || chTitle.includes("80's"))) return true;
+  if (c.id === "spell-you" && (chId === "spell-you" || chTitle.includes("spell you") || chTitle.includes("spell-you"))) return true;
   if (c.id === "hum-track" && (
     chId === "hum-track"
     || track?.meta?.humTrack
@@ -14268,6 +14328,7 @@ function discoverFeaturedChallengeHeroArt(c, topEntry) {
 }
 
 function discoverFeaturedChallengeSubtitle(c, topEntry, tracks) {
+  if (String(c?.id || "") === "spell-you") return "Put a spell on someone. Make it a song.";
   if (topEntry) return discoverChallengeRankText(topEntry, tracks);
   const blurb = String(c?.blurb || "").trim();
   if (blurb) return blurb;
@@ -14395,13 +14456,13 @@ function discoverFeaturedChallengeHeroButtonHtml(c, top, tracks) {
   const [toneA, toneB] = discoverChallengeToneTheme(c.tone);
   const kicker = discoverFeaturedChallengeKicker(c);
   const cta = discoverFeaturedChallengeCta(c);
-  const scriptHtml = String(c.id || "") === "80s-you"
+  const scriptHtml = ["80s-you", "spell-you"].includes(String(c.id || ""))
     ? `<img class="discoverFeaturedChallengeHeroScript" src="${escapeHtml(`${bundleAssetUrl("assets/discover/challenges/music-lives-in-you.png")}?v=${DISCOVER_CHALLENGE_ART_VERSION}`)}" alt="" aria-hidden="true" />`
     : "";
   return `
     <button
       type="button"
-      class="discoverFeaturedChallengeHero discoverFeaturedChallengeHero--${escapeHtml(String(c.tone || "violet").trim())}"
+      class="discoverFeaturedChallengeHero discoverFeaturedChallengeHero--${escapeHtml(String(c.tone || "violet").trim())}${String(c.id || "") === "spell-you" ? " discoverFeaturedChallengeHero--spellYou" : ""}"
       ${joinAttrs}
       style="--feat-ch-a:${toneA};--feat-ch-b:${toneB}"
       aria-label="${escapeHtml(cta)} — ${escapeHtml(challengeTitle)}"
@@ -20077,8 +20138,8 @@ const POST_AUTH_RETURN_HASH_KEY = "nabadai_post_auth_return_v1";
 const PENDING_DISCOVERY_IDEA_KEY = "nabadai_pending_discovery_idea_v1";
 
 const HUM_CHALLENGE_IDS = new Set(["voice-note-remix"]);
-const PHOTO_CHALLENGE_IDS = new Set(["last-photo-song", "80s-you"]);
-const PHOTO_SOLO_CHALLENGE_IDS = new Set(["80s-you"]);
+const PHOTO_CHALLENGE_IDS = new Set(["last-photo-song", "80s-you", "spell-you"]);
+const PHOTO_SOLO_CHALLENGE_IDS = new Set(["80s-you", "spell-you"]);
 let _80sLyricsGenInFlight = null;
 let _80sLyricsDraftDialectKey = "";
 
@@ -20107,12 +20168,16 @@ function isPhotoSoloChallengeId(challengeId) {
 
 /** 80s You only — photo-solo Create with external lang/dialect rows (not the Lyrics tab). */
 function is80sYouCreateFlow() {
-  const ch = challengePromptContext();
-  return String(ch?.id || "").trim() === "80s-you";
+  return activePhotoSoloChallengeId() === "80s-you";
+}
+
+function isSpellYouCreateFlow() {
+  return activePhotoSoloChallengeId() === "spell-you";
 }
 
 function activePhotoSoloChallengeId() {
-  return is80sYouCreateFlow() ? "80s-you" : "";
+  const id = String(challengePromptContext()?.id || "").trim();
+  return isPhotoSoloChallengeId(id) ? id : "";
 }
 
 function hide80sYouSoloCreateRows() {
@@ -20273,7 +20338,7 @@ async function apply80sLevantineDiacriticsIfNeeded(lyrics) {
 }
 
 function syncPhotoSoloVocalSections() {
-  if (!is80sYouCreateFlow()) {
+  if (!activePhotoSoloChallengeId()) {
     hide80sYouSoloCreateRows();
     document.body.removeAttribute("data-solo-instrumental");
     document.body.removeAttribute("data-solo-arabic");
@@ -20308,6 +20373,7 @@ function syncPhotoSoloVocalSections() {
     try { syncClipVocalCharacterUi(); } catch {}
   }
   try { apply80sYouArabicLyricsContext(); } catch {}
+  try { ensureSpellYouArabicDefaults(); } catch {}
 }
 
 function apply80sYouPortraitGender(mood) {
@@ -20397,9 +20463,233 @@ async function draft80sYouLyricsForGenerate(mood) {
   return _80sLyricsGenInFlight;
 }
 
+const SPELL_YOU_STYLE =
+  "late-night dark synth pop, mysterious midnight atmosphere, dark synth pads, soft church-organ or bell motif intro, deep 808, dark choir hint in the chorus, cinematic intimate vocal, not jump-scare, not kids Halloween, no pumpkins, 102 bpm";
+const SPELL_YOU_HARSH_RE =
+  /\b(kill|murder|rape|suicide|ugly|fat|slut|whore|bitch|stupid|idiot|retard|hate you|hurt|beat|family|mother|father|mom|dad|religion|islam|christian|jew|cancer|disease|disabled|cripple)\b|لعنة|اللعنة|أهلك|دينك|بموت|شتم|يلعن/i;
+
+function spellYouNameInput() {
+  return document.getElementById("spellYouName");
+}
+function spellYouCustomInput() {
+  return document.getElementById("spellYouAnnoyanceCustom");
+}
+function spellYouTargetName() {
+  return String(spellYouNameInput()?.value || "").trim().slice(0, 40);
+}
+function spellYouAnnoyanceRaw() {
+  const custom = String(spellYouCustomInput()?.value || "").trim();
+  if (custom) return custom;
+  const on = document.querySelector("#spellYouAnnoyanceChips .optChip.isActive");
+  return String(on?.getAttribute("data-spell-annoyance") || on?.textContent || "").trim();
+}
+function sanitizeSpellYouAnnoyance(raw) {
+  const t = String(raw || "").replace(/\s+/g, " ").trim().slice(0, 80);
+  if (!t) return "";
+  if (SPELL_YOU_HARSH_RE.test(t)) return "keeps leaving me on seen";
+  return t;
+}
+function spellYouReadyForGenerate() {
+  return Boolean(spellYouTargetName() && sanitizeSpellYouAnnoyance(spellYouAnnoyanceRaw()));
+}
+function persistSpellYouChallengePerson() {
+  const name = spellYouTargetName();
+  if (!pendingSearchRemixMeta?.challenge) return;
+  pendingSearchRemixMeta.challenge.personName = name;
+  try { persistCreateChallengeContext(pendingSearchRemixMeta); } catch {}
+  if (els.sunoTitle && name) {
+    els.sunoTitle.value = `Spell on ${name}`.slice(0, 80);
+  }
+}
+function resetSpellYouCardFields() {
+  const nameEl = spellYouNameInput();
+  const customEl = spellYouCustomInput();
+  if (nameEl) nameEl.value = "";
+  if (customEl) customEl.value = "";
+  document.querySelectorAll("#spellYouAnnoyanceChips .optChip").forEach((b) => {
+    b.classList.remove("isActive");
+    b.setAttribute("aria-pressed", "false");
+  });
+}
+function syncSpellYouCardUi() {
+  const card = document.getElementById("createSpellYouCard");
+  if (!card) return;
+  const show = isSpellYouCreateFlow();
+  card.hidden = !show;
+  card.setAttribute("aria-hidden", show ? "false" : "true");
+  if (show) {
+    try { applySpellYouLockedStyle(); } catch {}
+    try { persistSpellYouChallengePerson(); } catch {}
+  }
+}
+function applySpellYouLockedStyle() {
+  if (!isSpellYouCreateFlow() || !els.sunoStyle) return;
+  const clause = challengeDurationStyleClause("spell-you");
+  els.sunoStyle.value = templateStyleForProvider(
+    `${SPELL_YOU_STYLE}, ${clause}`,
+    "spell-you",
+  );
+}
+function ensureSpellYouArabicDefaults() {
+  if (!isSpellYouCreateFlow()) return;
+  if (lyricsLanguage === "arabic" && !lyricsDialect) {
+    lyricsDialect = "lebanese";
+    try { syncLyricsDialectPills(); } catch {}
+  }
+}
+function buildSpellYouLyricsBrief() {
+  const name = spellYouTargetName() || "them";
+  const annoyance = sanitizeSpellYouAnnoyance(spellYouAnnoyanceRaw()) || "keeps leaving me on seen";
+  if (photoSoloShowsArabicDialect()) {
+    return [
+      `اكتب أغنية سحر لبنانية عامية، خفيفة ومضحكة، عن ${name}.`,
+      `المزعج التافه: ${annoyance}.`,
+      "المغني ساحر أو ساحرة عم يعمل سحر لعوب. استخدم سحر / سحرتك.",
+      "ممنوع تمامًا: لعنة، اللعنة عليك، شتيمة، تهديد.",
+      "السحر تافه ومضحك بس (واي فاي، بطارية، زحمة، قهوة باردة، رسالة مقروءة).",
+      "إذا الطلب قاسي، حوّله لمزحة تافهة. ممنوع شكل، جسم، دين، أهل، أو صحة.",
+      "[Verse] سطرين. [Chorus] ٣–٤ أسطر مع هوك سحر يتكرر.",
+      "نهاية مكتملة. مش رعب، مش هالوين أطفال.",
+    ].join("\n");
+  }
+  return [
+    `Write a dark, funny Spell Song in an "I put a spell on you" vibe about ${name}.`,
+    `The harmless annoyance: ${annoyance}.`,
+    "The singer is a witch or sorcerer casting a playful spell.",
+    `Payoff shape: "from today, every time you're late, your phone dies at 1%."`,
+    "The spell is ALWAYS trivial and funny (wifi, battery, traffic, cold coffee, seen receipts).",
+    "No insults, swearing, threats. Nothing about looks, body, religion, family, or health.",
+    "If the annoyance sounds harsh, turn it into a harmless joke.",
+    "Never use the words curse, damn, or damn you. Use spell / I put a spell on you.",
+    "[Verse] 2 lines. [Chorus] 3–4 lines with one repeatable spell hook.",
+    "Complete ending. Not jump-scare, not kids' Halloween.",
+  ].join("\n");
+}
+let _spellYouLyricsGenInFlight = null;
+async function draftSpellYouLyricsForGenerate() {
+  if (!isSpellYouCreateFlow()) return true;
+  if (String(els.vocalInstrumentalOnly?.value || "0") === "1") return true;
+  const existing = String(els.sunoPrompt?.value || "").trim();
+  if (existing && looksLikeSingableLyrics(existing) && _lyricsGeneratedInNabad) return true;
+  if (_spellYouLyricsGenInFlight) {
+    try { await _spellYouLyricsGenInFlight; } catch {}
+    return Boolean(String(els.sunoPrompt?.value || "").trim());
+  }
+  const run = async () => {
+    try { applyLyricsLanguageToDialect(); } catch {}
+    try { ensureSpellYouArabicDefaults(); } catch {}
+    applySpellYouLockedStyle();
+    const style = String(els.sunoStyle?.value || SPELL_YOU_STYLE).trim();
+    const dialect = String(els.sunoDialect?.value || "").trim();
+    const challenge = challengePromptContext();
+    const brief = buildSpellYouLyricsBrief();
+    const requestSeed = challenge ? challengePromptMagicSeed(brief, challenge) : brief;
+    const authToken = getSupabaseAuthToken();
+    const r = await apiFetch("/api/lyrics", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify({
+        seed: requestSeed,
+        style,
+        mode: "challenge_clip",
+        dialect,
+        dialectHint: String(els.sunoDialectHint?.value || "").trim(),
+        scriptFormat: resolveLyricsScriptFormat(),
+        lyricsProvider: "gemini",
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !String(data?.lyrics || "").trim()) {
+      console.warn("[spell-you] lyrics draft failed", data?.error || r.status);
+      return false;
+    }
+    const lyrics = sanitizeLyricsPrompt(String(data.lyrics || "").trim());
+    if (els.sunoPrompt) els.sunoPrompt.value = lyrics;
+    _nabadAiLyricsDraft = lyrics;
+    _lyricsGeneratedInNabad = true;
+    try { autoResizeLyricsBox(); } catch {}
+    try { syncTemplateSparkClipGenerateReady(); syncGenerateOrbVisibility(); } catch {}
+    return true;
+  };
+  _spellYouLyricsGenInFlight = run().finally(() => {
+    _spellYouLyricsGenInFlight = null;
+  });
+  return _spellYouLyricsGenInFlight;
+}
+async function applyPhotoForSpellYou() {
+  const file = els.imageMoodUpload?.files?.[0];
+  if (file && !String(imageMoodCoverDataUrl || "").startsWith("data:")) {
+    try {
+      imageMoodCoverDataUrl = await prepareMomentCoverDataUrl(file);
+    } catch {
+      setStatus("Could not load that photo.");
+      return false;
+    }
+  }
+  if (!String(imageMoodCoverDataUrl || "").startsWith("data:")) return false;
+  imageMoodCoverOnlyForNextGen = false;
+  imageMoodAppliedForNextGen = true;
+  stashPhotoCoverForGeneration(imageMoodCoverDataUrl);
+  const summary = "Photo locked — this is the song cover.";
+  setCreatePhotoAttachmentPreview(imageMoodCoverDataUrl, summary);
+  if (els.imageMoodSummary) {
+    els.imageMoodSummary.textContent = summary;
+    els.imageMoodSummary.hidden = false;
+  }
+  applySpellYouLockedStyle();
+  try { syncPhotoSoloBannerUi(challengePromptContext()); } catch {}
+  try { syncSpellYouCardUi(); } catch {}
+  try { syncGenerateOrbVisibility(); } catch {}
+  try { syncCreateLyricsAttachStack(); } catch {}
+  return true;
+}
+function wireSpellYouCardOnce() {
+  const card = document.getElementById("createSpellYouCard");
+  if (!card || card.dataset.spellYouBound === "1") return;
+  card.dataset.spellYouBound = "1";
+  const nameEl = spellYouNameInput();
+  const customEl = spellYouCustomInput();
+  const chips = document.getElementById("spellYouAnnoyanceChips");
+  const onChange = () => {
+    persistSpellYouChallengePerson();
+    if (els.sunoPrompt && _lyricsGeneratedInNabad && isSpellYouCreateFlow()) {
+      _lyricsGeneratedInNabad = false;
+      els.sunoPrompt.value = "";
+    }
+    try { syncGenerateOrbVisibility(); } catch {}
+  };
+  nameEl?.addEventListener("input", onChange);
+  customEl?.addEventListener("input", () => {
+    if (String(customEl.value || "").trim()) {
+      chips?.querySelectorAll(".optChip").forEach((b) => {
+        b.classList.remove("isActive");
+        b.setAttribute("aria-pressed", "false");
+      });
+    }
+    onChange();
+  });
+  chips?.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("[data-spell-annoyance]");
+    if (!btn) return;
+    chips.querySelectorAll(".optChip").forEach((b) => {
+      const on = b === btn;
+      b.classList.toggle("isActive", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    if (customEl) customEl.value = "";
+    onChange();
+  });
+}
+
 function photoSoloChallengeCanGenerate() {
-  if (!activePhotoSoloChallengeId()) return false;
-  return Boolean(imageMoodAppliedForNextGen);
+  const id = activePhotoSoloChallengeId();
+  if (!id) return false;
+  if (!imageMoodAppliedForNextGen) return false;
+  if (id === "spell-you") return spellYouReadyForGenerate();
+  return true;
 }
 
 function syncCreateSongTypeTabs() {
@@ -20420,7 +20710,7 @@ function syncCreateSongTypeTabs() {
   if (tick) {
     let hideTick = false;
     try {
-      hideTick = is80sYouCreateFlow()
+      hideTick = Boolean(activePhotoSoloChallengeId())
         || (createFlowModeEnabled() && getCreateFlowMode() === "simple");
     } catch {}
     tick.hidden = hideTick;
@@ -20429,7 +20719,7 @@ function syncCreateSongTypeTabs() {
     tick.setAttribute("aria-pressed", instrumental ? "true" : "false");
   }
   const singerPanel = document.getElementById("singerVoicePanel");
-  if (singerPanel && !is80sYouCreateFlow()) singerPanel.hidden = instrumental;
+  if (singerPanel && !activePhotoSoloChallengeId()) singerPanel.hidden = instrumental;
 }
 
 function syncSoloInstrumentalToggleUi() {
@@ -20443,9 +20733,12 @@ function syncSoloInstrumentalToggleUi() {
 }
 
 function syncPhotoSoloChallengeCreateUi() {
-  const is80s = is80sYouCreateFlow();
-  if (is80s) {
-    document.body.setAttribute("data-photo-solo-challenge", "80s-you");
+  const photoSoloId = activePhotoSoloChallengeId();
+  const isPhotoSolo = Boolean(photoSoloId);
+  const is80s = photoSoloId === "80s-you";
+  const isSpell = photoSoloId === "spell-you";
+  if (isPhotoSolo) {
+    document.body.setAttribute("data-photo-solo-challenge", photoSoloId);
   } else {
     document.body.removeAttribute("data-photo-solo-challenge");
     document.body.removeAttribute("data-solo-instrumental");
@@ -20454,36 +20747,43 @@ function syncPhotoSoloChallengeCreateUi() {
   }
   const instRow = document.getElementById("createSoloInstrumentalRow");
   if (instRow) instRow.hidden = !is80s;
-  if (is80s) {
+  if (isPhotoSolo) {
     try { syncLyricsLangPills(); } catch {}
     try { syncPhotoSoloVocalSections(); } catch {}
   }
   const createTabs = document.querySelector(".createTabs");
   if (createTabs) {
-    createTabs.hidden = is80s;
-    createTabs.setAttribute("aria-hidden", is80s ? "true" : "false");
+    createTabs.hidden = isPhotoSolo;
+    createTabs.setAttribute("aria-hidden", isPhotoSolo ? "true" : "false");
   }
   const vibeTab = document.getElementById("createTabVibe");
-  if (vibeTab && is80s) {
+  if (vibeTab && isPhotoSolo) {
     vibeTab.hidden = true;
     vibeTab.style.display = "none";
   }
   const editTab = document.getElementById("createTabEdit");
-  if (editTab && is80s) {
+  if (editTab && isPhotoSolo) {
     editTab.hidden = true;
     editTab.style.display = "none";
   }
-  if (is80s) {
+  if (isPhotoSolo) {
     try { syncSoloInstrumentalToggleUi(); } catch {}
     try { syncCreateSongTypeTabs(); } catch {}
     try { setActiveCreateTab("photo"); } catch {}
     const photoSub = document.querySelector("#createPhotoCta .createPaneCtaSub");
-    if (photoSub) photoSub.textContent = "Tap to upload your retro portrait.";
+    if (photoSub) {
+      photoSub.textContent = is80s
+        ? "Tap to upload your retro portrait."
+        : isSpell
+          ? "This photo becomes the song cover."
+          : "We'll catch the mood and feed it into your song.";
+    }
   } else {
     const photoSub = document.querySelector("#createPhotoCta .createPaneCtaSub");
     if (photoSub) photoSub.textContent = "We'll catch the mood and feed it into your song.";
   }
-  try { syncPhotoSoloBannerUi(is80s ? challengePromptContext() : null); } catch {}
+  try { syncPhotoSoloBannerUi(isPhotoSolo ? challengePromptContext() : null); } catch {}
+  try { syncSpellYouCardUi(); } catch {}
   try { syncCreateSongTypeTabs(); } catch {}
 }
 
@@ -25030,41 +25330,46 @@ function isNabadClipPhotoDirectFlow() {
 function syncImageMoodSheetForCreateFlow() {
   const clipDirect = isNabadClipPhotoDirectFlow();
   const photoSolo80s = activePhotoSoloChallengeId() === "80s-you";
+  const photoSoloSpell = activePhotoSoloChallengeId() === "spell-you";
   const sheet = els.imageMoodModal || document.getElementById("imageMoodModal");
-  sheet?.classList.toggle("photoMoodSheet--clipDirect", clipDirect);
+  sheet?.classList.toggle("photoMoodSheet--clipDirect", clipDirect || photoSoloSpell);
   const title = document.getElementById("imageMoodSheetTitle");
   const lead = document.getElementById("imageMoodLead");
   const kicker = sheet?.querySelector?.(".photoMoodKicker");
-  if (kicker) kicker.textContent = photoSolo80s ? "80s You" : clipDirect ? "Nabad Clip" : "Photo mood";
+  if (kicker) kicker.textContent = photoSolo80s ? "80s You" : photoSoloSpell ? "Spell You" : clipDirect ? "Nabad Clip" : "Photo mood";
   if (title) {
     title.textContent = photoSolo80s
       ? "Your 80s portrait"
-      : clipDirect
-        ? "Photo for your clip"
-        : "Analyze your photo";
+      : photoSoloSpell
+        ? "Your spell cover"
+        : clipDirect
+          ? "Photo for your clip"
+          : "Analyze your photo";
   }
   if (lead) {
     lead.textContent = photoSolo80s
       ? "One quick read for mood, singer match, and lyrics — your photo is used once when the song generates."
-      : clipDirect
-        ? "Your photo sets the mood. On the next screen, pick singer & style (optional lyrics) — then Generate clip."
-        : "We'll turn the vibe into style tags — and the scene into a lyric idea.";
+      : photoSoloSpell
+        ? "This photo becomes the song cover. Then name who you're spelling and pick one annoyance."
+        : clipDirect
+          ? "Your photo sets the mood. On the next screen, pick singer & style (optional lyrics) — then Generate clip."
+          : "We'll turn the vibe into style tags — and the scene into a lyric idea.";
   }
   const analyzeBtn = document.getElementById("btnAnalyzeImageMood") || els.btnAnalyzeImageMood;
   const applyBtn = document.getElementById("btnApplyImageMood") || els.btnApplyImageMood;
   const resultsSection = sheet?.querySelector?.(".photoMoodSection--results");
   const coverRow = document.getElementById("imageMoodCoverRow");
   if (coverRow) {
-    coverRow.hidden = clipDirect || photoSolo80s;
-    coverRow.setAttribute("aria-hidden", clipDirect || photoSolo80s ? "true" : "false");
+    coverRow.hidden = clipDirect || photoSolo80s || photoSoloSpell;
+    coverRow.setAttribute("aria-hidden", clipDirect || photoSolo80s || photoSoloSpell ? "true" : "false");
   }
   if (analyzeBtn) {
-    analyzeBtn.hidden = clipDirect;
-    analyzeBtn.setAttribute("aria-hidden", clipDirect ? "true" : "false");
+    analyzeBtn.hidden = clipDirect || photoSoloSpell;
+    analyzeBtn.setAttribute("aria-hidden", clipDirect || photoSoloSpell ? "true" : "false");
   }
   if (resultsSection) {
-    resultsSection.hidden = clipDirect;
-    resultsSection.setAttribute("aria-hidden", clipDirect ? "true" : "false");
+    resultsSection.hidden = clipDirect || photoSoloSpell;
+    resultsSection.setAttribute("aria-hidden", clipDirect || photoSoloSpell ? "true" : "false");
   }
   if (analyzeBtn && applyBtn && !photoSolo80s) {
     if (clipDirect) {
@@ -25082,6 +25387,7 @@ function syncImageMoodSheetForCreateFlow() {
 function syncPhotoMoodActionButtonsState({ analyzing = false } = {}) {
   const clipDirect = isNabadClipPhotoDirectFlow();
   const photoSolo80s = activePhotoSoloChallengeId() === "80s-you";
+  const photoSoloSpell = activePhotoSoloChallengeId() === "spell-you";
   const analyzeBtn = document.getElementById("btnAnalyzeImageMood") || els.btnAnalyzeImageMood;
   const applyBtn = document.getElementById("btnApplyImageMood") || els.btnApplyImageMood;
   const sheet = els.imageMoodModal || document.getElementById("imageMoodModal");
@@ -25091,6 +25397,7 @@ function syncPhotoMoodActionButtonsState({ analyzing = false } = {}) {
   if (!analyzeBtn || !applyBtn) return;
 
   sheet?.classList.toggle("photoMoodSheet--80sPortrait", photoSolo80s);
+  sheet?.classList.toggle("photoMoodSheet--spellCover", photoSoloSpell);
   sheet?.classList.toggle("photoMoodSheet--80sPreAnalyze", photoSolo80s && !hasResult);
   sheet?.classList.toggle("photoMoodSheet--80sPostAnalyze", photoSolo80s && hasResult);
 
@@ -25110,6 +25417,17 @@ function syncPhotoMoodActionButtonsState({ analyzing = false } = {}) {
     const canApplyCoverOnly = hasCoverData && !hasResult && !analyzing;
     applyBtn.disabled = !canApplyCoverOnly;
     applyBtn.textContent = hasResult ? "Apply to clip" : "Use for clip";
+    applyBtn.classList.toggle("isReady", Boolean(canApplyCoverOnly));
+    return;
+  }
+
+  if (photoSoloSpell) {
+    analyzeBtn.hidden = true;
+    applyBtn.hidden = false;
+    setPrimary(applyBtn);
+    const canApplyCoverOnly = (hasCoverData || hasFile) && !analyzing;
+    applyBtn.disabled = !canApplyCoverOnly;
+    applyBtn.textContent = "Use photo";
     applyBtn.classList.toggle("isReady", Boolean(canApplyCoverOnly));
     return;
   }
@@ -25312,7 +25630,7 @@ function applyImageMoodToSongFields() {
   const mood = sanitizeImageMoodForClient(imageMoodData);
   imageMoodData = mood;
   const tags = Array.isArray(mood.tags) ? mood.tags.filter(Boolean) : [];
-  if (els.sunoStyle && tags.length) {
+  if (els.sunoStyle && tags.length && !isSpellYouCreateFlow()) {
     const existing = String(els.sunoStyle.value || "").trim();
     const current = existing ? existing.split(",").map((s) => s.trim()).filter(Boolean) : [];
     const merged = [...new Set([...current, ...tags])].slice(0, 12);
@@ -25343,7 +25661,7 @@ function applyImageMoodToSongFields() {
   }
   const summaryTags = tags.slice(0, 4).join(", ");
   const summaryText = String(mood.concept || summaryTags || "Image mood applied.").trim();
-  if (els.imageMoodUseAsCover?.checked && imageMoodCoverDataUrl) {
+  if ((isSpellYouCreateFlow() || els.imageMoodUseAsCover?.checked) && imageMoodCoverDataUrl) {
     stashPhotoCoverForGeneration(imageMoodCoverDataUrl);
     if (els.imageMoodSummary) {
       els.imageMoodSummary.textContent = `${summaryText} · cover ready for next song`;
@@ -77281,6 +77599,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   };
   const applyImageMood = async () => {
     if (!imageMoodData) {
+      if (isSpellYouCreateFlow()) {
+        if (!(await applyPhotoForSpellYou())) return;
+        closeImageMoodModal();
+        setStatus("Photo locked — name who you're spelling, pick one annoyance, then Generate.");
+        syncGenerateOrbVisibility();
+        return;
+      }
       if (isNabadClipPhotoDirectFlow()) {
         if (!(await applyPhotoForNabadClipDirect())) return;
         closeImageMoodModal();
@@ -77313,6 +77638,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ? "Photo locked in — we're writing your 80s lyrics. Pick singer, then Generate."
           : "Photo locked in — pick singer & vocal character, then Generate.",
       );
+    } else if (isSpellYouCreateFlow()) {
+      applySpellYouLockedStyle();
+      setStatus("Photo locked — name who you're spelling, pick one annoyance, then Generate.");
     } else {
       setStatus(
         isNabadClipPhotoDirectFlow()
@@ -78666,8 +78994,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     if (isLyriaClipGenerateFlow()) {
       if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId() && !imageMoodAppliedForNextGen) {
-        showToast("Upload and analyze your photo first.", { icon: "📷", durationMs: 3200 });
-        setStatus("Add your portrait on Photo — Analyze, then Generate.");
+        showToast(
+          isSpellYouCreateFlow() ? "Add a photo — it becomes the cover." : "Upload and analyze your photo first.",
+          { icon: "📷", durationMs: 3200 },
+        );
+        setStatus(isSpellYouCreateFlow()
+          ? "Add a photo — it becomes the song cover."
+          : "Add your portrait on Photo — Analyze, then Generate.");
+        return;
+      }
+      if (isSpellYouCreateFlow() && !spellYouReadyForGenerate()) {
+        const msg = createGenerateBlockedToastMessage();
+        showToast(msg, { icon: "✦", durationMs: 3200 });
+        setStatus(msg);
         return;
       }
       if (isTemplateSparkClipFlow() && !activePhotoSoloChallengeId() && !templateSparkClipLyricsReady()) {
@@ -78690,11 +79029,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         return;
       }
       if (!armCreateGenerateInFlight()) return;
-      const is80sPhotoSolo =
-        isTemplateSparkClipFlow() && activePhotoSoloChallengeId() === "80s-you";
+      const photoSoloId = isTemplateSparkClipFlow() ? activePhotoSoloChallengeId() : "";
+      const is80sPhotoSolo = photoSoloId === "80s-you";
+      const isSpellPhotoSolo = photoSoloId === "spell-you";
       const is80sInstrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
-      if (is80sPhotoSolo) {
-        try { beginCoachPriorityStatus("80s moment…", { generating: true }); } catch {}
+      if (is80sPhotoSolo || isSpellPhotoSolo) {
+        try {
+          beginCoachPriorityStatus(isSpellPhotoSolo ? "Casting the spell…" : "80s moment…", { generating: true });
+        } catch {}
         try { openProfileSongsWhileGenerating({ force: true }); } catch {}
       }
       setGenerateBtn("Generating…", true, "generate");
@@ -78704,7 +79046,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         releaseCreateGenerateInFlight();
         setGenerateBtn("Generate clip", false, "generate");
         setGenerateFieldsLocked(false);
-        if (is80sPhotoSolo) {
+        if (is80sPhotoSolo || isSpellPhotoSolo) {
           try { cancelCoachPriorityStatus(); } catch {}
         }
         return;
@@ -78736,18 +79078,28 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         const lyriaIdeaClip = lyriaIdeaModeForGenerate(userPrompt, { instrumental: false });
         const ideaClip = lyriaRaw ? false : createIdeaIsPromptToSong(userPrompt);
         if (ideaClip || lyriaIdeaClip) finalPrompt = "";
-        const clipStyle = lyriaIdeaClip
-          ? userStyleRaw
-          : lyriaRaw
+        if (isSpellPhotoSolo) applySpellYouLockedStyle();
+        const clipStyle = isSpellPhotoSolo
+          ? String(els.sunoStyle?.value || SPELL_YOU_STYLE).trim()
+          : lyriaIdeaClip
             ? userStyleRaw
-            : ideaClip
-              ? mergeIdeaIntoStyle(userPrompt, userStyle)
-              : userStyle;
+            : lyriaRaw
+              ? userStyleRaw
+              : ideaClip
+                ? mergeIdeaIntoStyle(userPrompt, userStyle)
+                : userStyle;
         if (!finalPrompt && is80sPhotoSolo && !is80sInstrumental) {
           try { updateCoachPriorityStatus("Crafting your lyrics…", { generating: true }); } catch {}
           await draft80sYouLyricsForGenerate(imageMoodData);
           finalPrompt = sanitizeLyricsPrompt(String(els.sunoPrompt?.value || "").trim());
           try { updateCoachPriorityStatus("Making your 80s clip…", { generating: true }); } catch {}
+        }
+        if (!finalPrompt && isSpellPhotoSolo && !is80sInstrumental) {
+          try { updateCoachPriorityStatus("Writing the spell…", { generating: true }); } catch {}
+          applySpellYouLockedStyle();
+          await draftSpellYouLyricsForGenerate();
+          finalPrompt = sanitizeLyricsPrompt(String(els.sunoPrompt?.value || "").trim());
+          try { updateCoachPriorityStatus("Making your spell song…", { generating: true }); } catch {}
         }
         if (!lyriaRaw && !finalPrompt && !clipAllowImageOnly && !isTemplateSparkClipFlow() && !ideaClip) {
           try {
@@ -78958,15 +79310,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             );
           }
           try {
-            if (is80sPhotoSolo) {
+            if (is80sPhotoSolo || isSpellPhotoSolo) {
               try { cancelCoachPriorityStatus(); } catch {}
             }
             beginCoachGenerationStatus({
               variantCount: 1,
-              pillText: is80sPhotoSolo ? "Making your 80s clip…" : "Clip generating…",
+              pillText: isSpellPhotoSolo
+                ? "Making your spell song…"
+                : is80sPhotoSolo
+                  ? "Making your 80s clip…"
+                  : "Clip generating…",
             });
           } catch {}
-          try { openProfileSongsWhileGenerating({ force: is80sPhotoSolo }); } catch {}
+          try { openProfileSongsWhileGenerating({ force: is80sPhotoSolo || isSpellPhotoSolo }); } catch {}
           try { setLoading(false); } catch {}
         }
         setGenerateBtn("Generate clip", false, "generate");
@@ -78986,7 +79342,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             showToast(e?.message || "Clip generation failed.", { icon: "!", durationMs: 4800 });
           } catch {}
         }
-        if (is80sPhotoSolo) {
+        if (is80sPhotoSolo || isSpellPhotoSolo) {
           try { cancelCoachPriorityStatus(); } catch {}
         }
       }
@@ -81315,7 +81671,7 @@ function syncCreateSimpleChrome() {
 
 function isCreateLyricsComposerLayout() {
   try {
-    if (typeof is80sYouCreateFlow === "function" && is80sYouCreateFlow()) return false;
+    if (typeof activePhotoSoloChallengeId === "function" && activePhotoSoloChallengeId()) return false;
   } catch {}
   const onGenerate = String(document.body.getAttribute("data-route") || "") === "generate";
   return onGenerate && createFlowModeEnabled();
@@ -83393,6 +83749,12 @@ function isCreateGenerateBlockedAwaitingLyrics() {
 
 function createGenerateBlockedToastMessage() {
   if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId()) {
+    if (isSpellYouCreateFlow()) {
+      if (!imageMoodAppliedForNextGen) return "Add a photo — it becomes the cover.";
+      if (!spellYouTargetName()) return "Type who you're putting a spell on.";
+      if (!sanitizeSpellYouAnnoyance(spellYouAnnoyanceRaw())) return "Pick or type one harmless annoyance.";
+      return "Ready — tap Generate.";
+    }
     return imageMoodAppliedForNextGen
       ? "Ready — tap Generate."
       : "Upload and analyze your photo first.";
@@ -89729,7 +90091,7 @@ function getActiveCreateTabMode() {
   return "lyrics";
 }
 function resyncActiveCreateTabPanes() {
-  if (is80sYouCreateFlow()) {
+  if (activePhotoSoloChallengeId()) {
     setActiveCreateTab("photo");
     return;
   }
@@ -89793,6 +90155,7 @@ if (createPhotoCtaBtn) {
   });
 }
 wireCreatePhotoSoloBannerOnce();
+wireSpellYouCardOnce();
 wireCreateLyricsAttachOnce();
 const createVibeCtaBtn = document.getElementById("createVibeCta");
 if (createVibeCtaBtn) {

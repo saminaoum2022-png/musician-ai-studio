@@ -1160,7 +1160,7 @@
                 <small id="createChallengeHintSub">Edit below, then tap Generate.</small>
               </span>
             </div>
-            <button id="createPhotoSoloBanner" type="button" class="createPhotoSoloBanner" hidden aria-label="80s You challenge — add your photo">
+            <button id="createPhotoSoloBanner" type="button" class="createPhotoSoloBanner" hidden aria-label="Challenge — add your photo">
               <span class="createPhotoSoloBannerBg" style="background-image:url(/assets/discover/challenges/80s-you-hero.png)" aria-hidden="true"></span>
               <span class="createPhotoSoloBannerScrim" aria-hidden="true"></span>
               <span class="createPhotoSoloBannerBody">
@@ -1170,6 +1170,24 @@
                 <span class="createPhotoSoloBannerCta">Try now</span>
               </span>
             </button>
+            <div id="createSpellYouCard" class="createSpellYouCard" hidden>
+              <p class="createSpellYouKicker">The spell</p>
+              <label class="createSpellYouField">
+                <span class="inPanelLabel">Who are you putting a spell on?</span>
+                <input id="spellYouName" type="text" maxlength="40" autocomplete="off" placeholder="Their name" />
+              </label>
+              <div class="createSpellYouField">
+                <span class="inPanelLabel">One harmless annoyance</span>
+                <div id="spellYouAnnoyanceChips" class="optChipRow createSpellYouChips" role="group" aria-label="Harmless annoyance">
+                  <button type="button" class="optChip" data-spell-annoyance="always late" aria-pressed="false">always late</button>
+                  <button type="button" class="optChip" data-spell-annoyance="leaves me on seen" aria-pressed="false">leaves me on seen</button>
+                  <button type="button" class="optChip" data-spell-annoyance="steals my charger" aria-pressed="false">steals my charger</button>
+                  <button type="button" class="optChip" data-spell-annoyance="spoils every series" aria-pressed="false">spoils every series</button>
+                  <button type="button" class="optChip" data-spell-annoyance="eats my food" aria-pressed="false">eats my food</button>
+                </div>
+                <input id="spellYouAnnoyanceCustom" type="text" maxlength="80" autocomplete="off" placeholder="or type one" />
+              </div>
+            </div>
             <div class="createPanes" data-mode="lyrics">
               <div class="createPane createPane--photo" data-mode="photo" hidden>
                 <button id="createPhotoCta" class="createPaneCta" type="button" aria-label="Add a photo">

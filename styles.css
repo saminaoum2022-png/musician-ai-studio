@@ -10310,10 +10310,14 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 .addressPills--two{
   grid-template-columns: repeat(2, 1fr);
 }
-/* 80s You only — never show solo lang/dialect on normal Create (Lyrics tab has its own). */
-body:not([data-photo-solo-challenge="80s-you"]) #createSoloInstrumentalRow,
-body:not([data-photo-solo-challenge="80s-you"]) #createSoloLangRow,
-body:not([data-photo-solo-challenge="80s-you"]) #createSoloDialectRow{
+/* Photo-solo only — never show solo lang/dialect on normal Create (Lyrics tab has its own). */
+body:not([data-photo-solo-challenge]) #createSoloInstrumentalRow,
+body:not([data-photo-solo-challenge]) #createSoloLangRow,
+body:not([data-photo-solo-challenge]) #createSoloDialectRow,
+body:not([data-photo-solo-challenge="spell-you"]) #createSpellYouCard{
+  display: none !important;
+}
+body[data-photo-solo-challenge="spell-you"] #createSoloInstrumentalRow{
   display: none !important;
 }
 body[data-photo-solo-challenge] .createSoloInstrumentalRow{
@@ -10350,7 +10354,7 @@ body[data-photo-solo-challenge] .createPane--vibe,
 body[data-photo-solo-challenge] .createPane--edit{
   display: none !important;
 }
-body[data-photo-solo-challenge="80s-you"] .createPane--lyrics{
+body[data-photo-solo-challenge] .createPane--lyrics{
   display: none !important;
 }
 body[data-photo-solo-challenge] .createFlowStep .inputPanel--style:has(#sunoStyle),
@@ -10464,6 +10468,54 @@ button.createPhotoSoloBanner:active{
   box-shadow: none;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+}
+body[data-photo-solo-challenge="spell-you"] button.createPhotoSoloBanner{
+  border-color: rgba(124, 92, 255, 0.28);
+  box-shadow: 0 12px 32px rgba(20, 8, 40, 0.28);
+}
+body[data-photo-solo-challenge="spell-you"] .createPhotoSoloBannerBg{
+  background-position: 72% 18%;
+}
+.createSpellYouCard[hidden]{
+  display: none !important;
+}
+.createSpellYouCard{
+  display: grid;
+  gap: 14px;
+  margin: 0 0 12px;
+  padding: 14px 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(167, 139, 250, 0.18);
+  background:
+    linear-gradient(180deg, rgba(28, 16, 48, 0.55) 0%, rgba(8, 8, 16, 0.72) 100%);
+}
+.createSpellYouKicker{
+  margin: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(216, 180, 254, 0.78);
+}
+.createSpellYouField{
+  display: grid;
+  gap: 8px;
+}
+.createSpellYouField .inPanelLabel{
+  margin: 0;
+}
+.createSpellYouCard input{
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(5, 8, 15, 0.45);
+  color: #f5f5fa;
+  font: inherit;
+}
+.createSpellYouChips{
+  flex-wrap: wrap;
 }
 .discoverPlaylistTryNow{
   display: inline-flex;
@@ -53285,6 +53337,9 @@ html[data-theme="light"] .chartTitle{
   object-position: center 38%;
   display: block;
   transform: scale(1.02);
+}
+.discoverFeaturedChallengeHero--spellYou .discoverFeaturedChallengeHeroBg img{
+  object-position: 72% 22%;
 }
 .discoverFeaturedChallengeHeroScrim{
   position: absolute;

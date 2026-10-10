@@ -6930,9 +6930,8 @@ function applyRoute({ passGen } = {}) {
     try { restoreCreatePageOnRouteEnter(); } catch {}
     try { autoResizeLyricsBox(); } catch {}
     if (prevRoute !== wanted) {
-      _createSimpleAutofocusAfterLayout =
-        createFlowModeEnabled() && getCreateFlowMode() === "simple";
-      scheduleCreateLyricsAutofocus();
+      try { cancelCreateLyricsAutofocus(); } catch {}
+      try { blurCreateFieldsQuietly(); } catch {}
     }
   }
   syncGenerateOrbVisibility();
@@ -81984,10 +81983,6 @@ function syncCreateFlowLayoutUi() {
   try { syncCreateComposeLayout(); } catch {}
   try { syncSimpleArabicAddressRow(); } catch {}
   try { syncCreateSimpleStyleTabs(); } catch {}
-  if (mode === "simple" && enabled && _createSimpleAutofocusAfterLayout) {
-    _createSimpleAutofocusAfterLayout = false;
-    scheduleCreateLyricsAutofocus();
-  }
 }
 
 function clearLyriaStudioStyleSelection({ clearStyleField = false } = {}) {
@@ -83617,9 +83612,8 @@ function lyricsBoxEmptyBaseHeight() {
 }
 
 let _createIgnoreAutofocus = false;
-let _createSimpleAutofocusAfterLayout = false;
-// Simple Create always lays out for an open keyboard. Until iOS reports the real
-// keyboard height we assume this (iPhone portrait) so the stack never jumps.
+// Until iOS reports the real keyboard height after they tap lyrics, assume this
+// (iPhone portrait) so the stack does not jump.
 let _createSimpleKbAssumed = false;
 const CREATE_SIMPLE_KB_FALLBACK = 336;
 let _createLyricsAutofocusTimers = [];
@@ -83797,22 +83791,9 @@ function isCreateSimpleMobileFill() {
 }
 
 function shouldAutoFocusCreateLyricsOnEnter() {
-  if (!isGenerateRouteActive()) return false;
-  if (!createFlowModeEnabled() || getCreateFlowMode() !== "simple") return false;
-  const flow = getCreateFlow();
-  if (flow && flow !== "song") return false;
-  if (document.body.classList.contains("generateLocked")) return false;
-  if (document.body.classList.contains("createChooserSheetOpen")) return false;
-  if (document.body.hasAttribute("data-photo-solo-challenge")) return false;
-  const editPane = document.querySelector(".createPane--edit");
-  if (editPane && !editPane.hidden) return false;
-  try {
-    if (createSessionHasResultVisible() && !createSessionIsGenerating()) return false;
-  } catch {}
-  const lyricsPane = document.querySelector(".createPane--lyrics");
-  if (lyricsPane?.hidden) return false;
-  if (els.sunoPrompt?.disabled) return false;
-  return true;
+  // Open Create with the keyboard down so styles are visible first.
+  // The lyrics box only focuses when they tap to write.
+  return false;
 }
 
 function scheduleCreateLyricsAutofocus() {
@@ -84030,6 +84011,7 @@ function handleCreateFieldFocus(target) {
   }
   _createFocusedField = target;
   if (isCreateSimpleCreateLayout()) {
+    if (isCreateLyricsKeyboardField(target)) _createSimpleKbAssumed = true;
     try { syncCreateComposeLayout(); } catch {}
     try { syncCreateKeyboardStyleVisibility(); } catch {}
   }

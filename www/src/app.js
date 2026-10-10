@@ -5503,7 +5503,7 @@ function setCreateChallengeHint(challenge) {
       els.createChallengeHintSub.textContent = String(c.id || "") === "80s-you"
         ? "Upload your portrait — we write your 80s lyrics. Pick singer & vocal character, then Generate."
         : String(c.id || "") === "spell-you"
-          ? "Edit the spell if you want, pick a singer, then Generate."
+          ? "The name is the idea — edit it, pick a singer, then Generate."
           : "Upload a photo on Photo — Analyze mood, then Generate.";
     } else {
       els.createChallengeHintSub.textContent = `${details ? `${details}. ` : ""}Edit the idea, then Generate — no need to write lyrics first.`;
@@ -9861,7 +9861,7 @@ const CHALLENGE_IDEAS = [
     styleLyria: "late-night dark synth pop, mysterious midnight atmosphere, dark synth pads, soft church-organ or bell motif intro, deep 808, dark choir hint in the chorus, cinematic intimate vocal, not jump-scare, not kids Halloween, no pumpkins, 102 bpm",
     style: "late-night dark synth pop, mysterious midnight atmosphere, dark synth pads, soft church-organ or bell motif intro, deep 808, dark choir hint in the chorus, cinematic intimate vocal, not jump-scare, not kids Halloween, no pumpkins, 102 bpm",
     lyricsMode: "instructions",
-    lyrics: "Spell You — lyrics written from the name and one harmless annoyance after you add a photo.",
+    lyrics: "Spell You — the name is the idea. One harmless annoyance makes the spell.",
     prompt: "Put a spell on someone. Make it a song.",
     tags: ["Spell", "Photo", "Halloween"],
   },
@@ -13292,9 +13292,9 @@ function syncPhotoSoloBannerUi(challenge) {
   if (cta) {
     const changePhoto = imageMoodAppliedForNextGen && activePhotoSoloChallengeId() === id;
     cta.textContent = id === "spell-you"
-      ? (changePhoto ? "Edit spell" : "Try now")
+      ? (spellYouReadyForGenerate() ? "Edit spell" : "Try now")
       : changePhoto ? "Change photo" : "Try now";
-    cta.classList.toggle("createPhotoSoloBannerCta--ghost", changePhoto);
+    cta.classList.toggle("createPhotoSoloBannerCta--ghost", id === "spell-you" ? spellYouReadyForGenerate() : changePhoto);
     cta.hidden = false;
   }
   banner.hidden = false;
@@ -20516,11 +20516,7 @@ function sanitizeSpellYouAnnoyance(raw) {
   return t;
 }
 function spellYouReadyForGenerate() {
-  return Boolean(
-    _spellYouCoverDataUrl
-    && spellYouTargetName()
-    && sanitizeSpellYouAnnoyance(spellYouAnnoyanceRaw()),
-  );
+  return Boolean(spellYouTargetName() && sanitizeSpellYouAnnoyance(spellYouAnnoyanceRaw()));
 }
 function readSpellYouDraft() {
   return {
@@ -20528,7 +20524,6 @@ function readSpellYouDraft() {
     address: spellYouAddressValue(),
     annoyance: spellYouAnnoyanceRaw(),
     language: spellYouLanguageValue(),
-    coverDataUrl: String(_spellYouCoverDataUrl || "").trim(),
   };
 }
 function persistSpellYouDraft() {
@@ -20569,19 +20564,7 @@ function applySpellYouDraftToSheet(draft) {
     b.classList.toggle("isActive", on);
     b.setAttribute("aria-pressed", on ? "true" : "false");
   });
-  const cover = String(draft.coverDataUrl || "").trim();
-  if (cover.startsWith("data:")) {
-    _spellYouCoverDataUrl = cover;
-    const preview = document.getElementById("spellYouPhotoPreview");
-    const wrap = preview?.closest?.(".spellYouPreviewWrap");
-    if (preview) {
-      preview.src = cover;
-      preview.removeAttribute("hidden");
-    }
-    wrap?.classList.add("hasPreview");
-    const label = document.getElementById("spellYouPhotoPickLabel");
-    if (label) label.textContent = "Change photo";
-  }
+  _spellYouCoverDataUrl = "";
   syncSpellYouContinueState();
 }
 function persistSpellYouChallengePerson() {
@@ -20613,19 +20596,6 @@ function resetSpellYouCardFields() {
     b.classList.toggle("isActive", on);
     b.setAttribute("aria-pressed", on ? "true" : "false");
   });
-  const preview = document.getElementById("spellYouPhotoPreview");
-  const wrap = preview?.closest?.(".spellYouPreviewWrap");
-  if (preview) {
-    preview.setAttribute("hidden", "");
-    preview.removeAttribute("src");
-  }
-  wrap?.classList.remove("hasPreview");
-  const upload = document.getElementById("spellYouPhotoUpload");
-  if (upload) {
-    try { upload.value = ""; } catch {}
-  }
-  const label = document.getElementById("spellYouPhotoPickLabel");
-  if (label) label.textContent = "Add a photo — it becomes the cover";
   try { sessionStorage.removeItem(SPELL_YOU_DRAFT_KEY); } catch {}
   syncSpellYouContinueState();
 }
@@ -20641,7 +20611,7 @@ function syncSpellYouCardUi() {
   const title = document.getElementById("createSpellYouSummaryTitle");
   const sub = document.getElementById("createSpellYouSummarySub");
   if (title) title.textContent = name ? `Spell on ${name}` : "Spell You";
-  if (sub) sub.textContent = annoyance ? `${annoyance} · tap to edit` : "Tap to edit photo, name, or annoyance.";
+  if (sub) sub.textContent = annoyance ? `${annoyance} · tap to edit` : "Tap to edit name or annoyance.";
   try { applySpellYouLockedStyle(); } catch {}
   try { persistSpellYouChallengePerson(); } catch {}
 }
@@ -20701,7 +20671,7 @@ function buildSpellYouLyricsBrief() {
 let _spellYouLyricsGenInFlight = null;
 async function draftSpellYouLyricsForGenerate() {
   if (!isSpellYouCreateFlow()) return true;
-  if (String(els.vocalInstrumentalOnly?.value || "0") === "1") return true;
+  if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
   const existing = String(els.sunoPrompt?.value || "").trim();
   if (existing && looksLikeSingableLyrics(existing) && _lyricsGeneratedInNabad) return true;
   if (_spellYouLyricsGenInFlight) {
@@ -20753,25 +20723,28 @@ async function draftSpellYouLyricsForGenerate() {
   });
   return _spellYouLyricsGenInFlight;
 }
-function applySpellYouPhotoToCreate() {
-  const cover = String(_spellYouCoverDataUrl || "").trim();
-  if (!cover.startsWith("data:")) return false;
-  imageMoodCoverDataUrl = cover;
-  imageMoodCoverOnlyForNextGen = false;
-  imageMoodAppliedForNextGen = true;
-  stashPhotoCoverForGeneration(cover);
-  const summary = "Photo locked — this is the song cover.";
-  setCreatePhotoAttachmentPreview(cover, summary);
-  if (els.imageMoodSummary) {
-    els.imageMoodSummary.textContent = summary;
-    els.imageMoodSummary.hidden = false;
+function buildSpellYouIdeaPrompt() {
+  const name = spellYouTargetName() || "them";
+  const annoyance = sanitizeSpellYouAnnoyance(spellYouAnnoyanceRaw());
+  const her = spellYouAddressValue() === "female";
+  if (spellYouLanguageValue() === "arabic") {
+    return annoyance
+      ? `أغنية سحر لبنانية خفيفة ومضحكة عن ${name} — ${annoyance}. خاطب ${name} بصيغة ${her ? "المؤنث" : "المذكر"}. المغني ساحر عم يعمل سحر لعوب. استخدم سحر / سحرتك، ممنوع لعنة.`
+      : `أغنية سحر لبنانية خفيفة ومضحكة عن ${name}.`;
   }
-  applySpellYouLockedStyle();
-  try { syncPhotoSoloBannerUi(challengePromptContext()); } catch {}
-  try { syncSpellYouCardUi(); } catch {}
+  return annoyance
+    ? `Put a spell on ${name} — ${her ? "she" : "he"} ${annoyance}. Dark funny witch/sorcerer song. Use "I put a spell on you", never curse.`
+    : `Put a spell on ${name}. Dark funny witch/sorcerer song. Use "I put a spell on you", never curse.`;
+}
+function applySpellYouIdeaIntoCreate() {
+  if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
+  const idea = buildSpellYouIdeaPrompt();
+  if (els.sunoPrompt) els.sunoPrompt.value = idea;
+  _lyricsGeneratedInNabad = false;
+  _nabadAiLyricsDraft = "";
+  try { setLyricsInputMode("generate", { silent: true, preserveText: true }); } catch {}
+  try { autoResizeLyricsBox(); } catch {}
   try { syncGenerateOrbVisibility(); } catch {}
-  try { syncCreateLyricsAttachStack(); } catch {}
-  return true;
 }
 function applySpellYouLanguageToCreate() {
   const lang = spellYouLanguageValue();
@@ -20794,7 +20767,7 @@ function openSpellYouSheet() {
     document.body.appendChild(sheet);
   }
   const saved = loadSpellYouDraft();
-  if (saved && (saved.name || saved.coverDataUrl || saved.annoyance)) {
+  if (saved && (saved.name || saved.annoyance)) {
     applySpellYouDraftToSheet(saved);
   }
   sheet.hidden = false;
@@ -20813,11 +20786,9 @@ function closeSpellYouSheet() {
 async function continueSpellYouSheet() {
   persistSpellYouDraft();
   if (!spellYouReadyForGenerate()) {
-    const msg = !_spellYouCoverDataUrl
-      ? "Add a photo — it becomes the cover."
-      : !spellYouTargetName()
-        ? "Type who you're putting a spell on."
-        : "Pick or type one harmless annoyance.";
+    const msg = !spellYouTargetName()
+      ? "Type who you're putting a spell on."
+      : "Pick or type one harmless annoyance.";
     try { showToast(msg, { icon: "✦", durationMs: 2800 }); } catch {}
     return;
   }
@@ -20835,13 +20806,7 @@ async function continueSpellYouSheet() {
     }
     applySpellYouDraftIntoCreate();
     closeSpellYouSheet();
-    if (els.sunoPrompt) {
-      els.sunoPrompt.value = "";
-      _lyricsGeneratedInNabad = false;
-    }
-    try { setStatus("Writing the spell…"); } catch {}
-    await draftSpellYouLyricsForGenerate();
-    try { setStatus("Edit the spell, pick a singer, then Generate."); } catch {}
+    try { setStatus("Name is the idea — edit it, pick a singer, then Generate."); } catch {}
   } finally {
     _spellYouInjecting = false;
     if (btn) {
@@ -20853,10 +20818,12 @@ async function continueSpellYouSheet() {
 function applySpellYouDraftIntoCreate() {
   const saved = loadSpellYouDraft();
   if (saved) applySpellYouDraftToSheet(saved);
+  if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
+  _spellYouCoverDataUrl = "";
   applySpellYouLanguageToCreate();
-  applySpellYouPhotoToCreate();
   persistSpellYouChallengePerson();
   applySpellYouLockedStyle();
+  applySpellYouIdeaIntoCreate();
   try { setActiveCreateTab("lyrics"); } catch {}
   try { syncPhotoSoloChallengeCreateUi(); } catch {}
   try { syncSpellYouCardUi(); } catch {}
@@ -20870,7 +20837,6 @@ function wireSpellYouCardOnce() {
   const chips = document.getElementById("spellYouAnnoyanceChips");
   const addr = document.getElementById("spellYouAddressChips");
   const langs = document.getElementById("spellYouLangChips");
-  const upload = document.getElementById("spellYouPhotoUpload");
   const onChange = () => {
     persistSpellYouDraft();
     if (els.sunoPrompt && _lyricsGeneratedInNabad && isSpellYouCreateFlow()) {
@@ -20921,26 +20887,6 @@ function wireSpellYouCardOnce() {
     });
     onChange();
   });
-  upload?.addEventListener("change", async () => {
-    const file = upload.files?.[0];
-    if (!file) return;
-    try {
-      _spellYouCoverDataUrl = await prepareMomentCoverDataUrl(file);
-    } catch {
-      try { showToast("Could not load that photo.", { icon: "!", durationMs: 2800 }); } catch {}
-      return;
-    }
-    const preview = document.getElementById("spellYouPhotoPreview");
-    const wrap = preview?.closest?.(".spellYouPreviewWrap");
-    if (preview && _spellYouCoverDataUrl) {
-      preview.src = _spellYouCoverDataUrl;
-      preview.removeAttribute("hidden");
-    }
-    wrap?.classList.add("hasPreview");
-    const label = document.getElementById("spellYouPhotoPickLabel");
-    if (label) label.textContent = "Change photo";
-    onChange();
-  });
   document.getElementById("btnCloseSpellYouSheet")?.addEventListener("click", closeSpellYouSheet);
   sheet.querySelector("[data-spell-you-dismiss]")?.addEventListener("click", closeSpellYouSheet);
   document.getElementById("btnSpellYouContinue")?.addEventListener("click", () => void continueSpellYouSheet());
@@ -20952,8 +20898,8 @@ function wireSpellYouCardOnce() {
 function photoSoloChallengeCanGenerate() {
   const id = activePhotoSoloChallengeId();
   if (!id) return false;
-  if (!imageMoodAppliedForNextGen) return false;
   if (id === "spell-you") return spellYouReadyForGenerate();
+  if (!imageMoodAppliedForNextGen) return false;
   return true;
 }
 
@@ -21040,7 +20986,7 @@ function syncPhotoSoloChallengeCreateUi() {
       photoSub.textContent = is80s
         ? "Tap to upload your retro portrait."
         : isSpell
-          ? "This photo becomes the song cover."
+          ? "The name is the idea — tap to edit the spell."
           : "We'll catch the mood and feed it into your song.";
     }
   } else {
@@ -79261,14 +79207,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       return;
     }
     if (isLyriaClipGenerateFlow()) {
-      if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId() && !imageMoodAppliedForNextGen) {
-        showToast(
-          isSpellYouCreateFlow() ? "Add a photo — it becomes the cover." : "Upload and analyze your photo first.",
-          { icon: "📷", durationMs: 3200 },
-        );
-        setStatus(isSpellYouCreateFlow()
-          ? "Add a photo — it becomes the song cover."
-          : "Add your portrait on Photo — Analyze, then Generate.");
+      if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId() && !imageMoodAppliedForNextGen && !isSpellYouCreateFlow()) {
+        showToast("Upload and analyze your photo first.", { icon: "📷", durationMs: 3200 });
+        setStatus("Add your portrait on Photo — Analyze, then Generate.");
         return;
       }
       if (isSpellYouCreateFlow() && !spellYouReadyForGenerate()) {
@@ -79363,11 +79304,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           try { updateCoachPriorityStatus("Making your 80s clip…", { generating: true }); } catch {}
         }
         if (!finalPrompt && isSpellPhotoSolo && !is80sInstrumental) {
-          try { updateCoachPriorityStatus("Writing the spell…", { generating: true }); } catch {}
           applySpellYouLockedStyle();
-          await draftSpellYouLyricsForGenerate();
-          finalPrompt = sanitizeLyricsPrompt(String(els.sunoPrompt?.value || "").trim());
-          try { updateCoachPriorityStatus("Making your spell song…", { generating: true }); } catch {}
+          applySpellYouIdeaIntoCreate();
+          finalPrompt = String(els.sunoPrompt?.value || "").trim();
         }
         if (!lyriaRaw && !finalPrompt && !clipAllowImageOnly && !isTemplateSparkClipFlow() && !ideaClip) {
           try {
@@ -79621,6 +79560,20 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       return;
     }
     if (!(await ensureSingabilityBeforeGenerate())) return;
+    if (isSpellYouCreateFlow()) {
+      if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
+      try { applySpellYouLockedStyle(); } catch {}
+      if (!String(els.sunoPrompt?.value || "").trim() && spellYouReadyForGenerate()) {
+        applySpellYouIdeaIntoCreate();
+      } else {
+        try { setLyricsInputMode("generate", { silent: true, preserveText: true }); } catch {}
+      }
+      if (!String(els.sunoPrompt?.value || "").trim()) {
+        try { showToast("Type who you're putting a spell on.", { icon: "✦", durationMs: 3200 }); } catch {}
+        setStatus("Type who you're putting a spell on.");
+        return;
+      }
+    }
     const promptText = String(els.sunoPrompt?.value || "").trim();
     const vocalRefFile = resolveVocalReferenceForSubmit();
     const hasUploadedReference = Boolean(vocalRefFile);
@@ -79743,8 +79696,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const prosodyStrictness = String(els.sunoProsody?.value || "").trim();
       const beatStability = String(els.sunoBeatStability?.value || "").trim();
       let finalPrompt = lyriaRaw ? userPrompt : sanitizeLyricsPrompt(userPrompt);
-      const imageOnlyInstrumental = Boolean(imageMoodAppliedForNextGen && !finalPrompt && !hasReference);
-      const shouldGenerateInstrumental = Boolean(instrumentalSelected || imageOnlyInstrumental);
+      const photoSoloNeedsVocals = isSpellYouCreateFlow()
+        || (is80sYouCreateFlow() && String(els.vocalInstrumentalOnly?.value || "0") !== "1");
+      const imageOnlyInstrumental = Boolean(
+        imageMoodAppliedForNextGen && !finalPrompt && !hasReference && !photoSoloNeedsVocals,
+      );
+      const shouldGenerateInstrumental = Boolean(
+        (instrumentalSelected && !isSpellYouCreateFlow()) || imageOnlyInstrumental,
+      );
       const lyriaIdeaMode = lyriaIdeaModeForGenerate(userPrompt, {
         instrumental: shouldGenerateInstrumental,
         hasReference,
@@ -84035,7 +83994,6 @@ function isCreateGenerateBlockedAwaitingLyrics() {
 function createGenerateBlockedToastMessage() {
   if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId()) {
     if (isSpellYouCreateFlow()) {
-      if (!imageMoodAppliedForNextGen) return "Add a photo — it becomes the cover.";
       if (!spellYouTargetName()) return "Type who you're putting a spell on.";
       if (!sanitizeSpellYouAnnoyance(spellYouAnnoyanceRaw())) return "Pick or type one harmless annoyance.";
       return "Ready — tap Generate.";

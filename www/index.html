@@ -1173,7 +1173,7 @@
             <button id="createSpellYouSummary" type="button" class="createSpellYouSummary" hidden>
               <span class="createSpellYouSummaryKicker">The spell</span>
               <strong id="createSpellYouSummaryTitle">Spell You</strong>
-              <small id="createSpellYouSummarySub">Tap to edit photo, name, or annoyance.</small>
+              <small id="createSpellYouSummarySub">Tap to edit name or annoyance.</small>
             </button>
             <div class="createPanes" data-mode="lyrics">
               <div class="createPane createPane--photo" data-mode="photo" hidden>
@@ -1899,17 +1899,10 @@
                 <div class="photoMoodHeadCopy">
                   <p class="photoMoodKicker">Spell You</p>
                   <h2 class="photoMoodTitle" id="spellYouSheetTitle">Put a spell on someone</h2>
-                  <p class="photoMoodSub">Photo, name, one annoyance. Then edit the song before you generate.</p>
+                  <p class="photoMoodSub">Their name is the idea. Add one annoyance, then edit before you generate.</p>
                 </div>
               </header>
               <div class="photoMoodBody imageMoodBody spellYouSheetBody">
-                <label class="photoMoodPick imageMoodPick field spellYouPhotoPick">
-                  <span class="photoMoodPickLabel imageMoodPickLabel" id="spellYouPhotoPickLabel">Add a photo — it becomes the cover</span>
-                  <input id="spellYouPhotoUpload" class="imageMoodUploadInput" type="file" accept="image/*" />
-                </label>
-                <div class="imageMoodPreviewWrap spellYouPreviewWrap">
-                  <img id="spellYouPhotoPreview" alt="Spell cover preview" hidden />
-                </div>
                 <label class="createSpellYouField">
                   <span class="inPanelLabel">Who are you putting a spell on?</span>
                   <input id="spellYouName" type="text" maxlength="40" autocomplete="off" placeholder="Their name" />

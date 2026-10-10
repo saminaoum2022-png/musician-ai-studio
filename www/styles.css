@@ -10319,7 +10319,9 @@ body:not([data-photo-solo-challenge="spell-you"]) #createSpellYouSummary{
 }
 body[data-photo-solo-challenge="spell-you"] #createSoloInstrumentalRow,
 body[data-photo-solo-challenge="spell-you"] #createSoloLangRow,
-body[data-photo-solo-challenge="spell-you"] #createSoloDialectRow{
+body[data-photo-solo-challenge="spell-you"] #createSoloDialectRow,
+body[data-photo-solo-challenge="spell-you"] #createLyricsAttachPhoto,
+body[data-photo-solo-challenge="spell-you"] #createPhotoCta{
   display: none !important;
 }
 body[data-photo-solo-challenge] .createSoloInstrumentalRow{

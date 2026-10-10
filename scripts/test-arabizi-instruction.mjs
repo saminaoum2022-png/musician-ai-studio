@@ -15,7 +15,11 @@ const arabicBody = {
 assert.equal(az.hasArabiziDigitWord("يا 7abibi"), true);
 assert.equal(az.hasArabiziDigitWord("3ayni يا عيني"), true);
 assert.equal(az.hasArabiziDigitWord("2albi"), true);
+assert.equal(az.hasArabiziDigitWord("'albi"), true, "apostrophe hamza counts");
+assert.equal(az.hasArabiziDigitWord("ya 'albi"), true);
 assert.equal(az.hasArabiziDigitWord("5alas"), true);
+assert.equal(az.hasArabiziDigitWord("9abr"), true);
+assert.equal(az.hasArabiziDigitWord("6ayyara"), true);
 assert.equal(az.hasArabiziDigitWord("7elwé ma3é"), true);
 assert.equal(az.hasArabiziDigitWord("Verse 2"), false, "standalone 2 is not Arabizi");
 assert.equal(az.hasArabiziDigitWord("I still hear you in the hallway"), false);
@@ -53,8 +57,20 @@ const mixed = az.maybeAppendArabiziInstruction({
 });
 assert.equal(mixed.used, true);
 assert.match(mixed.prompt, /native Lebanese Arabic pronunciation/);
-assert.match(mixed.prompt, /2 = ء/);
-assert.match(mixed.prompt, /7 = ح/);
+assert.match(mixed.prompt, /9 = saad/);
+assert.match(mixed.prompt, /6 = taa/);
+assert.match(mixed.prompt, /2 or ' = hamza/);
+assert.match(mixed.prompt, /q = a real deep qaf/);
+assert.equal(mixed.prompt.includes("9 = ق"), false, "old 9=qaf mapping must be gone");
+assert.equal(mixed.prompt.includes("9 = qaf"), false);
+
+const hamza = az.maybeAppendArabiziInstruction({
+  prompt: "Create a song.\nLyrics:\nيا 'albi",
+  body: arabicBody,
+  lyrics: "يا 'albi",
+  enabled: true,
+});
+assert.equal(hamza.used, true);
 
 const off = az.maybeAppendArabiziInstruction({
   prompt: "Create a song.\nLyrics:\nيا 7abibi",
@@ -77,6 +93,12 @@ assert.equal(
   1,
   "do not append the instruction twice",
 );
+
+const franco = az.buildLyriaArabiziPerformanceNote({ dialect: "Lebanese" });
+assert.match(franco, /9 = saad/);
+assert.match(franco, /6 = taa/);
+assert.match(franco, /2 or ' = hamza/);
+assert.equal(/9 = qaf|9 = ق/.test(franco), false, "Franco note must not teach 9 as qaf");
 
 assert.equal(
   v3.lyriaProducerV3SystemPrompt(),

@@ -185,10 +185,11 @@ function buildLyriaArabiziPerformanceNote({ dialect = "", dialectHint = "" } = {
   return [
     `FRANCO-ARABIC LYRICS (${label} in Latin letters — sing as Arabic phonetics):`,
     "- Sing as a native Arabic speaker with authentic dialect pronunciation.",
-    "- Latin spellings are phonetic Arabic only: Arabic vowels, Arabic stress, Levantine imala (e/eh endings).",
-    "- Apostrophe = glottal/qaf ('albi); kh = خ, gh = غ; h = هـ — Latin letters only unless lyrics already use digits.",
+    "- a/aa = open Arabic fatha/alef, never a flat French or English a. aa is a long stretched alef (daayeb), never shortened to \"deeb\".",
+    "- 2 or ' = hamza, a short glottal stop (Lebanese qaf replacement, e.g. 'albi). 3 = ain. 5/kh = kha. 7 = haa.",
+    "- 6 = taa (heavy t). 9 = saad (heavy s). q = real deep qaf. s = light seen. t = light ta. gh = ghain (French r, never hard g). sh = sheen.",
+    "- e-acute = light Lebanese imala e, never a or long ee. i/ee = long ee (7abibi).",
     "- Double consonants at word end = gemination — hold the doubled letter (taraktinne).",
-    levantine ? "- Lebanese spoken qaf/hamza = soft glottal (apostrophe or vowel), colloquial Levantine color." : "",
   ].filter(Boolean).join("\n");
 }
 
@@ -198,24 +199,25 @@ function isArabiziScript({ scriptFormat = "", lyrics = "" } = {}) {
   return looksLikeArabizi(lyrics);
 }
 
-const ARABIZI_INSTRUCTION_MARKER = "Some lyrics are Arabic written in Arabizi. Read them as Arabic, never as English";
+const ARABIZI_INSTRUCTION_MARKER = "Lebanese Arabizi pronunciation guide. Read all Latin-letter lyrics as Arabic, never as English or French";
+const ARABIZI_INSTRUCTION_MARKER_LEGACY = "Some lyrics are Arabic written in Arabizi. Read them as Arabic, never as English";
 const ARABIZI_DIGIT_CHARS = "235679";
 
 function tokenizeLyricWords(text) {
   return String(text || "")
     .split(/[^\p{L}\p{N}'’éÉ]+/u)
-    .map((w) => w.replace(/^[^\p{L}\p{N}éÉ]+|[^\p{L}\p{N}éÉ]+$/gu, ""))
     .filter(Boolean);
 }
 
-/** Latin letters mixed with 2/3/5/6/7/9, or Latin + é (7elwé, ma3é, kelmé). */
+/** Latin + 2/3/5/6/7/9, Latin + é, or Latin + apostrophe hamza ('albi). */
 function isArabiziDigitWord(word) {
   const w = String(word || "");
   if (!w) return false;
   const hasLatin = /[A-Za-z\u00C0-\u024F]/.test(w);
   if (!hasLatin) return false;
   if (new RegExp(`[${ARABIZI_DIGIT_CHARS}]`).test(w)) return true;
-  return /[éÉ]/.test(w);
+  if (/[éÉ]/.test(w)) return true;
+  return /['’]/.test(w);
 }
 
 function findArabiziDigitWords(text) {
@@ -275,22 +277,28 @@ function buildLyriaArabiziDigitInstruction({ dialect = "colloquial" } = {}) {
   const name = String(dialect || "colloquial").trim() || "colloquial";
   return [
     `${ARABIZI_INSTRUCTION_MARKER}:`,
-    "2 = ء (hamza; in Lebanese it often replaces ق, e.g. 2albi)",
-    "3 = ع",
-    "5 or kh = خ",
-    "6 = ط",
-    "7 = ح",
-    "9 = ق",
-    "gh = غ",
-    "sh = ش",
-    "é = the light Lebanese \"e\" (imala), as in French \"é\" (e.g. 7elwé, ma3é). Never pronounce it as \"a\" or as a long \"ee\".",
-    "i or ee = long \"ee\" (e.g. 7abibi).",
-    `Sing everything with native ${name} Arabic pronunciation, no foreign accent. Arabic-script and Arabizi words in the same song share the same accent.`,
+    "- Every \"a\" and \"aa\" is the open, full Arabic vowel (fatha / alef) as a native Lebanese singer says it in \"ana\", \"7abibi\". Never the flat, thin French or English \"a\".",
+    "- \"aa\" = a long, stretched alef (e.g. daayeb, saayeb, saayer). Always stretch it, never shorten it to \"deeb\" or \"seeb\".",
+    "- e-acute (e with an acute accent, as in French) = the light Lebanese \"e\" (imala). Never \"a\" and never a long \"ee\".",
+    "- \"i\" or \"ee\" = long \"ee\" (e.g. 7abibi).",
+    "- 2 or ' = hamza, a short glottal stop (in Lebanese it replaces qaf, e.g. 'albi).",
+    "- 3 = ain, a deep throat sound.",
+    "- 5 or kh = kha, like German \"ch\" in Bach.",
+    "- 7 = haa, a breathy h from the throat.",
+    "- gh = ghain, a soft throaty sound like the French \"r\" in Paris, never a hard \"g\".",
+    "- sh = sheen.",
+    "- s = a light, thin s (seen). Never the heavy emphatic s.",
+    "- 9 = saad, the heavy emphatic s (e.g. 9abr).",
+    "- t = a light, thin t (ta). Never the heavy emphatic t.",
+    "- 6 = taa, the heavy emphatic t (e.g. 6ayyara).",
+    "- q = a real deep qaf (rare in Lebanese).",
+    `Sing with native ${name} Arabic pronunciation by a native Lebanese Arabic singer, no foreign accent. Arabic-script and Arabizi words in the same song share the same accent.`,
   ].join("\n");
 }
 
 function promptHasArabiziDigitInstruction(prompt) {
-  return String(prompt || "").includes(ARABIZI_INSTRUCTION_MARKER);
+  const text = String(prompt || "");
+  return text.includes(ARABIZI_INSTRUCTION_MARKER) || text.includes(ARABIZI_INSTRUCTION_MARKER_LEGACY);
 }
 
 function shouldApplyArabiziDigitInstruction({
@@ -330,7 +338,7 @@ function maybeAppendArabiziInstruction({
 
 const ARABIZI_V3_PRESERVE_BLOCK = `
 === ARABIZI WORDS ===
-- Keep every Arabizi word exactly as the user wrote it (Latin letters mixed with 2, 3, 5, 6, 7, 9, and é). Never convert, translate, or respell them — same rule as harakat. Mixed Arabic-script and Arabizi words in the same song are allowed.`;
+- Keep every Arabizi word exactly as the user wrote it (Latin letters mixed with 2, 3, 5, 6, 7, 9, é, or an apostrophe hamza). Never convert, translate, or respell them — same rule as harakat. Mixed Arabic-script and Arabizi words in the same song are allowed.`;
 
 /** @deprecated Use buildToArabiziConversionLines — kept for importers. */
 const TO_ARABIZI_LINES = buildToArabiziConversionLines();

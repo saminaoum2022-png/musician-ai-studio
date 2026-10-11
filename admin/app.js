@@ -8136,10 +8136,16 @@ document.body.addEventListener("click", (e) => {
         msg.textContent = "Sending…";
       }
       try {
-        await sendSupportEmailApi({ userId: uid, templateId, subject, text });
+        const sent = await sendSupportEmailApi({ userId: uid, templateId, subject, text });
         closeSupportEmailModal();
         state.cache = {};
-        showError("");
+        if (sent?.logged === false) {
+          showError(sent.logError
+            ? `Email sent, but Sent could not save it: ${sent.logError}`
+            : "Email sent, but it could not be saved to Sent.");
+        } else {
+          showError("");
+        }
         if (state.view === "user" || state.view === "subscriptions") {
           await loadView({ force: true });
         }

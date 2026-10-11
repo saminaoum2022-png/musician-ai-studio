@@ -3262,6 +3262,23 @@ function renderUserDetail(data) {
   els.pageSub.textContent = u.email || u.username || VIEW_META.user.sub;
 }
 
+function parseMomentAdminMeta(detail) {
+  const text = String(detail || "");
+  const line = (key) => {
+    const m = new RegExp(`^${key}:\\s*(.*)$`, "im").exec(text);
+    return m?.[1]?.trim() || "";
+  };
+  const angle = line("moment_angle");
+  const style = line("moment_style");
+  const trait = line("moment_trait_used").toLowerCase();
+  if (!angle && !style && !trait) return null;
+  return {
+    angle,
+    style,
+    traitUsed: trait === "true" || trait === "yes" || trait === "1",
+  };
+}
+
 function parseLyriaRequestDetail(detail) {
   const text = String(detail || "");
   const lineValue = (key) => {
@@ -3432,6 +3449,16 @@ function renderGenerationDetail(data) {
     ? `<pre class="genDetailPrompt">${escapeHtml(g.prompt)}</pre>`
     : `<p class="sectionNote">No user-facing prompt summary stored for this log entry.</p>`;
 
+  const momentMeta = parseMomentAdminMeta(g.requestMeta || g.requestDetail || "");
+  const momentBlock = momentMeta
+    ? `<div class="detailMetaBlock"><strong>Moments</strong></div>
+       <p class="sectionNote">
+         Angle: ${escapeHtml(momentMeta.angle || "—")}
+         · Style: ${escapeHtml(momentMeta.style || "—")}
+         · Trait used: ${momentMeta.traitUsed ? "yes" : "no"}
+       </p>`
+    : "";
+
   const lyriaMeta = parsed;
   const lyriaMetaBlock = g.provider === "lyria"
     ? `<div class="detailMetaBlock"><strong>Lyria engine</strong></div>
@@ -3575,6 +3602,7 @@ function renderGenerationDetail(data) {
         ${statCard("Duration", fmtDurationMs(g.durationMs), g.completedAt ? fmtDateCompact(g.completedAt) : "Pending")}
         ${statCard("Started", fmtDateCompact(g.createdAt), g.taskId ? `${g.taskId.slice(0, 18)}…` : "No task")}
       </div>
+      ${momentBlock}
       <div class="detailMetaBlock"><strong>User prompt summary</strong></div>
       ${promptBlock}
       ${lyriaMetaBlock}

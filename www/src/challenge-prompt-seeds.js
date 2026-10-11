@@ -1,10 +1,12 @@
 /**
  * Localized instruction prompts for Templates / Sparks / Occasions.
- * Arabic pools are Arabic script only (positive instruction — never "no Arabizi" in the seed).
- * Style (dabke, pop) stays in the style field; the lyric idea can be anything.
+ * Occasion (Moments) angles are English Gemini instructions only.
+ * Language, dialect, and Arabizi stay on the Create + Gemini path.
+ * Spark pools stay bilingual. Arabic spark pools are Arabic script only.
  */
 
 const LAST_KEY = "nabad_challenge_prompt_last_v1";
+const LAST_LOCAL_KEY = "nabad_challenge_prompt_last_local_v1";
 export const CHALLENGE_LANG_STORAGE_KEY = "nabadai_challenge_lang_v1";
 
 const ARABIC_SCRIPT_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
@@ -12,13 +14,15 @@ const ARABIC_SCRIPT_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\
 export function readStoredChallengeLanguageId() {
   try {
     const id = String(sessionStorage.getItem(CHALLENGE_LANG_STORAGE_KEY) || "").trim();
-    if (id === "auto" || id === "english" || id === "levantine" || id === "neutral-arabic") return id;
+    if (id === "auto" || id === "english" || id === "arabic") return id;
+    if (id === "levantine" || id === "neutral-arabic") return "arabic";
   } catch {}
   return "auto";
 }
 
 export function storeChallengeLanguageId(id) {
-  const next = String(id || "auto").trim();
+  const raw = String(id || "auto").trim();
+  const next = raw === "levantine" || raw === "neutral-arabic" ? "arabic" : raw;
   try { sessionStorage.setItem(CHALLENGE_LANG_STORAGE_KEY, next); } catch {}
   return next;
 }
@@ -28,7 +32,7 @@ export function resolveChallengePromptLang(languageId, extras = {}) {
   if (id === "english") return "english";
   if (id === "levantine" || id === "neutral-arabic" || id === "arabic") return "arabic";
 
-  const userText = String(extras.userText || extras.person || "").trim();
+  const userText = String(extras.userText || extras.person || extras.trait || "").trim();
   if (userText) {
     if (ARABIC_SCRIPT_RE.test(userText)) return "arabic";
     if (/[A-Za-z]/.test(userText)) {
@@ -41,7 +45,7 @@ export function resolveChallengePromptLang(languageId, extras = {}) {
   const createLang = String(extras.createLang || extras.appLang || "").trim().toLowerCase();
   if (createLang === "arabic" || createLang === "arabizi") return "arabic";
   if (createLang === "english") return "english";
-  if (String(extras.createDialect || "").trim()) return "arabic";
+  if (String(extras.createDialect || extras.dialectId || "").trim()) return "arabic";
 
   // Auto with no user text: follow app language, never force Sparks to English.
   return "arabic";
@@ -55,14 +59,17 @@ export function withShelfScriptRule(text, lang) {
   return `${body}\n${rule}`;
 }
 
-export function mapChallengeLangToCreate(promptLang, languageId) {
+export function mapChallengeLangToCreate(promptLang, languageId, dialectId = "") {
   const lang = String(promptLang || "").trim();
   const id = String(languageId || "").trim();
-  if (lang === "arabic") {
-    return {
-      lyricsLanguage: "arabic",
-      dialect: id === "neutral-arabic" ? "" : "lebanese",
-    };
+  if (lang === "arabic" || id === "arabic" || id === "levantine" || id === "neutral-arabic") {
+    const d = String(dialectId || "").trim().toLowerCase();
+    if (id === "neutral-arabic" && !d) return { lyricsLanguage: "arabic", dialect: "" };
+    if (d === "neutral" || d === "msa") return { lyricsLanguage: "arabic", dialect: "" };
+    if (d === "lebanese" || d === "egyptian" || d === "gulf") {
+      return { lyricsLanguage: "arabic", dialect: d };
+    }
+    return { lyricsLanguage: "arabic", dialect: d || "" };
   }
   if (lang === "english" || id === "english") {
     return { lyricsLanguage: "english", dialect: "" };
@@ -70,168 +77,247 @@ export function mapChallengeLangToCreate(promptLang, languageId) {
   return null;
 }
 
-function pickFromPool(bucket, lines) {
-  const pool = Array.isArray(lines) ? lines.filter(Boolean) : [];
-  if (!pool.length) return "";
-  let last = -1;
-  try { last = Number(sessionStorage.getItem(`${LAST_KEY}:${bucket}`) || "-1"); } catch {}
-  let idx = Math.floor(Math.random() * pool.length);
-  if (pool.length > 1 && idx === last) idx = (idx + 1) % pool.length;
-  try { sessionStorage.setItem(`${LAST_KEY}:${bucket}`, String(idx)); } catch {}
-  return String(pool[idx] || "").trim();
+function readLastIndex(bucket) {
+  try {
+    const sessionVal = sessionStorage.getItem(`${LAST_KEY}:${bucket}`);
+    if (sessionVal != null && sessionVal !== "") return Number(sessionVal);
+  } catch {}
+  try {
+    const localVal = localStorage.getItem(`${LAST_LOCAL_KEY}:${bucket}`);
+    if (localVal != null && localVal !== "") return Number(localVal);
+  } catch {}
+  return -1;
 }
 
-function variantLine(lang, variant) {
-  if (lang === "arabic") {
-    if (variant === "dance") return "خلّيها راقصة وكورسها يتكرر.";
-    if (variant === "cinematic") return "خلّيها سينمائية وعاطفية والكورس واضح.";
-    return "خلّيها شخصية وسهلة تغنّى.";
-  }
-  if (variant === "dance") return "Make it danceable with a repeatable hook.";
-  if (variant === "cinematic") return "Make it cinematic, emotional, and chorus-led.";
-  return "Make it catchy, personal, and easy to sing.";
+function writeLastIndex(bucket, idx) {
+  const value = String(idx);
+  try { sessionStorage.setItem(`${LAST_KEY}:${bucket}`, value); } catch {}
+  try { localStorage.setItem(`${LAST_LOCAL_KEY}:${bucket}`, value); } catch {}
+}
+
+function pickFromPool(bucket, lines) {
+  const pool = Array.isArray(lines) ? lines.filter(Boolean) : [];
+  if (!pool.length) return { text: "", index: -1 };
+  let last = readLastIndex(bucket);
+  if (!Number.isFinite(last)) last = -1;
+  let idx = Math.floor(Math.random() * pool.length);
+  if (pool.length > 1 && idx === last) idx = (idx + 1) % pool.length;
+  writeLastIndex(bucket, idx);
+  return { text: String(pool[idx] || "").trim(), index: idx };
 }
 
 function scriptRule(lang) {
   return lang === "arabic"
-    ? "اكتب الكلمات بالأحرف العربية فقط (سكربت عربي)."
+    ? "اكتب الكلمات بالأحرف العربية فقط (سكربت عربي). ممنوع Arabizi أو فرانكو أو أحرف لاتينية."
     : "Write the lyrics in English.";
 }
 
-const OCCASION_IDEAS = {
-  birthday: {
-    english: [
-      "A personal birthday hook for {name} — one memory, one wish, not a generic party chant.",
-      "A warm short song for {name}'s day. Any real detail works: a joke, a habit, a late-night call.",
-      "Celebrate {name} like a toast from a close friend. Keep the chorus easy to sing back.",
-    ],
-    arabic: [
-      "اكتب كلمات عيد ميلاد لـ {name}. فكّر بهدية شخصية: ذكرى، مزحة، أمنية. مش لازم تحكي عن الكعكة.",
-      "أغنية قصيرة لـ {name} بمزاج احتفال. أي تفصيل حقيقي ينفع. الكورس دافئ وسهل يتكرر.",
-      "غنّي لـ {name} كأنك عم تعايدو بصوت عالٍ قدام رفاقو. خلّي الجملة الأولى شخصية.",
-    ],
-  },
-  anniversary: {
-    english: [
-      "A private anniversary message for {name} that becomes a chorus — time, loyalty, choosing each other again.",
-      "Write {name} a short love song about one shared night, not a generic forever vow.",
-    ],
-    arabic: [
-      "اكتب كلمات ذكرى حب لـ {name}. رسالة خاصة تصير كورس: وقت، وفا، إنكن عم تختاروا بعض من جديد.",
-      "أغنية قصيرة لـ {name} عن ليلة واحدة مشتركة. ابتعد عن كلام الحب العام.",
-    ],
-  },
-  wedding: {
-    english: [
-      "A grand, family-friendly entrance hook for {name}. Names as a short chant — any joyful idea, not only 'I do'.",
-      "Write a clap-ready wedding moment for {name}. The feeling is arrival and pride.",
-    ],
-    arabic: [
-      "اكتب كلمات دخول فرح لـ {name}. كورس كبير وسهل للعائلة. أي فكرة فرح تنفع — مش لازم تحكي عن الدبكة.",
-      "لحظة دخول لـ {name}: فخر، ضو، أحباب. خلّي الاسم يتردد مرة واحدة قبل الكورس.",
-    ],
-  },
-  "mom-day": {
-    english: [
-      "A sincere thank-you for mom / {name}. Specific, not greeting-card. Chorus: gratitude and protection.",
-      "Write {name} a short song about one thing she always did. Keep it warm and complete.",
-    ],
-    arabic: [
-      "اكتب كلمات شكر لماما / {name}. جملة صادقة مش بطاقة جاهزة. الكورس: امتنان وحماية.",
-      "أغنية قصيرة لـ {name} عن شي واحد كانت تعملو دايماً. دافئة ومكتملة.",
-    ],
-  },
-  christmas: {
-    english: [
-      "A cozy modern holiday hook for {name} — lights, home, warmth, without sounding like a mall carol.",
-      "Write a short winter-night song for {name}. Fresh images, not generic sleigh bells.",
-    ],
-    arabic: [
-      "اكتب كلمات شتوية دافئة لـ {name}: بيت، ضو، أحباب. تجنّب كليشيه الأعياد.",
-      "أغنية قصيرة لـ {name} عن ليلة شتوية هادية. صور جديدة، مش قالب جاهز.",
-    ],
-  },
-  "new-year": {
-    english: [
-      "A hopeful countdown for {name} — leave the old year, step into a better one.",
-      "Write {name} a short reset hook. Midnight energy, one clear wish.",
-    ],
-    arabic: [
-      "اكتب كلمات عدّ تنازلي لـ {name}: اترك السنة القديمة وادخل سنة أحسن.",
-      "أغنية قصيرة لـ {name} عن بداية جديدة. أمنية واحدة واضحة.",
-    ],
-  },
-  congrats: {
-    english: [
-      "Everyone is clapping for {name}. Confident chorus about the work finally paying off.",
-      "A proud short win song for {name} — specific grind, not empty 'you did it'.",
-    ],
-    arabic: [
-      "كل العالم عم تصفّق لـ {name}. كورس واثق عن التعب اللي دفع أخيراً.",
-      "أغنية فوز قصيرة لـ {name}. احكي عن الشغل الحقيقي، مش جملة تهنئة فاضية.",
-    ],
-  },
-  prom: {
-    english: [
-      "A shiny prom-night hook for {name}: lights, photos, friends, one unforgettable hour.",
-      "Write {name} a young cinematic chorus about tonight only.",
-    ],
-    arabic: [
-      "اكتب كلمات ليلة تخرج لـ {name}: ضو، صور، رفاق، ساعة ما بتنتسى.",
-      "كورس شبابي سينمائي لـ {name} عن هالليلة بس.",
-    ],
-  },
-  apology: {
-    english: [
-      "A sincere apology to {name}. Verse: what went wrong. Chorus: one clear sorry and one hope to fix it.",
-      "Write {name} the message you should have said. Short, direct, complete ending.",
-    ],
-    arabic: [
-      "اكتب اعتذار صادق لـ {name}. البيت: وين غلطت. الكورس: أسف واضح وأمل تصلح.",
-      "الرسالة اللي لازم تقلّه لـ {name}. قصيرة ومباشرة ونهاية مكتملة.",
-    ],
-  },
-  thanks: {
-    english: [
-      "A sincere thank-you for {name}. One specific thing they did, then thank you in a chorus people can sing back.",
-      "Write {name} the gratitude you never said out loud. Warm, short, complete.",
-    ],
-    arabic: [
-      "اكتب شكر صادق لـ {name}. شي واحد عملو، وبعدين شكراً بكورس سهل يتكرر.",
-      "الأغنية اللي لازم تقلّه لـ {name}: امتنان حقيقي، مش بطاقة جاهزة.",
-    ],
-  },
-  "proud-of-you": {
-    english: [
-      "Clap for {name}. Chorus: proud, grateful, you knew they could do it.",
-      "A warm short song for {name}'s hard work. Not shouty.",
-    ],
-    arabic: [
-      "صفّق لـ {name}. الكورس: فخور، ممتِن، كنت عارف إنك بتقدر.",
-      "أغنية دافئة قصيرة عن تعب {name}. مش صراخ.",
-    ],
-  },
-  "missing-you": {
-    english: [
-      "A voice-note song to {name} far away. One memory, then I miss you in words you'd actually say.",
-      "Write {name} a long-distance hook. Conversational, not dramatic.",
-    ],
-    arabic: [
-      "اكتب كلمات مثل فويس نوت لـ {name} البعيد. ذكرى واحدة وبعدين اشتقتلك بجملة حقيقية.",
-      "أغنية مسافة لـ {name}. عامّية، مش مسرحية.",
-    ],
-  },
-  "just-because": {
-    english: [
-      "A warm unexpected song for {name} — no holiday, no excuse, just I was thinking of you.",
-      "Write {name} a short gift with one specific reason they crossed your mind today.",
-    ],
-    arabic: [
-      "أغنية دافئة ومفاجئة لـ {name} — بلا مناسبة. بس خطرلي.",
-      "هدية قصيرة لـ {name} بسبب واحد خطر على بالك اليوم.",
-    ],
-  },
+function addressYouLine(address) {
+  const v = String(address || "").trim().toLowerCase();
+  if (v === "male" || v === "him") return "Sing to you as him — إنتَ.";
+  if (v === "female" || v === "her") return "Sing to you as her — إنتِ.";
+  if (v === "group") return "Sing to you as a group — إنتو.";
+  return "Sing to you (إنتَ or إنتِ from the address chip).";
+}
+
+const MOMENT_BAN_LIST = [
+  "Never use يا غالي, غالي, شخص غالي, someone dear, or someone special as a stand-in for the person.",
+  "Do not recycle tired gift clichés on every take.",
+  "Use كل سنة وإنتَ/إنتِ طيب at most once, and only if it truly fits.",
+  "Do not reuse the same opening line as this listener's last take for this moment.",
+  "Light tease only. Never a mean roast. No gimmick plots.",
+  "If the lyrics language is Arabic, write Arabic script only. Never Arabizi, Franco-Arabic, or Latin-letter Arabic. Arabizi is only when the user explicitly chose it.",
+].join("\n");
+
+/** English Gemini instructions — six grounded angles per Moment. */
+const OCCASION_ANGLES = {
+  birthday: [
+    "What makes them special to the people around them — name that quality without listing compliments.",
+    "A warm wish list for their new year: two or three real hopes, not a generic party chant.",
+    "A light, loving tease about one habit that turns sweet by the chorus.",
+    "Memories from the past year: one small scene, then a toast.",
+    "Thank them for being in your life, like you are saying it across the table.",
+    "The room changes when they walk in — make that the hook, keep it sincere.",
+  ],
+  anniversary: [
+    "The first time we met, told as one quiet picture, then choosing each other now.",
+    "The small daily things nobody notices, turned into the chorus.",
+    "How we grew together without making it a speech.",
+    "Choosing each other again every day — one plain promise.",
+    "A promise for the years ahead, grounded, not cinematic vows.",
+    "One ordinary evening that still feels like us.",
+  ],
+  wedding: [
+    "The couple’s walk in: doors, faces, the first look, family-friendly joy.",
+    "Families celebrating together — pride and welcome, not a dance tutorial.",
+    "One short “how they met” line, then the room opens.",
+    "Their names as a short chant once before the lift, then blessings.",
+    "Joy and blessings for the new life, clap-ready but sincere.",
+    "The moment the music starts and everyone stands — stay with that feeling.",
+  ],
+  engagement: [
+    "The yes: one held look, then a simple promise starting tonight.",
+    "Families coming together around two people, warm and proud.",
+    "How they knew it was them — one small proof, not a fairy tale.",
+    "A ring, a laugh, a future said in ordinary words.",
+    "Blessings for the life they just chose, easy for the room to sing back.",
+    "Soft tease about how long everyone saw this coming, then love.",
+  ],
+  graduation: [
+    "Proud people watching them walk — name the pride, not the diploma.",
+    "The work that got them here: late nights, one real detail, then lift.",
+    "A wish for the next chapter, hopeful and specific.",
+    "Friends from this year, one shared joke that stays kind.",
+    "Thank the person who stood by them through it.",
+    "Light tease about surviving the hard part, then “you did it” without shouting.",
+  ],
+  "mom-day": [
+    "One thing she always did, said simply, then thank you.",
+    "Protection and care as a chorus people can sing back.",
+    "A memory from childhood that still feels close.",
+    "How her voice or kitchen or wait-up still lives in you.",
+    "Grateful without a greeting-card list.",
+    "A quiet “I see you” for the work nobody clapped for.",
+  ],
+  christmas: [
+    "Home, lights, and one person you want in the room — cozy, not a mall carol.",
+    "A winter night indoors: warmth, not sleigh-bell clichés.",
+    "Family around a table, one toast that sounds like you.",
+    "Missing someone this season, gentle, not dramatic.",
+    "A small gift of words: I am glad you are here.",
+    "Quiet holiday love, modern and specific.",
+  ],
+  "new-year": [
+    "Leave one real thing behind; step into one clear wish.",
+    "Midnight as a held hand, not a countdown gimmick.",
+    "A hopeful reset for them, personal not generic “new year new me”.",
+    "What you want for them in the year ahead, two wishes max.",
+    "Looking back at the year with kindness, then forward.",
+    "A short toast at 12: stay, we start again.",
+  ],
+  congrats: [
+    "Clapping for one person: the work finally paid off.",
+    "Name the grind without bragging for them.",
+    "Proud family/friends energy, warm not shouty.",
+    "A door that opened — one next-step hope.",
+    "“We knew you could” as a chorus, sincere.",
+    "A quiet smile after the hard part, then lift.",
+  ],
+  prom: [
+    "Lights, photos, friends, one unforgettable hour — young, not cheesy.",
+    "Tonight only: the song you want to remember them by.",
+    "A little nervous, a little brave, then the dance floor.",
+    "One friend or date at the center, kind and specific.",
+    "The ride home feeling, still glowing.",
+    "A cinematic chorus that still sounds like real kids, not a movie trailer.",
+  ],
+  apology: [
+    "What went wrong in one honest line, then one clear sorry.",
+    "The message you should have said, short and complete.",
+    "Hope to fix it without begging or drama.",
+    "Own the mistake; keep the chorus human.",
+    "A door left open, sincere not cheesy.",
+    "Soft, direct, finished — no long confession.",
+  ],
+  thanks: [
+    "One specific thing they did, then thank you in a singable chorus.",
+    "The gratitude you never said out loud.",
+    "A small kindness that stayed with you.",
+    "Warm, short, complete — not a card.",
+    "How they showed up, in one picture.",
+    "“Because of you” without stacking clichés.",
+  ],
+  "proud-of-you": [
+    "Clap for their hard work without shouting.",
+    "You knew they could — grateful and specific.",
+    "The quiet effort nobody saw.",
+    "A proud look from across the room.",
+    "Celebrate the person, not the trophy.",
+    "Warm lift, finished last line.",
+  ],
+  "missing-you": [
+    "A voice note to someone far: one memory, then I miss you in words you’d say.",
+    "Conversational distance, not a tragic ballad.",
+    "One place you still expect them.",
+    "What you’d do if they walked in tonight.",
+    "Keep it close and ordinary.",
+    "End complete, no fading mid-sentence.",
+  ],
+  "just-because": [
+    "No holiday, no excuse — they crossed your mind.",
+    "One specific reason today.",
+    "A surprise gift of a song, small and warm.",
+    "“I was thinking of you” in a line people can repeat.",
+    "Everyday love, not a grand speech.",
+    "Short, personal, done.",
+  ],
 };
+
+function occasionLabelForId(occasionId) {
+  const labels = {
+    birthday: "birthday",
+    anniversary: "anniversary",
+    wedding: "wedding entrance",
+    engagement: "engagement",
+    graduation: "graduation",
+    "mom-day": "mom day",
+    christmas: "Christmas",
+    "new-year": "New Year",
+    congrats: "congratulations",
+    prom: "prom",
+    apology: "sorry",
+    thanks: "thank you",
+    "proud-of-you": "proud of you",
+    "missing-you": "missing you",
+    "just-because": "just because",
+  };
+  return labels[String(occasionId || "").trim()] || "gift";
+}
+
+function angleIdFromText(occasionId, text, index) {
+  const words = String(text || "").trim().replace(/\s+/g, " ").slice(0, 72);
+  if (words) return words;
+  return `${String(occasionId || "moment")}:${index}`;
+}
+
+export function pickOccasionLyricPrompt({
+  occasionId,
+  languageId = "auto",
+  person = "",
+  trait = "",
+  address = "",
+  createLang = "",
+  createDialect = "",
+  extraBrief = "",
+} = {}) {
+  const id = String(occasionId || "").trim() || "birthday";
+  const pool = OCCASION_ANGLES[id] || OCCASION_ANGLES.birthday;
+  const picked = pickFromPool(`occ:${id}`, pool);
+  const angle = picked.text || pool[0] || "";
+  const who = String(person || "").trim();
+  const traitText = String(trait || "").trim();
+  const lines = [
+    `Write original lyrics for a ${occasionLabelForId(id)} gift song. Warm, sincere, personal. Dedicated to one person. Not a Spark or Challenge story.`,
+    `Angle for this take: ${angle}`,
+  ];
+  if (who) {
+    lines.push(`Use their real name "${who}" in the dedication. Do not replace it with a nickname placeholder.`);
+  } else {
+    lines.push(`No name was given. ${addressYouLine(address)} Never invent غالي, يا غالي, شخص غالي, someone dear, or someone special.`);
+  }
+  if (traitText) {
+    lines.push(`The heart of the song is how they are: ${traitText}. Turn those words into natural sung lines. Do not quote them like tags or a list.`);
+  }
+  const extra = String(extraBrief || "").trim();
+  if (extra) lines.push(extra);
+  lines.push(MOMENT_BAN_LIST);
+  return {
+    prompt: lines.filter(Boolean).join("\n"),
+    angle,
+    angleId: angleIdFromText(id, angle, picked.index),
+    traitUsed: Boolean(traitText),
+  };
+}
 
 const SPARK_IDEAS = {
   "dabke-drop": {
@@ -335,31 +421,6 @@ const SPARK_IDEAS = {
   },
 };
 
-export function pickOccasionLyricPrompt({
-  occasionId,
-  languageId = "auto",
-  genreId = "",
-  person = "",
-  variant = "anthem",
-  createLang = "",
-  createDialect = "",
-  extraBrief = "",
-} = {}) {
-  const lang = resolveChallengePromptLang(languageId, {
-    genreId,
-    person,
-    userText: person,
-    createLang,
-    createDialect,
-  });
-  const who = String(person || "").trim() || (lang === "arabic" ? "شخص غالي" : "someone special");
-  const pool = OCCASION_IDEAS[String(occasionId || "").trim()] || OCCASION_IDEAS.birthday;
-  const idea = pickFromPool(`occ:${occasionId}:${lang}`, pool[lang] || pool.english)
-    .replaceAll("{name}", who);
-  const extra = String(extraBrief || "").trim().replaceAll("{name}", who);
-  return [idea, extra, variantLine(lang, variant), scriptRule(lang)].filter(Boolean).join("\n");
-}
-
 export function pickSparkLyricPrompt({
   sparkId,
   languageId = "auto",
@@ -375,7 +436,7 @@ export function pickSparkLyricPrompt({
     createDialect,
     userText,
   });
-  const idea = pickFromPool(`spark:${sparkId}:${lang}`, pool[lang] || pool.english);
+  const idea = pickFromPool(`spark:${sparkId}:${lang}`, pool[lang] || pool.english).text;
   if (!idea) return "";
   return [idea, scriptRule(lang)].filter(Boolean).join("\n");
 }

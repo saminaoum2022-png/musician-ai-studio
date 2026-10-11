@@ -12,7 +12,7 @@ const {
   resolveLyriaArabicAddress,
   resolveLyriaDialectLabel,
 } = require("./lyria-upstream");
-const { isArabiziScript, looksLikeArabizi } = require("./arabizi");
+const { isArabiziScript, looksLikeArabizi, isShelfMusicBody } = require("./arabizi");
 
 function lyriaLegacyPromptsEnabled() {
   return /^(1|true|yes|on)$/i.test(String(process.env.LYRIA_LEGACY_PROMPTS || "").trim());
@@ -75,10 +75,7 @@ function buildBareStudioStyleSuffixes(body = {}, { seedText = "" } = {}) {
   const lyricsLanguage = String(body?.lyricsLanguage || "").trim().toLowerCase();
   const lyricsSeed = String(seedText || body?.ideaBrief || body?.prompt || "").trim();
 
-  if (
-    scriptFormat === "arabizi"
-    || isArabiziScript({ scriptFormat, lyrics: lyricsSeed })
-  ) {
+  if (scriptFormat === "arabizi" && lyricsLanguage === "arabizi") {
     if (!styleContainsAny(style, [/\barabizi\b/i, /latin script arabic/i])) {
       suffixes.push("Arabizi lyrics, colloquial Arabic pronunciation");
     }
@@ -100,8 +97,8 @@ function buildBareStudioStyleSuffixes(body = {}, { seedText = "" } = {}) {
     const dialectLabel = resolveLyriaDialectLabel(body);
     if (dialectLabel) {
       const phrase = /modern standard|msa/i.test(dialectLabel)
-        ? "Modern Standard Arabic lyrics and vocal"
-        : `${dialectLabel} colloquial lyrics and vocal`;
+        ? "Modern Standard Arabic lyrics and vocal, Arabic script only, not Arabizi"
+        : `${dialectLabel} colloquial lyrics in Arabic script, not Arabizi`;
       if (!styleContainsAny(style, [new RegExp(dialectLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")])) {
         suffixes.push(phrase);
       }
@@ -142,6 +139,9 @@ function composeBareStyleLine(body = {}, { seedText = "" } = {}) {
   if (studio.length) {
     style = style ? `${style}, ${studio.join(", ")}` : studio.join(", ");
   }
+  if (isShelfMusicBody(body) && shelfWantsArabicScript(body) && !styleContainsAny(style, [/arabic script only/i])) {
+    style = style ? `${SHELF_ARABIC_SCRIPT_LOCK}, ${style}` : SHELF_ARABIC_SCRIPT_LOCK;
+  }
   return style;
 }
 
@@ -161,7 +161,20 @@ function lyriaIdeaComposeMatchStyleEnabled() {
 }
 
 const LYRIA_IDEA_COMPOSE_MATCH_STYLE_LINE =
-  "Lyrics direction — write original singable lyrics that match the style line above (genre, tempo, BPM, groove, meter, instruments, mood, and vocal type). Use verse and chorus sections with short-to-medium lines on the beat; avoid one long run-on sentence.";
+  "Lyrics direction — write original singable lyrics that match the style line above (genre, tempo, BPM, groove, meter, instruments, mood, and vocal type). Use verse and chorus sections with short-to-medium lines on the beat; avoid one long run-on sentence. If the song is Arabic, write Arabic script only — never Arabizi, Franco-Arabic, or Latin-letter Arabic.";
+
+const SHELF_ARABIC_SCRIPT_LOCK =
+  "Arabic lyrics in Arabic script only (الحروف العربية). Never Arabizi, Franco-Arabic, Latin-letter Arabic, or digit-letter codes (2 3 5 6 7 9)";
+
+function shelfWantsArabicScript(body = {}) {
+  const lang = String(body?.lyricsLanguage || "").trim().toLowerCase();
+  const fmt = String(body?.scriptFormat || "").trim().toLowerCase();
+  const dialect = String(body?.dialect || body?.dialectHint || "").trim();
+  if (lang === "english" || lang === "french" || lang === "spanish") return false;
+  if (fmt === "english" || fmt === "french" || fmt === "spanish") return false;
+  if (lang === "arabic" || fmt === "arabic") return true;
+  return Boolean(dialect);
+}
 
 function wrapBareLyriaIdeaBrief(ideaBrief = "") {
   const brief = String(ideaBrief || "").trim();

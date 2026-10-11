@@ -2057,24 +2057,20 @@
                   <p class="homeDeskSectionKicker">Gift a song</p>
                   <h3 id="challengePresetTitle">What's the moment?</h3>
                 </header>
-                <div class="homeDeskMakeSeg" role="tablist" aria-label="Occasion mode">
-                  <button type="button" class="homeDeskMakeSegBtn active" data-home-make-seg="occasion" aria-pressed="true">Occasion</button>
-                  <button type="button" class="homeDeskMakeSegBtn" data-home-make-seg="personal" aria-pressed="false">For someone</button>
-                </div>
                 <section class="challengePresetLab momentsLab">
-                  <div class="homeDeskMakePersonal" id="homeDeskMakePersonal" hidden>
+                  <div id="challengeOccasionRail" class="momentTileRail" role="tablist" aria-label="Choose occasion"></div>
+                  <div class="homeDeskMakePersonal" id="homeDeskMakePersonal">
                     <label class="challengeNameField">
-                      <input id="challengePersonName" type="text" maxlength="36" autocomplete="off" placeholder="Their name" aria-label="Who is this for?" />
+                      <input id="challengePersonName" type="text" maxlength="36" autocomplete="off" placeholder="Their name" aria-label="Their name" />
+                    </label>
+                    <label class="challengeNameField challengeTraitField">
+                      <small>Describe them in 2–3 words</small>
+                      <input id="challengePersonTrait" type="text" maxlength="48" autocomplete="off" placeholder="funny, always late" aria-label="Describe them in 2–3 words" />
                     </label>
                   </div>
-                  <div id="challengeOccasionRail" class="momentTileRail" role="tablist" aria-label="Choose occasion"></div>
                   <div id="momentsSettingRows" class="momentRows"></div>
                   <div class="homeDeskOccasionQuick" id="homeDeskOccasionQuick">
                     <button type="button" class="challengesPrimaryCta discoverOccasionStartCta" data-home-occasion-create>Start birthday song</button>
-                    <button type="button" class="momentAltLink" id="momentAltLink" data-home-make-seg="personal">Want their name in it? <u>Make it for someone</u></button>
-                  </div>
-                  <div class="homeDeskPresetVersions" id="homeDeskPresetVersions" hidden>
-                    <div id="challengePresetGrid" class="challengePresetGrid" aria-live="polite"></div>
                   </div>
                 </section>
               </section>

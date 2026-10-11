@@ -7211,8 +7211,16 @@ function promptLooksArabicOrArabizi(text = els.sunoPrompt?.value) {
  * first-song / a previous generate must not force dialect + addressee onto
  * English lyrics. Detect from the lyrics box instead.
  */
+function shelfForbidsArabizi() {
+  return Boolean(activeTemplateSparkShelfMeta() || challengePromptContext());
+}
+
 function effectiveLyricsLanguage() {
   const lang = String(lyricsLanguage || "auto").trim().toLowerCase() || "auto";
+  if (shelfForbidsArabizi()) {
+    if (isArabiziLyricsLanguage(lang)) return "arabic";
+    return lang;
+  }
   if (isCreateSimpleCreateLayout()) {
     const text = String(els.sunoPrompt?.value || "");
     if (promptLooksArabicOrArabizi(text)) {
@@ -7229,6 +7237,13 @@ function effectiveLyricsLanguage() {
 
 function resolveLyricsScriptFormat() {
   const lang = effectiveLyricsLanguage();
+  if (shelfForbidsArabizi()) {
+    if (isArabiziLyricsLanguage(lang) || lang === "arabic") return "arabic";
+    if (isExplicitNonArabicLyricsLanguage(lang)) return lang;
+    const text = String(els.sunoPrompt?.value || "");
+    if (textHasArabicScript(text)) return "arabic";
+    return lang === "auto" ? "auto" : lang;
+  }
   if (isArabiziLyricsLanguage(lang)) return "arabizi";
   if (isExplicitNonArabicLyricsLanguage(lang)) return lang;
   if (lang === "arabic") return "arabic";
@@ -7253,7 +7268,7 @@ function applyLyricsLanguageToDialect() {
   if (lang === "arabic" || isArabiziLyricsLanguage(lang)) {
     val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "";
     hint = LYRICS_ARABIC_DIALECT_HINT[lyricsDialect] || "";
-    if (isArabiziLyricsLanguage(lang)) {
+    if (isArabiziLyricsLanguage(lang) && !shelfForbidsArabizi()) {
       hint = [hint, "Output Arabizi (Latin phonetic spelling for Lebanese singing)."].filter(Boolean).join(" ");
     }
   } else if (lang !== "auto") {
@@ -7261,7 +7276,7 @@ function applyLyricsLanguageToDialect() {
   } else if (textHasArabicScript(els.sunoPrompt?.value) && lyricsDialect) {
     val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "";
     hint = LYRICS_ARABIC_DIALECT_HINT[lyricsDialect] || "";
-  } else if (looksLikeArabizi(els.sunoPrompt?.value) && lyricsDialect) {
+  } else if (!shelfForbidsArabizi() && looksLikeArabizi(els.sunoPrompt?.value) && lyricsDialect) {
     val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "";
     hint = [LYRICS_ARABIC_DIALECT_HINT[lyricsDialect] || "", "Arabizi Latin script."].filter(Boolean).join(" ");
   }
@@ -10039,120 +10054,33 @@ const CHALLENGE_SPARK_KICKERS = {
 const CHALLENGE_SPARK_TONES = ["violet", "cyan", "rose", "gold", "mint", "amber"];
 
 const CHALLENGE_OCCASIONS = [
-  {
-    id: "birthday",
-    label: "Birthday",
-    title: "Birthday Surprise",
-    angle: "a birthday song that feels personal, not generic",
-    lyricSeed: "Mention the person's name like the hook belongs to them.\nMake it warm, celebratory, and easy for friends to sing back.",
-    tags: ["Birthday", "Gift"],
-  },
-  {
-    id: "anniversary",
-    label: "Anniversary",
-    title: "Anniversary Memory",
-    angle: "a romantic anniversary song built around shared memories",
-    lyricSeed: "Write like a private message becoming a chorus.\nInclude a line about time, loyalty, and choosing each other again.",
-    tags: ["Love", "Memory"],
-  },
-  {
-    id: "wedding",
-    label: "Wedding entrance",
-    title: "Wedding Entrance",
-    angle: "a big entrance moment for a couple walking in",
-    lyricSeed: "Make the chorus grand, clap-ready, and family-friendly.\nUse the name as a short chant before the drop.",
-    tags: ["Wedding", "Entrance"],
-  },
-  {
-    id: "mom-day",
-    label: "Mom day",
-    title: "For Mom",
-    angle: "an emotional thank-you song for a mother",
-    lyricSeed: "Keep the verse sincere and specific.\nMake the chorus simple: gratitude, protection, and love.",
-    tags: ["Mom", "Thank you"],
-  },
-  {
-    id: "christmas",
-    label: "Christmas",
-    title: "Christmas Glow",
-    angle: "a cozy holiday song with a modern chorus",
-    lyricSeed: "Use winter, lights, home, and family warmth.\nKeep it festive without sounding like a template.",
-    tags: ["Holiday", "Cozy"],
-  },
-  {
-    id: "new-year",
-    label: "New Year",
-    title: "New Year Reset",
-    angle: "a hopeful countdown song for a fresh start",
-    lyricSeed: "Build toward midnight.\nMake the chorus about leaving the old behind and stepping into a better year.",
-    tags: ["Countdown", "Hope"],
-  },
-  {
-    id: "congrats",
-    label: "Congrats",
-    title: "Congratulations",
-    angle: "a proud celebration song for a big win",
-    lyricSeed: "Make it feel like everyone is clapping for the person.\nUse a confident chorus about the work finally paying off.",
-    tags: ["Win", "Proud"],
-  },
-  {
-    id: "prom",
-    label: "Prom day",
-    title: "Prom Night",
-    angle: "a shiny prom-night song made for memories and stories",
-    lyricSeed: "Write about lights, photos, friends, and one unforgettable night.\nKeep the hook young, bright, and cinematic.",
-    tags: ["Prom", "Night"],
-  },
-  {
-    id: "apology",
-    label: "Sorry",
-    title: "I'm Sorry",
-    angle: "a sincere apology song that feels honest, not cheesy",
-    lyricSeed: "Write like you're finally saying what you should have said.\nVerse: what went wrong. Chorus: one clear sorry and one hope to fix it.\nKeep it ~25 seconds — short, direct, complete ending.",
-    tags: ["Sorry", "Heart"],
-  },
-  {
-    id: "thanks",
-    label: "Thanks",
-    title: "Thank You",
-    angle: "a sincere thank-you song that feels personal, not a greeting card",
-    lyricSeed: "Write the thank-you you would actually say out loud.\nVerse: one specific thing they did. Chorus: thank you, simply, and why it mattered.\nKeep it short, warm, complete.",
-    tags: ["Thanks", "Gift"],
-  },
-  {
-    id: "proud-of-you",
-    label: "Proud of you",
-    title: "Proud of You",
-    angle: "a celebration song for someone who worked hard and earned it",
-    lyricSeed: "Make it feel like you're clapping for one person.\nMention their name. Chorus: proud, grateful, you knew they could do it.\nShort clip — warm, not shouty.",
-    tags: ["Proud", "Win"],
-  },
-  {
-    id: "missing-you",
-    label: "Missing you",
-    title: "Missing You",
-    angle: "a long-distance song that says I miss you without being dramatic",
-    lyricSeed: "Write like a voice note to someone far away.\nVerse: one specific memory. Chorus: I miss you + one line you'd actually say.\nConversational, complete ending.",
-    tags: ["Distance", "Love"],
-  },
-  {
-    id: "just-because",
-    label: "Just because",
-    title: "Just Because",
-    angle: "a warm unexpected song that says I was thinking of you",
-    lyricSeed: "No holiday, no excuse — just a gift.\nVerse: one reason they crossed your mind. Chorus: thinking of you, simply.\nKeep it short, warm, complete.",
-    tags: ["Gift", "Warm"],
-  },
+  { id: "birthday", label: "Birthday", title: "Birthday Surprise", tags: ["Birthday", "Gift"] },
+  { id: "anniversary", label: "Anniversary", title: "Anniversary Memory", tags: ["Love", "Memory"] },
+  { id: "wedding", label: "Wedding entrance", title: "Wedding Entrance", tags: ["Wedding", "Entrance"] },
+  { id: "engagement", label: "Engagement", title: "Engagement", tags: ["Engagement", "Love"] },
+  { id: "graduation", label: "Graduation", title: "Graduation", tags: ["Graduation", "Proud"] },
+  { id: "mom-day", label: "Mom day", title: "For Mom", tags: ["Mom", "Thank you"] },
+  { id: "christmas", label: "Christmas", title: "Christmas Glow", tags: ["Holiday", "Cozy"] },
+  { id: "new-year", label: "New Year", title: "New Year Reset", tags: ["Countdown", "Hope"] },
+  { id: "congrats", label: "Congrats", title: "Congratulations", tags: ["Win", "Proud"] },
+  { id: "prom", label: "Prom day", title: "Prom Night", tags: ["Prom", "Night"] },
+  { id: "apology", label: "Sorry", title: "I'm Sorry", tags: ["Sorry", "Heart"] },
+  { id: "thanks", label: "Thanks", title: "Thank You", tags: ["Thanks", "Gift"] },
+  { id: "proud-of-you", label: "Proud of you", title: "Proud of You", tags: ["Proud", "Win"] },
+  { id: "missing-you", label: "Missing you", title: "Missing You", tags: ["Distance", "Love"] },
+  { id: "just-because", label: "Just because", title: "Just Because", tags: ["Gift", "Warm"] },
 ];
 
 const CHALLENGE_OCCASION_ICONS = {
   birthday: "cake",
   anniversary: "heart",
   wedding: "rings",
+  engagement: "rings",
+  graduation: "cap",
   "mom-day": "family",
   christmas: "snow",
   "new-year": "burst",
-  congrats: "cap",
+  congrats: "trophy",
   prom: "star",
   apology: "sorry",
   thanks: "gift",
@@ -10161,69 +10089,78 @@ const CHALLENGE_OCCASION_ICONS = {
   "just-because": "all",
 };
 
-const CHALLENGE_GENRES = [
-  {
-    id: "arabic-pop",
-    label: "Arabic pop",
-    style: "modern Arabic pop, glossy drums, oud sparkle, emotional vocal, radio-ready chorus",
+const MOMENT_SOUND_WEDDING = {
+  arabic: ["modern-levantine-dabke", "levantine-pop-fusion", "arabic-pop", "summer-levantine-dabke-pop"],
+  english: ["rnb_pop", "latin_dance_pop", "contemporary_rnb", "synthpop_80s"],
+};
+const MOMENT_SOUND_PROUD = {
+  arabic: ["levantine-pop-fusion", "arabic-pop", "middle-eastern-rnb", "modern-levantine-dabke"],
+  english: ["rnb_pop", "synthpop_80s", "contemporary_rnb", "alt_rock"],
+};
+const MOMENT_SOUND_SOFT = {
+  arabic: ["levantine-ballad", "arabic-pop-acoustic-ballad", "middle-eastern-rnb", "levantine-indie-folk"],
+  english: ["indie_folk", "contemporary_rnb", "lofi_hiphop", "rnb_pop"],
+};
+
+const MOMENT_SOUND_IDS = {
+  birthday: {
+    arabic: ["arabic-pop-acoustic-ballad", "arabic-pop", "levantine-pop-fusion", "middle-eastern-rnb"],
+    english: ["indie_folk", "rnb_pop", "contemporary_rnb", "synthpop_80s"],
   },
-  {
-    id: "lev-dabke",
-    label: "Levantine dabke",
-    style: "Levantine dabke pop, mijwiz accents, ktakufti 6/8 dabkeh rhythm, driving percussion, festive vocal hook",
+  anniversary: {
+    arabic: ["levantine-ballad", "middle-eastern-rnb", "arabic-pop-acoustic-ballad", "levantine-pop-fusion"],
+    english: ["indie_folk", "contemporary_rnb", "rnb_pop", "lofi_hiphop"],
   },
-  {
-    id: "jazz",
-    label: "Jazz soul",
-    style: "warm jazz soul, upright bass, brushed drums, soft piano chords, classy intimate vocal",
+  wedding: MOMENT_SOUND_WEDDING,
+  engagement: MOMENT_SOUND_WEDDING,
+  graduation: {
+    arabic: ["levantine-pop-fusion", "arabic-pop", "modern-levantine-dabke", "dance-indie-pop"],
+    english: ["rnb_pop", "synthpop_80s", "contemporary_rnb", "latin_dance_pop"],
   },
-  {
-    id: "deep-house",
-    label: "Deep house",
-    style: "melodic deep house, warm kick, pulsing bass, airy pads, emotional dance-pop topline",
+  "mom-day": {
+    arabic: ["levantine-ballad", "arabic-pop-acoustic-ballad", "levantine-indie-folk", "lebanese-dramatic-ballad"],
+    english: ["indie_folk", "contemporary_rnb", "lofi_hiphop", "rnb_pop"],
   },
-  {
-    id: "fusion",
-    label: "Fusion",
-    style: "Arabic fusion, oud and synth layers, hybrid percussion, cinematic build, modern global pop",
+  christmas: {
+    arabic: ["levantine-indie-folk", "arabic-pop-acoustic-ballad", "levantine-ballad", "levantine-pop-fusion"],
+    english: ["indie_folk", "lofi_hiphop", "contemporary_rnb", "rnb_pop"],
   },
-  {
-    id: "acoustic",
-    label: "Acoustic",
-    style: "intimate acoustic pop, nylon guitar, soft hand percussion, close vocal, heartfelt chorus",
+  "new-year": {
+    arabic: ["levantine-pop-fusion", "arabic-pop", "dance-indie-pop", "modern-levantine-dabke"],
+    english: ["rnb_pop", "synthpop_80s", "latin_dance_pop", "contemporary_rnb"],
   },
-];
+  congrats: MOMENT_SOUND_PROUD,
+  "proud-of-you": MOMENT_SOUND_PROUD,
+  prom: {
+    arabic: ["levantine-pop-fusion", "arabic-pop", "dance-indie-pop", "modern-levantine-dabke"],
+    english: ["synthpop_80s", "rnb_pop", "latin_dance_pop", "kpop_dance"],
+  },
+  apology: MOMENT_SOUND_SOFT,
+  thanks: MOMENT_SOUND_SOFT,
+  "missing-you": MOMENT_SOUND_SOFT,
+  "just-because": MOMENT_SOUND_SOFT,
+};
 
 const CHALLENGE_LANGUAGES = [
-  {
-    id: "auto",
-    label: "Auto",
-    prompt: "Use the natural language for this style.",
-    dialect: "",
-    dialectHint: "",
-  },
-  {
-    id: "english",
-    label: "English",
-    prompt: "Use English lyrics.",
-    dialect: "",
-    dialectHint: "",
-  },
-  {
-    id: "levantine",
-    label: "Levantine Arabic",
-    prompt: "Use Levantine Arabic (Lebanese/Syrian/Palestinian) colloquial lyrics.",
-    dialect: "Lebanese Arabic",
-    dialectHint: "Lebanese Beirut colloquial; qaf as hamza; spoken Levantine vowels.",
-  },
-  {
-    id: "neutral-arabic",
-    label: "Neutral Arabic",
-    prompt: "Use neutral Arabic.",
-    dialect: "",
-    dialectHint: "",
-  },
+  { id: "auto", label: "Auto" },
+  { id: "english", label: "English" },
+  { id: "arabic", label: "Arabic" },
 ];
+
+const MOMENT_DIALECTS = [
+  { id: "lebanese", label: "Lebanese" },
+  { id: "egyptian", label: "Egyptian" },
+  { id: "gulf", label: "Khaleeji" },
+  { id: "", label: "Neutral" },
+];
+
+const MOMENT_ADDRESSES = [
+  { id: "male", label: "Him" },
+  { id: "female", label: "Her" },
+];
+
+const MOMENT_TRAIT_PLACEHOLDERS = ["funny, always late", "my safe place"];
+const MOMENT_SOUND_LAST_KEY = "nabad_moment_sound_last_v1";
 
 /** Non-null when Supabase returned ≥1 active row; merged over `SEARCH_TEMPLATE_FALLBACK` by `id`. */
 let searchTemplatesRemote = null;
@@ -10794,8 +10731,12 @@ function applyDiscoveryIdeaToCreate(idea) {
   if (Object.prototype.hasOwnProperty.call(idea, "dialectHint") && els.sunoDialectHint) els.sunoDialectHint.value = String(idea.dialectHint || "").trim();
   applyChallengeLanguageToCreate(idea.challenge, {
     sparkId: idea.challenge?.type === "spark" ? idea.challenge.id : "",
-    genreId: idea.challenge?.genreId || "",
+    genreId: idea.challenge?.genreId || idea.studioStyleId || "",
     languageId: idea.challenge?.languageId,
+    dialectId: idea.challenge?.dialectId,
+    address: idea.challenge?.arabicAddress,
+    person: idea.challenge?.personName,
+    trait: idea.challenge?.trait,
   });
   if (els.sunoAvoidTags && (useTemplateGuards || Object.prototype.hasOwnProperty.call(idea, "avoidTags"))) {
     els.sunoAvoidTags.value = templateUsesLyriaClip()
@@ -10825,10 +10766,24 @@ function applyDiscoveryIdeaToCreate(idea) {
     catalogStyle: String(els.sunoStyle?.value || idea.style || "").trim(),
     ...(idea.lyricsMode ? { lyricsMode: idea.lyricsMode } : {}),
     ...(idea.challenge ? { challenge: idea.challenge } : {}),
+    ...(idea.moment_angle ? { moment_angle: idea.moment_angle } : {}),
+    ...(idea.moment_style ? { moment_style: idea.moment_style } : {}),
+    ...(typeof idea.moment_trait_used === "boolean" ? { moment_trait_used: idea.moment_trait_used } : {}),
   };
   if (idea.challenge) persistCreateChallengeContext(pendingSearchRemixMeta);
   else clearCreateChallengeContext();
   keepShelfCatalogStyleInCreate();
+  if (idea.studioStyleId) {
+    try {
+      applyLyriaStudioStyle(idea.studioStyleId, {
+        keepSinger: true,
+        family: idea.studioFamily || "",
+      });
+    } catch {}
+    if (els.sunoStyle && String(idea.style || "").trim()) {
+      els.sunoStyle.value = String(idea.style || "").trim();
+    }
+  }
   const challenge = challengePromptContext();
   const quickTemplateClip =
     !challenge &&
@@ -10915,8 +10870,11 @@ let _homeDeskContinueTrack = null;
 let _homeSeg = "start";
 let _homeMakeSeg = "occasion";
 let _challengeOccasionId = "";
-let _challengeGenreId = "";
+let _challengeSoundId = "surprise";
 let _challengeLanguageId = readStoredChallengeLanguageId();
+let _challengeDialectId = "lebanese";
+let _challengeAddressId = "";
+let _pendingMomentMeta = null;
 
 function shelfPromptLangExtras(extra = {}) {
   return {
@@ -10933,18 +10891,175 @@ function applyChallengeLanguageToCreate(challenge, extras = {}) {
   const languageId = String(
     extras.languageId || challenge?.languageId || _challengeLanguageId || "auto",
   ).trim();
-  if (!languageId || languageId === "auto") return;
+  const dialectId = String(
+    extras.dialectId ?? challenge?.dialectId ?? (challenge?.type === "occasion" ? _challengeDialectId : "") ?? "",
+  ).trim();
   const promptLang = resolveChallengePromptLang(languageId, {
     sparkId: extras.sparkId || (challenge?.type === "spark" ? challenge?.id : ""),
-    genreId: extras.genreId || challenge?.genreId || "",
+    genreId: extras.genreId || challenge?.genreId || extras.studioStyleId || "",
+    dialectId,
     ...shelfPromptLangExtras(extras),
   });
-  const mapped = mapChallengeLangToCreate(promptLang, languageId);
+  const mapped = languageId === "auto"
+    ? mapChallengeLangToCreate(promptLang, promptLang === "arabic" ? "arabic" : "english", dialectId)
+    : mapChallengeLangToCreate(promptLang, languageId, dialectId);
   if (!mapped) return;
   try { setLyricsLanguage(mapped.lyricsLanguage); } catch {}
   if (mapped.lyricsLanguage === "arabic") {
-    try { setLyricsDialect(mapped.dialect || lyricsDialect || "lebanese"); } catch {}
+    try { setLyricsDialect(mapped.dialect || ""); } catch {}
+    const address = String(
+      extras.address || challenge?.arabicAddress || (challenge?.type === "occasion" ? _challengeAddressId : "") || "",
+    ).trim();
+    if (els.sunoArabicAddress && (address === "male" || address === "female" || address === "group")) {
+      els.sunoArabicAddress.value = address;
+      try { syncArabicAddressPills(); } catch {}
+    }
   }
+}
+
+function momentPromptLang(extras = {}) {
+  const name = String(extras.person || document.getElementById("challengePersonName")?.value || "").trim();
+  const trait = String(extras.trait || document.getElementById("challengePersonTrait")?.value || "").trim();
+  return resolveChallengePromptLang(_challengeLanguageId || "auto", {
+    ...shelfPromptLangExtras({
+      person: name,
+      userText: [name, trait].filter(Boolean).join(" "),
+      trait,
+    }),
+    dialectId: _challengeDialectId,
+  });
+}
+
+function momentSoundIdsFor(occasionId, lang) {
+  const pack = MOMENT_SOUND_IDS[String(occasionId || "").trim()] || MOMENT_SOUND_IDS.birthday;
+  return (lang === "arabic" ? pack.arabic : pack.english) || pack.english || [];
+}
+
+function momentCatalogStyle(styleId) {
+  const raw = String(styleId || "").trim();
+  const id = raw === "levantine-pop" ? "levantine-pop-fusion" : raw;
+  if (!id) return null;
+  const oriental = getOrientalStyle(id);
+  if (oriental) {
+    const fill = fillOrientalStylePrompt({
+      style: oriental,
+      vocalGender: oriental.default_vocal === "female" ? "f" : "m",
+      slots: defaultOrientalSlots(oriental),
+    });
+    return {
+      id: oriental.id,
+      name: oriental.name,
+      family: "oriental",
+      styleLine: fill.ok ? fill.styleLine : "",
+    };
+  }
+  const intl = getInternationalStyle(id);
+  if (intl) {
+    const fill = fillInternationalStylePrompt({
+      style: intl,
+      vocalGender: intl.default_vocal === "female" ? "f" : "m",
+      slots: defaultInternationalSlots(intl),
+    });
+    return {
+      id: intl.id,
+      name: intl.name,
+      family: "international",
+      styleLine: fill.ok ? fill.styleLine : "",
+    };
+  }
+  return null;
+}
+
+function pickMomentSoundId(occasionId, lang, selectedId = "") {
+  const ids = momentSoundIdsFor(occasionId, lang);
+  const want = String(selectedId || _challengeSoundId || "").trim();
+  if (want && want !== "surprise" && ids.includes(want)) return want;
+  if (!ids.length) return "";
+  const bucket = `${MOMENT_SOUND_LAST_KEY}:${occasionId}:${lang}`;
+  let last = -1;
+  try { last = Number(sessionStorage.getItem(bucket) || localStorage.getItem(bucket) || "-1"); } catch {}
+  let idx = Math.floor(Math.random() * ids.length);
+  if (ids.length > 1 && idx === last) idx = (idx + 1) % ids.length;
+  try { sessionStorage.setItem(bucket, String(idx)); } catch {}
+  try { localStorage.setItem(bucket, String(idx)); } catch {}
+  return ids[idx] || ids[0] || "";
+}
+
+function rotateMomentTraitPlaceholder() {
+  const input = document.getElementById("challengePersonTrait");
+  if (!input) return;
+  const next = MOMENT_TRAIT_PLACEHOLDERS[Math.floor(Math.random() * MOMENT_TRAIT_PLACEHOLDERS.length)];
+  input.placeholder = next;
+}
+
+function setPendingMomentMeta(meta) {
+  _pendingMomentMeta = meta && typeof meta === "object" ? { ...meta } : null;
+}
+
+function buildMomentPresetIdea(occasion, liveChallenge = null) {
+  const occ = occasion && typeof occasion === "object"
+    ? occasion
+    : CHALLENGE_OCCASIONS.find((o) => o.id === occasion) || CHALLENGE_OCCASIONS[0];
+  if (!occ) return null;
+  const languageId = _challengeLanguageId || readStoredChallengeLanguageId();
+  const person = String(document.getElementById("challengePersonName")?.value || "").trim();
+  const trait = String(document.getElementById("challengePersonTrait")?.value || "").trim();
+  const promptLang = momentPromptLang({ person, trait });
+  const soundId = pickMomentSoundId(occ.id, promptLang, _challengeSoundId);
+  const catalog = momentCatalogStyle(soundId);
+  const picked = pickOccasionLyricPrompt({
+    occasionId: occ.id,
+    languageId,
+    person,
+    trait,
+    address: _challengeAddressId,
+    ...shelfPromptLangExtras({ person, userText: [person, trait].filter(Boolean).join(" ") }),
+  });
+  const lyrics = String(picked?.prompt || "").trim();
+  const styleLine = String(catalog?.styleLine || "").trim();
+  const styleLabel = String(catalog?.name || soundId || "Surprise me").trim();
+  const momentMeta = {
+    moment_angle: String(picked?.angleId || picked?.angle || "").trim(),
+    moment_style: catalog ? `${catalog.id} · ${catalog.name}` : soundId,
+    moment_trait_used: Boolean(picked?.traitUsed),
+  };
+  setPendingMomentMeta(momentMeta);
+  const live = liveChallenge && typeof liveChallenge === "object" ? liveChallenge : null;
+  return {
+    id: live?.id ? `live:${live.id}` : `occasion:${occ.id}:${catalog?.id || soundId}`,
+    title: live?.title || occ.title,
+    style: styleLine,
+    prompt: lyrics,
+    lyrics,
+    lyricsMode: "instructions",
+    dialect: promptLang === "arabic" ? (_challengeDialectId || "") : "",
+    dialectHint: "",
+    studioStyleId: catalog?.id || "",
+    studioFamily: catalog?.family || "",
+    tags: [...(occ.tags || []), styleLabel].filter(Boolean),
+    createFocus: challengeCreateFocusForId(`occasion:${occ.id}`),
+    challenge: {
+      id: `occasion:${occ.id}`,
+      title: live?.title || occ.title,
+      type: "occasion",
+      liveChallengeId: String(live?.id || "").trim(),
+      occasion: occ.label,
+      genre: styleLabel,
+      language: promptLang === "arabic" ? "Arabic" : promptLang === "english" ? "English" : "Auto",
+      languageId,
+      dialectId: promptLang === "arabic" ? (_challengeDialectId || "") : "",
+      dialect: promptLang === "arabic" ? (_challengeDialectId || "") : "",
+      arabicAddress: promptLang === "arabic" ? (_challengeAddressId || "") : "",
+      personName: person,
+      trait,
+      variant: "occasion",
+      lyricsMode: "instructions",
+      studioStyleId: catalog?.id || "",
+      studioFamily: catalog?.family || "",
+      ...momentMeta,
+    },
+    ...momentMeta,
+  };
 }
 
 function libraryTrackNeedsContinue(track) {
@@ -11023,38 +11138,19 @@ function wireHomeDeskSegOnce() {
 }
 
 function syncHomeMakeSegUi() {
-  const page = document.getElementById("discoverOccasionsPanel")
-    || document.querySelector('[data-route="challenges"]');
   const personal = document.getElementById("homeDeskMakePersonal");
-  const versions = document.getElementById("homeDeskPresetVersions");
   const quick = document.getElementById("homeDeskOccasionQuick");
-  const isPersonal = _homeMakeSeg === "personal";
-  if (personal) personal.hidden = !isPersonal;
-  if (versions) versions.hidden = true;
+  if (personal) personal.hidden = false;
   if (quick) quick.hidden = false;
   const title = document.getElementById("challengePresetTitle");
-  if (title) title.textContent = isPersonal ? "Who's it for?" : "What's the moment?";
-  const alt = document.getElementById("momentAltLink");
-  if (alt) {
-    alt.innerHTML = isPersonal
-      ? `Just want an occasion song? <u>Skip the name</u>`
-      : `Want their name in it? <u>Make it for someone</u>`;
-    alt.setAttribute("data-home-make-seg", isPersonal ? "occasion" : "personal");
-  }
+  if (title) title.textContent = "What's the moment?";
   const cta = document.querySelector("[data-home-occasion-create]");
   if (cta) {
     const occ = CHALLENGE_OCCASIONS.find((o) => o.id === _challengeOccasionId) || CHALLENGE_OCCASIONS[0];
     const name = String(document.getElementById("challengePersonName")?.value || "").trim();
-    cta.textContent = isPersonal
-      ? (name ? `Start song for ${name}` : "Start personal song")
-      : `Start ${String(occ?.label || "occasion").toLowerCase()} song`;
+    const label = String(occ?.label || "occasion").toLowerCase();
+    cta.textContent = name ? `Start ${label} song for ${name}` : `Start ${label} song`;
   }
-  page?.querySelectorAll?.("[data-home-make-seg]")?.forEach?.((btn) => {
-    if (!btn.classList.contains("homeDeskMakeSegBtn")) return;
-    const on = String(btn.getAttribute("data-home-make-seg") || "") === _homeMakeSeg;
-    btn.classList.toggle("active", on);
-    btn.setAttribute("aria-pressed", on ? "true" : "false");
-  });
 }
 
 function homeDeskGreetingName() {
@@ -14836,12 +14932,11 @@ function discoverGiftShapeSvg(kind) {
 
 let _discoverWhoForDraft = "";
 
-/** "Who's it for?" → Moments › For someone, with the typed name already filled in. */
+/** "Who's it for?" → Moments, with the typed name already filled in. */
 function startGiftForName(rawName) {
   const name = String(rawName || "").trim().slice(0, 36);
   if (!name) return;
   _discoverWhoForDraft = "";
-  _homeMakeSeg = "personal";
   openDiscoverOccasionsTab("");
   const fill = () => {
     const input = document.getElementById("challengePersonName");
@@ -15940,38 +16035,8 @@ function applyDiscoverOccasionStart(occasionId, liveChallenge) {
   const occ = CHALLENGE_OCCASIONS.find((o) => String(o.id) === String(occasionId));
   if (!occ) return;
   haptic("light");
-  const live = liveChallenge && typeof liveChallenge === "object" ? liveChallenge : null;
-  const languageId = _challengeLanguageId || readStoredChallengeLanguageId();
-  const genre = CHALLENGE_GENRES.find((g) => g.id === "arabic-pop") || CHALLENGE_GENRES[0];
-  const lyrics = pickOccasionLyricPrompt({
-    occasionId: occ.id,
-    languageId,
-    extraBrief: occ.angle
-      ? `Challenge brief: ${occ.angle}. Keep the lyrics personal and avoid generic lines.`
-      : "",
-    ...shelfPromptLangExtras(),
-  });
-  applyDiscoveryIdeaToCreate({
-    id: live?.id ? `live:${live.id}` : `occasion:${occ.id}`,
-    title: live?.title || occ.title,
-    prompt: lyrics,
-    lyrics,
-    lyricsMode: "instructions",
-    style: withTemplateStyleGuard(`${genre?.style || "modern Arabic pop"}, mid-tempo, polished, emotional but catchy`),
-    tags: occ.tags || [],
-    challenge: {
-      id: occ.id,
-      title: live?.title || occ.title,
-      type: "occasion",
-      liveChallengeId: String(live?.id || "").trim(),
-      occasion: occ.label,
-      genre: genre?.label || "Arabic pop",
-      languageId,
-      personName: "",
-      variant: "occasion",
-      lyricsMode: "instructions",
-    },
-  });
+  _challengeOccasionId = occ.id;
+  applyDiscoveryIdeaToCreate(buildMomentPresetIdea(occ, liveChallenge));
 }
 
 let _discoverLiveClicksWired = false;
@@ -16459,87 +16524,15 @@ function bindChallengesPageOnce() {
   page.dataset.boundChallenges = "1";
   const challenges = new Map(CHALLENGE_IDEAS.map((idea) => [String(idea.id), idea]));
   const occasionRail = document.getElementById("challengeOccasionRail");
-  const genreRail = document.getElementById("challengeGenreRail");
-  const languageRail = document.getElementById("challengeLanguageRail");
-  const presetGrid = document.getElementById("challengePresetGrid");
   const nameInput = document.getElementById("challengePersonName");
+  const traitInput = document.getElementById("challengePersonTrait");
   if (!_challengeOccasionId) _challengeOccasionId = CHALLENGE_OCCASIONS[0]?.id || "";
-  if (!_challengeGenreId) _challengeGenreId = CHALLENGE_GENRES[0]?.id || "";
+  if (!_challengeSoundId) _challengeSoundId = "surprise";
   if (!_challengeLanguageId) _challengeLanguageId = CHALLENGE_LANGUAGES[0]?.id || "auto";
   const selected = (list, id) => list.find((item) => item.id === id) || list[0] || null;
   const nameForPrompt = () => String(nameInput?.value || "").trim();
-  const requireChallengeName = () => {
-    if (_homeMakeSeg !== "personal") return true;
-    if (nameForPrompt()) return true;
-    try { nameInput?.focus?.({ preventScroll: true }); } catch {}
-    try { nameInput?.scrollIntoView?.({ behavior: "smooth", block: "center" }); } catch {}
-    try { nameInput?.closest?.(".challengeNameField")?.classList?.add?.("isRequired"); } catch {}
-    try { showToast("Add their name for a personal dedication", { icon: "✍", durationMs: 2600 }); } catch {}
-    return false;
-  };
-  const buildChallengeLyricPrompt = (occasion, genre, language, person, variant) => {
-    const extra = [
-      occasion?.angle ? `Challenge brief: ${occasion.angle}. Dedicated to ${person}. Keep the lyrics personal and avoid generic lines.` : "",
-      String(occasion?.lyricSeed || "").trim(),
-    ].filter(Boolean).join("\n");
-    return pickOccasionLyricPrompt({
-      occasionId: occasion?.id,
-      languageId: language?.id || _challengeLanguageId,
-      genreId: genre?.id,
-      person,
-      variant,
-      extraBrief: extra,
-      ...shelfPromptLangExtras({ person, genreId: genre?.id }),
-    });
-  };
-  const buildPresetIdea = (occasion, genre, variant = "anthem") => {
-    const language = selected(CHALLENGE_LANGUAGES, _challengeLanguageId);
-    const promptLang = resolveChallengePromptLang(language?.id, shelfPromptLangExtras({
-      person: nameForPrompt(),
-      genreId: genre.id,
-    }));
-    const person = nameForPrompt() || (promptLang === "arabic" ? "شخص غالي" : "someone special");
-    const variantLabel = variant === "dance"
-      ? "Dance version"
-      : variant === "cinematic"
-        ? "Cinematic version"
-        : "Signature version";
-    const title = `${occasion.title} - ${variantLabel}`;
-    const tempoHint = variant === "dance"
-      ? "112-124 bpm, energetic but polished"
-      : variant === "cinematic"
-        ? "slow cinematic intro into a memorable chorus"
-        : "mid-tempo, polished, emotional but catchy";
-    const lyricPrompt = buildChallengeLyricPrompt(occasion, genre, language, person, variant);
-    return {
-      id: `occasion:${occasion.id}:${genre.id}:${variant}`,
-      title,
-      style: withTemplateStyleGuard(`${genre.style}, ${tempoHint}, personalized for ${person}`),
-      prompt: lyricPrompt,
-      lyrics: lyricPrompt,
-      lyricsMode: "instructions",
-      dialect: language?.dialect || "",
-      dialectHint: language?.dialectHint || "",
-      avoidTags: TEMPLATE_GENERATION_AVOID_TAGS,
-      tags: [...(occasion.tags || []), genre.label],
-      createFocus: challengeCreateFocusForId(`occasion:${occasion.id}:${genre.id}`),
-      challenge: {
-        id: `occasion:${occasion.id}:${genre.id}`,
-        title: `${occasion.label} ${genre.label}`,
-        type: "occasion",
-        occasion: occasion.label,
-        genre: genre.label,
-        language: language?.label || "Auto",
-        languageId: language?.id || "auto",
-        genreId: genre.id,
-        dialect: language?.dialect || "",
-        dialectHint: language?.dialectHint || "",
-        personName: person,
-        variant,
-        lyricsMode: "instructions",
-      },
-    };
-  };
+  const chip = (attrs, label, on) => `
+    <button type="button" class="optChip${on ? " isActive" : ""}" ${attrs} aria-pressed="${on ? "true" : "false"}">${escapeHtml(label)}</button>`;
   const renderFilters = () => {
     if (occasionRail) {
       const keepScroll = occasionRail.scrollLeft;
@@ -16555,15 +16548,41 @@ function bindChallengesPageOnce() {
     }
     const rows = document.getElementById("momentsSettingRows");
     if (rows) {
-      const genre = selected(CHALLENGE_GENRES, _challengeGenreId);
-      const language = selected(CHALLENGE_LANGUAGES, _challengeLanguageId);
-      const row = (key, label, value) => `
-        <button type="button" class="momentRow" data-moment-pick="${key}">
-          <span>${label}</span>
-          <b>${escapeHtml(value)}</b>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
-        </button>`;
-      rows.innerHTML = row("sound", "Sound", genre?.label || "") + row("language", "Language", language?.label || "");
+      const promptLang = momentPromptLang();
+      const showArabicExtras = (_challengeLanguageId === "arabic") || (_challengeLanguageId === "auto" && promptLang === "arabic");
+      const soundIds = momentSoundIdsFor(_challengeOccasionId, promptLang);
+      const langChips = CHALLENGE_LANGUAGES.map((item) =>
+        chip(`data-challenge-language="${escapeHtml(item.id)}"`, item.label, item.id === _challengeLanguageId)
+      ).join("");
+      const dialectChips = showArabicExtras
+        ? `<div class="momentChipBlock"><span class="momentChipLabel">Dialect</span><div class="optChipRow momentChipRow" role="group" aria-label="Dialect">${
+          MOMENT_DIALECTS.map((item) =>
+            chip(`data-challenge-dialect="${escapeHtml(item.id)}"`, item.label, item.id === _challengeDialectId)
+          ).join("")
+        }</div></div>
+        <div class="momentChipBlock"><span class="momentChipLabel">Address</span><div class="optChipRow momentChipRow" role="group" aria-label="Him or her">${
+          MOMENT_ADDRESSES.map((item) =>
+            chip(`data-challenge-address="${escapeHtml(item.id)}"`, item.label, item.id === _challengeAddressId)
+          ).join("")
+        }</div></div>`
+        : "";
+      const soundChips = [
+        chip(`data-challenge-sound="surprise"`, "Surprise me", _challengeSoundId === "surprise" || !soundIds.includes(_challengeSoundId)),
+        ...soundIds.map((id) => {
+          const rec = momentCatalogStyle(id);
+          return chip(`data-challenge-sound="${escapeHtml(id)}"`, rec?.name || id, _challengeSoundId === id);
+        }),
+      ].join("");
+      rows.innerHTML = `
+        <div class="momentChipBlock">
+          <span class="momentChipLabel">Language</span>
+          <div class="optChipRow momentChipRow" role="group" aria-label="Language">${langChips}</div>
+        </div>
+        ${dialectChips}
+        <div class="momentChipBlock">
+          <span class="momentChipLabel">Sound</span>
+          <div class="optChipRow momentChipRow momentSoundRow" role="group" aria-label="Sound">${soundChips}</div>
+        </div>`;
     }
     renderMomentCta();
   };
@@ -16572,73 +16591,11 @@ function bindChallengesPageOnce() {
     if (!cta) return;
     const occasion = selected(CHALLENGE_OCCASIONS, _challengeOccasionId);
     const name = nameForPrompt();
-    if (_homeMakeSeg === "personal") {
-      cta.textContent = name ? `Start song for ${name}` : "Start personal song";
-    } else {
-      const label = String(occasion?.label || "occasion").toLowerCase();
-      cta.textContent = `Start ${label} song`;
-    }
-  };
-  const openMomentPicker = (kind) => {
-    const isSound = kind === "sound";
-    const list = isSound ? CHALLENGE_GENRES : CHALLENGE_LANGUAGES;
-    const current = isSound ? _challengeGenreId : _challengeLanguageId;
-    document.getElementById("momentPickSheet")?.remove();
-    const sheet = document.createElement("div");
-    sheet.id = "momentPickSheet";
-    sheet.className = "momentSheet";
-    sheet.setAttribute("role", "dialog");
-    sheet.setAttribute("aria-modal", "true");
-    sheet.innerHTML = `
-      <div class="momentSheetBackdrop" data-moment-sheet-close></div>
-      <div class="momentSheetPanel">
-        <div class="momentSheetGrab" aria-hidden="true"></div>
-        <h3 class="momentSheetTitle">${isSound ? "Sound" : "Language"}</h3>
-        <div class="momentSheetList">
-          ${list.map((item) => `
-            <button type="button" class="momentSheetOpt${item.id === current ? " active" : ""}" data-moment-opt="${escapeHtml(item.id)}">
-              <span>${escapeHtml(item.label)}</span>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
-            </button>`).join("")}
-        </div>
-      </div>`;
-    const close = () => {
-      sheet.classList.remove("isOpen");
-      setTimeout(() => sheet.remove(), 220);
-    };
-    sheet.addEventListener("click", (e) => {
-      if (e.target.closest("[data-moment-sheet-close]")) { close(); return; }
-      const opt = e.target.closest("[data-moment-opt]");
-      if (!opt) return;
-      const id = String(opt.getAttribute("data-moment-opt") || "");
-      haptic("light");
-      if (isSound) _challengeGenreId = id;
-      else _challengeLanguageId = storeChallengeLanguageId(id);
-      renderPresetLab();
-      close();
-    });
-    document.body.appendChild(sheet);
-    requestAnimationFrame(() => sheet.classList.add("isOpen"));
-  };
-  const renderPresets = () => {
-    if (!presetGrid) return;
-    const occasion = selected(CHALLENGE_OCCASIONS, _challengeOccasionId);
-    const genre = selected(CHALLENGE_GENRES, _challengeGenreId);
-    if (!occasion || !genre) return;
-    const variants = ["anthem", "dance", "cinematic"].map((variant) => buildPresetIdea(occasion, genre, variant));
-    presetGrid.innerHTML = variants.map((preset) => `
-      <article class="challengePresetCard">
-        <span class="challengePresetChip">${escapeHtml(genre.label)}</span>
-        <h3>${escapeHtml(preset.title)}</h3>
-        <p>${escapeHtml(preset.prompt)}</p>
-        <div class="challengePresetTags">${(preset.tags || []).slice(0, 3).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
-        <button type="button" data-challenge-preset="${escapeHtml(preset.id)}">Create this</button>
-      </article>
-    `).join("");
+    const label = String(occasion?.label || "occasion").toLowerCase();
+    cta.textContent = name ? `Start ${label} song for ${name}` : `Start ${label} song`;
   };
   const renderPresetLab = () => {
     renderFilters();
-    renderPresets();
   };
   page._renderPresetLab = renderPresetLab;
   const updateChallengeJoinCounts = (entries = []) => {
@@ -16666,44 +16623,25 @@ function bindChallengesPageOnce() {
     }));
   };
   renderPresetLab();
+  rotateMomentTraitPlaceholder();
   syncHomeMakeSegUi();
   page._refreshChallengeEntries = refreshChallengeEntries;
   void refreshChallengeEntries();
   renderHomeDesk();
   page.addEventListener("click", (e) => {
     const occCreate = e.target?.closest?.("[data-home-occasion-create]");
-    const pickBtn = e.target?.closest?.("[data-moment-pick]");
-    if (pickBtn && page.contains(pickBtn)) {
-      haptic("light");
-      openMomentPicker(String(pickBtn.getAttribute("data-moment-pick") || "sound"));
-      return;
-    }
     if (occCreate && page.contains(occCreate)) {
-      if (!requireChallengeName()) return;
       const occasion = selected(CHALLENGE_OCCASIONS, _challengeOccasionId);
-      const genre = selected(CHALLENGE_GENRES, _challengeGenreId);
-      if (!occasion || !genre) return;
+      if (!occasion) return;
       haptic("light");
-      applyDiscoveryIdeaToCreate(buildPresetIdea(occasion, genre, "anthem"));
-      return;
-    }
-    const segBtn = e.target?.closest?.("[data-home-make-seg]");
-    if (segBtn && page.contains(segBtn)) {
-      _homeMakeSeg = String(segBtn.getAttribute("data-home-make-seg") || "occasion");
-      haptic("light");
-      syncHomeMakeSegUi();
+      applyDiscoveryIdeaToCreate(buildMomentPresetIdea(occasion));
       return;
     }
     const occasionBtn = e.target?.closest?.("[data-challenge-occasion]");
     if (occasionBtn && page.contains(occasionBtn)) {
       _challengeOccasionId = String(occasionBtn.getAttribute("data-challenge-occasion") || _challengeOccasionId);
-      haptic("light");
-      renderPresetLab();
-      return;
-    }
-    const genreBtn = e.target?.closest?.("[data-challenge-genre]");
-    if (genreBtn && page.contains(genreBtn)) {
-      _challengeGenreId = String(genreBtn.getAttribute("data-challenge-genre") || _challengeGenreId);
+      if (_challengeSoundId !== "surprise") _challengeSoundId = "surprise";
+      rotateMomentTraitPlaceholder();
       haptic("light");
       renderPresetLab();
       return;
@@ -16713,19 +16651,31 @@ function bindChallengesPageOnce() {
       _challengeLanguageId = storeChallengeLanguageId(
         languageBtn.getAttribute("data-challenge-language") || _challengeLanguageId,
       );
+      if (_challengeSoundId !== "surprise") _challengeSoundId = "surprise";
       haptic("light");
       renderPresetLab();
       return;
     }
-    const presetBtn = e.target?.closest?.("[data-challenge-preset]");
-    if (presetBtn && page.contains(presetBtn)) {
-      if (!requireChallengeName()) return;
-      const [, occasionId, genreId, variant] = String(presetBtn.getAttribute("data-challenge-preset") || "").split(":");
-      const occasion = selected(CHALLENGE_OCCASIONS, occasionId);
-      const genre = selected(CHALLENGE_GENRES, genreId);
-      if (!occasion || !genre) return;
+    const dialectBtn = e.target?.closest?.("[data-challenge-dialect]");
+    if (dialectBtn && page.contains(dialectBtn)) {
+      _challengeDialectId = String(dialectBtn.getAttribute("data-challenge-dialect") ?? _challengeDialectId);
       haptic("light");
-      applyDiscoveryIdeaToCreate(buildPresetIdea(occasion, genre, variant || "anthem"));
+      renderPresetLab();
+      return;
+    }
+    const addressBtn = e.target?.closest?.("[data-challenge-address]");
+    if (addressBtn && page.contains(addressBtn)) {
+      const next = String(addressBtn.getAttribute("data-challenge-address") || "");
+      _challengeAddressId = _challengeAddressId === next ? "" : next;
+      haptic("light");
+      renderPresetLab();
+      return;
+    }
+    const soundBtn = e.target?.closest?.("[data-challenge-sound]");
+    if (soundBtn && page.contains(soundBtn)) {
+      _challengeSoundId = String(soundBtn.getAttribute("data-challenge-sound") || "surprise");
+      haptic("light");
+      renderPresetLab();
       return;
     }
     const btn = e.target?.closest?.("[data-challenge-start]");
@@ -16734,9 +16684,11 @@ function bindChallengesPageOnce() {
     }
   });
   nameInput?.addEventListener?.("input", () => {
-    try { nameInput.closest?.(".challengeNameField")?.classList?.remove?.("isRequired"); } catch {}
-    renderPresets();
     renderMomentCta();
+    renderFilters();
+  });
+  traitInput?.addEventListener?.("input", () => {
+    renderFilters();
   });
 }
 
@@ -55872,6 +55824,7 @@ function collectCreateInputsFromScreen() {
     studioSlots: activeSlottedStudioStyle()
       ? { ..._internationalStyleSlots }
       : { LEAD: "", RHYTHM: "", MOOD: "", BPM: "", KEY: "" },
+    ...(_pendingMomentMeta || {}),
   });
 }
 
@@ -79958,8 +79911,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
         ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
         ...(ideaPromptToSongAlt || lyriaIdeaPayload ? { ideaPrompt: true, ideaBrief: userPrompt } : {}),
+        ...(_pendingMomentMeta || {}),
         ...(isTemplateSparkLyriaFullFlow()
-          ? { lyriaModel: "lyria-3.5", templateSparkFull: "1" }
+          ? {
+              lyriaModel: "lyria-3.5",
+              templateSparkFull: "1",
+              ...(challengePromptContext()?.type
+                ? { challengeType: String(challengePromptContext().type) }
+                : {}),
+            }
           : {}),
         personaId: ideaSimpleMode ? undefined : (personaIdSel || undefined),
         personaModel: ideaSimpleMode ? undefined : (personaModelSel || undefined),
@@ -80089,6 +80049,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ...remixMeta,
         ...(photoCoverMeta || {}),
         ...(vibeReadAppliedForNextGen ? { vibeReadApplied: true } : {}),
+        ...(_pendingMomentMeta || {}),
       };
       const createInputsSnap = collectCreateInputsFromScreen();
       if (useLyriaForThisGenerate() || shelfLyriaFull) {

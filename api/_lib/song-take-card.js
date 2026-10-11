@@ -34,6 +34,9 @@ const CREATE_INPUT_KEYS = [
   "studioStyleId",
   "studioFamily",
   "studioSlots",
+  "moment_angle",
+  "moment_style",
+  "moment_trait_used",
 ];
 
 function svcHeaders(extra) {
@@ -133,6 +136,9 @@ function normalizeCreateInputs(raw) {
       BPM: str(slotSrc.BPM),
       KEY: str(slotSrc.KEY),
     },
+    moment_angle: str(src.moment_angle),
+    moment_style: str(src.moment_style),
+    moment_trait_used: bool(src.moment_trait_used),
   };
 }
 
@@ -333,6 +339,9 @@ function buildCreateInputsFromBody(body = {}) {
     studioStyleId: body.studioStyleId,
     studioFamily: body.studioFamily,
     studioSlots: body.studioSlots,
+    moment_angle: body.moment_angle,
+    moment_style: body.moment_style,
+    moment_trait_used: body.moment_trait_used,
   });
 }
 

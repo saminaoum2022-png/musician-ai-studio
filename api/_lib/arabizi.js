@@ -195,8 +195,29 @@ function buildLyriaArabiziPerformanceNote({ dialect = "", dialectHint = "" } = {
 
 function isArabiziScript({ scriptFormat = "", lyrics = "" } = {}) {
   const fmt = String(scriptFormat || "").trim().toLowerCase();
+  if (fmt === "arabic" || fmt === "english" || fmt === "french" || fmt === "spanish") return false;
   if (fmt === "arabizi") return true;
   return looksLikeArabizi(lyrics);
+}
+
+function isShelfMusicBody(body = {}) {
+  if (String(body?.templateSparkFull || "").trim() === "1") return true;
+  if (String(body?.templateSparkClip || "").trim() === "1") return true;
+  const kind = String(body?.challenge?.type || body?.challengeType || "").trim().toLowerCase();
+  return kind === "occasion" || kind === "spark" || kind === "template" || kind === "live";
+}
+
+/** Templates / Sparks / Challenges / Moments never use Arabizi unless this is freeform Create. */
+function stripShelfArabizi(body = {}) {
+  if (!isShelfMusicBody(body)) return body;
+  const next = { ...body };
+  if (String(next.lyricsLanguage || "").trim().toLowerCase() === "arabizi") {
+    next.lyricsLanguage = "arabic";
+  }
+  if (String(next.scriptFormat || "").trim().toLowerCase() === "arabizi") {
+    next.scriptFormat = "arabic";
+  }
+  return next;
 }
 
 const ARABIZI_INSTRUCTION_MARKER = "Lebanese Arabizi pronunciation guide. Read all Latin-letter lyrics as Arabic, never as English or French";
@@ -308,7 +329,14 @@ function shouldApplyArabiziDigitInstruction({
   displayLyrics = "",
 } = {}) {
   if (!enabled) return false;
-  const seed = [lyrics, displayLyrics, body?.prompt, body?.ideaBrief].filter(Boolean).join("\n");
+  if (isShelfMusicBody(body)) return false;
+  const fmt = String(body?.scriptFormat || "").trim().toLowerCase();
+  const lang = String(body?.lyricsLanguage || "").trim().toLowerCase();
+  if (fmt === "arabic" || isPlainNonArabicLanguage(fmt) || isPlainNonArabicLanguage(lang)) return false;
+  const explicitArabizi = fmt === "arabizi" || lang === "arabizi";
+  const seed = explicitArabizi
+    ? [lyrics, displayLyrics, body?.prompt, body?.ideaBrief].filter(Boolean).join("\n")
+    : [lyrics, displayLyrics].filter(Boolean).join("\n");
   if (!isArabicSongForArabiziInstruction({ body, lyrics: seed })) return false;
   return hasArabiziDigitWord(seed);
 }
@@ -349,6 +377,8 @@ module.exports = {
   isLevantineDialect,
   isLebaneseDialect,
   isArabiziScript,
+  isShelfMusicBody,
+  stripShelfArabizi,
   buildArabiziPromptLines,
   buildToArabiziConversionLines,
   buildLevantineFrancoConversionRules,

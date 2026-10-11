@@ -88,6 +88,9 @@ export function normalizeCreateInputs(raw) {
       BPM: str(slotSrc.BPM),
       KEY: str(slotSrc.KEY),
     },
+    moment_angle: str(src.moment_angle),
+    moment_style: str(src.moment_style),
+    moment_trait_used: bool(src.moment_trait_used),
   };
 }
 
@@ -97,6 +100,7 @@ const INPUT_KEYS = [
   "songKey", "durationPreset", "timing", "groovePace", "prosody",
   "beatStability", "avoidTags", "artworkStyle", "voiceProfile",
   "lyricsLanguage", "lyricsDialect", "studioStyleId", "studioFamily", "studioSlots",
+  "moment_angle", "moment_style", "moment_trait_used",
 ];
 
 export function createInputsEqual(a, b) {

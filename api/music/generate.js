@@ -146,6 +146,7 @@ const {
   maybeAppendArabiziInstruction,
   shouldApplyArabiziDigitInstruction,
   promptHasArabiziDigitInstruction,
+  stripShelfArabizi,
 } = require("../_lib/arabizi");
 const { isArabiziInstructionEnabled } = require("../_lib/admin-runtime-settings");
 
@@ -545,7 +546,25 @@ function buildLyriaFullSongAdminExtra({
     ...(dialectHintLine ? [`dialect_hint: ${dialectHintLine.slice(0, 400)}`] : []),
     ...buildLyriaClipMetaLines(body, lyriaPrompt),
     `arabizi_instruction_used: ${arabiziInstructionUsed ? "true" : "false"}`,
+    ...momentAdminMetaLines(body),
   ];
+}
+
+function momentAdminMetaLines(body = {}) {
+  const inputs = body?.take2CreateInputs && typeof body.take2CreateInputs === "object"
+    ? body.take2CreateInputs
+    : {};
+  const angle = String(body?.moment_angle || inputs.moment_angle || "").trim();
+  const style = String(body?.moment_style || inputs.moment_style || "").trim();
+  const traitRaw = body?.moment_trait_used ?? inputs.moment_trait_used;
+  const lines = [];
+  if (angle) lines.push(`moment_angle: ${angle.slice(0, 160)}`);
+  if (style) lines.push(`moment_style: ${style.slice(0, 160)}`);
+  if (angle || style || traitRaw === true || traitRaw === false || traitRaw === "true" || traitRaw === "false") {
+    const used = traitRaw === true || traitRaw === 1 || traitRaw === "1" || traitRaw === "true";
+    lines.push(`moment_trait_used: ${used ? "true" : "false"}`);
+  }
+  return lines;
 }
 
 function applyArabiziInstructionToPrompt({
@@ -580,7 +599,8 @@ async function runLyriaGenerationJob({
   stylePrompt = "",
   fallbackLyriaPrompt = "",
 }) {
-  body = stripArabicLyricContextIfUnused(body || {}, { lyrics });
+  body = stripShelfArabizi(body || {});
+  body = stripArabicLyricContextIfUnused(body, { lyrics });
   const arabiziEnabled = await isArabiziInstructionEnabled();
   const fail = async (msg, requestDetailOverride) => {
     if (!isAdmin) {
@@ -1578,7 +1598,8 @@ async function handleMinimaxGenerate(req, res, { user, isAdmin, body }) {
 }
 
 async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
-  body = stripArabicLyricContextIfUnused(body || {}, {
+  body = stripShelfArabizi(body || {});
+  body = stripArabicLyricContextIfUnused(body, {
     lyrics: String(body?.prompt || "").trim(),
   });
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
@@ -1750,6 +1771,7 @@ function resolveClipCreditCost(body) {
 }
 
 async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
+  body = stripShelfArabizi(body || {});
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
   if (!apiKey) return sendJson(res, 500, { error: "Missing GEMINI_API_KEY on server" });
 

@@ -25769,6 +25769,13 @@ function closeImageMoodSheet() {
   try {
     document.body.classList.remove("imageMoodSheetOpen");
   } catch {}
+  if (imageMoodAppliedForNextGen && imageMoodData) {
+    if (els.imageMoodUpload) {
+      try { els.imageMoodUpload.value = ""; } catch {}
+    }
+    syncImageMoodPreviewUi(false);
+    return;
+  }
   resetImageMoodSheetSession();
 }
 
@@ -25855,17 +25862,101 @@ function syncImageMoodPreviewUi(show) {
   }
 }
 
+/** Gemini mood tags → closest Oriental / International gallery tile. */
+function matchImageMoodToStudioStyle(mood) {
+  const tags = Array.isArray(mood?.tags) ? mood.tags.map((t) => String(t || "").trim()).filter(Boolean) : [];
+  const blob = [mood?.concept, mood?.lyricSeed, ...tags].filter(Boolean).join(" ").toLowerCase();
+  if (!blob) return null;
+  const hints = [
+    { re: /\b(80s|synthpop|synth-pop|new wave|neon|retro synth)\b/i, id: "synthpop_80s", family: "international" },
+    { re: /\b(indie folk|singer-songwriter|fingerpick|acoustic folk)\b/i, id: "indie_folk", family: "international" },
+    { re: /\b(r&b|rnb|neo-?soul)\b/i, id: "contemporary_rnb", family: "international" },
+    { re: /\b(rnb pop|pop r&b)\b/i, id: "rnb_pop", family: "international" },
+    { re: /\b(lo-?fi|chill hop|lofi)\b/i, id: "lofi_hiphop", family: "international" },
+    { re: /\b(alt.?rock|indie rock)\b/i, id: "alt_rock", family: "international" },
+    { re: /\b(deep house|uk garage|garage house)\b/i, id: "deep_house_garage", family: "international" },
+    { re: /\b(techno|melodic techno)\b/i, id: "melodic_techno", family: "international" },
+    { re: /\b(k-?pop)\b/i, id: "kpop_dance", family: "international" },
+    { re: /\b(latin|reggaeton|dembow)\b/i, id: "latin_dance_pop", family: "international" },
+    { re: /\b(dabke|dabkeh)\b/i, id: "levantine-folk", family: "oriental" },
+    { re: /\b(tarab|maqam|maqamatic)\b/i, id: "tarab", family: "oriental" },
+    { re: /\b(khaleeji|gulf)\b/i, id: "modern-khaleeji-pop", family: "oriental" },
+    { re: /\b(\brai\b|raï)\b/i, id: "modern-rai", family: "oriental" },
+    { re: /\b(trap|drill)\b/i, id: "arabic-trap", family: "oriental" },
+    { re: /\b(shaabi|mahraganat)\b/i, id: "egyptian-shaabi-mahraganat", family: "oriental" },
+    { re: /\b(arabic pop|levantine pop|oriental pop)\b/i, id: "levantine-pop-fusion", family: "oriental" },
+    { re: /\b(ballad|intimate piano|cinematic ballad)\b/i, id: "levantine-ballad", family: "oriental" },
+  ];
+  for (const hint of hints) {
+    if (!hint.re.test(blob)) continue;
+    if (hint.family === "oriental" && !orientalStylesUiEnabled()) continue;
+    const style = hint.family === "international"
+      ? getInternationalStyle(hint.id)
+      : getOrientalStyle(hint.id);
+    if (style) return { id: style.id, family: hint.family };
+  }
+  const tokens = blob.split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+  if (!tokens.length) return null;
+  const tokenSet = new Set(tokens);
+  const arabicCue = /[\u0600-\u06FF]/.test(blob)
+    || /\b(arabic|levantine|egyptian|khaleeji|oriental|dabke)\b/.test(blob);
+  const candidates = [
+    ...(orientalStylesUiEnabled()
+      ? listOrientalStyles().map((style) => ({ style, family: "oriental" }))
+      : []),
+    ...listInternationalStyles().map((style) => ({ style, family: "international" })),
+  ];
+  let best = null;
+  let bestScore = 0;
+  for (const row of candidates) {
+    const name = String(row.style.name || "").toLowerCase();
+    const id = String(row.style.id || "").toLowerCase().replace(/[_-]+/g, " ");
+    const prompt = String(row.style.style_prompt || "").toLowerCase();
+    const hay = `${name} ${id} ${prompt}`;
+    let score = 0;
+    for (const t of tokenSet) {
+      if (!hay.includes(t)) continue;
+      score += t.length > 5 ? 2 : 1;
+    }
+    for (const n of name.split(/[^a-z0-9]+/).filter((w) => w.length > 2)) {
+      if (tokenSet.has(n)) score += 4;
+    }
+    if (arabicCue && row.family === "oriental") score += 2;
+    if (score > bestScore) {
+      bestScore = score;
+      best = row;
+    }
+  }
+  if (!best || bestScore < 4) return null;
+  return { id: best.style.id, family: best.family };
+}
+
+function applyImageMoodGalleryStyle(mood) {
+  if (isSpellYouCreateFlow() || activePhotoSoloChallengeId() === "80s-you") return false;
+  const matched = matchImageMoodToStudioStyle(mood);
+  if (matched) {
+    applyLyriaStudioStyle(matched.id, { family: matched.family, keepSinger: true });
+    return true;
+  }
+  const tags = Array.isArray(mood?.tags) ? mood.tags.filter(Boolean) : [];
+  if (!els.sunoStyle || !tags.length) return false;
+  els.sunoStyle.value = tags.slice(0, 12).join(", ");
+  _studioCustomPicked = true;
+  clearLyriaStudioStyleSelection({ clearStyleField: false });
+  try { mountCreateCustomStyleField(true); } catch {}
+  try { syncLyriaStudioStyleUi(); } catch {}
+  try { syncStyleUi(); } catch {}
+  return true;
+}
+
 function applyImageMoodToSongFields() {
   if (!imageMoodData) return;
   imageMoodCoverOnlyForNextGen = false;
   const mood = sanitizeImageMoodForClient(imageMoodData);
   imageMoodData = mood;
   const tags = Array.isArray(mood.tags) ? mood.tags.filter(Boolean) : [];
-  if (els.sunoStyle && tags.length && !isSpellYouCreateFlow()) {
-    const existing = String(els.sunoStyle.value || "").trim();
-    const current = existing ? existing.split(",").map((s) => s.trim()).filter(Boolean) : [];
-    const merged = [...new Set([...current, ...tags])].slice(0, 12);
-    els.sunoStyle.value = merged.join(", ");
+  if (!isSpellYouCreateFlow()) {
+    applyImageMoodGalleryStyle(mood);
   }
   const wantsLyrics = String(mood.vocalSuggestion || "lyrics") !== "instrumental";
   const lyricSeed = String(mood.lyricSeed || "").trim();
@@ -25877,6 +25968,8 @@ function applyImageMoodToSongFields() {
     !String(els.sunoPrompt.value || "").trim() &&
     !photoSolo
   ) {
+    // Gemini lyricSeed is a scene brief, not finished lyrics — Idea → song.
+    try { setLyricsInputMode("generate", { preserveText: true, silent: true }); } catch {}
     els.sunoPrompt.value = lyricSeed;
     try {
       autoResizeLyricsBox();
@@ -77814,13 +77907,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         els.imageMoodSummary.textContent = tags || String(imageMoodData?.concept || "Image mood ready.");
         els.imageMoodSummary.hidden = false;
       }
-      setStatus(
-        activePhotoSoloChallengeId() === "80s-you"
-          ? "Portrait read ready — tap Continue, or Retry for another pass."
-          : isNabadClipPhotoDirectFlow()
-            ? "Mood preview ready — tap Apply to clip."
-            : "Image mood ready. Tap Apply to send style tags + lyric idea into your song.",
-      );
+      // Analyze used to leave the sheet open for a second Apply tap. Users
+      // dismissed it and Create stayed empty. Apply into Create immediately.
+      if (!isNabadClipPhotoDirectFlow()) {
+        await applyImageMood();
+        return;
+      }
+      setStatus("Mood preview ready — tap Apply to clip.");
     } catch (e) {
       if (els.imageMoodOutput) {
         els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">Analysis failed — try another photo.</div>`;
@@ -81761,6 +81854,13 @@ function mountCreateCustomStyleField(show) {
   document.body.classList.toggle("hasCreateCustomStyle", show);
   if (els.sunoStyle && show) {
     els.sunoStyle.placeholder = "Type your own style — instruments, mood, tempo…";
+  }
+  if (show) {
+    window.requestAnimationFrame(() => {
+      try {
+        fields.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+      } catch {}
+    });
   }
 }
 

@@ -13433,6 +13433,10 @@ body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost
   max-height: 200px;
   opacity: 1;
 }
+body[data-route="generate"][data-create-layout="simple"].hasCreateCustomStyle #createSimpleStudioHost:not([hidden]){
+  max-height: none;
+  overflow: visible;
+}
 body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createSimpleStudioHost:not([hidden]){
   max-height: 0;
   opacity: 0;
@@ -24424,6 +24428,13 @@ body.trackSheetOpen .footer{
     border: none !important;
     box-shadow: none !important;
     z-index: 4;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].hasCreateCustomStyle #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
+    max-height: none;
+    overflow: visible;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].hasCreateCustomStyle #createFlow.createComposeStack #lyricsFieldPanel{
+    overflow-y: auto;
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel{
     background: var(--surface-panel);

@@ -38,6 +38,11 @@ const SUPPORT_TEMPLATES = Object.freeze([
     label: "Refund confirm",
     description: "After you issue a refund in Stripe — confirm amount and reason.",
   },
+  {
+    id: "pro_credits_update",
+    label: "Credits — 1 November update",
+    description: "Grandfathered Pro: included credits refresh at first renewal on/after 1 Nov 2026. Current balance stays.",
+  },
 ]);
 
 const PLAN_PRICES = Object.freeze({
@@ -234,6 +239,26 @@ Thanks for trying NabadAi Pro. We'd love to have you back anytime.
 
 — NabadAi Support`,
     },
+    pro_credits_update: {
+      subject: "A quick update about your credits",
+      text: `Dear {{name}},
+
+We're always working to make NabadAi better for you, and we're so happy to have you with us as a Pro member.
+
+A quick update about your credits: from your first renewal on or after 1 November 2026, the credits included with your plan refresh each billing period.
+
+And because you're one of our valued members, the credits you have today are yours to keep. We won't take them away.
+
+Until that renewal, nothing changes for you. After it, each period starts with a fresh set of included Pro credits, and unused included credits from that period don't carry over.
+
+You can always see your balance on the Credits page in the app. Full details are in our Terms: https://www.nabadai.com/terms.html
+
+Keep making music, and thank you for being part of NabadAi.
+
+If you have any questions, just reply to this email.
+
+— The NabadAi team`,
+    },
     refund_confirm: {
       subject: "Your NabadAi refund has been processed",
       text: `Hi,
@@ -337,6 +362,12 @@ function suggestSupportEmailTemplate({ subscription, emailLogs, billingEvents } 
   if (isPendingCancel(sub)) {
     if (status === "trialing" && !sent.has("trial_canceled")) return "trial_canceled";
     if (status !== "trialing" && !sent.has("cancel_confirm")) return "cancel_confirm";
+  }
+
+  const creditPolicy = String(sub.creditPolicy || sub.credit_policy || "").toLowerCase();
+  const live = status === "active" || status === "trialing" || status === "grace";
+  if (creditPolicy === "stack" && live && !sent.has("pro_credits_update")) {
+    return "pro_credits_update";
   }
 
   if (status === "trialing") {

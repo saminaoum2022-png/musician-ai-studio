@@ -128,6 +128,7 @@ function mapSubscriptionRow(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     providerSubscriptionId: row.provider_subscription_id,
+    creditPolicy: row.credit_policy || "",
   };
 }
 
@@ -137,7 +138,7 @@ async function loadUserEmailContext(userId) {
 
   const [subRes, email, emailLogs, billingEvents] = await Promise.all([
     serviceFetch(
-      `pro_subscriptions?select=plan_id,status,provider,current_period_end,cancel_at_period_end,created_at,updated_at,provider_subscription_id&user_id=eq.${encodeURIComponent(uid)}&limit=1`,
+      `pro_subscriptions?select=plan_id,status,provider,current_period_end,cancel_at_period_end,created_at,updated_at,provider_subscription_id,credit_policy&user_id=eq.${encodeURIComponent(uid)}&limit=1`,
     ),
     fetchAuthEmail(uid),
     fetchSupportEmailLogs(uid),

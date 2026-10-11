@@ -337,6 +337,9 @@ module.exports = async function handler(req, res) {
       if (userId) logRow.user_id = userId;
 
       const logRes = await serviceInsert("support_email_log", logRow);
+      const logError = logRes.ok
+        ? ""
+        : String(logRes.data?.message || logRes.data?.error || `log_failed_${logRes.status || "unknown"}`);
 
       return sendJson(res, 200, {
         ok: true,
@@ -344,6 +347,7 @@ module.exports = async function handler(req, res) {
         recipient,
         templateId: effectiveTemplateId,
         logged: Boolean(logRes.ok),
+        logError: logError || undefined,
       });
     }
 

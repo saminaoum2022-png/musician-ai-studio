@@ -197,6 +197,14 @@ import {
   mapChallengeLangToCreate,
   pickOccasionLyricPrompt,
   pickSparkLyricPrompt,
+  pickSparkRecipe,
+  composeSparkIdeaBrief,
+  getSparkRecipe,
+  isRecipeSparkId,
+  resolveSparkId,
+  resolveSparkPromptLang,
+  dailySparkDeckIds,
+  FEATURED_SPARK_ID,
   withShelfScriptRule,
 } from "./challenge-prompt-seeds.js";
 import {
@@ -995,6 +1003,10 @@ const els = {
   createChallengeHint: document.getElementById("createChallengeHint"),
   createChallengeHintTitle: document.getElementById("createChallengeHintTitle"),
   createChallengeHintSub: document.getElementById("createChallengeHintSub"),
+  sparkRecipeChipRow: document.getElementById("sparkRecipeChipRow"),
+  sparkRecipeChip: document.getElementById("sparkRecipeChip"),
+  sparkRecipeReroll: document.getElementById("sparkRecipeReroll"),
+  sparkRecipeExtra: document.getElementById("sparkRecipeExtra"),
   sunoReferenceMode: document.getElementById("sunoReferenceMode"),
   sunoReferenceHint: document.getElementById("sunoReferenceHint"),
   btnVocalRefRec: document.getElementById("btnVocalRefRec"),
@@ -5448,6 +5460,7 @@ function setCreateChallengeHint(challenge) {
   if (!c) {
     els.createChallengeHint.hidden = true;
     els.createChallengeHint.classList.remove("createChallengeHint--template", "createChallengeHint--spark", "createChallengeHint--live");
+    try { syncSparkRecipeChip(null); } catch {}
     try { syncPhotoSoloBannerUi(null); } catch {}
     try { syncPhotoSoloChallengeCreateUi(); } catch {}
     try { syncCreateAttachedStyleRow(); } catch {}
@@ -9769,87 +9782,33 @@ const DISCOVERY_QUICK_IDEAS = [
   },
 ];
 
+function recipeSparkIdea(id) {
+  const recipe = getSparkRecipe(id);
+  return {
+    id,
+    title: recipe?.title || id,
+    lyricsMode: "instructions",
+    lyrics: "",
+    prompt: recipe?.blurb || "One tap. The AI surprises.",
+    tags: [recipe?.kicker || "Spark", "Recipe"],
+  };
+}
+
 const CHALLENGE_IDEAS = [
-  {
-    id: "hook-rush",
-    title: "Hook Rush",
-    styleLyria: "instant pop hook, tight drums, bright melody, sticky chorus, 112 bpm",
-    style: "Instant viral hook, no intro, punchy drums, bright lead melody, sticky chorus, 112 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Write original lyrics for a cold-open pop hook. No intro — the first sung line is already the chorus people replay. One short verse (2 lines) naming a now-or-never moment, then a chorus (3–4 lines) with one sticky phrase repeated. Specific, not generic party talk. End on a complete held last word.",
-    prompt: "Make the first 15 seconds the whole reason someone replays the song.",
-    tags: ["Hook", "Replay", "Fast"],
-  },
-  {
-    id: "one-line-reply",
-    title: "One-Line Reply",
-    styleLyria: "intimate pop hook, warm bass, soft drums, 98 bpm",
-    style: "Reply-song pop, conversational vocal, warm bass, soft drums, natural cadence, 98 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Write a ~25 second clip replying to a text or DM.\n\nOne short verse (2 lines) reacting to what they said.\nOne chorus (2–4 lines) — the line you'd actually send back.\n\nKeep words short. End on a complete phrase — nothing cut mid-sentence.",
-    prompt: "Turn the text you wish you'd sent into a 30-second reply hook.",
-    tags: ["Reply", "Personal", "DM"],
-  },
-  {
-    id: "whisper-to-hook",
-    title: "Whisper to Hook",
-    styleLyria: "soft intimate opening, bright pop chorus, close-mic vocal, 102 bpm",
-    style: "Soft intro building to catchy chorus, intimate vocal opening, bright drop, 102 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Challenge: start quiet, land loud — but keep it ~25 seconds total.\n\n[Verse] — 2 whisper-soft lines (close, personal).\n[Chorus] — 3–4 lines, bigger but not shouty; end on a held final word.\n\nNo bridge. No second verse. Must feel finished at the end.",
-    prompt: "Begin almost whispering — then let the chorus open up without screaming.",
-    tags: ["Dynamic", "Hook", "Mood"],
-  },
-  {
-    id: "dabke-drop",
-    title: "Dabke Drop",
-    styleLyria: "Levantine dabke pop, mijwiz accents, festive 6/8 rhythm, clap-ready chorus, 126 bpm",
-    style: "Levantine dabke pop, mijwiz and oud accents, ktakufti 6/8 dabkeh rhythm, 126 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Write a short clip about any personal idea — reunion, summer, pride, missing someone.\nSTYLE is Levantine dabke. Do not write lyrics about dabke or weddings.",
-    prompt: "Any idea. Dabke is the style, not the story.",
-    tags: ["Dabke", "Party", "Rhythm"],
-  },
-  {
-    id: "sad-to-dance-challenge",
-    title: "Sad to Dance",
-    styleLyria: "bittersweet dance pop, minor piano, warm bass, uplifting chorus, 118 bpm",
-    style: "Bittersweet dance pop, minor-key piano intro, warm bass, emotional vocal, uplifting drop, 118 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Challenge: flip a sad feeling into dance — keep the emotion.\n\nVerse: quiet and honest, like a text you never sent.\nPre-chorus: let the feeling lift.\nChorus: dance through the sadness — one repeatable hook line.\n\nMake it personal and finished.",
-    prompt: "Flip a sad idea into motion without losing the emotion.",
-    tags: ["Mood flip", "Dance", "Heart"],
-  },
-  {
-    id: "arabic-trend-byte",
-    title: "Arabic Trend Byte",
-    styleLyria: "modern Arabic pop hook, glossy beat, TikTok-ready, 104 bpm",
-    style: "modern Arabic pop, TikTok-ready hook, glossy 808s, sticky hook energy, 104 bpm",
-    lyricsMode: "instructions",
-    lyrics: "حوّل جملة يومية صغيرة لكورس ترند عربي قصير. اكتب بالأحرف العربية فقط.",
-    prompt: "Turn a tiny Arabic phrase into a trend-sized hook under 20 seconds.",
-    tags: ["Arabic", "Trend", "Short"],
-  },
-  {
-    id: "roast-song",
-    title: "Roast Song",
-    styleLyria: "playful comedy pop, talk-sing verse, catchy roast chorus, 118 bpm",
-    style: "playful comedy pop, punchy brass stabs, talk-sing verse, catchy roast chorus, 118 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Write a playful roast for a friend — funny, never cruel. Verse: 4 original lines of affectionate teasing (habits, timing, excuses), not a stock joke. Chorus: 3–4 lines that land the roast with a smile, then make it clear you still love them. Light, singable, finished.",
-    prompt: "Write a playful roast song for a friend — funny, never cruel.",
-    tags: ["Roast", "Fun", "Friends"],
-  },
-  {
-    id: "three-word-hook",
-    title: "3-Word Hook",
-    styleLyria: "minimal pop hook, huge chorus feel, clap stack, 110 bpm",
-    style: "hyper-catchy pop, minimal lyrics, huge chorus, clap stack, 110 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Write original lyrics whose chorus uses only three words, repeated. Verse: 2 short lines that set a scene. Chorus: those three words only, sung as a huge chantable hook. Pick three vivid words (not \"I love you\"). Impossible to forget. End cleanly.",
-    prompt: "Only three words in the chorus — make them impossible to forget.",
-    tags: ["Short", "Hook", "Minimal"],
-  },
+  recipeSparkIdea("hook-first"),
+  recipeSparkIdea("overheard"),
+  recipeSparkIdea("tiny-thing"),
+  recipeSparkIdea("other-side"),
+  recipeSparkIdea("weather-heart"),
+  recipeSparkIdea("main-character"),
+  recipeSparkIdea("mood-flip"),
+  recipeSparkIdea("genre-passport"),
+  recipeSparkIdea("roast-song"),
+  recipeSparkIdea("one-line-reply"),
+  recipeSparkIdea("dabke-drop"),
+  recipeSparkIdea("caption-song"),
+  recipeSparkIdea("city-night"),
+  recipeSparkIdea("shower-thought"),
   {
     id: "last-photo-song",
     title: "Last Photo Song",
@@ -9879,106 +9838,6 @@ const CHALLENGE_IDEAS = [
     lyrics: "Spell You — the name is the idea. One harmless annoyance makes the spell.",
     prompt: "Put a spell on someone. Make it a song.",
     tags: ["Spell", "Photo", "Halloween"],
-  },
-  {
-    id: "hum-track",
-    title: "Hum Track",
-    styleLyria: "solo instrumental from hummed melody, one instrument, intimate studio, 100 bpm",
-    style: "solo instrumental from a hummed melody, one chosen instrument, intimate studio, 100 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Hum Track — melody only. No lyrics. Solo instrumental on the instrument you pick.",
-    prompt: "Hum a melody — get a solo instrumental on the instrument you pick.",
-    tags: ["Hum", "Instrumental"],
-  },
-  {
-    id: "tiktok-teaser",
-    title: "TikTok Teaser",
-    styleLyria: "short social hook, tight drums, bright ear-candy, 120 bpm",
-    style: "Short social teaser, instant hook, tight drums, bright ear-candy, 120 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Start with the hook first.\nNo long intro.\nMake the first 8 seconds impossible to skip.",
-    prompt: "Build a short teaser hook made for social — instant payoff, zero slow build.",
-    tags: ["Short", "Hook", "Social"],
-  },
-  {
-    id: "wrong-genre-party",
-    title: "Wrong Genre",
-    styleLyria: "genre contrast pop, ironic verse texture, sugary chorus, 132 bpm",
-    style: "death metal drums with sugary K-pop chorus, ironic contrast, 132 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Write original lyrics for a collision: a heavy, stormy verse and a sweet, sugary chorus. Verse: 4 lines that lean into dark vs bright without naming genres. Chorus: 3–4 catchy joyful lines that win the argument. Personal story. Complete last phrase.",
-    prompt: "Pick two genres that should not match — make the chorus win anyway.",
-    tags: ["Weird", "Contrast", "Fun"],
-  },
-  {
-    id: "countdown-hook",
-    title: "Countdown Hook",
-    styleLyria: "countdown pop drop, tight drums, rising tension, 3-2-1 payoff, 118 bpm",
-    style: "countdown pop drop, rising tension, 3-2-1 hook, punchy drums, 118 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Build a ~25 second countdown clip.\n\n[Verse] — 2 lines setting the moment.\n[Chorus] — 3–4 lines with a 3-2-1 or now-now-now hook.\n\nEnd on a complete phrase — nothing cut mid-count.",
-    prompt: "3-2-1 — make the drop land on one sticky hook line.",
-    tags: ["Countdown", "Hook", "Drop"],
-  },
-  {
-    id: "caption-song",
-    title: "Caption Song",
-    styleLyria: "Instagram-caption pop, intimate vocal, warm beat, 100 bpm",
-    style: "social caption pop, intimate vocal, warm beat, sticky hook, 100 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Turn an Instagram caption into a ~25 second clip.\n\nPaste or describe the caption in the box.\n\n[Verse] — 2 lines from the caption mood.\n[Chorus] — 2–4 lines, the line you'd post as the hook.\n\nShort words. Clean ending.",
-    prompt: "Your caption is the song — one hook, one feeling.",
-    tags: ["Social", "Personal", "Caption"],
-  },
-  {
-    id: "makhlouta-genre",
-    title: "Makhlouta Genre",
-    styleLyria: "genre-blend pop, unexpected fusion, playful chorus, 110 bpm",
-    style: "genre mashup pop, unexpected fusion, playful contrast, catchy chorus, 110 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Pick two genres that should not work together (e.g. Raï × K-pop, Dabke × trap).\n\n[Verse] — 2 lines lean into the weird combo.\n[Chorus] — 3–4 lines, one hook that owns the mashup.\n\n~25 seconds total. End cleanly.",
-    prompt: "Mix two genres that shouldn't match — let the chorus win.",
-    tags: ["Fusion", "Weird", "Fun"],
-  },
-  {
-    id: "city-night",
-    title: "City Night",
-    styleLyria: "night-drive pop, neon pads, warm bass, city-lights mood, 96 bpm",
-    style: "night-drive pop, neon pads, warm bass, city-lights mood, 96 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Write a ~25 second night-in-the-city clip.\n\nName a city or vibe (Beirut, Dubai, Cairo, late taxi, rooftop).\n\n[Verse] — 2 cinematic lines.\n[Chorus] — 3–4 lines, one repeatable night hook.\n\nConversational, not shouty. Complete ending.",
-    prompt: "Neon, windows down — one city, one hook.",
-    tags: ["City", "Mood", "Night"],
-  },
-  {
-    id: "before-after",
-    title: "Before & After",
-    styleLyria: "mood-flip pop, quiet verse, brighter chorus, gentle lift, 104 bpm",
-    style: "mood-flip pop, quiet verse, brighter chorus, emotional lift, 104 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Flip the mood in ~25 seconds.\n\n[Verse] — 2 quiet honest lines (before).\n[Chorus] — 3–4 lines, brighter but not screamy (after).\n\nOne feeling changes. End on a held final word.",
-    prompt: "Sad verse → lighter chorus — same story, different light.",
-    tags: ["Mood", "Flip", "Heart"],
-  },
-  {
-    id: "oud-loop",
-    title: "Oud Loop",
-    styleLyria: "minimal oud pop loop, modern beat, Arabic-friendly, 92 bpm",
-    style: "minimal oud pop loop, modern beat, warm vocal, Arabic-friendly, 92 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Write a ~25 second oud-led clip.\n\n[Verse] — 2 lines, simple and poetic.\n[Chorus] — 2–4 lines with one Arabic or English hook phrase.\n\nKeep syllables short. Must feel finished at the end.",
-    prompt: "One oud phrase, one modern beat, one hook.",
-    tags: ["Arabic", "Oud", "Minimal"],
-  },
-  {
-    id: "shower-thought",
-    title: "Shower Thought",
-    styleLyria: "philosophical pop hook, soft beat, witty one-liner chorus, 98 bpm",
-    style: "philosophical pop hook, soft beat, witty one-liner chorus, 98 bpm",
-    lyricsMode: "instructions",
-    lyrics: "Turn a random shower thought into a ~25 second clip.\n\n[Verse] — 2 lines set up the thought.\n[Chorus] — 2–4 lines — the thought as a repeatable hook.\n\nFunny or deep. Short lines. Clean ending.",
-    prompt: "That random thought you had today — make it a hook.",
-    tags: ["Funny", "Thought", "Hook"],
   },
 ];
 
@@ -10029,27 +9888,23 @@ function trackIsChallengeContent(track) {
 
 const HOME_SEG_STORAGE_KEY = "nabadai_home_seg_v1";
 const CHALLENGE_SPARK_KICKERS = {
-  "one-line-reply": "Reply",
-  "whisper-to-hook": "Dynamic",
-  "countdown-hook": "Drop",
-  "caption-song": "Social",
-  "makhlouta-genre": "Fusion",
-  "city-night": "Night",
-  "before-after": "Flip",
-  "oud-loop": "Oud",
-  "shower-thought": "Thought",
-  "three-word-hook": "Tiny",
-  "hook-rush": "Fast",
-  "tiktok-teaser": "Social",
-  "dabke-drop": "Party",
-  "sad-to-dance-challenge": "Mood",
-  "arabic-trend-byte": "Arabic",
+  overheard: "Spy",
+  "tiny-thing": "Object",
+  "other-side": "Flip",
+  "weather-heart": "Mood",
+  "main-character": "Scene",
+  "mood-flip": "Flip",
+  "hook-first": "Hook",
+  "genre-passport": "Stamp",
   "roast-song": "Roast",
+  "one-line-reply": "Reply",
+  "dabke-drop": "Party",
+  "caption-song": "Social",
+  "city-night": "Night",
+  "shower-thought": "Thought",
   "last-photo-song": "Photo",
   "80s-you": "Trending",
   "spell-you": "Spell",
-  "hum-track": "Hum",
-  "roast-song": "Roast",
 };
 const CHALLENGE_SPARK_TONES = ["violet", "cyan", "rose", "gold", "mint", "amber"];
 
@@ -10769,6 +10624,10 @@ function applyDiscoveryIdeaToCreate(idea) {
     ...(idea.moment_angle ? { moment_angle: idea.moment_angle } : {}),
     ...(idea.moment_style ? { moment_style: idea.moment_style } : {}),
     ...(typeof idea.moment_trait_used === "boolean" ? { moment_trait_used: idea.moment_trait_used } : {}),
+    ...(idea.spark_angle ? { spark_angle: idea.spark_angle } : {}),
+    ...(idea.spark_twist ? { spark_twist: idea.spark_twist } : {}),
+    ...(idea.spark_style ? { spark_style: idea.spark_style } : {}),
+    ...(idea.spark_seed ? { spark_seed: idea.spark_seed } : {}),
   };
   if (idea.challenge) persistCreateChallengeContext(pendingSearchRemixMeta);
   else clearCreateChallengeContext();
@@ -10793,6 +10652,11 @@ function applyDiscoveryIdeaToCreate(idea) {
   if (challenge) setCreateChallengeHint(challenge);
   else if (quickTemplateClip) setCreateTemplateLoadedHint(title);
   else setCreateChallengeHint(null);
+  if (challenge?.type === "spark" && isRecipeSparkId(challenge.id)) {
+    syncSparkRecipeChip(_pendingSparkRoll);
+  } else {
+    syncSparkRecipeChip(null);
+  }
   const sourceKind = challenge
     ? creationSourceKind(challenge)
     : quickTemplateClip
@@ -10875,6 +10739,8 @@ let _challengeLanguageId = readStoredChallengeLanguageId();
 let _challengeDialectId = "lebanese";
 let _challengeAddressId = "";
 let _pendingMomentMeta = null;
+let _pendingSparkMeta = null;
+let _pendingSparkRoll = null;
 
 function shelfPromptLangExtras(extra = {}) {
   return {
@@ -10894,12 +10760,16 @@ function applyChallengeLanguageToCreate(challenge, extras = {}) {
   const dialectId = String(
     extras.dialectId ?? challenge?.dialectId ?? (challenge?.type === "occasion" ? _challengeDialectId : "") ?? "",
   ).trim();
-  const promptLang = resolveChallengePromptLang(languageId, {
+  const langExtras = {
     sparkId: extras.sparkId || (challenge?.type === "spark" ? challenge?.id : ""),
     genreId: extras.genreId || challenge?.genreId || extras.studioStyleId || "",
     dialectId,
+    appLang: sparkAppLanguage(),
     ...shelfPromptLangExtras(extras),
-  });
+  };
+  const promptLang = challenge?.type === "spark"
+    ? resolveSparkPromptLang(languageId, langExtras)
+    : resolveChallengePromptLang(languageId, langExtras);
   const mapped = languageId === "auto"
     ? mapChallengeLangToCreate(promptLang, promptLang === "arabic" ? "arabic" : "english", dialectId)
     : mapChallengeLangToCreate(promptLang, languageId, dialectId);
@@ -11023,6 +10893,8 @@ function buildMomentPresetIdea(occasion, liveChallenge = null) {
     moment_style: catalog ? `${catalog.id} · ${catalog.name}` : soundId,
     moment_trait_used: Boolean(picked?.traitUsed),
   };
+  setPendingSparkMeta(null);
+  _pendingSparkRoll = null;
   setPendingMomentMeta(momentMeta);
   const live = liveChallenge && typeof liveChallenge === "object" ? liveChallenge : null;
   return {
@@ -11276,14 +11148,156 @@ function renderHomeDeskContinue() {
   /* Continue Draft removed from Create — no-op. */
 }
 
+function sparkAppLanguage() {
+  const htmlLang = String(document.documentElement?.lang || "").trim().toLowerCase();
+  if (htmlLang.startsWith("ar")) return "arabic";
+  if (htmlLang.startsWith("en")) return "english";
+  const nav = String(navigator.language || "").trim().toLowerCase();
+  if (nav.startsWith("ar")) return "arabic";
+  if (nav.startsWith("en")) return "english";
+  return "";
+}
+
+function setPendingSparkMeta(meta) {
+  _pendingSparkMeta = meta && typeof meta === "object" ? { ...meta } : null;
+}
+
+function sparkMetaFromRoll(roll) {
+  if (!roll) return null;
+  return {
+    spark_angle: String(roll.angleId || roll.angle || "").trim(),
+    spark_twist: String(roll.twistId || roll.twist || "").trim(),
+    spark_style: String(roll.styleId || "").trim(),
+    spark_seed: String(roll.seed || "").trim(),
+  };
+}
+
+function applySparkRollToCreate(roll, { openCreate = true } = {}) {
+  if (!roll) return;
+  setPendingMomentMeta(null);
+  _pendingSparkRoll = roll;
+  setPendingSparkMeta(sparkMetaFromRoll(roll));
+  const catalog = momentCatalogStyle(roll.styleId);
+  const recipe = getSparkRecipe(roll.sparkId);
+  const idea = {
+    id: `challenge:${roll.sparkId}`,
+    title: String(recipe?.title || roll.title || "Spark").trim(),
+    prompt: roll.prompt,
+    lyrics: roll.prompt,
+    style: catalog?.styleLine || "",
+    studioStyleId: catalog?.id || roll.styleId || "",
+    studioFamily: catalog?.family || "",
+    createFocus: { tab: "lyrics", tabs: ["lyrics"] },
+    lyricsMode: "instructions",
+    ...sparkMetaFromRoll(roll),
+    challenge: {
+      id: roll.sparkId,
+      title: recipe?.title || roll.title || "Spark",
+      type: "spark",
+      occasion: "",
+      genre: catalog?.name || "",
+      language: roll.lang === "arabic" ? "Arabic" : roll.lang === "english" ? "English" : "Auto",
+      languageId: _challengeLanguageId || readStoredChallengeLanguageId(),
+      personName: "",
+      variant: "spark",
+      lyricsMode: "instructions",
+      studioStyleId: catalog?.id || roll.styleId || "",
+      studioFamily: catalog?.family || "",
+      ...sparkMetaFromRoll(roll),
+    },
+  };
+  delete idea.dialect;
+  delete idea.dialectHint;
+  if (!authSession?.user?.id) {
+    stashPendingDiscoveryIdea(idea);
+    setPostAuthReturnHash("#/generate");
+    setPendingCreateAction("song");
+    try { showToast("Sign in to try this spark", { icon: "♪", durationMs: 2600 }); } catch {}
+    try { location.hash = "#/auth"; } catch {}
+    scheduleApplyRoute();
+    return;
+  }
+  if (openCreate) applyDiscoveryIdeaToCreate(idea);
+  else {
+    if (els.sunoPrompt) els.sunoPrompt.value = roll.prompt;
+    if (catalog?.id) {
+      try {
+        applyLyriaStudioStyle(catalog.id, { keepSinger: true, family: catalog.family });
+      } catch {}
+    }
+    if (els.sunoStyle && catalog?.styleLine) els.sunoStyle.value = catalog.styleLine;
+    try { autoResizeLyricsBox(); } catch {}
+  }
+  bindSparkRecipeChipOnce();
+  syncSparkRecipeChip(roll);
+}
+
+function syncSparkRecipeChip(roll = _pendingSparkRoll) {
+  const row = els.sparkRecipeChipRow;
+  if (!row) return;
+  if (!roll || !isRecipeSparkId(roll.sparkId)) {
+    row.hidden = true;
+    if (els.sparkRecipeExtra) {
+      els.sparkRecipeExtra.hidden = true;
+      els.sparkRecipeExtra.value = "";
+    }
+    return;
+  }
+  row.hidden = false;
+  if (els.sparkRecipeChip) els.sparkRecipeChip.textContent = roll.chip || "✦";
+  if (els.sparkRecipeExtra) {
+    const show = Boolean(roll.extraPlaceholder);
+    els.sparkRecipeExtra.hidden = !show;
+    if (show) {
+      els.sparkRecipeExtra.placeholder = roll.extraPlaceholder;
+      if (!els.sparkRecipeExtra.value && roll.extra?.userNamed) {
+        els.sparkRecipeExtra.value = String(roll.extra.object || roll.extra.hook || "").trim();
+      }
+    }
+  }
+}
+
+function rerollActiveSpark() {
+  const prev = _pendingSparkRoll;
+  if (!prev?.sparkId) return;
+  const userText = String(els.sparkRecipeExtra?.value || "").trim();
+  const languageId = _challengeLanguageId || readStoredChallengeLanguageId();
+  const roll = pickSparkRecipe({
+    sparkId: prev.sparkId,
+    languageId,
+    appLang: sparkAppLanguage(),
+    userText,
+    ...shelfPromptLangExtras({ sparkId: prev.sparkId, userText }),
+  });
+  if (!roll) return;
+  haptic("light");
+  applySparkRollToCreate(roll, { openCreate: false });
+}
+
 function applyChallengeStartById(id, challengesMap) {
-  const key = String(id || "").trim();
-  if (key === "hum-track") {
+  const raw = String(id || "").trim();
+  if (raw === "hum-track") {
     openHumTrackFlow();
     return;
   }
-  if (key === "spell-you" && !_spellYouInjecting) {
+  if (raw === "spell-you" && !_spellYouInjecting) {
     openSpellYouSheet();
+    return;
+  }
+  const key = resolveSparkId(raw);
+  if (isRecipeSparkId(key)) {
+    haptic("light");
+    const languageId = _challengeLanguageId || readStoredChallengeLanguageId();
+    const userText = String(els.sparkRecipeExtra?.value || "").trim();
+    const roll = pickSparkRecipe({
+      sparkId: key,
+      languageId,
+      appLang: sparkAppLanguage(),
+      userText,
+      ...shelfPromptLangExtras({ sparkId: key, userText }),
+    });
+    if (!roll) return;
+    applySparkRollToCreate(roll);
     return;
   }
   const challenge =
@@ -11294,8 +11308,8 @@ function applyChallengeStartById(id, challengesMap) {
   haptic("light");
   const focus = challengeCreateFocusForId(challenge.id);
   const languageId = _challengeLanguageId || readStoredChallengeLanguageId();
-  const langExtras = shelfPromptLangExtras({ sparkId: challenge.id });
-  const promptLang = resolveChallengePromptLang(languageId, langExtras);
+  const langExtras = { ...shelfPromptLangExtras({ sparkId: challenge.id }), appLang: sparkAppLanguage() };
+  const promptLang = resolveSparkPromptLang(languageId, langExtras);
   const localizedLyrics = isVoiceClipChallengeId(challenge.id)
     ? ""
     : pickSparkLyricPrompt({ sparkId: challenge.id, languageId, ...langExtras });
@@ -11330,6 +11344,8 @@ function applyChallengeStartById(id, challengesMap) {
   };
   delete idea.dialect;
   delete idea.dialectHint;
+  setPendingSparkMeta(null);
+  _pendingSparkRoll = null;
   if (!authSession?.user?.id) {
     stashPendingDiscoveryIdea(idea);
     setPostAuthReturnHash("#/generate");
@@ -11340,21 +11356,24 @@ function applyChallengeStartById(id, challengesMap) {
     return;
   }
   applyDiscoveryIdeaToCreate(idea);
+  syncSparkRecipeChip(null);
 }
 
 function sparksDeckCardsHtml() {
-  const sparks = CHALLENGE_IDEAS.filter((c) => c.id !== "hook-rush" && c.id !== "hum-track");
-  return sparks.map((c, i) => {
+  const ids = dailySparkDeckIds({ count: 7 });
+  const byId = new Map(CHALLENGE_IDEAS.map((c) => [c.id, c]));
+  return ids.map((id, i) => {
+    const c = byId.get(id) || recipeSparkIdea(id);
     const tone = CHALLENGE_SPARK_TONES[i % CHALLENGE_SPARK_TONES.length];
-    const kicker = CHALLENGE_SPARK_KICKERS[c.id] || "Spark";
-    const blurb = String(c.prompt || "").trim() || "Open Create with this challenge ready.";
+    const kicker = CHALLENGE_SPARK_KICKERS[c.id] || getSparkRecipe(id)?.kicker || "Spark";
+    const blurb = String(c.prompt || getSparkRecipe(id)?.blurb || "").trim() || "One tap. The AI surprises.";
     return `
       <article class="challengeMiniCard challengeMiniCard--${tone}">
         <span class="challengeMiniKicker">${escapeHtml(kicker)}</span>
         <h3>${escapeHtml(c.title)}</h3>
         <p>${escapeHtml(blurb)}</p>
         <span class="challengeMiniCount" data-challenge-count="${escapeHtml(c.id)}">0 joined</span>
-        <button type="button" data-challenge-start="${escapeHtml(c.id)}">Join</button>
+        <button type="button" data-challenge-start="${escapeHtml(c.id)}">Surprise me</button>
       </article>`;
   }).join("");
 }
@@ -11366,23 +11385,22 @@ function renderHomeDeskSparksDeck() {
 }
 
 function renderDiscoverHookRushCardHtml() {
-  const hook = CHALLENGE_IDEAS.find((c) => String(c.id) === "hook-rush");
-  if (!hook) return "";
+  const hook = CHALLENGE_IDEAS.find((c) => String(c.id) === FEATURED_SPARK_ID) || recipeSparkIdea(FEATURED_SPARK_ID);
   const blurb = String(hook.prompt || "").trim()
-    || "Make the first 15 seconds impossible to skip — cold open straight into the part people replay.";
+    || "A rolled hook phrase — or type your own. Instant replay.";
   return `
     <section class="challengeFeatureCard discoverSparksFeature" aria-labelledby="discoverHookRushTitle">
       <div class="challengeFeatureTop">
         <span class="challengeLivePill"><span></span> Today’s spark</span>
-        <span class="challengeTimer"><span data-challenge-count="hook-rush">0 joined</span></span>
+        <span class="challengeTimer"><span data-challenge-count="${escapeHtml(FEATURED_SPARK_ID)}">0 joined</span></span>
       </div>
-      <h3 id="discoverHookRushTitle">${escapeHtml(hook.title || "Hook Rush")}</h3>
+      <h3 id="discoverHookRushTitle">${escapeHtml(hook.title || "Hook First")}</h3>
       <p>${escapeHtml(blurb)}</p>
       <div class="challengeTagRow">
-        <span>15 sec hook</span>
-        <span>Fast idea</span>
+        <span>Hook first</span>
+        <span>New every tap</span>
       </div>
-      <button type="button" class="challengeFeatureStart discoverSparksStartCta" data-challenge-start="hook-rush">Use this spark</button>
+      <button type="button" class="challengeFeatureStart discoverSparksStartCta" data-challenge-start="${escapeHtml(FEATURED_SPARK_ID)}">Surprise me</button>
     </section>`;
 }
 
@@ -13170,10 +13188,10 @@ function discoverCommunityPicksTracksPersonalized(tracks, prefs) {
 const DISCOVER_HUB_SPARK_CHALLENGES = [
   { id: "birthday", title: "Birthday Surprise", category: "Birthday", tone: "rose", action: "occasion", occasionId: "birthday", artKey: "birthday", matchKeywords: ["birthday", "bday"] },
   { id: "one-line-reply", title: "One-Line Reply", category: "Reply", tone: "violet", action: "challenge", challengeId: "one-line-reply", artKey: "three-word-hook" },
-  { id: "hook-rush", title: "Hook Rush", category: "Hook", tone: "cyan", action: "challenge", challengeId: "hook-rush", artKey: "hook-rush" },
+  { id: "hook-first", title: "Hook First", category: "Hook", tone: "cyan", action: "challenge", challengeId: "hook-first", artKey: "hook-rush" },
   { id: "anniversary", title: "First Dance", category: "Wedding", tone: "gold", action: "occasion", occasionId: "anniversary", artKey: "love-song", matchKeywords: ["anniv", "love", "wedding", "dance"] },
-  { id: "three-word-hook", title: "3-Word Hook", category: "Hook", tone: "gold", action: "challenge", challengeId: "three-word-hook", artKey: "three-word-hook" },
-  { id: "tiktok-teaser", title: "TikTok Teaser", category: "Teaser", tone: "rose", action: "challenge", challengeId: "tiktok-teaser", artKey: "tiktok-teaser" },
+  { id: "overheard", title: "Overheard", category: "Spy", tone: "gold", action: "challenge", challengeId: "overheard", artKey: "three-word-hook" },
+  { id: "mood-flip", title: "Mood Flip", category: "Flip", tone: "rose", action: "challenge", challengeId: "mood-flip", artKey: "tiktok-teaser" },
   { id: "caption-song", title: "Caption Song", category: "Social", tone: "rose", action: "challenge", challengeId: "caption-song", artKey: "tiktok-teaser" },
   { id: "city-night", title: "City Night", category: "Mood", tone: "cyan", action: "challenge", challengeId: "city-night", artKey: "hook-rush" },
 ];
@@ -13437,7 +13455,7 @@ const DISCOVER_LIVE_CHALLENGES = [
     id: "dabke-drop",
     emoji: "💃",
     title: "Dabke Drop",
-    blurb: "Build the chorus everyone can clap to.",
+    blurb: "Any story. Dabke is the style, not the plot.",
     tone: "gold",
     participants: 712,
     submissions: 104,
@@ -13448,38 +13466,10 @@ const DISCOVER_LIVE_CHALLENGES = [
     challengeId: "dabke-drop",
   },
   {
-    id: "three-word-hook",
+    id: "mood-flip",
     emoji: "✦",
-    title: "3-Word Hook",
-    blurb: "Only three words in the chorus — make them impossible to forget.",
-    tone: "cyan",
-    participants: 658,
-    submissions: 91,
-    daysLeft: 6,
-    totalDays: 10,
-    progressGoal: 120,
-    action: "challenge",
-    challengeId: "three-word-hook",
-  },
-  {
-    id: "wrong-genre-party",
-    emoji: "🎭",
-    title: "Wrong Genre",
-    blurb: "Pick two genres that should not match — make the chorus win anyway.",
-    tone: "rose",
-    participants: 541,
-    submissions: 76,
-    daysLeft: 8,
-    totalDays: 14,
-    progressGoal: 110,
-    action: "challenge",
-    challengeId: "wrong-genre-party",
-  },
-  {
-    id: "sad-to-dance",
-    emoji: "💃",
-    title: "Sad to Dance",
-    blurb: "Flip a sad idea into motion — keep the feeling.",
+    title: "Mood Flip",
+    blurb: "The roll picks the flip. Same story, different light.",
     tone: "rose",
     participants: 638,
     submissions: 97,
@@ -13487,7 +13477,21 @@ const DISCOVER_LIVE_CHALLENGES = [
     totalDays: 10,
     progressGoal: 120,
     action: "challenge",
-    challengeId: "sad-to-dance-challenge",
+    challengeId: "mood-flip",
+  },
+  {
+    id: "genre-passport",
+    emoji: "🎭",
+    title: "Genre Passport",
+    blurb: "A genre you would never pick — stamped for this tap.",
+    tone: "rose",
+    participants: 541,
+    submissions: 76,
+    daysLeft: 8,
+    totalDays: 14,
+    progressGoal: 110,
+    action: "challenge",
+    challengeId: "genre-passport",
   },
   {
     id: "last-photo-song",
@@ -13519,7 +13523,7 @@ const DISCOVER_NEW_THIS_WEEK = [
   { id: "graduation", emoji: "🎓", kicker: "New template", title: "Graduation Song", blurb: "Celebrate the milestone.", tone: "gold", action: "occasion", occasionId: "congrats" },
   { id: "ramadan", emoji: "🌙", kicker: "Seasonal", title: "Ramadan Glow", blurb: "Warm spiritual vibes.", tone: "violet", action: "occasion", occasionId: "christmas" },
   { id: "roast-week", emoji: "😄", kicker: "Fun challenge", title: "Roast Song", blurb: "Playful roast for a friend — funny, never cruel.", tone: "gold", action: "challenge", challengeId: "roast-song" },
-  { id: "wedding-pack", emoji: "💍", kicker: "New challenge", title: "Hook Rush", blurb: "Instant viral hook energy.", tone: "rose", action: "challenge", challengeId: "hook-rush" },
+  { id: "wedding-pack", emoji: "💍", kicker: "New challenge", title: "Hook First", blurb: "A rolled hook phrase. Instant replay.", tone: "rose", action: "challenge", challengeId: "hook-first" },
 ];
 
 const DISCOVER_REMIX_FALLBACK = [
@@ -13650,6 +13654,10 @@ function discoverChallengeMatchesTrack(c, track) {
   if (c.id === "three-word-hook" && (chId === "three-word-hook" || chTitle.includes("3-word") || chTitle.includes("three word"))) return true;
   if (c.id === "wrong-genre-party" && (chId === "wrong-genre-party" || chTitle.includes("wrong genre"))) return true;
   if (c.id === "sad-to-dance" && (chId === "sad-to-dance-challenge" || chTitle.includes("sad") || chTitle.includes("dance"))) return true;
+  if (c.id === "hook-first" && (chId === "hook-first" || chId === "hook-rush" || chTitle.includes("hook first") || chTitle.includes("hook rush"))) return true;
+  if (c.id === "mood-flip" && (chId === "mood-flip" || chId === "sad-to-dance-challenge" || chTitle.includes("mood flip"))) return true;
+  if (c.id === "genre-passport" && (chId === "genre-passport" || chId === "wrong-genre-party" || chTitle.includes("passport") || chTitle.includes("wrong genre"))) return true;
+  if (c.id === "overheard" && (chId === "overheard" || chTitle.includes("overheard"))) return true;
   if (c.id === "last-photo-song" && (chId === "last-photo-song" || chTitle.includes("photo"))) return true;
   if (c.id === "80s-you" && (chId === "80s-you" || chTitle.includes("80s") || chTitle.includes("80's"))) return true;
   if (c.id === "spell-you" && (chId === "spell-you" || chTitle.includes("spell you") || chTitle.includes("spell-you"))) return true;
@@ -16382,10 +16390,54 @@ function bindDiscoverHubV1Once() {
   });
 }
 
+function bindSparkRecipeChipOnce() {
+  const reroll = els.sparkRecipeReroll;
+  const extra = els.sparkRecipeExtra;
+  if (reroll && reroll.dataset.boundSparkReroll !== "1") {
+    reroll.dataset.boundSparkReroll = "1";
+    reroll.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      rerollActiveSpark();
+    });
+  }
+  if (extra && extra.dataset.boundSparkExtra !== "1") {
+    extra.dataset.boundSparkExtra = "1";
+    extra.addEventListener("input", () => {
+      const roll = _pendingSparkRoll;
+      if (!roll) return;
+      const userText = String(extra.value || "").trim();
+      const nextExtra = { ...(roll.extra || {}), kind: roll.extraKind || roll.extra?.kind || "" };
+      if (nextExtra.kind === "object") {
+        nextExtra.object = userText || nextExtra.object;
+        nextExtra.userNamed = Boolean(userText);
+      } else if (nextExtra.kind === "hook") {
+        nextExtra.hook = userText || nextExtra.hook;
+        nextExtra.userNamed = Boolean(userText);
+      } else if (nextExtra.kind === "reply" || nextExtra.kind === "caption") {
+        nextExtra.userText = userText;
+      }
+      const recipe = getSparkRecipe(roll.sparkId);
+      const prompt = composeSparkIdeaBrief({
+        recipe: { ...recipe, id: roll.sparkId },
+        angle: { id: roll.angleId, text: roll.angle },
+        twist: { id: roll.twistId, text: roll.twist, chip: roll.twistChip },
+        seed: roll.seed,
+        extra: nextExtra,
+        lang: roll.lang,
+      });
+      _pendingSparkRoll = { ...roll, prompt, extra: nextExtra };
+      if (els.sunoPrompt) els.sunoPrompt.value = prompt;
+      try { autoResizeLyricsBox(); } catch {}
+    });
+  }
+}
+
 function bindHomeDeskOnce(page) {
   if (!page || page.dataset.boundHomeDesk === "1") return;
   page.dataset.boundHomeDesk = "1";
   wireHomeDeskSegOnce();
+  bindSparkRecipeChipOnce();
   try {
     bindHumTrackHomeCard(page);
   } catch {}
@@ -20983,7 +21035,7 @@ function challengeDurationStyleClause(challengeId) {
   if (templateUsesLyriaClip()) {
     return lyriaClipDurationStyleClause(id);
   }
-  if (["tiktok-teaser", "hook-rush", "three-word-hook", "arabic-trend-byte"].includes(id)) {
+  if (["tiktok-teaser", "hook-rush", "three-word-hook", "arabic-trend-byte", "hook-first"].includes(id)) {
     return "Short clip under 45 seconds, hook-focused, compact form";
   }
   if (HUM_CHALLENGE_IDS.has(id) || PHOTO_CHALLENGE_IDS.has(id)) {
@@ -20994,7 +21046,7 @@ function challengeDurationStyleClause(challengeId) {
 
 function lyriaClipDurationStyleClause(challengeId) {
   const id = String(challengeId || "").trim();
-  if (["tiktok-teaser", "hook-rush", "three-word-hook", "arabic-trend-byte", "one-line-reply"].includes(id)) {
+  if (["tiktok-teaser", "hook-rush", "three-word-hook", "arabic-trend-byte", "one-line-reply", "hook-first"].includes(id)) {
     return "~28 second hook clip, instant payoff, one chorus loop, natural ending";
   }
   if (id === "whisper-to-hook") {
@@ -55825,6 +55877,7 @@ function collectCreateInputsFromScreen() {
       ? { ..._internationalStyleSlots }
       : { LEAD: "", RHYTHM: "", MOOD: "", BPM: "", KEY: "" },
     ...(_pendingMomentMeta || {}),
+    ...(_pendingSparkMeta || {}),
   });
 }
 
@@ -79912,6 +79965,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
         ...(ideaPromptToSongAlt || lyriaIdeaPayload ? { ideaPrompt: true, ideaBrief: userPrompt } : {}),
         ...(_pendingMomentMeta || {}),
+        ...(_pendingSparkMeta || {}),
         ...(isTemplateSparkLyriaFullFlow()
           ? {
               lyriaModel: "lyria-3.5",
@@ -80050,6 +80104,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ...(photoCoverMeta || {}),
         ...(vibeReadAppliedForNextGen ? { vibeReadApplied: true } : {}),
         ...(_pendingMomentMeta || {}),
+        ...(_pendingSparkMeta || {}),
       };
       const createInputsSnap = collectCreateInputsFromScreen();
       if (useLyriaForThisGenerate() || shelfLyriaFull) {

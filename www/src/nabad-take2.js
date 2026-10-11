@@ -91,6 +91,10 @@ export function normalizeCreateInputs(raw) {
     moment_angle: str(src.moment_angle),
     moment_style: str(src.moment_style),
     moment_trait_used: bool(src.moment_trait_used),
+    spark_angle: str(src.spark_angle),
+    spark_twist: str(src.spark_twist),
+    spark_style: str(src.spark_style),
+    spark_seed: str(src.spark_seed),
   };
 }
 
@@ -101,6 +105,7 @@ const INPUT_KEYS = [
   "beatStability", "avoidTags", "artworkStyle", "voiceProfile",
   "lyricsLanguage", "lyricsDialect", "studioStyleId", "studioFamily", "studioSlots",
   "moment_angle", "moment_style", "moment_trait_used",
+  "spark_angle", "spark_twist", "spark_style", "spark_seed",
 ];
 
 export function createInputsEqual(a, b) {

@@ -3279,6 +3279,20 @@ function parseMomentAdminMeta(detail) {
   };
 }
 
+function parseSparkAdminMeta(detail) {
+  const text = String(detail || "");
+  const line = (key) => {
+    const m = new RegExp(`^${key}:\\s*(.*)$`, "im").exec(text);
+    return m?.[1]?.trim() || "";
+  };
+  const angle = line("spark_angle");
+  const twist = line("spark_twist");
+  const style = line("spark_style");
+  const seed = line("spark_seed");
+  if (!angle && !twist && !style && !seed) return null;
+  return { angle, twist, style, seed };
+}
+
 function parseLyriaRequestDetail(detail) {
   const text = String(detail || "");
   const lineValue = (key) => {
@@ -3458,6 +3472,16 @@ function renderGenerationDetail(data) {
          · Trait used: ${momentMeta.traitUsed ? "yes" : "no"}
        </p>`
     : "";
+  const sparkMeta = parseSparkAdminMeta(g.requestMeta || g.requestDetail || "");
+  const sparkBlock = sparkMeta
+    ? `<div class="detailMetaBlock"><strong>Sparks</strong></div>
+       <p class="sectionNote">
+         Angle: ${escapeHtml(sparkMeta.angle || "—")}
+         · Twist: ${escapeHtml(sparkMeta.twist || "—")}
+         · Style: ${escapeHtml(sparkMeta.style || "—")}
+         · Seed: ${escapeHtml(sparkMeta.seed || "—")}
+       </p>`
+    : "";
 
   const lyriaMeta = parsed;
   const lyriaMetaBlock = g.provider === "lyria"
@@ -3603,6 +3627,7 @@ function renderGenerationDetail(data) {
         ${statCard("Started", fmtDateCompact(g.createdAt), g.taskId ? `${g.taskId.slice(0, 18)}…` : "No task")}
       </div>
       ${momentBlock}
+      ${sparkBlock}
       <div class="detailMetaBlock"><strong>User prompt summary</strong></div>
       ${promptBlock}
       ${lyriaMetaBlock}

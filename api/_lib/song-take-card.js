@@ -37,6 +37,10 @@ const CREATE_INPUT_KEYS = [
   "moment_angle",
   "moment_style",
   "moment_trait_used",
+  "spark_angle",
+  "spark_twist",
+  "spark_style",
+  "spark_seed",
 ];
 
 function svcHeaders(extra) {
@@ -139,6 +143,10 @@ function normalizeCreateInputs(raw) {
     moment_angle: str(src.moment_angle),
     moment_style: str(src.moment_style),
     moment_trait_used: bool(src.moment_trait_used),
+    spark_angle: str(src.spark_angle),
+    spark_twist: str(src.spark_twist),
+    spark_style: str(src.spark_style),
+    spark_seed: str(src.spark_seed),
   };
 }
 
@@ -342,6 +350,10 @@ function buildCreateInputsFromBody(body = {}) {
     moment_angle: body.moment_angle,
     moment_style: body.moment_style,
     moment_trait_used: body.moment_trait_used,
+    spark_angle: body.spark_angle,
+    spark_twist: body.spark_twist,
+    spark_style: body.spark_style,
+    spark_seed: body.spark_seed,
   });
 }
 

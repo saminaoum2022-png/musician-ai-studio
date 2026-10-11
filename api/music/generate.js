@@ -547,6 +547,7 @@ function buildLyriaFullSongAdminExtra({
     ...buildLyriaClipMetaLines(body, lyriaPrompt),
     `arabizi_instruction_used: ${arabiziInstructionUsed ? "true" : "false"}`,
     ...momentAdminMetaLines(body),
+    ...sparkAdminMetaLines(body),
   ];
 }
 
@@ -564,6 +565,22 @@ function momentAdminMetaLines(body = {}) {
     const used = traitRaw === true || traitRaw === 1 || traitRaw === "1" || traitRaw === "true";
     lines.push(`moment_trait_used: ${used ? "true" : "false"}`);
   }
+  return lines;
+}
+
+function sparkAdminMetaLines(body = {}) {
+  const inputs = body?.take2CreateInputs && typeof body.take2CreateInputs === "object"
+    ? body.take2CreateInputs
+    : {};
+  const angle = String(body?.spark_angle || inputs.spark_angle || "").trim();
+  const twist = String(body?.spark_twist || inputs.spark_twist || "").trim();
+  const style = String(body?.spark_style || inputs.spark_style || "").trim();
+  const seed = String(body?.spark_seed || inputs.spark_seed || "").trim();
+  const lines = [];
+  if (angle) lines.push(`spark_angle: ${angle.slice(0, 160)}`);
+  if (twist) lines.push(`spark_twist: ${twist.slice(0, 160)}`);
+  if (style) lines.push(`spark_style: ${style.slice(0, 160)}`);
+  if (seed) lines.push(`spark_seed: ${seed.slice(0, 160)}`);
   return lines;
 }
 

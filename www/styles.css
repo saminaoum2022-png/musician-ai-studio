@@ -10307,6 +10307,50 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 .createChallengeHint--live{
   border-color: rgba(250,204,21,0.22);
 }
+.sparkRecipeChipRow{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.sparkRecipeChipRow[hidden]{ display: none !important; }
+.sparkRecipeChip{
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: rgba(232,236,247,0.88);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.sparkRecipeReroll{
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(124,92,255,0.16);
+  color: #efe7ff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sparkRecipeExtra{
+  flex: 1 1 140px;
+  min-width: 120px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  color: #fff;
+  padding: 0 12px;
+  font-size: 12px;
+}
+.sparkRecipeExtra[hidden]{ display: none !important; }
 .addressPills--two{
   grid-template-columns: repeat(2, 1fr);
 }

@@ -84450,7 +84450,7 @@ function scrollCreatePanelAboveKeyboard(field) {
 function isCreateLyricsKeyboardField(field) {
   const el = field || _createFocusedField || document.activeElement;
   if (!el || !el.closest) return false;
-  return Boolean(el.closest("#lyricsFieldPanel"));
+  return Boolean(el.closest("#sunoPrompt, .lyricsBoxMain"));
 }
 
 function isCreateCustomStyleField(field) {
@@ -84464,12 +84464,12 @@ function syncCreateKeyboardStyleVisibility() {
     document.body.classList.remove("createLyricsKeyboard");
     return;
   }
-  const lyricsFocus = _createLyricsKeyboardIntent || isCreateLyricsKeyboardField();
   const customFocus = isCreateCustomStyleField();
   const kbOpen = document.body.classList.contains("createKeyboardOpen");
-  // iOS often raises the keyboard before focusin. Hide the style rail unless
-  // they are clearly typing a Custom style, so the old compact row never flashes.
-  const hide = lyricsFocus || (kbOpen && !customFocus);
+  // Hide the rail only while the lyrics keyboard is up, or the instant after
+  // they tap the lyrics box (before iOS reports the keyboard). A tap on the
+  // AI-lyrics / singer row must not keep styles invisible after the keyboard is down.
+  const hide = customFocus ? false : (kbOpen || _createLyricsKeyboardIntent);
   document.body.classList.toggle("createLyricsKeyboard", hide);
 }
 
@@ -84647,7 +84647,7 @@ function wireCreatePageKeyboardOnce() {
     root.addEventListener("pointerdown", (e) => {
       if (isCreateSimpleCreateLayout()) {
         const t = e.target;
-        if (t?.closest?.("#sunoPrompt, .lyricsBoxMain, .lyricsBox")) {
+        if (t?.closest?.("#sunoPrompt, .lyricsBoxMain")) {
           _createIgnoreAutofocus = false;
           if (!document.body.classList.contains("createLyricsKeyboard")) {
             _createLyricsKeyboardIntent = true;
@@ -84655,8 +84655,20 @@ function wireCreatePageKeyboardOnce() {
           }
           return;
         }
-        if (t?.closest?.("#lyricsFieldPanel") || isCreateFormField(t)) {
+        if (isCreateFormField(t)) {
           _createIgnoreAutofocus = false;
+          return;
+        }
+        if (t?.closest?.("#lyricsFieldPanel")) {
+          _createIgnoreAutofocus = true;
+          _createLyricsKeyboardIntent = false;
+          cancelCreateLyricsAutofocus();
+          const active = document.activeElement;
+          if (active && isCreateFormField(active)) {
+            try { active.blur(); } catch {}
+            try { getNativeKeyboardPlugin()?.hide?.(); } catch {}
+          }
+          try { syncCreateKeyboardStyleVisibility(); } catch {}
           return;
         }
         _createIgnoreAutofocus = true;

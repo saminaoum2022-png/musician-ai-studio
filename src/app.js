@@ -84225,14 +84225,11 @@ function syncCreateSimpleViewportHeight() {
   }
   const pluginKb = _createKeyboardHeight > 0 ? _createKeyboardHeight : 0;
   const layoutH = window.innerHeight;
-  const vv = window.visualViewport;
-  const visibleBottom = vv ? Math.round(vv.offsetTop + vv.height) : layoutH;
-  const fromViewport = Math.max(0, layoutH - visibleBottom);
   let dockBottom;
-  if (pluginKb > 0) {
-    // Overlay keyboard: visualViewport shrinks, innerHeight stays. resizes-content:
-    // innerHeight already excludes the keyboard. First frame often has neither yet.
-    dockBottom = (fromViewport >= 80 ? fromViewport : pluginKb) + CREATE_SIMPLE_STACK_GAP;
+  if (pluginKb > 80) {
+    // Lock to the plugin height. visualViewport moves during the iOS keyboard
+    // animation and restamping from it makes the lyrics card flicker.
+    dockBottom = pluginKb + CREATE_SIMPLE_STACK_GAP;
   } else {
     const tb = document.querySelector(".mobileTabbar");
     const r = tb?.getBoundingClientRect?.();
@@ -84396,6 +84393,16 @@ let _createKeyboardInsetLast = 0;
 let _createKeyboardViewportRaf = 0;
 let _createMobileWebKbTimer = 0;
 let _createMobileWebKbTimer2 = 0;
+let _createKbAnimTimer = 0;
+
+function markCreateKeyboardAnimating() {
+  document.body.classList.add("createKbAnimating");
+  if (_createKbAnimTimer) clearTimeout(_createKbAnimTimer);
+  _createKbAnimTimer = window.setTimeout(() => {
+    document.body.classList.remove("createKbAnimating");
+    _createKbAnimTimer = 0;
+  }, 340);
+}
 
 function getCreatePageRoot() {
   return document.querySelector('.card.wide[data-route="generate"]');
@@ -84478,16 +84485,10 @@ function applyCreateKeyboardOpen(height) {
   let kb = Math.max(0, Math.round(Number(height) || 0));
   if (!kb) kb = measureCreateViewportKeyboardInset();
   if (kb < 80) return;
-  const insetChanged = Math.abs(kb - _createKeyboardInsetLast) > 80;
-  if (document.body.classList.contains("createKeyboardOpen") && _createKeyboardInsetLast > 0 && !insetChanged) {
-    syncCreateComposeLayout();
-    try { autoResizeLyricsBox(); } catch {}
-    try { syncCreateKeyboardStyleVisibility(); } catch {}
-    window.requestAnimationFrame(() => {
-      try { syncCreateSimpleViewportHeight(); } catch {}
-    });
-    return;
-  }
+  const alreadyOpen = document.body.classList.contains("createKeyboardOpen");
+  const insetChanged = Math.abs(kb - _createKeyboardInsetLast) > 24;
+  if (alreadyOpen && _createKeyboardInsetLast > 0 && !insetChanged) return;
+  markCreateKeyboardAnimating();
   _createKeyboardHeight = kb;
   _createKeyboardInsetLast = kb;
   if (isCreateSimpleCreateLayout() && !isCreateCustomStyleField()) {
@@ -84506,11 +84507,6 @@ function applyCreateKeyboardOpen(height) {
   } catch {}
   syncCreateComposeLayout();
   try { autoResizeLyricsBox(); } catch {}
-  try { refreshSimpleStudioKeyboardRow(); } catch {}
-  window.requestAnimationFrame(() => {
-    try { syncCreateSimpleViewportHeight(); } catch {}
-    try { refreshSimpleStudioKeyboardRow(); } catch {}
-  });
 }
 
 function scheduleCreateKeyboardScroll() {
@@ -84536,6 +84532,13 @@ function scheduleCreateMobileWebKeyboardSync() {
 }
 
 function clearCreatePageKeyboardInset() {
+  const alreadyClear = !document.body.classList.contains("createKeyboardOpen")
+    && !document.body.classList.contains("createLyricsKeyboard")
+    && !_createKeyboardHeight
+    && !_createLyricsKeyboardIntent
+    && !_createFocusedField;
+  if (alreadyClear) return;
+  markCreateKeyboardAnimating();
   _createFocusedField = null;
   _createLyricsKeyboardIntent = false;
   _createKeyboardHeight = 0;
@@ -84651,6 +84654,7 @@ function wireCreatePageKeyboardOnce() {
           _createIgnoreAutofocus = false;
           if (!document.body.classList.contains("createLyricsKeyboard")) {
             _createLyricsKeyboardIntent = true;
+            markCreateKeyboardAnimating();
             try { syncCreateKeyboardStyleVisibility(); } catch {}
           }
           return;
@@ -84662,6 +84666,7 @@ function wireCreatePageKeyboardOnce() {
         if (t?.closest?.("#lyricsFieldPanel")) {
           _createIgnoreAutofocus = true;
           _createLyricsKeyboardIntent = false;
+          markCreateKeyboardAnimating();
           cancelCreateLyricsAutofocus();
           const active = document.activeElement;
           if (active && isCreateFormField(active)) {

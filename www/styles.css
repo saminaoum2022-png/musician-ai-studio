@@ -12917,13 +12917,6 @@ body[data-route="generate"] .studioStyleTile.isActive .studioStyleTileName{
   font-weight: 650;
   cursor: pointer;
 }
-body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard:not(.createKeyboardOpen) #createSimpleStudioHost:not([hidden]){
-  visibility: hidden;
-  pointer-events: none;
-}
-body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard.createKeyboardOpen #createSimpleStudioHost:not([hidden]){
-  display: none !important;
-}
 body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createSimpleStudioHost:not([hidden]){
   margin-top: 0;
   padding: 2px 0 4px;
@@ -13436,13 +13429,23 @@ html:not([data-theme="light"]) .createLyricsAttachMenu{
 }
 body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost:not([hidden]){
   display: block;
+  overflow: hidden;
+  max-height: 200px;
+  opacity: 1;
 }
-body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard:not(.createKeyboardOpen) #createSimpleStudioHost:not([hidden]){
-  visibility: hidden;
+body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createSimpleStudioHost:not([hidden]){
+  max-height: 0;
+  opacity: 0;
+  margin: 0;
+  padding: 0;
   pointer-events: none;
 }
-body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard.createKeyboardOpen #createSimpleStudioHost:not([hidden]){
-  display: none !important;
+body[data-route="generate"][data-create-layout="simple"].createKbAnimating #createSimpleStudioHost:not([hidden]){
+  transition:
+    max-height 280ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 180ms ease,
+    margin 280ms cubic-bezier(0.32, 0.72, 0, 1),
+    padding 280ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 #createSimpleStudioHost[hidden]{
   display: none !important;
@@ -24425,15 +24428,22 @@ body.trackSheetOpen .footer{
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel{
     background: var(--surface-panel);
   }
-  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard:not(.createKeyboardOpen) #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
-    visibility: hidden;
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKbAnimating #createFlow.createComposeStack{
+    transition: height 280ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKbAnimating #createGenerateDock,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKbAnimating.createKeyboardOpen #createGenerateDock{
+    transition: bottom 280ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
+    max-height: 0;
+    opacity: 0;
+    margin: 0;
+    padding: 0;
     pointer-events: none;
   }
-  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createLyricsKeyboard.createKeyboardOpen #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
-    display: none !important;
-  }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
-    padding: 2px 0 4px;
+    padding: 0;
   }
   /* Advanced sound panel + generate step take no room in Simple; the dock floats. */
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack > .createFlowStep[aria-label="Sound and title"]{

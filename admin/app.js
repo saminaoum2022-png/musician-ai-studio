@@ -675,6 +675,7 @@ const SUPPORT_TEMPLATE_LABELS = Object.freeze({
   cancel_confirm: "Cancel confirm",
   trial_canceled: "Trial canceled",
   refund_confirm: "Refund confirm",
+  pro_credits_update: "Credits — 1 November update",
 });
 
 function supportTemplateLabel(id) {
@@ -4695,6 +4696,7 @@ function supportTemplateShortLabel(id) {
     cancel_confirm: "Cancel confirm",
     trial_canceled: "Trial canceled",
     refund_confirm: "Refund",
+    pro_credits_update: "Credits 1 Nov",
     custom_compose: "Compose",
   };
   return map[String(id || "").trim()] || String(id || "Email");
@@ -4898,19 +4900,23 @@ function renderSupportSent(data) {
 const COMPOSE_TEMPLATES = Object.freeze([
   {
     id: "pro_credits_update",
-    label: "Pro members — credits update",
-    subject: "🎶 A quick update about your credits",
+    label: "Credits — 1 November update",
+    subject: "A quick update about your credits",
     text: `Dear {{name}},
 
-We're always working to make NabadAi better for you, and we're so happy to have you with us as a Pro member. 💛
+We're always working to make NabadAi better for you, and we're so happy to have you with us as a Pro member.
 
-A quick update about your credits: from 1 November 2026, the credits included with your plan refresh each billing period.
+A quick update about your credits: from your first renewal on or after 1 November 2026, the credits included with your plan refresh each billing period.
 
 And because you're one of our valued members, the credits you have today are yours to keep. We won't take them away.
 
-You can always see your balance on the Credits page in the app.
+Until that renewal, nothing changes for you. After it, each period starts with a fresh set of included Pro credits, and unused included credits from that period don't carry over.
 
-Keep making music, and thank you for being part of NabadAi! 🎵
+You can always see your balance on the Credits page in the app. Full details are in our Terms: https://www.nabadai.com/terms.html
+
+Keep making music, and thank you for being part of NabadAi.
+
+If you have any questions, just reply to this email.
 
 — The NabadAi team`,
   },

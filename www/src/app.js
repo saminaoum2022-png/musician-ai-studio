@@ -81746,7 +81746,9 @@ let _studioRowKbMeasureTries = 0;
 let _studioRowKbActive = false;
 
 function isCreateKeyboardStyleRow() {
-  return document.body.classList.contains("createKeyboardOpen") && isCreateSimpleCreateLayout();
+  return document.body.classList.contains("createKeyboardOpen")
+    && isCreateSimpleCreateLayout()
+    && !document.body.classList.contains("createCustomStyleKeyboard");
 }
 
 function measureKeyboardStudioExtraSlots() {
@@ -81778,7 +81780,8 @@ function keyboardStudioRowFillPresets(tab, home) {
 }
 
 function refreshSimpleStudioKeyboardRow() {
-  if (document.body.classList.contains("createLyricsKeyboard")) {
+  if (document.body.classList.contains("createLyricsKeyboard")
+    || document.body.classList.contains("createCustomStyleKeyboard")) {
     const wasKb = _studioRowKbActive || _studioRowKbExtraSlots > 0;
     _studioRowKbExtraSlots = 0;
     _studioRowKbMeasureTries = 0;
@@ -84309,6 +84312,7 @@ function lyricsBoxEmptyBaseHeight() {
 
 let _createIgnoreAutofocus = false;
 let _createLyricsKeyboardIntent = false;
+let _createCustomStyleKeyboardIntent = false;
 let _createLyricsAutofocusTimers = [];
 function cancelCreateLyricsAutofocus() {
   for (const id of _createLyricsAutofocusTimers) clearTimeout(id);
@@ -84607,16 +84611,21 @@ function isCreateCustomStyleField(field) {
 
 function syncCreateKeyboardStyleVisibility() {
   if (!isCreateSimpleCreateLayout()) {
-    document.body.classList.remove("createLyricsKeyboard");
+    document.body.classList.remove("createLyricsKeyboard", "createCustomStyleKeyboard");
     return;
   }
   const customFocus = isCreateCustomStyleField();
+  const customMode = document.body.classList.contains("hasCreateCustomStyle");
   const kbOpen = document.body.classList.contains("createKeyboardOpen");
   // Hide the rail only while the lyrics keyboard is up, or the instant after
   // they tap the lyrics box (before iOS reports the keyboard). A tap on the
   // AI-lyrics / singer row must not keep styles invisible after the keyboard is down.
-  const hide = customFocus ? false : (kbOpen || _createLyricsKeyboardIntent);
+  const hide = (customFocus || _createCustomStyleKeyboardIntent)
+    ? false
+    : (kbOpen || _createLyricsKeyboardIntent);
   document.body.classList.toggle("createLyricsKeyboard", hide);
+  const hideCustomRail = customMode && (customFocus || _createCustomStyleKeyboardIntent);
+  document.body.classList.toggle("createCustomStyleKeyboard", hideCustomRail);
 }
 
 function applyCreateKeyboardOpen(height) {
@@ -84630,7 +84639,7 @@ function applyCreateKeyboardOpen(height) {
   markCreateKeyboardAnimating();
   _createKeyboardHeight = kb;
   _createKeyboardInsetLast = kb;
-  if (isCreateSimpleCreateLayout() && !isCreateCustomStyleField()) {
+  if (isCreateSimpleCreateLayout() && !isCreateCustomStyleField() && !_createCustomStyleKeyboardIntent) {
     document.body.classList.add("createLyricsKeyboard");
   }
   document.body.classList.add("createKeyboardOpen");
@@ -84671,15 +84680,20 @@ function scheduleCreateMobileWebKeyboardSync() {
 }
 
 function clearCreatePageKeyboardInset() {
+  const wasCustomKb = document.body.classList.contains("createCustomStyleKeyboard")
+    || _createCustomStyleKeyboardIntent;
   const alreadyClear = !document.body.classList.contains("createKeyboardOpen")
     && !document.body.classList.contains("createLyricsKeyboard")
+    && !document.body.classList.contains("createCustomStyleKeyboard")
     && !_createKeyboardHeight
     && !_createLyricsKeyboardIntent
+    && !_createCustomStyleKeyboardIntent
     && !_createFocusedField;
   if (alreadyClear) return;
   markCreateKeyboardAnimating();
   _createFocusedField = null;
   _createLyricsKeyboardIntent = false;
+  _createCustomStyleKeyboardIntent = false;
   _createKeyboardHeight = 0;
   _createKeyboardInsetLast = 0;
   if (_createKeyboardScrollTimer) {
@@ -84698,7 +84712,7 @@ function clearCreatePageKeyboardInset() {
     cancelAnimationFrame(_createKeyboardViewportRaf);
     _createKeyboardViewportRaf = 0;
   }
-  document.body.classList.remove("createKeyboardOpen", "createLyricsKeyboard");
+  document.body.classList.remove("createKeyboardOpen", "createLyricsKeyboard", "createCustomStyleKeyboard");
   try {
     document.documentElement.style.setProperty("--create-keyboard-inset", "0px");
   } catch {}
@@ -84710,8 +84724,10 @@ function clearCreatePageKeyboardInset() {
   });
   syncCreateComposeLayout();
   try { autoResizeLyricsBox(); } catch {}
-  try { refreshSimpleStudioKeyboardRow(); } catch {}
-  try { renderLyriaStudioStyleRow(); } catch {}
+  if (!wasCustomKb) {
+    try { refreshSimpleStudioKeyboardRow(); } catch {}
+    try { renderLyriaStudioStyleRow(); } catch {}
+  }
 }
 
 function handleCreateFieldFocus(target) {
@@ -84723,6 +84739,8 @@ function handleCreateFieldFocus(target) {
   _createFocusedField = target;
   if (isCreateSimpleCreateLayout()) {
     const lyrics = isCreateLyricsKeyboardField(target);
+    const customStyle = isCreateCustomStyleField(target)
+      && document.body.classList.contains("hasCreateCustomStyle");
     if (lyrics && target === els.sunoPrompt) {
       try {
         const pos = target.selectionEnd ?? String(target.value || "").length;
@@ -84731,8 +84749,18 @@ function handleCreateFieldFocus(target) {
         }
       } catch {}
     }
+    const wasLyrics = document.body.classList.contains("createLyricsKeyboard");
+    const wasCustom = document.body.classList.contains("createCustomStyleKeyboard");
     _createLyricsKeyboardIntent = lyrics;
+    _createCustomStyleKeyboardIntent = customStyle;
+    if (lyrics) _createCustomStyleKeyboardIntent = false;
+    if (customStyle) _createLyricsKeyboardIntent = false;
     try { syncCreateKeyboardStyleVisibility(); } catch {}
+    const nowLyrics = document.body.classList.contains("createLyricsKeyboard");
+    const nowCustom = document.body.classList.contains("createCustomStyleKeyboard");
+    if (wasLyrics !== nowLyrics || wasCustom !== nowCustom) {
+      markCreateKeyboardAnimating();
+    }
     const alreadyOpen = document.body.classList.contains("createKeyboardOpen")
       && document.body.classList.contains("createLyricsKeyboard");
     if (!alreadyOpen) {
@@ -84792,8 +84820,20 @@ function wireCreatePageKeyboardOnce() {
         const t = e.target;
         if (t?.closest?.("#sunoPrompt, .lyricsBoxMain")) {
           _createIgnoreAutofocus = false;
+          _createCustomStyleKeyboardIntent = false;
           if (!document.body.classList.contains("createLyricsKeyboard")) {
             _createLyricsKeyboardIntent = true;
+            markCreateKeyboardAnimating();
+            try { syncCreateKeyboardStyleVisibility(); } catch {}
+          }
+          return;
+        }
+        if (t?.closest?.("#createSoundCustomFields, #sunoStyle")
+          && document.body.classList.contains("hasCreateCustomStyle")) {
+          _createIgnoreAutofocus = false;
+          if (!document.body.classList.contains("createCustomStyleKeyboard")) {
+            _createCustomStyleKeyboardIntent = true;
+            _createLyricsKeyboardIntent = false;
             markCreateKeyboardAnimating();
             try { syncCreateKeyboardStyleVisibility(); } catch {}
           }
@@ -84806,6 +84846,7 @@ function wireCreatePageKeyboardOnce() {
         if (t?.closest?.("#lyricsFieldPanel")) {
           _createIgnoreAutofocus = true;
           _createLyricsKeyboardIntent = false;
+          _createCustomStyleKeyboardIntent = false;
           markCreateKeyboardAnimating();
           cancelCreateLyricsAutofocus();
           const active = document.activeElement;

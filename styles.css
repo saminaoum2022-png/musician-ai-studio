@@ -12762,6 +12762,11 @@ body[data-route="generate"][data-create-layout="advanced"] .createSimpleStudioTo
   justify-content: space-between;
   margin-bottom: 6px;
 }
+body[data-route="generate"][data-create-layout="simple"] .createSimpleStudioToolbar{
+  overflow: hidden;
+  max-height: 44px;
+  opacity: 1;
+}
 body[data-route="generate"][data-create-layout="simple"] .createSimpleStudioToolbar[hidden],
 body[data-route="generate"][data-create-layout="advanced"] .createSimpleStudioToolbar[hidden]{
   display: none !important;
@@ -12791,6 +12796,10 @@ body[data-route="generate"][data-create-layout="advanced"] #createSoundPanel .ly
   padding: 12px 0 4px;
   gap: 12px;
   overflow: hidden;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .lyriaStudioStyleRow{
+  max-height: 180px;
+  opacity: 1;
 }
 body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .lyriaStudioStyleRowTrack,
 body[data-route="generate"][data-create-layout="advanced"] #createSoundPanel .lyriaStudioStyleRowTrack{
@@ -12975,40 +12984,40 @@ body[data-route="generate"] .studioStyleTile.isActive .studioStyleTileName{
   font-weight: 650;
   cursor: pointer;
 }
-body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createSimpleStudioHost:not([hidden]){
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen:not(.createCustomStyleKeyboard) #createSimpleStudioHost:not([hidden]){
   margin-top: 0;
   padding: 2px 0 4px;
 }
-body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .createSimpleStudioToolbar{
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen:not(.createCustomStyleKeyboard) .createSimpleStudioToolbar{
   margin-bottom: 2px;
 }
-body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .createSimpleStyleTab{
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen:not(.createCustomStyleKeyboard) .createSimpleStyleTab{
   padding-bottom: 4px;
   font-size: 13px;
 }
-body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .createSimpleAllStyles{
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen:not(.createCustomStyleKeyboard) .createSimpleAllStyles{
   display: none !important;
 }
-body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createSimpleStudioHost .lyriaStudioStyleRow{
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen:not(.createCustomStyleKeyboard) #createSimpleStudioHost .lyriaStudioStyleRow{
   padding: 4px 0 0;
   gap: 6px;
   mask-image: none;
   -webkit-mask-image: none;
 }
-body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .studioStyleTile,
-body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .studioStyleTileCover{
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen:not(.createCustomStyleKeyboard) .studioStyleTile,
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen:not(.createCustomStyleKeyboard) .studioStyleTileCover{
   width: 56px;
 }
-body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .studioStyleTileCover{
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen:not(.createCustomStyleKeyboard) .studioStyleTileCover{
   height: 56px;
   border-radius: 12px;
 }
-body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .studioStyleTileName{
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen:not(.createCustomStyleKeyboard) .studioStyleTileName{
   margin-top: 4px;
   font-size: 10px;
   -webkit-line-clamp: 1;
 }
-body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .studioStyleTileGear{
+body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen:not(.createCustomStyleKeyboard) .studioStyleTileGear{
   width: 22px;
   height: 22px;
 }
@@ -13506,6 +13515,31 @@ body[data-route="generate"][data-create-layout="simple"].createKbAnimating #crea
   transition:
     max-height 280ms cubic-bezier(0.32, 0.72, 0, 1),
     opacity 180ms ease,
+    margin 280ms cubic-bezier(0.32, 0.72, 0, 1),
+    padding 280ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard .createSimpleStudioToolbar{
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+  pointer-events: none;
+}
+body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard #createSimpleStudioHost .lyriaStudioStyleRow{
+  max-height: 0;
+  opacity: 0;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+}
+body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard.hasCreateCustomStyle #createSoundCustomFields{
+  margin-top: 0;
+}
+body[data-route="generate"][data-create-layout="simple"].createKbAnimating .createSimpleStudioToolbar,
+body[data-route="generate"][data-create-layout="simple"].createKbAnimating #createSimpleStudioHost .lyriaStudioStyleRow,
+body[data-route="generate"][data-create-layout="simple"].createKbAnimating.hasCreateCustomStyle #createSoundCustomFields{
+  transition:
+    max-height 280ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 200ms ease,
     margin 280ms cubic-bezier(0.32, 0.72, 0, 1),
     padding 280ms cubic-bezier(0.32, 0.72, 0, 1);
 }
@@ -24510,6 +24544,31 @@ body.trackSheetOpen .footer{
     margin: 0;
     padding: 0;
     pointer-events: none;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard .createSimpleStudioToolbar{
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0;
+    pointer-events: none;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard #createFlow.createComposeStack #createSimpleStudioHost .lyriaStudioStyleRow{
+    max-height: 0;
+    opacity: 0;
+    margin: 0;
+    padding: 0;
+    pointer-events: none;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard.hasCreateCustomStyle #createSoundCustomFields{
+    margin-top: 0;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKbAnimating .createSimpleStudioToolbar,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKbAnimating #createFlow.createComposeStack #createSimpleStudioHost .lyriaStudioStyleRow,
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKbAnimating.hasCreateCustomStyle #createSoundCustomFields{
+    transition:
+      max-height 280ms cubic-bezier(0.32, 0.72, 0, 1),
+      opacity 200ms ease,
+      margin 280ms cubic-bezier(0.32, 0.72, 0, 1),
+      padding 280ms cubic-bezier(0.32, 0.72, 0, 1);
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
     padding: 0;

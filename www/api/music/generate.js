@@ -238,13 +238,6 @@ function buildLyriaClipMetaLines(body, lyriaPrompt) {
   } else if (vocalGender === "duo") {
     lines.push("Singer: Duet");
   }
-  const chain = body?.nabadVocalChain || body?.nabadVocalToggles;
-  if (chain && typeof chain === "object") {
-    const on = Object.keys(chain).filter((k) => chain[k]).join(",") || "none";
-    lines.push(`nabadVocalChain: ${on}`);
-  } else {
-    lines.push("nabadVocalChain: defaults");
-  }
   if (/Nabad identity/i.test(String(lyriaPrompt || ""))) {
     lines.push("vocalIdentity: nabad_signature");
   }
@@ -377,7 +370,6 @@ function buildLyriaPromptFromBody(body, extra = {}) {
     photoMood: photoImages.length > 0,
     durationSec: resolveLyriaDurationSec(body),
     scriptFormat: extra.scriptFormat ?? String(body?.scriptFormat || "").trim(),
-    nabadVocalToggles: extra.nabadVocalToggles ?? body?.nabadVocalChain ?? body?.nabadVocalToggles ?? null,
     useNabadVocalIdentity: extra.useNabadVocalIdentity !== false,
     prepBody: body,
   });
@@ -789,7 +781,6 @@ async function runLyriaGenerationJob({
           photoMood: photoImages.length > 0,
           durationSec,
           scriptFormat: String(body?.scriptFormat || "").trim(),
-          nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
         });
       }
     }
@@ -985,7 +976,6 @@ async function runLyriaClipGenerationJob({
           photoMood: photoImages.length > 0,
           durationSec: resolveLyriaDurationSec(body),
           scriptFormat: String(body?.scriptFormat || "").trim(),
-          nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
         });
       }
     }
@@ -1169,7 +1159,6 @@ async function runElevenlabsGenerationJob({
         : null;
     const vocalGender = String(body?.vocalGender || "").trim();
     const voiceTimbre = String(body?.voiceTimbre || "").trim();
-    const nabadVocalToggles = body?.nabadVocalChain || body?.nabadVocalToggles || null;
     const dialectHint = mergeLyriaDialectHint(body);
     const scriptFormat = String(body?.scriptFormat || "").trim();
     const isSongInpaint = Boolean(editCompositionPlan);
@@ -1216,7 +1205,6 @@ async function runElevenlabsGenerationJob({
           negativeTags: body?.negativeTags,
           vocalGender,
           voiceTimbre,
-          nabadVocalToggles,
           dialectHint,
           scriptFormat,
           useNabadVocalIdentity: false,
@@ -1260,7 +1248,6 @@ async function runElevenlabsGenerationJob({
       producerChunks,
       vocalGender,
       voiceTimbre,
-      nabadVocalToggles,
       dialectHint,
       scriptFormat,
     });
@@ -1290,7 +1277,6 @@ async function runElevenlabsGenerationJob({
         negativeTags: body?.negativeTags,
         vocalGender,
         voiceTimbre,
-        nabadVocalToggles,
         dialectHint,
         scriptFormat,
       });
@@ -1307,7 +1293,6 @@ async function runElevenlabsGenerationJob({
         title,
         instrumental,
         vocalGender,
-        nabadVocalToggles,
         dialectHint,
         scriptFormat,
       });
@@ -2230,7 +2215,6 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
         title,
         instrumental,
         vocalGender: String(body?.vocalGender || "").trim(),
-        nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
         dialectHint: mergeLyriaDialectHint(body),
         scriptFormat: String(body?.scriptFormat || "").trim(),
       })
@@ -2458,7 +2442,6 @@ async function runMurekaGenerationJob({
         producerResult.ok ? "geminiProducer: on (lyria compact)" : "geminiProducer: off",
         `mureka_lyrics: ${murekaLyricsPrep.charCount} chars, ${murekaLyricsPrep.byteCount || "?"} bytes / ${MUREKA_LYRICS_MAX_CHARS}${murekaLyricsPrep.truncated ? " truncated" : ""}`,
         `mureka_prompt_chars: ${murekaPromptPrep.charCount}/${MUREKA_PROMPT_MAX_CHARS}${murekaPromptPrep.truncated ? " truncated" : ""}`,
-        "nabadVocalChain: off (mureka)",
       ].filter(Boolean).join("\n"),
     });
   } catch (e) {

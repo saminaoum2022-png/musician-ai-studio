@@ -1,46 +1,7 @@
 /**
- * NabadAi Signature Vocal Identity — Lyria 3.5 prompt layers.
- * Admin A/B toggles control the audio FX chain; gender × language picks the vocal matrix.
- * Standard users get the active default chain (all FX on) without seeing controls.
+ * NabadAi Signature Vocal Identity — Lyria / ElevenLabs singer profile only.
+ * Audio FX chain (Auto-Tune, reverb, doubles) was removed.
  */
-
-const NABAD_VOCAL_FX = Object.freeze({
-  auto_tune:
-    "polished modern pitch-correction with subtle digital Auto-Tune effect on sustained notes",
-  analog_saturation:
-    "warm analog tube saturation, heavily compressed lead vocal tightly glued to the beat",
-  reverb_delay:
-    "wet vocal mix drenched in lush plate reverb and wide stereo delay trails",
-  double_tracking:
-    "double-tracked lead vocal with stereo-widened backing harmony layers",
-  vocal_texture:
-    "subtle vocal fry and expressive phrasing texture at phrase endings",
-});
-
-/** Short ElevenLabs positive_styles for each FX toggle (chunk-friendly). */
-const NABAD_VOCAL_FX_ELEVEN_TAGS = Object.freeze({
-  auto_tune: [
-    "polished modern pitch-correction",
-    "subtle digital Auto-Tune on sustained notes",
-  ],
-  analog_saturation: [
-    "warm analog tube saturation",
-    "heavily compressed lead vocal glued to the beat",
-  ],
-  reverb_delay: [
-    "wet vocal mix",
-    "lush plate reverb",
-    "wide stereo delay trails",
-  ],
-  double_tracking: [
-    "double-tracked lead vocal",
-    "stereo-widened backing harmony layers",
-  ],
-  vocal_texture: [
-    "subtle vocal fry at phrase endings",
-    "expressive phrasing texture",
-  ],
-});
 
 const NABAD_VOCAL_MATRIX_ELEVEN_TAGS = Object.freeze({
   male_ar: [
@@ -71,17 +32,6 @@ const NABAD_VOCAL_MATRIX_ELEVEN_TAGS = Object.freeze({
     "soft vibrato",
     "layered harmonies",
   ],
-});
-
-const NABAD_VOCAL_FX_KEYS = Object.freeze(Object.keys(NABAD_VOCAL_FX));
-
-/** Default signature chain — on for everyone until admin toggles for A/B. */
-const NABAD_VOCAL_FX_DEFAULTS = Object.freeze({
-  auto_tune: true,
-  analog_saturation: true,
-  reverb_delay: true,
-  double_tracking: true,
-  vocal_texture: true,
 });
 
 const NABAD_VOCAL_MATRIX = Object.freeze({
@@ -140,47 +90,22 @@ function resolveNabadVocalLanguage({
   return "en";
 }
 
-function normalizeNabadVocalToggles(raw) {
-  const src = raw && typeof raw === "object" ? raw : {};
-  const out = { ...NABAD_VOCAL_FX_DEFAULTS };
-  for (const key of NABAD_VOCAL_FX_KEYS) {
-    if (Object.prototype.hasOwnProperty.call(src, key)) {
-      const v = src[key];
-      out[key] = !(v === false || v === 0 || v === "0" || v === "false" || v === "off");
-    }
-  }
-  return out;
-}
-
 function resolveNabadVocalMatrixKey(gender, language) {
   const g = normalizeNabadGender(gender) || "female";
   const lang = language === "ar" ? "ar" : "en";
   return `${g === "male" ? "male" : "female"}_${lang}`;
 }
 
-function buildNabadVocalFxChain(toggles = NABAD_VOCAL_FX_DEFAULTS) {
-  const on = normalizeNabadVocalToggles(toggles);
-  return NABAD_VOCAL_FX_KEYS
-    .filter((k) => on[k])
-    .map((k) => NABAD_VOCAL_FX[k])
-    .filter(Boolean);
-}
-
 function buildNabadVocalStyleLine({
   gender = "",
   language = "en",
-  toggles = NABAD_VOCAL_FX_DEFAULTS,
 } = {}) {
   const matrixKey = resolveNabadVocalMatrixKey(gender, language);
-  const identity = NABAD_VOCAL_MATRIX[matrixKey] || NABAD_VOCAL_MATRIX.female_en;
-  const fx = buildNabadVocalFxChain(toggles);
-  const bits = [identity];
-  if (fx.length) bits.push(`Audio FX Chain: ${fx.join(", ")}`);
-  return bits.join(" ").replace(/\s+/g, " ").trim();
+  return NABAD_VOCAL_MATRIX[matrixKey] || NABAD_VOCAL_MATRIX.female_en;
 }
 
 /**
- * Build the vocal-direction fragment for Lyria (Layer B + Layer A).
+ * Build the vocal-direction fragment for Lyria (singer identity only).
  * Does not include the user's song prompt — callers merge into musical direction.
  */
 function buildNabadVocalPrompt({
@@ -189,8 +114,6 @@ function buildNabadVocalPrompt({
   lyrics = "",
   dialectHint = "",
   scriptFormat = "",
-  adminToggles = null,
-  toggles = null,
 } = {}) {
   const resolvedLang = resolveNabadVocalLanguage({
     language,
@@ -199,23 +122,19 @@ function buildNabadVocalPrompt({
     scriptFormat,
   });
   const resolvedGender = normalizeNabadGender(gender) || "female";
-  const chain = normalizeNabadVocalToggles(adminToggles || toggles || NABAD_VOCAL_FX_DEFAULTS);
   return {
     styleLine: buildNabadVocalStyleLine({
       gender: resolvedGender,
       language: resolvedLang,
-      toggles: chain,
     }),
     gender: resolvedGender,
     language: resolvedLang,
     matrixKey: resolveNabadVocalMatrixKey(resolvedGender, resolvedLang),
-    toggles: chain,
-    fxEnabled: NABAD_VOCAL_FX_KEYS.filter((k) => chain[k]),
   };
 }
 
 /**
- * ElevenLabs-friendly short positive_styles from the same Nabad identity + FX chain.
+ * ElevenLabs-friendly short positive_styles from the Nabad singer identity.
  */
 function buildNabadVocalElevenTags({
   gender = "",
@@ -223,8 +142,6 @@ function buildNabadVocalElevenTags({
   lyrics = "",
   dialectHint = "",
   scriptFormat = "",
-  adminToggles = null,
-  toggles = null,
 } = {}) {
   const built = buildNabadVocalPrompt({
     gender,
@@ -232,13 +149,9 @@ function buildNabadVocalElevenTags({
     lyrics,
     dialectHint,
     scriptFormat,
-    adminToggles,
-    toggles,
   });
   const matrixTags = NABAD_VOCAL_MATRIX_ELEVEN_TAGS[built.matrixKey] || NABAD_VOCAL_MATRIX_ELEVEN_TAGS.female_en;
-  const fxTags = NABAD_VOCAL_FX_KEYS.filter((k) => built.toggles[k])
-    .flatMap((k) => NABAD_VOCAL_FX_ELEVEN_TAGS[k] || []);
-  const tags = [...matrixTags, ...fxTags].map((t) => String(t).trim()).filter(Boolean);
+  const tags = matrixTags.map((t) => String(t).trim()).filter(Boolean);
   return {
     ...built,
     tags: [...new Set(tags)],
@@ -251,25 +164,19 @@ function mergeNabadVocalIntoStylePrompt(stylePrompt = "", nabadOpts = {}) {
   const base = String(stylePrompt || "").trim();
   if (!built.styleLine) return base;
   if (!base) return built.styleLine;
-  if (base.includes("Nabad identity") || base.includes("Audio FX Chain:")) return base;
+  if (base.includes("Nabad identity")) return base;
   return `${base}. ${built.styleLine}`.replace(/\s+/g, " ").trim().slice(0, 2000);
 }
 
 module.exports = {
-  NABAD_VOCAL_FX,
-  NABAD_VOCAL_FX_KEYS,
-  NABAD_VOCAL_FX_DEFAULTS,
-  NABAD_VOCAL_FX_ELEVEN_TAGS,
   NABAD_VOCAL_MATRIX,
   NABAD_VOCAL_MATRIX_ELEVEN_TAGS,
-  buildNabadVocalFxChain,
   buildNabadVocalPrompt,
   buildNabadVocalElevenTags,
   buildNabadVocalStyleLine,
   mergeNabadVocalIntoStylePrompt,
   normalizeNabadGender,
   normalizeNabadLanguage,
-  normalizeNabadVocalToggles,
   resolveNabadVocalLanguage,
   resolveNabadVocalMatrixKey,
 };

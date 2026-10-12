@@ -5,6 +5,11 @@
 
 const { buildLyriaVocalProfile, clipVocalProfileById, sanitizeLyriaLyricsForSinging, normalizeLyriaArrangementLines } = require("./lyria-upstream");
 const { stripInlinePunctuationFromLyrics } = require("./sung-lyrics-punctuation");
+const {
+  LYRIA_PRODUCER_V3_RESPONSE_SCHEMA,
+  lyriaProducerV3SystemPrompt,
+  normalizeLyriaProducerV3Output,
+} = require("./lyria-producer-v3");
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const PRODUCER_TIMEOUT_MS = Number(process.env.CLIP_GEMINI_PRODUCER_TIMEOUT_MS || 15000);
@@ -24,7 +29,8 @@ OUTPUT SCHEMA:
 
 === structured_lyrics ===
 - If idea_brief is set (prompt-to-song): WRITE original singable lyrics that fulfill the brief. Do NOT copy the brief, challenge instructions, line counts, or phrases like "Write a clip" into sung lines.
-- Else if lyrics_raw is set: the user provided lyrics — preserve their words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines. You may only trim if clearly too long for ~28s.
+- If arabic_address is "female", lyrics are sung TO a woman — use feminine address (إنتِ، حبيبتي، غالية), never masculine habibi/enta on those lines. If "male", use masculine (إنتَ، حبيبي، غالي). Honor arabic_address even when vocal_gender differs (singer gender ≠ addressee).
+- Else if lyrics_raw is set: the user provided lyrics — preserve their words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines. You may only trim if clearly too long for ~28s. Still honor arabic_address for any clear vocatives you keep.
 - Structure tags MUST be in English only, on their own lines, e.g.:
   [Quick Catchy Intro]
   [Main Hook / Chorus Drop]
@@ -108,6 +114,11 @@ OUTPUT SCHEMA:
 - EVERY vocal chunk negative_styles MUST include only: "off-key vocals", "pitchy singing", "mumbled lyrics", "spoken word".
 - Arabic lyrics are fine — still use English tags for all styles. Lines can breathe; honor dialect ornamentation when dialect_hint suggests it.
 
+=== HUM TRACK (when hum_track is true) ===
+- User hummed a melody to be rendered as ONE solo instrument (instrumental is true). Do NOT treat the hum as vocals to sing or replay.
+- enhanced_style_prompt: solo instrument only, translate hum to pitch/rhythm on that instrument, no voice/humming in output.
+- composition_chunks: optional; server may bypass chunks for hum track. If you output chunks: 2–3 max, empty lines, negative_styles must include vocals, humming, voice, speech.
+
 === VOCAL REFERENCE (when has_vocal_reference is true) ===
 - User uploaded a hum/voice clip — match singer timbre and melodic shape; intro section should NOT mimic the reference pickup verbatim.
 - Still output full composition_chunks (4–8 sections); the server attaches the reference to vocal sections (intro often without reference).
@@ -142,7 +153,8 @@ OUTPUT SCHEMA:
 
 === structured_lyrics (SUNG WORDS ONLY) ===
 - If idea_brief is set (prompt-to-song): WRITE original catchy singable lyrics that fulfill the brief. Do NOT copy the brief, challenge instructions, line counts, or phrases like "Write a song" / "Create a" into sung lines.
-- Else if lyrics_raw is set: preserve the user's words and meaning. You MAY trim extra sections (Intro/Pre-Chorus/Outro) to fit ~180s — do NOT add new sections the user did not write.
+- If arabic_address is "female", lyrics are sung TO a woman — feminine address (إنتِ، حبيبتي، غالية). If "male", masculine (إنتَ، حبيبي، غالي). Singer vocal_gender is NOT the addressee — honor arabic_address in the sung words.
+- Else if lyrics_raw is set: preserve the user's words and meaning. You MAY trim extra sections (Intro/Pre-Chorus/Outro) to fit ~180s — do NOT add new sections the user did not write. Still honor arabic_address on vocatives.
 - COMPACT structure only (max ~18 sung lines total):
   [Verse 1] — up to 4 lines
   [Chorus] — up to 4 lines (sticky hook — repeat verbatim in second chorus)
@@ -153,6 +165,7 @@ OUTPUT SCHEMA:
 - Structure tags MUST be plain English section labels ONLY — NO timestamps inside tags.
 - NEVER put timing, BPM, dialect notes, style directions, or "Create a song…" inside structured_lyrics — Lyria will sing them.
 - NO commas, semicolons, colons, or bullets inside lyric lines — Lyria reads them like tashkeel; use line breaks only.
+- Each sung line: ONLY 3–5 words (about 4–10 speakable syllables). Split longer thoughts into extra lines — never one long sentence per line.
 - One hum-able chorus hook. Honor target_length_seconds — less lyric text is better than cramming.
 - End on a complete phrase — never mid-word or mid-sentence.
 - If instrumental is true, return "".
@@ -386,7 +399,6 @@ function buildClipProducerInput(body, flow = "nabad_clip") {
     dialectHint: String(body?.dialectHint || body?.dialect || "").trim(),
     lyrics: String(body?.prompt || "").trim(),
     scriptFormat: String(body?.scriptFormat || "").trim(),
-    nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
     useNabadVocalIdentity: true,
   });
   const ideaPrompt = body?.ideaPrompt === true
@@ -409,6 +421,7 @@ function buildClipProducerInput(body, flow = "nabad_clip") {
     vocal_character_label: "Nabad Signature",
     vocal_lyria_hint: vocalLyriaHint,
     dialect_hint: String(body?.dialectHint || body?.dialect || "").trim(),
+    arabic_address: String(body?.arabicAddress || body?.address || "").trim().toLowerCase(),
     challenge_id: String(body?.challenge?.id || body?.challengeId || "").trim(),
     instrumental: Boolean(body?.instrumental),
     script_format: String(body?.scriptFormat || "").trim(),
@@ -429,20 +442,27 @@ function buildSongProducerInput(body, flow = "elevenlabs") {
     target: "full_length_song",
     target_length_seconds: targetSeconds,
     mood: String(body?.mood || "").trim(),
-    has_vocal_reference: Boolean(body?.hasReference || body?.referenceAudio),
+    hum_track: Boolean(body?.humTrack),
+    has_vocal_reference: Boolean(
+      (body?.hasReference || body?.referenceAudio) && !body?.humTrack,
+    ),
   };
 }
 
 function appendProducerAdminDetail(baseDetail, producerResult) {
   const lines = [String(baseDetail || "").trim()].filter(Boolean);
   if (!producerResult) {
-    lines.push("gemini_producer: skipped");
-    return lines.join("\n").slice(0, 4000);
+    lines.push("producer: fallback");
+    lines.push("producer_reason: skipped");
+    return lines.join("\n").slice(0, 24000);
   }
-  lines.push(`gemini_producer: ${producerResult.used ? "applied" : "fallback"}`);
-  if (producerResult.model) lines.push(`gemini_producer_model: ${producerResult.model}`);
-  if (producerResult.error) lines.push(`gemini_producer_error: ${producerResult.error}`);
-  if (producerResult.latencyMs != null) lines.push(`gemini_producer_ms: ${producerResult.latencyMs}`);
+  const applied = Boolean(producerResult.used || producerResult.ok) && !producerResult.fallback;
+  lines.push(`producer: ${applied ? "applied" : "fallback"}`);
+  if (!applied) {
+    lines.push(`producer_reason: ${producerResult.error || "fallback"}`);
+  }
+  if (producerResult.model) lines.push(`producer_model: ${producerResult.model}`);
+  if (producerResult.latencyMs != null) lines.push(`producer_ms: ${producerResult.latencyMs}`);
   if (producerResult.enhanced_style_prompt) {
     lines.push(`enhanced_style_prompt: ${producerResult.enhanced_style_prompt.slice(0, 600)}`);
   }
@@ -455,7 +475,7 @@ function appendProducerAdminDetail(baseDetail, producerResult) {
   if (producerResult.chunk_plan && Array.isArray(producerResult.composition_chunks)) {
     lines.push(`gemini_chunk_plan: ${producerResult.composition_chunks.length} sections`);
   }
-  return lines.join("\n").slice(0, 4000);
+  return lines.join("\n").slice(0, 24000);
 }
 
 async function enrichWithGeminiProducer({
@@ -466,6 +486,7 @@ async function enrichWithGeminiProducer({
   maxStyleChars,
   normalizeFn,
   enabled,
+  generationConfig = null,
 } = {}) {
   const started = Date.now();
   const instrumental = Boolean(input?.instrumental);
@@ -479,13 +500,16 @@ async function enrichWithGeminiProducer({
 
   const models = resolveProducerModels();
   const userMessage = JSON.stringify(input || {}, null, 0);
+  const genConfig = generationConfig && typeof generationConfig === "object"
+    ? generationConfig
+    : {
+        temperature: 0.65,
+        responseMimeType: "application/json",
+      };
   const requestBody = JSON.stringify({
     systemInstruction: { parts: [{ text: String(systemPrompt || "").trim() }] },
     contents: [{ role: "user", parts: [{ text: userMessage }] }],
-    generationConfig: {
-      temperature: 0.65,
-      responseMimeType: "application/json",
-    },
+    generationConfig: genConfig,
   });
 
   let lastError = "unknown";
@@ -590,6 +614,40 @@ async function enrichLyriaSongWithGeminiProducer({ apiKey, input, enabled } = {}
   });
 }
 
+/** Lyria 3.5 full song — v3 section plan. Does not rewrite style. */
+async function enrichLyriaSongWithGeminiProducerV3({
+  apiKey,
+  input,
+  enabled,
+  preserveArabizi = false,
+} = {}) {
+  const shared = {
+    apiKey,
+    input,
+    systemPrompt: lyriaProducerV3SystemPrompt({ preserveArabizi }),
+    timeoutMs: SONG_PRODUCER_TIMEOUT_MS,
+    enabled,
+    normalizeFn: (parsed, ctx) => normalizeLyriaProducerV3Output(parsed, ctx),
+  };
+  const withSchema = await enrichWithGeminiProducer({
+    ...shared,
+    generationConfig: {
+      temperature: 0.65,
+      responseMimeType: "application/json",
+      responseSchema: LYRIA_PRODUCER_V3_RESPONSE_SCHEMA,
+      maxOutputTokens: 4096,
+    },
+  });
+  if (withSchema.ok) return withSchema;
+  return enrichWithGeminiProducer({
+    ...shared,
+    generationConfig: {
+      temperature: 0.65,
+      responseMimeType: "application/json",
+    },
+  });
+}
+
 module.exports = {
   CLIP_PRODUCER_SYSTEM_PROMPT,
   LYRIA_SONG_PRODUCER_SYSTEM_PROMPT,
@@ -602,4 +660,5 @@ module.exports = {
   enrichClipWithGeminiProducer,
   enrichSongWithGeminiProducer,
   enrichLyriaSongWithGeminiProducer,
+  enrichLyriaSongWithGeminiProducerV3,
 };

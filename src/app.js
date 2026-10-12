@@ -8882,7 +8882,6 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   if (!show) {
     syncSettingsElevenFinetuneRow("suno");
     syncSettingsGeminiProducerRow();
-    syncSettingsNabadVocalChainRow("suno");
     return;
   }
   const p = normalizeMusicProviderPref(pref) || "suno";
@@ -8896,7 +8895,6 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   if (sub) sub.textContent = musicProviderSubline(p);
   syncSettingsElevenFinetuneRow(p);
   syncSettingsGeminiProducerRow();
-  syncSettingsNabadVocalChainRow(p);
   try { syncElevenSongLengthPanel(); } catch {}
   try { syncCreateSongTitleField(); } catch {}
 }
@@ -8971,64 +8969,6 @@ function syncSettingsGeminiProducerRow() {
       ? "On — Gemini plans song sections and lyrics; your style line stays as written"
       : "Off — direct prompt to Lyria (no Gemini producer)";
   }
-}
-
-const NABAD_VOCAL_CHAIN_LS_KEY = "nabadVocalChainV1";
-const NABAD_VOCAL_FX_DEFAULTS = Object.freeze({
-  auto_tune: true,
-  analog_saturation: true,
-  reverb_delay: true,
-  double_tracking: true,
-  vocal_texture: true,
-});
-
-/** Admin Lyria A/B: Nabad Signature vocal FX chain (defaults all on). */
-function getNabadVocalChainPrefs() {
-  const out = { ...NABAD_VOCAL_FX_DEFAULTS };
-  if (!creditsState.isAdmin) return out;
-  try {
-    const raw = localStorage.getItem(NABAD_VOCAL_CHAIN_LS_KEY);
-    if (!raw) return out;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return out;
-    for (const key of Object.keys(NABAD_VOCAL_FX_DEFAULTS)) {
-      if (Object.prototype.hasOwnProperty.call(parsed, key)) {
-        out[key] = Boolean(parsed[key]);
-      }
-    }
-  } catch {}
-  return out;
-}
-
-function setNabadVocalChainPref(key, on) {
-  if (!creditsState.isAdmin) return;
-  const k = String(key || "").trim();
-  if (!Object.prototype.hasOwnProperty.call(NABAD_VOCAL_FX_DEFAULTS, k)) return;
-  const next = { ...getNabadVocalChainPrefs(), [k]: Boolean(on) };
-  try {
-    localStorage.setItem(NABAD_VOCAL_CHAIN_LS_KEY, JSON.stringify(next));
-  } catch {}
-  syncSettingsNabadVocalChainRow(getMusicProviderPref());
-}
-
-function syncSettingsNabadVocalChainRow(providerPref = getMusicProviderPref()) {
-  const block = document.getElementById("settingsNabadVocalChainBlock");
-  const show =
-    Boolean(creditsState.isAdmin)
-    && (providerPref === "lyria" || providerPref === "elevenlabs");
-  // lyria_clip uses Lyria v2 — no legacy Nabad FX chain on the prompt.
-  if (block) {
-    block.hidden = !show;
-    block.style.display = show ? "" : "none";
-    block.setAttribute("aria-hidden", show ? "false" : "true");
-  }
-  if (!show) return;
-  const prefs = getNabadVocalChainPrefs();
-  block?.querySelectorAll?.("[data-nabad-vocal-fx]")?.forEach((input) => {
-    const key = String(input.getAttribute("data-nabad-vocal-fx") || "");
-    if (!key) return;
-    input.checked = prefs[key] !== false;
-  });
 }
 
 function syncSettingsElevenFinetuneRow(providerPref = getMusicProviderPref()) {
@@ -9139,27 +9079,6 @@ function wireSettingsMusicProviderOnce() {
             ? "Gemini producer ON — rewrites style/lyrics before Lyria."
             : "Gemini producer OFF — direct prompt to Lyria (A/B).",
           { icon: "♪", durationMs: 3600 },
-        );
-      } catch {}
-    });
-  }
-  const vocalBlock = document.getElementById("settingsNabadVocalChainBlock");
-  if (vocalBlock && vocalBlock.dataset.boundNabadVocal !== "1") {
-    vocalBlock.dataset.boundNabadVocal = "1";
-    vocalBlock.addEventListener("change", (ev) => {
-      const input = ev.target?.closest?.("[data-nabad-vocal-fx]");
-      if (!input || !vocalBlock.contains(input)) return;
-      if (!creditsState.isAdmin) return;
-      const key = String(input.getAttribute("data-nabad-vocal-fx") || "");
-      if (!key) return;
-      try {
-        if (typeof haptic === "function") haptic("light");
-      } catch {}
-      setNabadVocalChainPref(key, Boolean(input.checked));
-      try {
-        showToast(
-          `${key.replace(/_/g, " ")} ${input.checked ? "ON" : "OFF"} for Lyria / ElevenLabs vocal A/B.`,
-          { icon: "♪", durationMs: 2800 },
         );
       } catch {}
     });
@@ -79565,7 +79484,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ...(creditsState.isAdmin
             ? {
                 geminiProducer: getGeminiProducerPref() ? "1" : "0",
-                nabadVocalChain: getNabadVocalChainPrefs(),
               }
             : {}),
         };
@@ -79589,7 +79507,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           arabicAddress,
           singerGender: clipVocalGender || undefined,
           voiceProfile: clipVoiceProfile || undefined,
-          nabadVocalChain: creditsState.isAdmin ? getNabadVocalChainPrefs() : undefined,
           ...(clipArtworkStyle
             ? { artworkStyle: clipArtworkStyle, artworkHint: clipArtworkStyle }
             : {}),
@@ -80136,12 +80053,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         }
         delete payload.voiceTimbre;
         delete payload.clipVocalProfileId;
-        if (creditsState.isAdmin) {
-          payload.nabadVocalChain = getNabadVocalChainPrefs();
-        }
-      }
-      if (useElevenlabsMusicProvider() && !shouldGenerateInstrumental && creditsState.isAdmin) {
-        payload.nabadVocalChain = getNabadVocalChainPrefs();
       }
       if (intlLock?.ok) {
         payload.style = intlLock.styleLine;

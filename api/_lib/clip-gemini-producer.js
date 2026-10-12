@@ -399,7 +399,6 @@ function buildClipProducerInput(body, flow = "nabad_clip") {
     dialectHint: String(body?.dialectHint || body?.dialect || "").trim(),
     lyrics: String(body?.prompt || "").trim(),
     scriptFormat: String(body?.scriptFormat || "").trim(),
-    nabadVocalToggles: body?.nabadVocalChain || body?.nabadVocalToggles || null,
     useNabadVocalIdentity: true,
   });
   const ideaPrompt = body?.ideaPrompt === true

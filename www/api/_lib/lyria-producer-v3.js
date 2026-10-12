@@ -13,10 +13,6 @@ const {
   resolveLyriaArabicAddress,
 } = require("./lyria-upstream");
 const { isArabiziScript, ARABIZI_V3_PRESERVE_BLOCK } = require("./arabizi");
-const {
-  LIGHT_HARAKAT_V3_SECTION,
-  applyLightHarakatToV3Sections,
-} = require("./arabic-dialect-lyrics");
 
 const MAWWAL_SECONDS = 18;
 const MAWWAL_SECONDS_MIN = 15;
@@ -92,9 +88,10 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary, no extr
 - arabic_address is who the lyrics talk TO, not the singer's gender (vocal_gender). Use it only for Arabic or Arabizi lyrics.
 - If the lyrics are not Arabic, ignore arabic_address completely. Do not rewrite English (or other non-Arabic) lyrics into Arabic to satisfy it.
 - If arabic_address is male, female, or group: match ALL pronouns, verb endings and possessives to that address (female: إنتِ، عيونِك، ضحكتِك، حبيبتي، بتعرفي. male: إنتَ، عيونَك، ضحكتَك، حبيبي، بتعرف. group: إنتو، عيونكن، بتعرفوا). If the user's lyrics use a different address, adapt them to arabic_address.
-- If arabic_address is "auto" or empty: infer the addressee from the lyrics (إنتَ / إنتِ / إنتو and matching endings) and stay consistent. If still unclear, pick the most natural address the lyrics imply. Do not invent a different addressee than the lyrics suggest.
+- If arabic_address is "auto" or empty: infer the addressee from the lyrics (إنت / إنتو and matching endings) and stay consistent. If still unclear, pick the most natural address the lyrics imply. Do not invent a different addressee than the lyrics suggest.
 
-${LIGHT_HARAKAT_V3_SECTION}
+=== ARABIC SCRIPT ===
+Do not add tashkeel, harakat, sukoon, tanween, or any vowel marks. If the user already typed marks, keep them exactly. Never vowelize letters.
 
 === PREVIOUS TAKE ===
 If previous_take is present:
@@ -142,7 +139,7 @@ Do not write intensity into any lyric or arrangement string — it is a number f
   - BPM above 115 (dabke, dance, mahraganat): 6-9
 - Every line is a complete small phrase. No 1-2 word fragments, no run-on sentences.
 - No commas, semicolons, colons, dashes, bullets or quotes inside lines. Use line breaks only.
-- Honor ARABIC HARAKAT (LIGHT) above. Never vowelize every letter. Never put fatha/kasra on the kaf itself (قلبكَ / قلبكِ).
+- Do not add tashkeel / harakat. Keep any marks the user already typed.
 - Honor arabic_address as in ARABIC ADDRESS above. This is not the singer's gender.
 - Never put timing, BPM, style words, dialect notes or instructions in lyrics.
 - BACKING echoes are optional and rare. Leave "backing": [] unless style_tags explicitly asks for chants, choir, or group vocals. Never invent backing just to fill the chorus.
@@ -151,12 +148,12 @@ Do not write intensity into any lyric or arrangement string — it is a number f
 - Write original lyrics in the language you detected. If Arabic, use the dialect from dialect_hint, or Lebanese colloquial when dialect is unclear. Natural spoken words, not formal Arabic (fusha).
 - Never copy phrases from idea_brief into the lyrics; express the idea in new words.
 - The chorus is the hook: short, memorable, emotionally clear, and the title-like line comes first or last.
-- Honor ARABIC HARAKAT (LIGHT) and arabic_address as in ARABIC ADDRESS above — only if you are writing Arabic or Arabizi. This is not the singer's gender.
+- Honor arabic_address as in ARABIC ADDRESS above — only if you are writing Arabic or Arabizi. This is not the singer's gender. Do not add tashkeel.
 - Script: follow the language of idea_brief. Do not default to Arabic. If script_format is "arabic", write Arabic script. If script_format is "arabizi", write Arabizi using letters only: "a" for ع, "h" for ح, "kh" for خ, "gh" for غ, "'" for ء. No numerals. If script_format is "english", "auto", empty, or any other non-Arabic value, write in the language of the idea.
 
 === WRITE MODE (lyrics_raw set) ===
 - Keep the meaning of the user's lyrics. Never invent new verses, new story events, or a new message.
-- Honor ARABIC HARAKAT (LIGHT) above: keep every word and every diacritic the user typed; add only missing address marks.
+- Keep every word exactly as the user wrote it, including any marks they typed. Do not add tashkeel.
 - Honor arabic_address as in ARABIC ADDRESS above — only if the lyrics are Arabic or Arabizi.
 - If lyrics_raw is English or another non-Arabic language, keep that language. Do not translate into Arabic.
 - You MAY adapt for singability: split or join lines, place lines into sections, repeat the chorus, and make small wording fixes so the lines sit in the groove.
@@ -534,13 +531,9 @@ function normalizeLyriaProducerV3Output(raw, { instrumental = false, input = {} 
     }
   }
 
-  const harakat = applyLightHarakatToV3Sections(sections, input);
   return {
-    sections: harakat.sections,
+    sections,
     v3: true,
-    harakatMode: harakat.harakatMode,
-    addressMarksAdded: harakat.addressMarksAdded,
-    harakatPerLine: harakat.harakatPerLine,
   };
 }
 

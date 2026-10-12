@@ -205,7 +205,6 @@ import {
   resolveSparkPromptLang,
   dailySparkDeckIds,
   FEATURED_SPARK_ID,
-  withShelfScriptRule,
 } from "./challenge-prompt-seeds.js";
 import {
   configureCoverArt,
@@ -9815,7 +9814,7 @@ const CHALLENGE_IDEAS = [
     styleLyria: "photo-inspired pop, warm textures, intimate vocal, 98 bpm",
     style: "Photo-inspired pop, emotional snapshot, warm textures, intimate vocal, 98 bpm",
     lyricsMode: "instructions",
-    lyrics: "Write original lyrics inspired by a personal photo — a real moment in a frame, not a generic memories song. Verse: 2 close specific lines (light, a face, a place). Chorus: 3–4 lines with one repeatable hook that holds that picture. Intimate and finished.",
+    lyrics: "A song from a personal photo — one real moment in a frame.",
     prompt: "Turn the feeling in your photo into a short personal hook — any photo you choose.",
     tags: ["Photo", "Personal", "Mood"],
   },
@@ -11316,7 +11315,7 @@ function applyChallengeStartById(id, challengesMap) {
   const catalogBrief = isVoiceClipChallengeId(challenge.id)
     ? ""
     : String(challenge.lyrics || challenge.prompt || "").trim();
-  const lyrics = localizedLyrics || (catalogBrief ? withShelfScriptRule(catalogBrief, promptLang) : "");
+  const lyrics = localizedLyrics || catalogBrief;
   const idea = {
     ...challenge,
     id: `challenge:${challenge.id}`,
@@ -12191,12 +12190,9 @@ function startCampaignCreate() {
   const langCfg = campaignLangConfigForTeam(team.id);
   const lyricLang = _campaignLang === "ar" ? "ar" : "en";
   const teamDisplay = lyricLang === "ar" ? team.ar : team.name;
-  const lyrics = withShelfScriptRule(
-    lyricLang === "ar"
-      ? `اكتب كلمات أنشودة أصليّة لـ ${teamDisplay} — مش هتاف جاهز.\nبيت: صورة واحدة من الملعب أو الجمهور أو ذكرى.\nكورس: هوك يتكرر فيه اسم الفريق، سهل يتغنّى.\nخلّيها شخصية ومكتملة.`
-      : `Write original match-day anthem lyrics for ${teamDisplay} — not a generic chant.\nVerse: one specific image of the fans, the pitch, or a memory.\nChorus: a repeatable hook with the team name, easy to shout back.\nKeep it personal, studio-sung, and finished.`,
-    lyricLang === "ar" ? "arabic" : "english",
-  );
+  const lyrics = lyricLang === "ar"
+    ? `أنشودة لـ ${teamDisplay}. صورة واحدة من الملعب أو الجمهور، ثم هوك باسم الفريق.`
+    : `${teamDisplay} anthem. One match-day picture, then a hook with the team name.`;
   const style = withTemplateStyleGuard(campaignStyleForTeamVibe(team.id, vibe.id));
   const useArabicDialect = lyricLang === "ar";
   closeCampaignSheet();

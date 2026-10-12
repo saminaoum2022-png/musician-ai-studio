@@ -296,23 +296,20 @@ export function pickOccasionLyricPrompt({
   const angle = picked.text || pool[0] || "";
   const who = String(person || "").trim();
   const traitText = String(trait || "").trim();
-  const lines = [
-    `Write original lyrics for a ${occasionLabelForId(id)} gift song. Warm, sincere, personal. Dedicated to one person. Not a Spark or Challenge story.`,
-    `Angle for this take: ${angle}`,
-  ];
-  if (who) {
-    lines.push(`Use their real name "${who}" in the dedication. Do not replace it with a nickname placeholder.`);
-  } else {
-    lines.push(`No name was given. ${addressYouLine(address)} Never invent غالي, يا غالي, شخص غالي, someone dear, or someone special.`);
-  }
-  if (traitText) {
-    lines.push(`The heart of the song is how they are: ${traitText}. Turn those words into natural sung lines. Do not quote them like tags or a list.`);
+  const occ = occasionLabelForId(id);
+  const occTitle = occ ? occ.charAt(0).toUpperCase() + occ.slice(1) : "Gift";
+  let lead = `${occTitle} song`;
+  if (who) lead += ` for ${who}`;
+  if (traitText) lead += `, who is ${traitText}`;
+  if (!who) {
+    const v = String(address || "").trim().toLowerCase();
+    if (v === "male" || v === "him") lead += ", sung to him";
+    else if (v === "female" || v === "her") lead += ", sung to her";
+    else if (v === "group") lead += ", sung to them";
   }
   const extra = String(extraBrief || "").trim();
-  if (extra) lines.push(extra);
-  lines.push(MOMENT_BAN_LIST);
   return {
-    prompt: lines.filter(Boolean).join("\n"),
+    prompt: [`${lead}.`, angle, extra].filter(Boolean).join("\n"),
     angle,
     angleId: angleIdFromText(id, angle, picked.index),
     traitUsed: Boolean(traitText),
@@ -366,11 +363,11 @@ export function resolveSparkPromptLang(languageId, extras = {}) {
 
 const SPARK_TWISTS = [
   { id: "4am", chip: "4 am", text: "Set the whole song at 4 am." },
-  { id: "second-language", chip: "second language", text: "One line in the other language (Arabic ↔ English). Never Arabizi." },
+  { id: "second-language", chip: "second language", text: "One line in the other language (Arabic ↔ English)." },
   { id: "end-question", chip: "end on a question", text: "The last sung line is a question." },
   { id: "smell-first", chip: "smell first", text: "A smell in the first line." },
   { id: "sound-first", chip: "sound first", text: "A sound in the first line." },
-  { id: "no-chorus-word", chip: "no chorus word", text: "Never say the title topic in the chorus." },
+  { id: "no-chorus-word", chip: "no chorus word", text: "The chorus talks around the title topic without naming it." },
   { id: "one-room", chip: "one room", text: "The whole story stays in one room." },
   { id: "leftover-food", chip: "leftover food", text: "A leftover meal is in the verse." },
   { id: "unread", chip: "unread", text: "Someone left them on read." },
@@ -825,12 +822,8 @@ const SPARK_RECIPES = {
 
 const PHOTO_SPARK_IDEAS = {
   "last-photo-song": {
-    english: [
-      "Write original lyrics inspired by a personal photo — a real moment in a frame, not a generic memories song. Verse: 2 close specific lines (light, a face, a place). Chorus: 3–4 lines with one repeatable hook that holds that picture. Intimate and finished.",
-    ],
-    arabic: [
-      "اكتب كلمات أصليّة من صورة شخصية — لحظة حقيقية بالإطار، مش أغنية ذكريات عامة. البيت: سطرين قريبين (ضو، وجه، مكان). الكورس: 3–4 أسطر وهوك يتكرر يمسك هالصورة. حميمة ومكتملة.",
-    ],
+    english: ["A song from a personal photo — one real moment in a frame."],
+    arabic: ["أغنية من صورة شخصية — لحظة حقيقية في الإطار."],
   },
 };
 
@@ -896,49 +889,32 @@ export function composeSparkIdeaBrief({
   twist,
   seed,
   extra = {},
-  lang = "arabic",
 } = {}) {
-  const lines = [
-    `Write original lyrics for a Spark called ${recipe?.title || "Spark"}. Playful, specific, finished. No ready lyrics in the style line. Verse and chorus. Short-to-medium lines. Complete last phrase.`,
-    `Angle: ${angle?.text || ""}`,
-    `Twist: ${twist?.text || ""}`,
-    seed ? `Put this concrete image in the lyric world: ${seed}.` : "",
-  ];
-  if (extra.overheard) {
-    lines.push(`The song is built around this invented overheard line (do not treat it as a real quote from a real person): “${extra.overheard}”`);
+  const lines = [];
+  if (extra.overheard) lines.push(`Overheard: “${extra.overheard}”`);
+  else if (extra.object) lines.push(`A song about ${extra.object}.`);
+  else if (extra.hook) lines.push(`Hook first: “${extra.hook}”`);
+  else if (extra.viewpoint) {
+    lines.push(`Told from ${extra.viewpoint}. ${extra.tone === "funny" ? "Funny." : "Tender."}`);
+  } else if (extra.weather) {
+    lines.push(`The heart-weather is ${extra.weather}.`);
+  } else if (extra.film) {
+    lines.push(`An ordinary minute scored like a ${extra.film} scene.`);
+  } else if (extra.kind === "reply" && extra.userText) {
+    lines.push(`A reply to: “${extra.userText}”`);
+  } else if (extra.kind === "caption" && extra.userText) {
+    lines.push(`Caption: “${extra.userText}”`);
+  } else if (extra.passport) {
+    lines.push(`A ${extra.passport.label} feeling.`);
+  } else if (recipe?.title) {
+    lines.push(`${recipe.title}.`);
   }
-  if (extra.object) {
-    lines.push(`The small object at the center is: ${extra.object}.`);
+  if (angle?.text) lines.push(angle.text);
+  if (twist?.text) lines.push(twist.text);
+  if (seed) {
+    const s = String(seed).trim();
+    lines.push(s ? `${s.charAt(0).toUpperCase()}${s.slice(1)}.` : "");
   }
-  if (extra.viewpoint) {
-    lines.push(`Tell it from ${extra.viewpoint}. Tone: ${extra.tone || "tender"}.`);
-  }
-  if (extra.weather) {
-    lines.push(`The heart-weather is: ${extra.weather}. Light Gulf/Levant flavor. Weather is the metaphor, not a climate lecture.`);
-  }
-  if (extra.film) {
-    lines.push(`Score an ordinary minute like a ${extra.film} scene.`);
-  }
-  if (extra.hook) {
-    lines.push(`The hook phrase is: “${extra.hook}”. First sung line can already be the chorus.`);
-  }
-  if (extra.kind === "reply" && extra.userText) {
-    lines.push(`They are answering this text: “${extra.userText}”.`);
-  }
-  if (extra.kind === "caption" && extra.userText) {
-    lines.push(`The caption is: “${extra.userText}”.`);
-  }
-  if (extra.passport) {
-    lines.push(`Genre passport: write a personal story that lives in a ${extra.passport.label} feeling. Do not name the genre in the lyrics.`);
-  }
-  if (String(recipe?.id || "") === "dabke-drop" || recipe?.title === "Dabke Drop") {
-    lines.push("Dabke is the style, not the story. Do not write lyrics about dabke or weddings unless the angle needs a celebration.");
-  }
-  if (recipe?.title === "Roast Song") {
-    lines.push("Funny, never cruel. End like you still love them.");
-  }
-  lines.push("If the lyrics language is Arabic, write Arabic script only. Never Arabizi, Franco-Arabic, or Latin-letter Arabic.");
-  lines.push(scriptRule(lang));
   return lines.filter(Boolean).join("\n");
 }
 
@@ -1048,6 +1024,5 @@ export function pickSparkLyricPrompt({
     userText,
   });
   const idea = pickFromPool(`spark:${id}:${lang}`, pool[lang] || pool.english).text;
-  if (!idea) return "";
-  return [idea, scriptRule(lang)].filter(Boolean).join("\n");
+  return String(idea || "").trim();
 }

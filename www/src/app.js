@@ -6980,6 +6980,7 @@ function applyRoute({ passGen } = {}) {
   } catch {}
   try { syncCoachFabDesktopAnchor(); } catch {}
   try { maybeShowStartupCoachNudge(); } catch {}
+  try { scheduleWebAppInstallOffer(); } catch {}
   try {
     updatePlayerSecondaryChrome();
   } catch {}
@@ -42250,6 +42251,96 @@ function isIosWebShell() {
   return /iPhone|iPad|iPod/i.test(ua);
 }
 
+const WEB_APP_INSTALL_DISMISS_KEY = "nabad.webAppInstall.dismissed";
+let _webAppInstallTimer = 0;
+let _webAppInstallWired = false;
+
+function isStandaloneWebApp() {
+  try {
+    if (document.documentElement.classList.contains("is-standalone-pwa")) return true;
+    if (window.navigator?.standalone === true) return true;
+    return Boolean(window.matchMedia?.("(display-mode: standalone)")?.matches);
+  } catch {
+    return false;
+  }
+}
+
+function shouldOfferWebAppInstall() {
+  if (isNativeShell() || isStandaloneWebApp()) return false;
+  if (isIosWebShell()) return true;
+  try {
+    return isWebOrDesktopShell() && window.matchMedia("(max-width: 720px)").matches;
+  } catch {
+    return false;
+  }
+}
+
+function webAppInstallDismissed() {
+  try { return localStorage.getItem(WEB_APP_INSTALL_DISMISS_KEY) === "1"; } catch { return false; }
+}
+
+function dismissWebAppInstall() {
+  try { localStorage.setItem(WEB_APP_INSTALL_DISMISS_KEY, "1"); } catch {}
+  closeWebAppInstallSheet();
+}
+
+function closeWebAppInstallSheet() {
+  const sheet = document.getElementById("webAppInstallSheet");
+  if (!sheet) return;
+  sheet.classList.remove("isOpen");
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("webAppInstallOpen");
+}
+
+function openWebAppInstallSheet() {
+  const sheet = document.getElementById("webAppInstallSheet");
+  if (!sheet || !shouldOfferWebAppInstall()) return;
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("webAppInstallOpen");
+  requestAnimationFrame(() => sheet.classList.add("isOpen"));
+}
+
+function webAppInstallRouteOk() {
+  const route = String(document.body.getAttribute("data-route") || "");
+  if (/^(intro|onboarding|music-preferences|first-song|auth|start)$/.test(route)) return false;
+  const blocked = document.body.classList.contains("booting")
+    || document.body.classList.contains("isAuth")
+    || document.body.classList.contains("isIntro")
+    || document.body.classList.contains("isOnboarding")
+    || document.body.classList.contains("isMusicPrefs")
+    || document.body.classList.contains("isFirstSong")
+    || document.body.classList.contains("createKeyboardOpen")
+    || document.body.classList.contains("createWebViewportFit");
+  return !blocked;
+}
+
+function scheduleWebAppInstallOffer() {
+  if (_webAppInstallTimer) {
+    clearTimeout(_webAppInstallTimer);
+    _webAppInstallTimer = 0;
+  }
+  if (!shouldOfferWebAppInstall() || webAppInstallDismissed()) return;
+  if (!webAppInstallRouteOk()) return;
+  _webAppInstallTimer = window.setTimeout(() => {
+    _webAppInstallTimer = 0;
+    if (!shouldOfferWebAppInstall() || webAppInstallDismissed() || !webAppInstallRouteOk()) return;
+    openWebAppInstallSheet();
+  }, 700);
+}
+
+function wireWebAppInstallSheetOnce() {
+  if (_webAppInstallWired) return;
+  const sheet = document.getElementById("webAppInstallSheet");
+  if (!sheet) return;
+  _webAppInstallWired = true;
+  sheet.addEventListener("click", (e) => {
+    if (!e.target?.closest?.("[data-web-app-install-dismiss]")) return;
+    dismissWebAppInstall();
+  });
+}
+
 function isIosPlatform() {
   const ua = String(navigator?.userAgent || "");
   return /iPhone|iPad|iPod/i.test(ua);
@@ -74928,6 +75019,8 @@ if (typeof document !== "undefined") {
     try { initFeedVinylPlayerSystem(); } catch {}
     try { wireFeedEdgeFlipOnce(); } catch {}
     try { wirePlayerConfirmOnce(); } catch {}
+    try { wireWebAppInstallSheetOnce(); } catch {}
+    try { scheduleWebAppInstallOffer(); } catch {}
   };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initPageUiOnce, { once: true });

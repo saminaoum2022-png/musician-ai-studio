@@ -408,6 +408,24 @@
         </div>
       </div>
     </div>
+    <div id="webAppInstallSheet" class="webAppInstallSheet" hidden aria-hidden="true">
+      <button type="button" class="webAppInstallScrim" data-web-app-install-dismiss="1" aria-label="Close"></button>
+      <div class="webAppInstallCard" role="dialog" aria-modal="true" aria-labelledby="webAppInstallTitle">
+        <img class="webAppInstallLogo" src="/apple-touch-icon.png" width="56" height="56" alt="" />
+        <div class="webAppInstallCopy">
+          <p id="webAppInstallTitle" class="webAppInstallTitle">Install Nabad</p>
+          <p class="webAppInstallText">Tap
+            <span class="webAppInstallShare" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 16V4M8 8l4-4 4 4M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"/></svg>
+            </span>
+            Share, then <strong>Add to Home Screen</strong> to install the web-based app.
+          </p>
+        </div>
+        <button type="button" class="webAppInstallClose" data-web-app-install-dismiss="1" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+        </button>
+      </div>
+    </div>
     <div id="userActionSheet" class="userActionSheet" hidden aria-hidden="true">
       <button type="button" id="userActionSheetScrim" class="userActionSheetScrim" aria-label="Close"></button>
       <div class="userActionSheetPanel" role="dialog" aria-modal="true" aria-label="User actions">

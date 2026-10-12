@@ -2,16 +2,16 @@
  * Provider-neutral full song generation — MiniMax + Lyria + ElevenLabs + Mureka admin spikes.
  *
  * POST /api/music/generate?provider=minimax|lyria|elevenlabs|mureka
- *   Same auth/credits shell as /api/suno/generate; admin-only unless
- *   MINIMAX_GENERATE_ENABLED=1, LYRIA_GENERATE_ENABLED=1, ELEVENLABS_GENERATE_ENABLED=1,
- *   or MUREKA_GENERATE_ENABLED=1.
+ *   Same auth/credits shell as /api/suno/generate.
+ *   Lyria full Create is public (batch 2). MiniMax / ElevenLabs / Mureka stay
+ *   admin-only unless their *_GENERATE_ENABLED flags are on.
  *
  * Env:
  * - MINIMAX_API_KEY, MINIMAX_KEY_KIND, MINIMAX_MUSIC_MODEL, MINIMAX_GENERATE_ENABLED
  * - GEMINI_API_KEY / GOOGLE_API_KEY, LYRIA_MUSIC_MODEL, LYRIA_GENERATE_ENABLED
  * - CLIP_GEMINI_PRODUCER_ENABLED=1 — Gemini prompt enrichment for clips + ElevenLabs (staging preview)
  * - Lyria default: bare passthrough (style + lyrics only). LYRIA_LEGACY_PROMPTS=1 restores Nabad stack.
- * - LYRIA_PRODUCER_V3 — admin-only Flash section planner (default on). Does not rewrite style.
+ * - LYRIA_PRODUCER_V3 — Flash section planner for public Create (default on). Does not rewrite style.
  * - LYRIA_PROMPT_V2=1 — optional minimal Lyria prompt v2 (legacy mode only); skips Gemini producer on Lyria
  * - CLIP_GEMINI_PRODUCER_MODEL — optional override; else tries 3.6 → 3.5 → 2.5 flash
  * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_FINETUNE_ID, ELEVENLABS_GENERATE_ENABLED
@@ -1637,8 +1637,8 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   if (!apiKey) return sendJson(res, 500, { error: "Missing GEMINI_API_KEY on server" });
 
   const templateSparkFull = String(body?.templateSparkFull || "").trim() === "1";
-  // Public templates / sparks / occasions / challenges use Lyria 3.5 full via templateSparkFull.
-  // Admin Settings → Lyria (or LYRIA_GENERATE_ENABLED) still opens full Lyria for freeform create.
+  // Public Create + templates / sparks / occasions / challenges use Lyria 3.5.
+  // LYRIA_GENERATE_ENABLED=0 still blocks non-admin freeform Create (templates keep working).
   if (!isAdmin && !lyriaGenerateEnabled() && !templateSparkFull) {
     return sendJson(res, 403, {
       error: "This generation mode isn't available yet.",

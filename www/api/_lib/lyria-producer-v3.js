@@ -213,9 +213,8 @@ function flagOn(raw) {
   return raw === "1" || raw === 1 || raw === true || raw === "true";
 }
 
-/** Admin-only. Settings Gemini-producer Off disables v3. Non-admins stay on bare Lyria. */
+/** Public Create uses v3. Settings Gemini-producer Off disables it. LYRIA_PRODUCER_V3=0 kills it. */
 function resolveLyriaProducerV3Enabled(body, isAdmin = false) {
-  if (!isAdmin) return false;
   if (!lyriaProducerV3EnvEnabled()) return false;
   if (flagOff(body?.lyriaProducerV3)) return false;
   if (flagOn(body?.lyriaProducerV3)) return true;

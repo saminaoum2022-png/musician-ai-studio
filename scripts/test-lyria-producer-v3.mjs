@@ -182,6 +182,10 @@ const mawwalAdmin = v3.appendLyriaProducerV3AdminDetail(
 assert.ok(/producer: applied/.test(mawwalAdmin));
 assert.ok(/Mawwal:\d+s/.test(mawwalAdmin), mawwalAdmin);
 
+assert.equal(v3.resolveLyriaProducerV3Enabled({}, false), true);
+assert.equal(v3.resolveLyriaProducerV3Enabled({ lyriaProducerV3: "0" }, false), false);
+assert.equal(v3.resolveLyriaProducerV3Enabled({ lyriaProducerV3: "1" }, false), true);
+
 console.log("--- Greek-Arabic pop ---\n" + popStitch.prompt.slice(0, 900) + "\n");
 console.log("--- Lebanese Mawwal ---\n" + lebaneseStitch.prompt.slice(0, 1100) + "\n");
 console.log("--- Khaleeji pop ---\n" + khStitch.prompt.slice(0, 900) + "\n");

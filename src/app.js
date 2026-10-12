@@ -6959,6 +6959,7 @@ function applyRoute({ passGen } = {}) {
   if (wanted === "generate") {
     try { renderPersonaSelect(); } catch {}
     try { restoreCreatePageOnRouteEnter(); } catch {}
+    try { renderRemixSourceBanner(); } catch {}
     try { autoResizeLyricsBox(); } catch {}
     if (prevRoute !== wanted) {
       try { cancelCreateLyricsAutofocus(); } catch {}
@@ -29918,12 +29919,14 @@ async function ensureRemixSourceLyrics() {
 
 function renderRemixSourceBanner() {
   if (!els.remixSourceBanner) return;
+  document.body.toggleAttribute("data-remixing", Boolean(currentRemixSource));
   if (!currentRemixSource) {
     els.remixSourceBanner.hidden = true;
     if (els.remixSourceCover) els.remixSourceCover.style.backgroundImage = "";
     if (els.remixSourceLyricsPanel) els.remixSourceLyricsPanel.hidden = true;
     if (els.remixSourceLyricsText) els.remixSourceLyricsText.textContent = "";
     try { syncCreateAttachedStyleRow(); } catch {}
+    try { autoResizeLyricsBox(); } catch {}
     return;
   }
   els.remixSourceBanner.hidden = false;
@@ -29932,26 +29935,17 @@ function renderRemixSourceBanner() {
   if (els.remixSourceTitle) {
     els.remixSourceTitle.textContent = creator ? `${title} · @${creator}` : title;
   }
-  const sourceLyrics = remixSourceLyricsText();
   if (els.remixSourceSub) {
-    els.remixSourceSub.textContent = sourceLyrics
-      ? "Tap ✦ Generate to write a reply, or type your angle below."
-      : "Loading original lyrics…";
+    els.remixSourceSub.textContent = "Tap Generate to write a reply, or type your angle below.";
   }
   if (els.remixSourceCover) {
     const cover = String(currentRemixSource.coverUrl || "").trim();
     els.remixSourceCover.style.backgroundImage = cover ? `url("${cover.replace(/"/g, '\\"')}")` : "";
   }
-  if (els.remixSourceLyricsPanel && els.remixSourceLyricsText) {
-    if (sourceLyrics) {
-      els.remixSourceLyricsPanel.hidden = false;
-      els.remixSourceLyricsText.textContent = sourceLyrics;
-    } else {
-      els.remixSourceLyricsPanel.hidden = true;
-      els.remixSourceLyricsText.textContent = "";
-    }
-  }
+  if (els.remixSourceLyricsPanel) els.remixSourceLyricsPanel.hidden = true;
+  if (els.remixSourceLyricsText) els.remixSourceLyricsText.textContent = "";
   try { syncCreateAttachedStyleRow(); } catch {}
+  try { autoResizeLyricsBox(); } catch {}
 }
 
 /** Fetch any audio URL and return its Blob. Tries the same-origin proxy
@@ -30181,7 +30175,6 @@ async function startHubRemix(post) {
           const text = await ensureRemixSourceLyrics();
           if (text) {
             renderRemixSourceBanner();
-            showToast("Original lyrics loaded for your reply.", { icon: "♪", durationMs: 2200 });
           }
         } catch {}
       })();
@@ -84447,6 +84440,7 @@ function syncGenerateOrbVisibility() {
 }
 
 function lyricsBoxEmptyBaseHeight() {
+  if (currentRemixSource) return 168;
   try {
     if (window.matchMedia("(max-width: 720px)").matches) return 72;
   } catch {}
@@ -84551,7 +84545,8 @@ function autoResizeLyricsBox() {
   if (!els.sunoPrompt) return;
   const el = els.sunoPrompt;
   const composeStack = document.getElementById("createFlow")?.classList.contains("createComposeStack");
-  if (composeStack) {
+  const remixing = Boolean(currentRemixSource);
+  if (composeStack && !remixing) {
     el.style.height = "";
     try { applyLyricsInputBidi(el); } catch {}
     return;
@@ -84559,7 +84554,7 @@ function autoResizeLyricsBox() {
   try { applyLyricsInputBidi(el); } catch {}
   el.style.height = "auto";
   const base = lyricsBoxEmptyBaseHeight();
-  const max = 340;
+  const max = remixing ? 520 : 340;
   const hasText = Boolean(String(el.value || "").trim());
   const next = hasText
     ? Math.max(base, Math.min(max, el.scrollHeight))

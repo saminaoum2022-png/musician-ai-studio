@@ -9913,6 +9913,24 @@ textarea{
   z-index: 1;
 }
 .remixSourceLyricsPanel[hidden]{ display:none !important; }
+body[data-remixing] #remixSourceLyricsPanel{
+  display: none !important;
+}
+body[data-route="generate"][data-create-layout="simple"][data-remixing] #createFlow.createComposeStack .createSectionStack,
+body[data-route="generate"][data-create-layout="simple"][data-remixing] #createFlow.createComposeStack .createPane--lyrics{
+  overflow: auto;
+}
+body[data-route="generate"][data-create-layout="simple"][data-remixing] #createFlow.createComposeStack #lyricsFieldPanel{
+  flex: 1 1 auto;
+  min-height: 168px;
+}
+body[data-route="generate"][data-create-layout="simple"][data-remixing] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain{
+  overflow: auto;
+}
+body[data-route="generate"][data-create-layout="simple"][data-remixing] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain textarea,
+body[data-route="generate"][data-create-layout="simple"][data-remixing] #sunoPrompt{
+  min-height: 168px !important;
+}
 .remixSourceLyricsSummary{
   list-style:none;
   cursor:pointer;

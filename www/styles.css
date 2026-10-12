@@ -24622,6 +24622,82 @@ body.trackSheetOpen .footer{
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen .mobileTabbar{
     transition: none;
   }
+  /* Mobile web: lyrics fills leftover space. Generate stays in the page (not a
+     floating dock) so Safari does not pay for a fixed blur layer. */
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack{
+    height: var(--create-simple-flow-h, auto);
+    min-height: 0;
+    max-height: none;
+    overflow: hidden;
+    padding-bottom: 0;
+    margin-bottom: 0;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack > .createFlowStep:first-child,
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createSectionStack,
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createPanes,
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createPane--lyrics,
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #simpleBox{
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack > .createFlowStep[aria-label="Sound and title"]{
+    display: none;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel{
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+    padding-bottom: 16px;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBox{
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain{
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain textarea{
+    flex: 1 1 auto;
+    min-height: 96px !important;
+    height: 100% !important;
+    max-height: none !important;
+    overflow-y: auto;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
+    flex: 0 0 auto;
+    margin-top: 0;
+    padding: 4px 0 8px;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createFlowStep--generate{
+    flex: 0 0 auto;
+    height: auto;
+    margin: 0;
+    padding: 0 0 4px;
+    overflow: visible;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard #createFlow.createComposeStack #lyricsFieldPanel{
+    flex: 0 0 auto;
+    max-height: 112px;
+    padding-bottom: 8px;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain{
+    display: none;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].hasCreateCustomStyle #createFlow.createComposeStack #createSimpleStudioHost:not([hidden]){
+    max-height: none;
+    overflow: visible;
+  }
   body[data-route="generate"] input:focus,
   body[data-route="generate"] textarea:focus,
   body[data-route="generate"] select:focus{

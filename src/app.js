@@ -81743,6 +81743,7 @@ function getSimpleStudioRowPresets() {
 
 let _studioRowKbExtraSlots = 0;
 let _studioRowKbMeasureTries = 0;
+let _studioRowKbActive = false;
 
 function isCreateKeyboardStyleRow() {
   return document.body.classList.contains("createKeyboardOpen") && isCreateSimpleCreateLayout();
@@ -81778,8 +81779,11 @@ function keyboardStudioRowFillPresets(tab, home) {
 
 function refreshSimpleStudioKeyboardRow() {
   if (document.body.classList.contains("createLyricsKeyboard")) {
+    const wasKb = _studioRowKbActive || _studioRowKbExtraSlots > 0;
     _studioRowKbExtraSlots = 0;
     _studioRowKbMeasureTries = 0;
+    _studioRowKbActive = false;
+    if (wasKb) renderLyriaStudioStyleRow();
     return;
   }
   const row = els.lyriaStudioStyleRow;
@@ -81787,8 +81791,9 @@ function refreshSimpleStudioKeyboardRow() {
   const kb = isCreateKeyboardStyleRow();
   const w = row.clientWidth || 0;
   const next = kb ? measureKeyboardStudioExtraSlots() : 0;
-  if (next !== _studioRowKbExtraSlots) {
+  if (next !== _studioRowKbExtraSlots || kb !== _studioRowKbActive) {
     _studioRowKbExtraSlots = next;
+    _studioRowKbActive = kb;
     renderLyriaStudioStyleRow();
   }
   if (kb && w < 80 && _studioRowKbMeasureTries < 8) {
@@ -82829,9 +82834,9 @@ function renderLyriaStudioStyleRow() {
   const kb = isCreateKeyboardStyleRow();
   const fill = kb ? keyboardStudioRowFillPresets(tab, home) : [];
   const homeFamily = tab === "international" ? "international" : tab === "oriental" ? "oriental" : "arabic";
-  row.innerHTML = home.map((preset) => studioStyleTileHtml(preset, active, { family: homeFamily })).join("")
-    + fill.map((preset) => studioStyleTileHtml(preset, active, { family: preset.studioFamily })).join("")
-    + (kb ? "" : studioCustomTileHtml(isStudioCustomStyleActive()));
+  const tiles = home.map((preset) => studioStyleTileHtml(preset, active, { family: homeFamily })).join("")
+    + fill.map((preset) => studioStyleTileHtml(preset, active, { family: preset.studioFamily })).join("");
+  row.innerHTML = `<div class="lyriaStudioStyleRowTrack">${tiles}</div>${studioCustomTileHtml(isStudioCustomStyleActive())}`;
   try { syncCreateSimpleStyleTabs(); } catch {}
   try { syncCreateNabadHeard(); } catch {}
 }
@@ -84706,6 +84711,7 @@ function clearCreatePageKeyboardInset() {
   syncCreateComposeLayout();
   try { autoResizeLyricsBox(); } catch {}
   try { refreshSimpleStudioKeyboardRow(); } catch {}
+  try { renderLyriaStudioStyleRow(); } catch {}
 }
 
 function handleCreateFieldFocus(target) {

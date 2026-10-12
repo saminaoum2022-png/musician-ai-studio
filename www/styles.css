@@ -12790,10 +12790,24 @@ body[data-route="generate"][data-create-layout="advanced"] #createSoundPanel .ly
   margin-top: 0;
   padding: 12px 0 4px;
   gap: 12px;
+  overflow: hidden;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .lyriaStudioStyleRowTrack,
+body[data-route="generate"][data-create-layout="advanced"] #createSoundPanel .lyriaStudioStyleRowTrack{
+  display: flex;
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+  gap: inherit;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
   mask-image: linear-gradient(90deg, #000 88%, transparent);
   -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .lyriaStudioStyleRowTrack::-webkit-scrollbar,
+body[data-route="generate"][data-create-layout="advanced"] #createSoundPanel .lyriaStudioStyleRowTrack::-webkit-scrollbar{
+  display: none;
 }
 body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .styleSuggestPill{
   padding: 8px 12px;
@@ -12803,13 +12817,13 @@ body[data-route="generate"][data-create-layout="simple"] .styleSuggestPill--stud
   display: none !important;
 }
 body[data-route="generate"] .lyriaStudioStyleRow{
+  display: flex;
   align-items: flex-start;
   flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
+  overflow: hidden;
 }
-body[data-route="generate"] .lyriaStudioStyleRow::-webkit-scrollbar{
-  display: none;
+body[data-route="generate"] .lyriaStudioStyleRow .studioStyleTile--custom{
+  flex-shrink: 0;
 }
 body[data-route="generate"] .studioStyleTile{
   flex: 0 0 auto;

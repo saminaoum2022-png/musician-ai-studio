@@ -1517,7 +1517,7 @@
                   <span class="addressPillMain">Female</span>
                   <span class="addressPillSub">مغنية</span>
                 </button>
-                <button type="button" id="singerPersonaPill" class="addressPill singerPersonaPill" data-persona-action="create" aria-pressed="false">
+                <button type="button" id="singerPersonaPill" class="addressPill singerPersonaPill" data-persona-action="create" hidden aria-hidden="true" aria-pressed="false">
                   <span class="addressPillMain">Persona</span>
                   <span class="addressPillSub singerPersonaPillSub"><svg class="singerPersonaPlusIco" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
                 </button>
@@ -2103,7 +2103,7 @@
           </div>
         </section>
 
-        <section class="mashupPage wide" data-route="mashup" id="mashupPage">
+        <section class="mashupPage wide" data-route="mashup" id="mashupPage" hidden>
           <header class="mashupHead">
             <button type="button" class="nabadBackBtn mashupBack" id="btnMashupBack" aria-label="Back to Create">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
@@ -2527,7 +2527,7 @@
                     <span class="homeDeskPromoChev" aria-hidden="true">→</span>
                   </button>
 
-                  <button type="button" class="homeDeskPromoCard homeDeskPersonaPromo homeDeskPromo--quick" data-home-card="persona" aria-label="Persona — save your voice once and use it across every song">
+                  <button type="button" class="homeDeskPromoCard homeDeskPersonaPromo homeDeskPromo--quick" data-home-card="persona" hidden aria-hidden="true" aria-label="Persona — save your voice once and use it across every song">
                     <span class="homeDeskPromoVisual homeDeskPromoVisual--persona" aria-hidden="true">
                       <span class="homeDeskPersonaTileWrap">
                         <span class="homeDeskPersonaTile">
@@ -4453,7 +4453,7 @@
             <section class="profileEditSection" aria-labelledby="profileEditAiTitle">
               <h2 id="profileEditAiTitle" class="profileEditSectionLabel">AI</h2>
               <div class="profileEditCard">
-                <button type="button" class="profileEditRow" data-profile-edit-field="persona">
+                <button type="button" class="profileEditRow" data-profile-edit-field="persona" hidden aria-hidden="true">
                   <span class="profileEditRowLabel">Voice persona</span>
                   <span class="profileEditRowValue" id="profileEditPersonaVal">Default voice</span>
                   <span class="profileEditRowChev" aria-hidden="true">›</span>
@@ -4712,7 +4712,7 @@
               </div>
             </section>
 
-            <section class="settingsSection settingsPersonaFeature" aria-labelledby="settingsVoicesManagerTitle">
+            <section class="settingsSection settingsPersonaFeature" aria-labelledby="settingsVoicesManagerTitle" hidden>
               <h2 id="settingsVoicesManagerTitle" class="settingsSectionLabel">Persona</h2>
               <button id="btnSettingsPersonaRecord" type="button" class="settingsPersonaCard">
                 <span class="settingsPersonaCardMark" aria-hidden="true">

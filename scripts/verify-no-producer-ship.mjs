@@ -53,6 +53,22 @@ if (/export\s+const\s+NABAD_GOLD_PUBLIC_SHIPPED\s*=\s*true/.test(text)) {
   failed = true;
 }
 
+if (/export\s+const\s+NABAD_PERSONA_PUBLIC_SHIPPED\s*=\s*true/.test(text)) {
+  console.error(
+    "NABAD_PERSONA_PUBLIC_SHIPPED is true — Persona would go live for users.",
+  );
+  console.error("Set it back to false in src/feature-flags.js before shipping to main.");
+  failed = true;
+}
+
+if (/export\s+const\s+NABAD_MASHUP_PUBLIC_SHIPPED\s*=\s*true/.test(text)) {
+  console.error(
+    "NABAD_MASHUP_PUBLIC_SHIPPED is true — Mashup would go live for users.",
+  );
+  console.error("Set it back to false in src/feature-flags.js before shipping to main.");
+  failed = true;
+}
+
 if (failed) process.exit(1);
 
-console.log("verify-no-producer-ship: OK (Producer + Vibe + Edit + Gold stay hidden — Live Listen and Oriental are launched)");
+console.log("verify-no-producer-ship: OK (Producer + Vibe + Edit + Gold + Persona + Mashup stay hidden — Live Listen and Oriental are launched)");

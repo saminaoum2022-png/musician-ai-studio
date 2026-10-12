@@ -13487,6 +13487,20 @@ html:not([data-theme="light"]) .createLyricsAttachMenu{
 .createLyricsAttachMenuItem[hidden]{
   display: none !important;
 }
+#singerPersonaPill[hidden],
+#singerPersonaRow[hidden],
+.homeDeskPersonaPromo[hidden],
+.homeDeskCreateStack .homeDeskPersonaPromo[hidden],
+#profilePersonaRow[hidden],
+.settingsPersonaFeature[hidden],
+.profileEditRow[hidden],
+.pubSwitchRow--mashup[hidden],
+#mashupPage[hidden],
+#mashupPickerSheet[hidden],
+#personaActiveBanner[hidden],
+#personaVoiceTune[hidden]{
+  display: none !important;
+}
 .createLyricsAttachMenuItem{
   display: flex;
   align-items: center;

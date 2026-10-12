@@ -50,6 +50,18 @@ export const NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED = true;
  */
 export const NABAD_LYRIA_CREATE_PUBLIC_SHIPPED = true;
 
+/**
+ * When true: Persona (voice clone) is live — Create pill, home card, Settings.
+ * Keep false until explicit launch. Remix stays; Persona is parked.
+ */
+export const NABAD_PERSONA_PUBLIC_SHIPPED = false;
+
+/**
+ * When true: Mashup (blend two tracks) is live — player sheet, #/mashup route.
+ * Keep false until explicit launch. Remix stays; Mashup is parked.
+ */
+export const NABAD_MASHUP_PUBLIC_SHIPPED = false;
+
 /** When false: hide play counts on Discover cards, charts, and challenge heroes (sorting unchanged). */
 export const DISCOVER_SHOW_PLAY_COUNTS = false;
 

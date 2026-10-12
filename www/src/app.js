@@ -359,7 +359,7 @@ import {
   screenshotProf,
   screenshotSanitizeCopy,
 } from "./screenshot-mode.js";
-import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED, NABAD_LYRIA_CREATE_PUBLIC_SHIPPED, NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED } from "./feature-flags.js";
+import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED, NABAD_LYRIA_CREATE_PUBLIC_SHIPPED, NABAD_MASHUP_PUBLIC_SHIPPED, NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED, NABAD_PERSONA_PUBLIC_SHIPPED } from "./feature-flags.js";
 import {
   applyGoldToAvatarWrap,
   applyGoldNameGradient,
@@ -6924,9 +6924,16 @@ function applyRoute({ passGen } = {}) {
     }
   }
   if (wanted === "mashup") {
-    bindMashupPageOnce();
-    enterMashupRoute();
-    void ensureUserLibraryHydrated().then(() => renderMashupPage());
+    if (!nabadMashupEnabled()) {
+      try { history.replaceState(null, "", "#/generate"); } catch {}
+      wanted = "generate";
+      syncRoutePanelVisibility("generate");
+      try { restoreCreatePageOnRouteEnter(); } catch {}
+    } else {
+      bindMashupPageOnce();
+      enterMashupRoute();
+      void ensureUserLibraryHydrated().then(() => renderMashupPage());
+    }
   }
   if (wanted === "user") {
     enterUserPublicRoute({
@@ -8344,7 +8351,7 @@ const CREATE_PLUS_ICON_HTML =
 function renderSingerPersonaPill() {
   const pill = document.getElementById("singerPersonaPill");
   if (!pill) return;
-  if (isLyriaClipGenerateFlow()) {
+  if (!nabadPersonaEnabled() || isLyriaClipGenerateFlow()) {
     pill.hidden = true;
     pill.setAttribute("aria-hidden", "true");
     return;
@@ -8392,6 +8399,13 @@ function renderSingerPersonaRow() {
   renderSingerPersonaPill();
   const row = els.singerPersonaRow || document.getElementById("singerPersonaRow");
   if (!row) return;
+  if (!nabadPersonaEnabled()) {
+    _singerPersonaDrawerOpen = false;
+    row.hidden = true;
+    row.innerHTML = "";
+    try { syncSingerGenderPills(); } catch {}
+    return;
+  }
   let list = [];
   let active = "";
   if (authSession?.user?.id) {
@@ -16370,6 +16384,7 @@ function bindHomeDeskOnce(page) {
         return;
       }
       if (card === "persona") {
+        if (!nabadPersonaEnabled()) return;
         if (!requireProForWebFeature("Persona")) return;
         void openVoiceWizard();
         return;
@@ -16393,6 +16408,7 @@ function bindHomeDeskOnce(page) {
         return;
       }
       if (card === "mashup") {
+        if (!nabadMashupEnabled()) return;
         if (!authSession?.user?.id) {
           try { location.hash = "#/auth"; } catch {}
           scheduleApplyRoute();
@@ -33307,9 +33323,46 @@ function savePersonaSelection(id) {
     else localStorage.removeItem(k);
   } catch {}
 }
+function nabadPersonaEnabled() {
+  return NABAD_PERSONA_PUBLIC_SHIPPED === true;
+}
+
+function nabadMashupEnabled() {
+  return NABAD_MASHUP_PUBLIC_SHIPPED === true;
+}
+
+function hideRetiredFeatureEl(el) {
+  if (!el) return;
+  el.hidden = true;
+  el.setAttribute("aria-hidden", "true");
+}
+
+function syncPersonaMashupHiddenUi() {
+  if (!nabadPersonaEnabled()) {
+    hideRetiredFeatureEl(document.getElementById("singerPersonaPill"));
+    hideRetiredFeatureEl(document.getElementById("singerPersonaRow"));
+    hideRetiredFeatureEl(document.getElementById("personaActiveBanner"));
+    hideRetiredFeatureEl(document.getElementById("personaVoiceTune"));
+    hideRetiredFeatureEl(document.getElementById("profilePersonaRow"));
+    hideRetiredFeatureEl(document.getElementById("profilePersonaAvatarBadge"));
+    hideRetiredFeatureEl(document.getElementById("profilePersonaInlineChip"));
+    hideRetiredFeatureEl(document.querySelector(".settingsPersonaFeature"));
+    hideRetiredFeatureEl(document.querySelector('[data-profile-edit-field="persona"]'));
+    hideRetiredFeatureEl(document.querySelector('[data-home-card="persona"]'));
+    hideRetiredFeatureEl(document.getElementById("voiceWizardSheet"));
+    try { if (els.sunoPersonaId) els.sunoPersonaId.value = ""; } catch {}
+  }
+  if (!nabadMashupEnabled()) {
+    hideRetiredFeatureEl(document.getElementById("mashupPage"));
+    hideRetiredFeatureEl(document.getElementById("mashupPickerSheet"));
+    document.querySelectorAll(".pubSwitchRow--mashup").forEach((el) => hideRetiredFeatureEl(el));
+  }
+}
+
 /** Active persona for Create — saved chip/settings selection is source of truth;
  *  the hidden select can lag behind and previously sent a stale old voice id. */
 function getActivePersonaId() {
+  if (!nabadPersonaEnabled()) return "";
   const saved = loadPersonaSelection().trim();
   const fromSelect = String(els.sunoPersonaId?.value || "").trim();
   const id = saved || fromSelect;
@@ -36495,6 +36548,11 @@ function syncProGatedWebUi() {
       el.setAttribute("aria-hidden", "true");
       return;
     }
+    if (el.getAttribute("data-home-card") === "persona" && !nabadPersonaEnabled()) {
+      el.hidden = true;
+      el.setAttribute("aria-hidden", "true");
+      return;
+    }
     el.hidden = false;
     el.setAttribute("aria-hidden", "false");
     setWebProFeaturePillOnHomeCard(el, locked);
@@ -36502,12 +36560,22 @@ function syncProGatedWebUi() {
 
   const singerPill = document.getElementById("singerPersonaPill");
   if (singerPill) {
-    singerPill.hidden = false;
-    singerPill.setAttribute("aria-hidden", "false");
-    setWebProFeaturePill(singerPill, locked, "pill");
+    if (!nabadPersonaEnabled()) {
+      singerPill.hidden = true;
+      singerPill.setAttribute("aria-hidden", "true");
+    } else {
+      singerPill.hidden = false;
+      singerPill.setAttribute("aria-hidden", "false");
+      setWebProFeaturePill(singerPill, locked, "pill");
+    }
   }
 
   document.querySelectorAll('[data-profile-edit-field="persona"]').forEach((el) => {
+    if (!nabadPersonaEnabled()) {
+      el.hidden = true;
+      el.setAttribute("aria-hidden", "true");
+      return;
+    }
     el.hidden = false;
     el.setAttribute("aria-hidden", "false");
     setWebProFeaturePill(el, locked, "inline");
@@ -36534,18 +36602,28 @@ function syncProGatedWebUi() {
   syncTrackSheetProPills();
 
   if (els.profilePersonaRow) {
-    els.profilePersonaRow.hidden = false;
-    els.profilePersonaRow.setAttribute("aria-hidden", "false");
-    const title = document.getElementById("profilePersonaSignatureTitle");
-    setWebProFeaturePill(title || els.profilePersonaRow, locked, "inline");
+    if (!nabadPersonaEnabled()) {
+      els.profilePersonaRow.hidden = true;
+      els.profilePersonaRow.setAttribute("aria-hidden", "true");
+    } else {
+      els.profilePersonaRow.hidden = false;
+      els.profilePersonaRow.setAttribute("aria-hidden", "false");
+      const title = document.getElementById("profilePersonaSignatureTitle");
+      setWebProFeaturePill(title || els.profilePersonaRow, locked, "inline");
+    }
   }
 
   const settingsVoicesSection = document.querySelector('[aria-labelledby="settingsVoicesManagerTitle"]');
   if (settingsVoicesSection) {
-    settingsVoicesSection.hidden = false;
-    settingsVoicesSection.setAttribute("aria-hidden", "false");
-    const title = document.getElementById("settingsVoicesManagerTitle");
-    setWebProFeaturePill(title, locked, "inline");
+    if (!nabadPersonaEnabled()) {
+      settingsVoicesSection.hidden = true;
+      settingsVoicesSection.setAttribute("aria-hidden", "true");
+    } else {
+      settingsVoicesSection.hidden = false;
+      settingsVoicesSection.setAttribute("aria-hidden", "false");
+      const title = document.getElementById("settingsVoicesManagerTitle");
+      setWebProFeaturePill(title, locked, "inline");
+    }
   }
 
   if (locked && creditsState.loaded) {
@@ -36567,8 +36645,9 @@ function syncProGatedWebUi() {
   try { renderSingerPersonaRow(); } catch {}
   if (locked) {
     const pill = document.getElementById("singerPersonaPill");
-    if (pill) setWebProFeaturePill(pill, true, "pill");
+    if (pill && nabadPersonaEnabled()) setWebProFeaturePill(pill, true, "pill");
   }
+  try { syncPersonaMashupHiddenUi(); } catch {}
 }
 
 function syncDeskSidebarPromo() {
@@ -40034,7 +40113,7 @@ function ensurePublishReleaseSheet() {
         </div>
         <div class="pubGroup" role="group" aria-label="Collaboration permissions">
           <label class="pubSwitchRow"><span class="pubSwitchText"><b>Allow remixes</b><small>Others can build on your song</small></span><input id="publishAllowRemix" class="pubSwitch" type="checkbox" checked /></label>
-          <label class="pubSwitchRow"><span class="pubSwitchText"><b>Allow mashups</b><small>Others can blend it with theirs</small></span><input id="publishAllowMashup" class="pubSwitch" type="checkbox" checked /></label>
+          <label class="pubSwitchRow pubSwitchRow--mashup"${nabadMashupEnabled() ? "" : " hidden"}><span class="pubSwitchText"><b>Allow mashups</b><small>Others can blend it with theirs</small></span><input id="publishAllowMashup" class="pubSwitch" type="checkbox" checked /></label>
         </div>
         <div id="publishReleaseMeta" class="publishReleaseMeta pubMeta" hidden></div>
         <div class="pubActions">
@@ -53890,6 +53969,7 @@ function mashupSlotSourceLabel(ref) {
 }
 
 function openMashupWithPrefill(trackRef, slot = "a") {
+  if (!nabadMashupEnabled()) return;
   if (!trackRef?.songId) {
     try { location.hash = "#/mashup"; } catch {}
     return;
@@ -55393,7 +55473,7 @@ function renderTrackSheetPublic(ctx) {
   };
   const isSound = String(trackRef.kind || "") === "sound";
   const allowRemix = !isSound && trackAllowsRemix(trackRef) && Boolean(ctx?.url);
-  const allowMashup = allowRemix && trackAllowsMashup(trackRef) && Boolean(mashupSongCloudId(trackRef));
+  const allowMashup = nabadMashupEnabled() && allowRemix && trackAllowsMashup(trackRef) && Boolean(mashupSongCloudId(trackRef));
   q.innerHTML = `
     ${allowRemix ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="remix">Remix</button>` : ""}
     ${allowMashup ? `<button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="mashup">Mashup</button>` : ""}
@@ -55427,7 +55507,7 @@ function renderTrackSheetDiscover(ctx) {
   };
   const isSound = String(trackRef.kind || "") === "sound";
   const allowRemix = !isSound && trackAllowsRemix(trackRef) && Boolean(ctx?.url);
-  const allowMashup = allowRemix && trackAllowsMashup(trackRef) && Boolean(mashupSongCloudId(trackRef));
+  const allowMashup = nabadMashupEnabled() && allowRemix && trackAllowsMashup(trackRef) && Boolean(mashupSongCloudId(trackRef));
   q.innerHTML = `
     ${allowRemix ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="remix">Remix</button>` : ""}
     ${allowMashup ? `<button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="mashup">Mashup</button>` : ""}
@@ -55474,7 +55554,7 @@ function renderTrackSheetLibrary(track) {
   const quickRemix = remixEligible
     ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="library_remix">Remix</button>`
     : "";
-  const mashupEligible = remixEligible && Boolean(mashupSongCloudId(track));
+  const mashupEligible = nabadMashupEnabled() && remixEligible && Boolean(mashupSongCloudId(track));
   const quickMashup = mashupEligible
     ? `<button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_mashup">Mashup</button>`
     : "";
@@ -56449,6 +56529,7 @@ function runTrackSheetAction(action, sourceEl) {
       return;
     }
     if (action === "mashup") {
+      if (!nabadMashupEnabled()) return;
       if (!authSession?.user?.id) {
         showToast("Sign in to mash up songs.", { icon: "!", durationMs: 3800 });
         shut();
@@ -56571,6 +56652,7 @@ function runTrackSheetAction(action, sourceEl) {
       return;
     }
     if (action === "library_mashup") {
+      if (!nabadMashupEnabled()) return;
       if (!authSession?.user?.id) {
         showToast("Sign in to mash up songs.", { icon: "!", durationMs: 3800 });
         shut();
@@ -63706,6 +63788,7 @@ function renderVoiceWizardStep1() {
 }
 
 async function openVoiceWizard() {
+  if (!nabadPersonaEnabled()) return;
   if (!authSession?.user?.id) {
     try { showToast("Sign in to record your voice", { icon: "!", durationMs: 3200 }); } catch {}
     try { location.hash = "#/auth"; } catch {}
@@ -63732,6 +63815,7 @@ async function openVoiceWizard() {
 }
 
 function openProfilePersonaPanel() {
+  if (!nabadPersonaEnabled()) return;
   if (!requireProForWebFeature("Persona")) return;
   setProfilePersonaExpanded(true);
   setProfilePersonaVoicesOpen(true);
@@ -90649,6 +90733,7 @@ setStatus(
 try {
   if (isWebOrDesktopShell()) syncProGatedWebUi();
   try { syncCreateProLocks(); } catch {}
+  try { syncPersonaMashupHiddenUi(); } catch {}
 } catch {}
 
 function clampInt(n, min, max) {

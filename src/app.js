@@ -82046,7 +82046,7 @@ function enterStudioCustomStyle() {
   try { syncCreateSimpleAura(); } catch {}
   window.setTimeout(() => {
     try { els.sunoStyle?.focus({ preventScroll: true }); } catch { try { els.sunoStyle?.focus(); } catch {} }
-    try { schedulePinCreateWebCustomStyleScroll(); } catch {}
+    try { syncCreateWebViewportFit(); } catch {}
   }, 80);
 }
 
@@ -84774,7 +84774,10 @@ function applyCreateKeyboardOpen(height) {
   if (kb < 80) return;
   const alreadyOpen = document.body.classList.contains("createKeyboardOpen");
   const insetChanged = Math.abs(kb - _createKeyboardInsetLast) > 24;
-  if (alreadyOpen && _createKeyboardInsetLast > 0 && !insetChanged) return;
+  if (alreadyOpen && _createKeyboardInsetLast > 0 && !insetChanged) {
+    try { syncCreateWebViewportFit(); } catch {}
+    return;
+  }
   markCreateKeyboardAnimating();
   _createKeyboardHeight = kb;
   _createKeyboardInsetLast = kb;
@@ -84786,28 +84789,31 @@ function applyCreateKeyboardOpen(height) {
   try {
     document.documentElement.style.setProperty("--create-keyboard-inset", `${kb}px`);
   } catch {}
-  try {
-    const vv = window.visualViewport;
-    if (vv) {
-      document.documentElement.style.setProperty("--create-vv-height", `${Math.round(vv.height)}px`);
-    }
-  } catch {}
+  try { stampCreateVisualViewportHeight(); } catch {}
   syncCreateComposeLayout();
   try { autoResizeLyricsBox(); } catch {}
-  try { schedulePinCreateWebCustomStyleScroll(); } catch {}
+  try { syncCreateWebViewportFit(); } catch {}
 }
 
-function isCreateMobileWebCustomStyleKeyboard() {
+function isCreateMobileWebKeyboardFit() {
   return createKeyboardUsesStableInsetOnly()
     && !getNativeKeyboardPlugin()
-    && (
-      document.body.classList.contains("createCustomStyleKeyboard")
-      || _createCustomStyleKeyboardIntent
-    );
+    && isCreateSimpleCreateLayout();
 }
 
-function pinCreateWebCustomStyleScroll() {
-  if (!isCreateMobileWebCustomStyleKeyboard()) return;
+function stampCreateVisualViewportHeight() {
+  if (!isCreateMobileWebKeyboardFit()) return;
+  try {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const h = Math.max(280, Math.round(vv.height));
+    document.documentElement.style.setProperty("--create-vv-height", `${h}px`);
+  } catch {}
+}
+
+function pinCreateWebKeyboardScroll() {
+  if (!isCreateMobileWebKeyboardFit()) return;
+  if (!document.body.classList.contains("createWebViewportFit")) return;
   try { window.scrollTo(0, 0); } catch {}
   try {
     document.documentElement.scrollTop = 0;
@@ -84815,12 +84821,29 @@ function pinCreateWebCustomStyleScroll() {
   } catch {}
 }
 
-function schedulePinCreateWebCustomStyleScroll() {
-  if (!isCreateMobileWebCustomStyleKeyboard()) return;
-  pinCreateWebCustomStyleScroll();
-  requestAnimationFrame(pinCreateWebCustomStyleScroll);
-  window.setTimeout(pinCreateWebCustomStyleScroll, 80);
-  window.setTimeout(pinCreateWebCustomStyleScroll, 240);
+function schedulePinCreateWebKeyboardScroll() {
+  if (!isCreateMobileWebKeyboardFit()) return;
+  pinCreateWebKeyboardScroll();
+  requestAnimationFrame(pinCreateWebKeyboardScroll);
+  window.setTimeout(pinCreateWebKeyboardScroll, 80);
+  window.setTimeout(pinCreateWebKeyboardScroll, 240);
+}
+
+function syncCreateWebViewportFit() {
+  if (!isCreateMobileWebKeyboardFit()) {
+    document.body.classList.remove("createWebViewportFit");
+    return;
+  }
+  const focused = isCreateFormField(document.activeElement)
+    || document.body.classList.contains("createKeyboardOpen")
+    || document.body.classList.contains("createCustomStyleKeyboard")
+    || document.body.classList.contains("createLyricsKeyboard")
+    || _createCustomStyleKeyboardIntent
+    || _createLyricsKeyboardIntent;
+  document.body.classList.toggle("createWebViewportFit", focused);
+  if (!focused) return;
+  stampCreateVisualViewportHeight();
+  schedulePinCreateWebKeyboardScroll();
 }
 
 function scheduleCreateKeyboardScroll() {
@@ -84840,6 +84863,7 @@ function scheduleCreateMobileWebKeyboardSync() {
     if (!isGenerateRouteActive() || !_createFocusedField) return;
     const kb = measureCreateViewportKeyboardInset();
     if (kb > 80) applyCreateKeyboardOpen(kb);
+    try { syncCreateWebViewportFit(); } catch {}
   };
   _createMobileWebKbTimer = window.setTimeout(sync, 280);
   _createMobileWebKbTimer2 = window.setTimeout(sync, 520);
@@ -84851,6 +84875,7 @@ function clearCreatePageKeyboardInset() {
   const alreadyClear = !document.body.classList.contains("createKeyboardOpen")
     && !document.body.classList.contains("createLyricsKeyboard")
     && !document.body.classList.contains("createCustomStyleKeyboard")
+    && !document.body.classList.contains("createWebViewportFit")
     && !_createKeyboardHeight
     && !_createLyricsKeyboardIntent
     && !_createCustomStyleKeyboardIntent
@@ -84878,7 +84903,7 @@ function clearCreatePageKeyboardInset() {
     cancelAnimationFrame(_createKeyboardViewportRaf);
     _createKeyboardViewportRaf = 0;
   }
-  document.body.classList.remove("createKeyboardOpen", "createLyricsKeyboard", "createCustomStyleKeyboard");
+  document.body.classList.remove("createKeyboardOpen", "createLyricsKeyboard", "createCustomStyleKeyboard", "createWebViewportFit");
   try {
     document.documentElement.style.setProperty("--create-keyboard-inset", "0px");
   } catch {}
@@ -84932,9 +84957,7 @@ function handleCreateFieldFocus(target) {
     if (!alreadyOpen) {
       try { syncCreateComposeLayout(); } catch {}
     }
-    if (customStyle) {
-      try { schedulePinCreateWebCustomStyleScroll(); } catch {}
-    }
+    try { syncCreateWebViewportFit(); } catch {}
   }
   setGenerateInputFocus(target.closest(".inputPanel") || null);
   scheduleCreateMobileWebKeyboardSync();
@@ -84976,13 +84999,16 @@ function wireCreatePageKeyboardOnce() {
         if (kb > 80) applyCreateKeyboardOpen(kb);
         else if (!isCreateFormField(document.activeElement)) {
           clearCreatePageKeyboardInset();
+        } else {
+          try { syncCreateWebViewportFit(); } catch {}
         }
       });
     };
     vv?.addEventListener("resize", onViewportResize);
     vv?.addEventListener("scroll", () => {
-      if (!isCreateMobileWebCustomStyleKeyboard()) return;
-      pinCreateWebCustomStyleScroll();
+      if (!isCreateMobileWebKeyboardFit()) return;
+      stampCreateVisualViewportHeight();
+      pinCreateWebKeyboardScroll();
     });
   }
 

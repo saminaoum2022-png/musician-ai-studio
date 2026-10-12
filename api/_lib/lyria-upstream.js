@@ -89,8 +89,7 @@ function lyriaUseInteractionsApi() {
 }
 
 function lyriaGenerateEnabled() {
-  const v = String(process.env.LYRIA_GENERATE_ENABLED || "").trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
+  return envFlagEnabled("LYRIA_GENERATE_ENABLED", { defaultOn: true });
 }
 
 function envFlagEnabled(name, { defaultOn = true } = {}) {

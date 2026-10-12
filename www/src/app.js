@@ -359,7 +359,7 @@ import {
   screenshotProf,
   screenshotSanitizeCopy,
 } from "./screenshot-mode.js";
-import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED, NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED } from "./feature-flags.js";
+import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED, NABAD_LYRIA_CREATE_PUBLIC_SHIPPED, NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED } from "./feature-flags.js";
 import {
   applyGoldToAvatarWrap,
   applyGoldNameGradient,
@@ -389,7 +389,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20261012-170043";
+const APP_BUILD = "20261012-172337";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -32302,8 +32302,23 @@ function useMinimaxMusicProvider() {
   return creditsState.isAdmin && getMusicProviderPref() === "minimax";
 }
 
+/** Remix, persona, mashup, and hum/audio reference stay on Suno. */
+function createAttachmentForcesSuno() {
+  try {
+    if (String(getActivePersonaId() || "").trim()) return true;
+  } catch {}
+  try {
+    if (currentRemixSource) return true;
+  } catch {}
+  try {
+    if (typeof getVocalReferenceFile === "function" && getVocalReferenceFile()) return true;
+  } catch {}
+  return false;
+}
+
 function useLyriaMusicProvider() {
-  return creditsState.isAdmin && getMusicProviderPref() === "lyria";
+  if (creditsState.isAdmin) return getMusicProviderPref() === "lyria";
+  return Boolean(NABAD_LYRIA_CREATE_PUBLIC_SHIPPED) && !createAttachmentForcesSuno();
 }
 
 /** Admin Settings → Lyria clip (~30s) on the clip model from normal Create. */
@@ -32331,6 +32346,7 @@ function adminProviderCapabilityBlockReason({
   shelfLyriaFull = false,
 } = {}) {
   if (!creditsState.isAdmin) return "";
+  if (createAttachmentForcesSuno()) return "";
   // Public shelf → Lyria full ignores the picker unless admin honors it.
   if (shelfLyriaFull && !adminHonorsTemplateEnginePicker()) {
     if (hasReference || personaId) {
@@ -32450,7 +32466,7 @@ function syncElevenSongLengthPanel() {
 }
 
 function musicGenerateApiPath() {
-  if (isTemplateSparkLyriaFullFlow()) return "/api/music/generate?provider=lyria";
+  if (isTemplateSparkLyriaFullFlow() || useLyriaForThisGenerate()) return "/api/music/generate?provider=lyria";
   const pref = getMusicProviderPref();
   if (pref === "minimax") return "/api/music/generate?provider=minimax";
   if (pref === "lyria_clip") return nabadClipGenerateApiPath();
@@ -32542,6 +32558,7 @@ function isTemplateSparkLyriaFullFlow() {
 }
 
 function useLyriaForThisGenerate() {
+  if (createAttachmentForcesSuno()) return false;
   return useLyriaMusicProvider() || isTemplateSparkLyriaFullFlow();
 }
 

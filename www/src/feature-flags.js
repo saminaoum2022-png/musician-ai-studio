@@ -43,6 +43,13 @@ export const NABAD_LIVE_LISTEN_PUBLIC_SHIPPED = true;
  */
 export const NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED = true;
 
+/**
+ * When true: blank Create (and templates) use Lyria 3.5 for everyone.
+ * Remix / persona / mashup / hum-reference stay on Suno.
+ * Batch 2 — keep true. Admin Settings → engine still overrides for admins.
+ */
+export const NABAD_LYRIA_CREATE_PUBLIC_SHIPPED = true;
+
 /** When false: hide play counts on Discover cards, charts, and challenge heroes (sorting unchanged). */
 export const DISCOVER_SHOW_PLAY_COUNTS = false;
 

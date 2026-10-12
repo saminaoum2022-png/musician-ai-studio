@@ -81701,8 +81701,7 @@ function syncCreateSoundPanelUi() {
 }
 
 function createFlowModeEnabled() {
-  const stagingEnv = String(window.__NABAD_CLIENT_ENV__?.environment || "") === "staging";
-  return stagingEnv || useLyriaMusicProvider();
+  return true;
 }
 
 function getCreateFlowMode() {

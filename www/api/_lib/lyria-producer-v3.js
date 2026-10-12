@@ -313,6 +313,21 @@ function fmtTime(sec) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/** Musical form for Lyria — bars at the style BPM, not wall-clock [m:ss] cuts. */
+function formatV3ArrangementLine(s, { vocalEnter } = {}) {
+  let a = String(s?.arrangement || "").replace(/\.\s*$/, "");
+  const name = String(s?.name || "").trim() || "Section";
+  if (name === "Verse 1" && vocalEnter && !/vocal enters on the downbeat/i.test(a)) {
+    a = a ? `${a}; ${vocalEnter}` : vocalEnter;
+  }
+  if (name === "Mawwal") {
+    return a ? `Mawwal, free time: ${a}` : "Mawwal, free time";
+  }
+  const bars = Math.max(0, Math.round(Number(s?.bars) || 0));
+  const label = bars > 0 ? `${name}, ${bars} bars` : name;
+  return a ? `${label}: ${a}` : label;
+}
+
 function capWords(text, max) {
   const parts = String(text || "").trim().split(/\s+/).filter(Boolean);
   return parts.slice(0, max).join(" ");
@@ -618,6 +633,9 @@ function validateLyriaPromptV3({
   if (/\bIntensity\s+\d+\s*\/\s*10\b/i.test(text)) {
     return { ok: false, error: "intensity_leaked" };
   }
+  if (/\[\d+:\d{2}\s*[-–—]\s*\d+:\d{2}\]/.test(text)) {
+    return { ok: false, error: "section_clocks" };
+  }
   const chorusLines = [];
   for (const s of sections || []) {
     if (FORBIDDEN_ARRANGEMENT.test(s.arrangement || "")) {
@@ -681,13 +699,7 @@ function buildLyriaPromptV3({
   if (arabiziSentence) head.push(arabiziSentence);
 
   const vocalEnter = "vocal enters on the downbeat after the intro phrase ends";
-  const arrLines = timed.map((s) => {
-    let a = String(s.arrangement || "").replace(/\.\s*$/, "");
-    if (s.name === "Verse 1" && !/vocal enters on the downbeat/i.test(a)) {
-      a = a ? `${a}; ${vocalEnter}` : vocalEnter;
-    }
-    return `[${fmtTime(s.startSec)} - ${fmtTime(s.endSec)}] ${s.name}: ${a}`;
-  });
+  const arrLines = timed.map((s) => formatV3ArrangementLine(s, { vocalEnter }));
 
   const blocks = [head.join(" ").replace(/\.\s*\./g, ".").trim(), "", ...arrLines];
 

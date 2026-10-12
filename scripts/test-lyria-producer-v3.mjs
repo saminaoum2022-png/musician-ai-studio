@@ -81,11 +81,10 @@ assert.ok(lebaneseStitch.prompt.includes("\nLyrics:\n"));
 assert.equal(/\bIntensity\s+\d/.test(lebaneseStitch.prompt), false);
 assert.equal(lebaneseStitch.styleLine.includes("male lead vocal"), false);
 assert.equal(lebaneseStitch.bpm, 85);
-const mawwalLine = lebaneseStitch.prompt.split("\n").find((l) => l.includes("] Mawwal:"));
-assert.ok(mawwalLine, "mawwal timestamp");
-const mTimes = mawwalLine.match(/\[(\d):(\d{2}) - (\d):(\d{2})\]/);
-const mDur = Number(mTimes[3]) * 60 + Number(mTimes[4]) - (Number(mTimes[1]) * 60 + Number(mTimes[2]));
-assert.ok(mDur >= 15 && mDur <= 20, `mawwal duration ${mDur}`);
+const mawwalLine = lebaneseStitch.prompt.split("\n").find((l) => /^Mawwal,/.test(l));
+assert.ok(mawwalLine, "mawwal bar line");
+assert.ok(/^Mawwal, free time:/.test(mawwalLine), mawwalLine);
+assert.equal(/\[\d+:\d{2}\s*[-–—]\s*\d+:\d{2}\]/.test(lebaneseStitch.prompt), false, "no section clocks");
 
 const pop = {
   style: "Greek-Arabic pop, bouzouki and oud, warm vocal",
@@ -146,12 +145,10 @@ if (!writeStitch.ok) fail(`write adapted stitch: ${writeStitch.error}`);
 assert.ok(writeStitch.prompt.includes("acoustic textures"));
 assert.ok(writeStitch.prompt.includes("[") && writeStitch.prompt.includes("Instrumental"));
 assert.ok(writeStitch.prompt.includes("vocal enters on the downbeat after the intro phrase ends"));
-const writeIntro = writeStitch.prompt.split("\n").find((l) => l.includes("] Intro:"));
-assert.ok(writeIntro);
-const writeIntroTimes = writeIntro.match(/\[(\d):(\d{2}) - (\d):(\d{2})\]/);
-const writeIntroDur = Number(writeIntroTimes[3]) * 60 + Number(writeIntroTimes[4])
-  - (Number(writeIntroTimes[1]) * 60 + Number(writeIntroTimes[2]));
-assert.ok(writeIntroDur >= 16, `intro must be >= 8 bars (~16s+), got ${writeIntroDur}s from ${writeIntro}`);
+const writeIntro = writeStitch.prompt.split("\n").find((l) => /^Intro,/.test(l));
+assert.ok(writeIntro, "intro bar line");
+assert.ok(/^Intro, 8 bars:/.test(writeIntro), `intro must be 8 bars, got ${writeIntro}`);
+assert.equal(/\[\d+:\d{2}\s*[-–—]\s*\d+:\d{2}\]/.test(writeStitch.prompt), false, "no section clocks");
 
 const mawwalZero = v3.normalizeLyriaProducerV3Output({
   sections: [
@@ -171,10 +168,10 @@ const mawwalZeroStitch = v3.buildLyriaPromptV3({
   lyricsRaw: "يا ليل قلبي تعبان يا دني",
 });
 if (!mawwalZeroStitch.ok) fail(`mawwal 0 bars stitch: ${mawwalZeroStitch.error}`);
-const mzLine = mawwalZeroStitch.prompt.split("\n").find((l) => l.includes("] Mawwal:"));
-const mzTimes = mzLine.match(/\[(\d):(\d{2}) - (\d):(\d{2})\]/);
-const mzDur = Number(mzTimes[3]) * 60 + Number(mzTimes[4]) - (Number(mzTimes[1]) * 60 + Number(mzTimes[2]));
-assert.ok(mzDur >= 15 && mzDur <= 20, `mawwal fixed window ${mzDur}`);
+const mzLine = mawwalZeroStitch.prompt.split("\n").find((l) => /^Mawwal,/.test(l));
+assert.ok(mzLine, "mawwal 0 bars still stitched");
+assert.ok(/^Mawwal, free time:/.test(mzLine), mzLine);
+assert.equal(/\[\d+:\d{2}\s*[-–—]\s*\d+:\d{2}\]/.test(mawwalZeroStitch.prompt), false);
 const mawwalAdmin = v3.appendLyriaProducerV3AdminDetail(
   { ok: true, v3: true, fallback: false },
   mawwalZeroStitch,

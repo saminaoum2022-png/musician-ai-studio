@@ -39301,11 +39301,8 @@ async function deliverDownloadBlobToDevice(blob, { filename, title, isVideo } = 
     if (canFileShare) {
       showToast(hintToast, { durationMs: 4800 });
       try {
-        await navigator.share({
-          files: [file],
-          title: trackTitle,
-          text: isVideo ? `“${trackTitle}” — save to Photos or Files` : `“${trackTitle}” — save this audio`,
-        });
+        // Files only — iOS Safari turns `text`/`title` into a second .txt next to the audio.
+        await navigator.share({ files: [file] });
       } catch (shareErr) {
         if (shareSheetCanceledError(shareErr)) return;
         tryAnchorDownload(shareBlob);

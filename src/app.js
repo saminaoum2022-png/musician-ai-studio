@@ -5517,7 +5517,7 @@ function setCreateChallengeHint(challenge) {
       els.createChallengeHintSub.textContent = String(c.id || "") === "80s-you"
         ? "Upload your portrait — we write your 80s lyrics. Pick singer & vocal character, then Generate."
         : String(c.id || "") === "spell-you"
-          ? "The name is the idea — edit it, pick a singer, then Generate."
+          ? "Upload a photo — we catch the mood. Pick singer, then Generate."
           : "Upload a photo on Photo — Analyze mood, then Generate.";
     } else {
       els.createChallengeHintSub.textContent = `${details ? `${details}. ` : ""}Edit the idea, then Generate — no need to write lyrics first.`;
@@ -6531,7 +6531,9 @@ function applyRoute({ passGen } = {}) {
   }
   if (prevRoute !== wanted) {
     closeCreateChooserSheet({ immediate: true });
-    closeImageMoodSheet();
+    if (!(wanted === "generate" && activePhotoSoloChallengeId())) {
+      closeImageMoodSheet();
+    }
   }
   if ((prevRoute === "discover" || prevRoute === "discover-playlist") && wanted !== "discover" && wanted !== "discover-playlist") {
     try { onLeaveSearchRoute(); } catch {}
@@ -9751,13 +9753,13 @@ const CHALLENGE_IDEAS = [
   },
   {
     id: "spell-you",
-    title: "Spell You",
+    title: "Mood You",
     styleLyria: "80s synthpop, dark atmospheric electronic pop",
     style: "80s synthpop, dark atmospheric electronic pop",
     lyricsMode: "instructions",
-    lyrics: "Spell You — the name is the idea. One harmless annoyance makes the spell.",
-    prompt: "Put a spell on someone. Make it a song.",
-    tags: ["Spell", "Photo", "Halloween"],
+    lyrics: "Photo mood song — lyrics come from your portrait after Analyze.",
+    prompt: "Add a photo. We catch the mood.",
+    tags: ["Mood", "Photo", "Trend"],
   },
 ];
 
@@ -9824,7 +9826,7 @@ const CHALLENGE_SPARK_KICKERS = {
   "shower-thought": "Thought",
   "last-photo-song": "Photo",
   "80s-you": "Trending",
-  "spell-you": "Spell",
+  "spell-you": "Mood",
 };
 const CHALLENGE_SPARK_TONES = ["violet", "cyan", "rose", "gold", "mint", "amber"];
 
@@ -10644,9 +10646,12 @@ function applyDiscoveryIdeaToCreate(idea) {
     }
   }
   if (photoSoloChallenge) {
-    try { setActiveCreateTab(isSpellYouCreateFlow() ? "lyrics" : "photo"); } catch {}
+    try { setActiveCreateTab("photo"); } catch {}
     if (isSpellYouCreateFlow()) {
-      applySpellYouDraftIntoCreate();
+      try { applySpellYouLockedStyle(); } catch {}
+    }
+    if (!imageMoodAppliedForNextGen) {
+      open80sYouPhotoSheetAfterBannerTap();
     }
   }
 }
@@ -11199,10 +11204,6 @@ function applyChallengeStartById(id, challengesMap) {
   const raw = String(id || "").trim();
   if (raw === "hum-track") {
     openHumTrackFlow();
-    return;
-  }
-  if (raw === "spell-you" && !_spellYouInjecting) {
-    openSpellYouSheet();
     return;
   }
   const key = resolveSparkId(raw);
@@ -13132,7 +13133,7 @@ const DISCOVER_CHALLENGE_AVATAR_SEEDS = {
   "roast-song": ["R", "O", "A", "S"],
 };
 
-const DISCOVER_CHALLENGE_ART_VERSION = "20261010spell1";
+const DISCOVER_CHALLENGE_ART_VERSION = "20261012mood1";
 const DISCOVER_CHALLENGE_ART = {
   worldcup2026: "./assets/discover/challenges/worldcup-anthem.svg",
   "one-line-reply": "./assets/discover/challenges/remix-battle.svg",
@@ -13143,7 +13144,7 @@ const DISCOVER_CHALLENGE_ART = {
   "sad-to-dance": "./assets/discover/challenges/remix-battle.svg",
   "last-photo-song": "./assets/discover/challenges/birthday-song.svg",
   "80s-you": "./assets/discover/challenges/love-song.svg",
-  "spell-you": "./assets/discover/challenges/spell-you-hero.jpg",
+  "spell-you": "./assets/discover/challenges/mood-you-hero.jpg",
   "hum-track": "./assets/discover/challenges/hum-track-hero.png",
   "roast-song": "./assets/discover/challenges/remix-battle.svg",
   birthday: "./assets/discover/challenges/birthday-song.svg",
@@ -13160,13 +13161,13 @@ function discoverChallengeArtUrl(challengeId) {
 const DISCOVER_FEATURED_HERO_ART = {
   worldcup2026: "./assets/discover/challenges/worldcup-hero.png",
   "80s-you": "./assets/discover/challenges/80s-you-hero.png",
-  "spell-you": "./assets/discover/challenges/spell-you-hero.jpg",
+  "spell-you": "./assets/discover/challenges/mood-you-hero.jpg",
   "hum-track": "./assets/discover/challenges/hum-track-hero.png",
 };
 
 const PHOTO_SOLO_CHALLENGE_ART = {
   "80s-you": "./assets/discover/challenges/80s-you-hero.png",
-  "spell-you": "./assets/discover/challenges/spell-you-hero.jpg",
+  "spell-you": "./assets/discover/challenges/mood-you-hero.jpg",
 };
 
 function bundleAssetUrl(relativePath) {
@@ -13232,10 +13233,6 @@ function handlePhotoSoloBannerTap(e) {
   if (!id) id = String(banner?.dataset?.challengeId || "80s-you").trim();
   if (!isPhotoSoloChallengeId(id)) return;
   haptic("light");
-  if (id === "spell-you") {
-    openSpellYouSheet();
-    return;
-  }
   const changePhoto = Boolean(imageMoodAppliedForNextGen && activePhotoSoloChallengeId() === id);
   if (changePhoto) {
     open80sYouPhotoSheetAfterBannerTap();
@@ -13306,27 +13303,25 @@ function syncPhotoSoloBannerUi(challenge) {
     kicker.textContent = id === "80s-you"
       ? "80s You · Trending"
       : id === "spell-you"
-        ? "Spell You · Trending"
+        ? "Mood You · Trending"
         : "Challenge";
   }
   if (title) {
     title.textContent = id === "spell-you"
-      ? "Spell You"
+      ? "Mood You"
       : String(challenge?.title || spark?.title || "Challenge").trim();
   }
   if (sub) {
     sub.textContent = id === "80s-you"
       ? "Your portrait becomes a synth-pop anthem."
       : id === "spell-you"
-        ? "Tap to edit the spell, then generate."
+        ? "Upload a photo — we catch the mood."
         : String(spark?.prompt || "Add a photo to start.").trim();
   }
   if (cta) {
     const changePhoto = imageMoodAppliedForNextGen && activePhotoSoloChallengeId() === id;
-    cta.textContent = id === "spell-you"
-      ? (spellYouReadyForGenerate() ? "Edit spell" : "Try now")
-      : changePhoto ? "Change photo" : "Try now";
-    cta.classList.toggle("createPhotoSoloBannerCta--ghost", id === "spell-you" ? spellYouReadyForGenerate() : changePhoto);
+    cta.textContent = changePhoto ? "Change photo" : "Try now";
+    cta.classList.toggle("createPhotoSoloBannerCta--ghost", changePhoto);
     cta.hidden = false;
   }
   banner.hidden = false;
@@ -13342,8 +13337,8 @@ const DISCOVER_LIVE_CHALLENGES = [
   {
     id: "spell-you",
     emoji: "✦",
-    title: "Spell You",
-    blurb: "Put a spell on someone. Make it a song.",
+    title: "Mood You",
+    blurb: "Upload a photo — we catch the mood.",
     tone: "violet",
     participants: 0,
     submissions: 0,
@@ -13436,7 +13431,7 @@ const DISCOVER_SUGGESTED_CREATORS = [
 ];
 
 const DISCOVER_NEW_THIS_WEEK = [
-  { id: "spell-you", emoji: "✦", kicker: "Trending", title: "Spell You", blurb: "Put a spell on someone. Make it a song.", tone: "violet", action: "challenge", challengeId: "spell-you" },
+  { id: "spell-you", emoji: "✦", kicker: "Trending", title: "Mood You", blurb: "Upload a photo — we catch the mood.", tone: "violet", action: "challenge", challengeId: "spell-you" },
   { id: "80s-you", emoji: "📼", kicker: "Trending", title: "80s You", blurb: "Photo → your personal 80s anthem.", tone: "violet", action: "challenge", challengeId: "80s-you" },
   { id: "graduation", emoji: "🎓", kicker: "New template", title: "Graduation Song", blurb: "Celebrate the milestone.", tone: "gold", action: "occasion", occasionId: "congrats" },
   { id: "ramadan", emoji: "🌙", kicker: "Seasonal", title: "Ramadan Glow", blurb: "Warm spiritual vibes.", tone: "violet", action: "occasion", occasionId: "christmas" },
@@ -13578,7 +13573,7 @@ function discoverChallengeMatchesTrack(c, track) {
   if (c.id === "overheard" && (chId === "overheard" || chTitle.includes("overheard"))) return true;
   if (c.id === "last-photo-song" && (chId === "last-photo-song" || chTitle.includes("photo"))) return true;
   if (c.id === "80s-you" && (chId === "80s-you" || chTitle.includes("80s") || chTitle.includes("80's"))) return true;
-  if (c.id === "spell-you" && (chId === "spell-you" || chTitle.includes("spell you") || chTitle.includes("spell-you"))) return true;
+  if (c.id === "spell-you" && (chId === "spell-you" || chTitle.includes("spell you") || chTitle.includes("spell-you") || chTitle.includes("mood you"))) return true;
   if (c.id === "hum-track" && (
     chId === "hum-track"
     || track?.meta?.humTrack
@@ -14362,7 +14357,7 @@ function discoverFeaturedChallengeHeroArt(c, topEntry) {
 }
 
 function discoverFeaturedChallengeSubtitle(c, topEntry, tracks) {
-  if (String(c?.id || "") === "spell-you") return "Put a spell on someone. Make it a song.";
+  if (String(c?.id || "") === "spell-you") return "Upload a photo — we catch the mood.";
   if (topEntry) return discoverChallengeRankText(topEntry, tracks);
   const blurb = String(c?.blurb || "").trim();
   if (blurb) return blurb;
@@ -20158,7 +20153,7 @@ function photoSoloShowsArabicDialect() {
 }
 
 function apply80sYouArabicLyricsContext() {
-  if (activePhotoSoloChallengeId() !== "80s-you") return;
+  if (!["80s-you", "spell-you"].includes(activePhotoSoloChallengeId())) return;
   if (!photoSoloShowsArabicDialect()) return;
   if (els.sunoArabicAddress) {
     els.sunoArabicAddress.value = "male";
@@ -20173,7 +20168,7 @@ function current80sLyricsDialectKey() {
 }
 
 function invalidate80sYouLyricsDraft() {
-  if (activePhotoSoloChallengeId() !== "80s-you") return;
+  if (!["80s-you", "spell-you"].includes(activePhotoSoloChallengeId())) return;
   _lyricsGeneratedInNabad = false;
   _80sLyricsDraftDialectKey = "";
   if (els.sunoPrompt) {
@@ -20191,7 +20186,8 @@ function ensure80sYouArabicDefaults() {
 }
 
 function maybeRedraft80sYouLyricsAfterDialectChange() {
-  if (activePhotoSoloChallengeId() !== "80s-you") return;
+  const id = activePhotoSoloChallengeId();
+  if (!["80s-you", "spell-you"].includes(id)) return;
   if (!imageMoodAppliedForNextGen || !imageMoodData) return;
   if (String(els.vocalInstrumentalOnly?.value || "0") === "1") return;
   const key = current80sLyricsDialectKey();
@@ -20200,12 +20196,13 @@ function maybeRedraft80sYouLyricsAfterDialectChange() {
   }
   if (!photoSoloShowsArabicDialect()) return;
   if (!arabicLyricChoicesReady()) return;
-  void draft80sYouLyricsForGenerate(imageMoodData);
+  if (id === "spell-you") void draftSpellYouLyricsForGenerate(imageMoodData);
+  else void draft80sYouLyricsForGenerate(imageMoodData);
 }
 
 function lyricDialectHintFor80sYou() {
   const base = String(els.sunoDialectHint?.value || "").trim();
-  if (activePhotoSoloChallengeId() !== "80s-you") return base;
+  if (!["80s-you", "spell-you"].includes(activePhotoSoloChallengeId())) return base;
   if (!photoSoloShowsArabicDialect()) return base;
   const addressNote = arabicAddressPronunciationNote(
     String(els.sunoArabicAddress?.value || "male").trim() || "male",
@@ -20217,7 +20214,7 @@ function lyricDialectHintFor80sYou() {
 function resolveFrancoConversionDialectHint() {
   try { applyLyricsLanguageToDialect(); } catch {}
   try { apply80sYouArabicLyricsContext(); } catch {}
-  if (activePhotoSoloChallengeId() === "80s-you") {
+  if (["80s-you", "spell-you"].includes(activePhotoSoloChallengeId())) {
     return lyricDialectHintFor80sYou();
   }
   const dialectHint = String(els.sunoDialectHint?.value || "").trim();
@@ -20229,7 +20226,7 @@ function resolveFrancoConversionDialectHint() {
 }
 
 function is80sLevantineDialectForDiacritics() {
-  if (activePhotoSoloChallengeId() !== "80s-you") return false;
+  if (!["80s-you", "spell-you"].includes(activePhotoSoloChallengeId())) return false;
   const d = String(lyricsDialect || "").trim().toLowerCase();
   return d === "lebanese" || d === "syrian" || d === "palestinian";
 }
@@ -20312,7 +20309,7 @@ function syncPhotoSoloVocalSections() {
 }
 
 function apply80sYouPortraitGender(mood) {
-  if (activePhotoSoloChallengeId() !== "80s-you") return;
+  if (!["80s-you", "spell-you"].includes(activePhotoSoloChallengeId())) return;
   const pg = String(mood?.portraitGender || "").trim().toLowerCase();
   const gender =
     pg === "male" || pg === "m"
@@ -20401,7 +20398,7 @@ async function draft80sYouLyricsForGenerate(mood) {
 const SPELL_YOU_STYLE_AR = "arabic-trap";
 const SPELL_YOU_STYLE_EN = "synthpop_80s";
 function spellYouLockedStyleFallback() {
-  return spellYouLanguageValue() === "arabic"
+  return photoSoloShowsArabicDialect() || lyricsLanguage === "arabic"
     ? "Arabic trap, melodic hip-hop, Middle Eastern trap, heavy 808 sub-bass, short lead hook under the 808"
     : "80s synthpop, dark atmospheric electronic pop, punchy LinnDrum beat, warm pulsing analog bassline";
 }
@@ -20529,17 +20526,8 @@ function resetSpellYouCardFields() {
 function syncSpellYouCardUi() {
   const summary = document.getElementById("createSpellYouSummary");
   if (!summary) return;
-  const show = isSpellYouCreateFlow() && spellYouReadyForGenerate();
-  summary.hidden = !show;
-  summary.setAttribute("aria-hidden", show ? "false" : "true");
-  if (!show) return;
-  const name = spellYouTargetName();
-  const annoyance = sanitizeSpellYouAnnoyance(spellYouAnnoyanceRaw());
-  const title = document.getElementById("createSpellYouSummaryTitle");
-  const sub = document.getElementById("createSpellYouSummarySub");
-  if (title) title.textContent = name ? `Spell on ${name}` : "Spell You";
-  if (sub) sub.textContent = annoyance ? `${annoyance} · tap to edit` : "Tap to edit name or annoyance.";
-  try { persistSpellYouChallengePerson(); } catch {}
+  summary.hidden = true;
+  summary.setAttribute("aria-hidden", "true");
 }
 function syncSpellYouContinueState() {
   const btn = document.getElementById("btnSpellYouContinue");
@@ -20550,7 +20538,7 @@ function syncSpellYouContinueState() {
 }
 function applySpellYouLockedStyle() {
   if (!isSpellYouCreateFlow()) return;
-  const arabic = spellYouLanguageValue() === "arabic";
+  const arabic = photoSoloShowsArabicDialect() || lyricsLanguage === "arabic";
   if (arabic) {
     const oriental = getOrientalStyle(SPELL_YOU_STYLE_AR);
     if (oriental) applyOrientalStudioStyle(oriental, { keepSinger: true });
@@ -20571,55 +20559,69 @@ function ensureSpellYouArabicDefaults() {
     try { syncLyricsDialectPills(); } catch {}
   }
 }
-function buildSpellYouLyricsBrief() {
-  const name = spellYouTargetName() || "them";
-  const annoyance = sanitizeSpellYouAnnoyance(spellYouAnnoyanceRaw()) || "keeps leaving me on seen";
-  const her = spellYouAddressValue() === "female";
-  if (photoSoloShowsArabicDialect() || spellYouLanguageValue() === "arabic") {
+function buildSpellYouLyricsBrief(mood = null) {
+  const subject = String(mood?.subject || "").trim() || "the person in the photo";
+  const concept = String(mood?.concept || "").trim();
+  const lyricSeed = String(mood?.lyricSeed || "").trim();
+  if (photoSoloShowsArabicDialect() || lyricsLanguage === "arabic") {
     return [
-      `اكتب أغنية سحر لبنانية عامية، خفيفة ومضحكة، عن ${name}.`,
-      `خاطب ${name} بصيغة ${her ? "المؤنث (إنتِ / سحرتِك)" : "المذكر (إنتَ / سحرتَك)"}.`,
-      `المزعج التافه: ${annoyance}.`,
-      "المغني ساحر أو ساحرة عم يعمل سحر لعوب. استخدم سحر / سحرتك.",
-      "ممنوع تمامًا: لعنة، اللعنة عليك، شتيمة، تهديد.",
-      "السحر تافه ومضحك بس (واي فاي، بطارية، زحمة، قهوة باردة، رسالة مقروءة).",
-      "إذا الطلب قاسي، حوّله لمزحة تافهة. ممنوع شكل، جسم، دين، أهل، أو صحة.",
-      "[Verse] سطرين. [Chorus] ٣–٤ أسطر مع هوك سحر يتكرر.",
-      "نهاية مكتملة. مش رعب، مش هالوين أطفال.",
-    ].join("\n");
+      "اكتب أغنية سينث بوب داكنة وسينمائية مستوحاة من الصورة المرفوعة، حوالي ٢٥ ثانية.",
+      "",
+      `موضوع الصورة: ${subject}`,
+      concept ? `المزاج: ${concept}` : "",
+      lyricSeed ? `تفصيل شخصي للنسج: ${lyricSeed}` : "",
+      "",
+      "حميمية وسينمائية — مش كوميديا هالوين.",
+      "[Verse] سطرين مربوطين بالصورة.",
+      "[Chorus] ٣–٤ أسطر مع هوك يتكرر عن الإحساس بالصورة.",
+      "نهاية مكتملة.",
+    ].filter(Boolean).join("\n");
   }
   return [
-    `Write a dark, funny Spell Song in an "I put a spell on you" vibe about ${name}.`,
-    `Address ${name} as ${her ? "her / she" : "him / he"}.`,
-    `The harmless annoyance: ${annoyance}.`,
-    "The singer is a witch or sorcerer casting a playful spell.",
-    `Payoff shape: "from today, every time you're late, your phone dies at 1%."`,
-    "The spell is ALWAYS trivial and funny (wifi, battery, traffic, cold coffee, seen receipts).",
-    "No insults, swearing, threats. Nothing about looks, body, religion, family, or health.",
-    "If the annoyance sounds harsh, turn it into a harmless joke.",
-    "Never use the words curse, damn, or damn you. Use spell / I put a spell on you.",
-    "[Verse] 2 lines. [Chorus] 3–4 lines with one repeatable spell hook.",
-    "Complete ending. Not jump-scare, not kids' Halloween.",
-  ].join("\n");
+    "Write a ~25 second dark atmospheric synth-pop song inspired by the uploaded photo.",
+    "",
+    `Photo subject: ${subject}`,
+    concept ? `Mood: ${concept}` : "",
+    lyricSeed ? `Personal detail to weave in: ${lyricSeed}` : "",
+    "",
+    "Cinematic and intimate — not a parody, not Halloween novelty.",
+    "[Verse] — 2 lines: vivid imagery tied to this photo.",
+    "[Chorus] — 3–4 lines with one repeatable hook about the feeling in the frame.",
+    "",
+    "Complete ending.",
+  ].filter(Boolean).join("\n");
 }
 let _spellYouLyricsGenInFlight = null;
-async function draftSpellYouLyricsForGenerate() {
+async function draftSpellYouLyricsForGenerate(mood) {
   if (!isSpellYouCreateFlow()) return true;
-  if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
+  if (String(els.vocalInstrumentalOnly?.value || "0") === "1") return true;
+  if (!photoSoloShowsArabicDialect()) return true;
+  if (!arabicLyricChoicesReady()) return false;
+  const dialectKey = current80sLyricsDialectKey();
   const existing = String(els.sunoPrompt?.value || "").trim();
-  if (existing && looksLikeSingableLyrics(existing) && _lyricsGeneratedInNabad) return true;
+  if (
+    existing &&
+    looksLikeSingableLyrics(existing) &&
+    _lyricsGeneratedInNabad &&
+    _80sLyricsDraftDialectKey === dialectKey
+  ) {
+    return true;
+  }
   if (_spellYouLyricsGenInFlight) {
     try { await _spellYouLyricsGenInFlight; } catch {}
     return Boolean(String(els.sunoPrompt?.value || "").trim());
   }
+  if (!mood) return false;
   const run = async () => {
     try { applyLyricsLanguageToDialect(); } catch {}
+    try { apply80sYouArabicLyricsContext(); } catch {}
     try { ensureSpellYouArabicDefaults(); } catch {}
     applySpellYouLockedStyle();
     const style = String(els.sunoStyle?.value || spellYouLockedStyleFallback()).trim();
     const dialect = String(els.sunoDialect?.value || "").trim();
+    const dialectHint = lyricDialectHintFor80sYou();
     const challenge = challengePromptContext();
-    const brief = buildSpellYouLyricsBrief();
+    const brief = buildSpellYouLyricsBrief(mood);
     const requestSeed = challenge ? challengePromptMagicSeed(brief, challenge) : brief;
     const authToken = getSupabaseAuthToken();
     const r = await apiFetch("/api/lyrics", {
@@ -20633,8 +20635,7 @@ async function draftSpellYouLyricsForGenerate() {
         style,
         mode: "challenge_clip",
         dialect,
-        dialectHint: String(els.sunoDialectHint?.value || "").trim(),
-        arabicAddress: spellYouAddressValue(),
+        dialectHint,
         scriptFormat: resolveLyricsScriptFormat(),
         lyricsProvider: "gemini",
       }),
@@ -20648,6 +20649,7 @@ async function draftSpellYouLyricsForGenerate() {
     if (els.sunoPrompt) els.sunoPrompt.value = lyrics;
     _nabadAiLyricsDraft = lyrics;
     _lyricsGeneratedInNabad = true;
+    _80sLyricsDraftDialectKey = dialectKey;
     try { autoResizeLyricsBox(); } catch {}
     try { syncTemplateSparkClipGenerateReady(); syncGenerateOrbVisibility(); } catch {}
     return true;
@@ -20928,7 +20930,6 @@ function wireSpellYouCardOnce() {
 function photoSoloChallengeCanGenerate() {
   const id = activePhotoSoloChallengeId();
   if (!id) return false;
-  if (id === "spell-you") return spellYouReadyForGenerate();
   if (!imageMoodAppliedForNextGen) return false;
   return true;
 }
@@ -20987,7 +20988,7 @@ function syncPhotoSoloChallengeCreateUi() {
     hide80sYouSoloCreateRows();
   }
   const instRow = document.getElementById("createSoloInstrumentalRow");
-  if (instRow) instRow.hidden = !is80s;
+  if (instRow) instRow.hidden = !isPhotoSolo;
   if (isPhotoSolo) {
     try { syncLyricsLangPills(); } catch {}
     try { syncPhotoSoloVocalSections(); } catch {}
@@ -21010,13 +21011,13 @@ function syncPhotoSoloChallengeCreateUi() {
   if (isPhotoSolo) {
     try { syncSoloInstrumentalToggleUi(); } catch {}
     try { syncCreateSongTypeTabs(); } catch {}
-    try { setActiveCreateTab(isSpell ? "lyrics" : "photo"); } catch {}
+    try { setActiveCreateTab("photo"); } catch {}
     const photoSub = document.querySelector("#createPhotoCta .createPaneCtaSub");
     if (photoSub) {
       photoSub.textContent = is80s
         ? "Tap to upload your retro portrait."
         : isSpell
-          ? "The name is the idea — tap to edit the spell."
+          ? "Tap to upload a photo — we catch the mood."
           : "We'll catch the mood and feed it into your song.";
     }
   } else {
@@ -21032,7 +21033,6 @@ function syncPhotoSoloChallengeCreateUi() {
 function challengeCreateFocusForId(challengeId) {
   const id = String(challengeId || "").trim();
   if (HUM_CHALLENGE_IDS.has(id)) return { tab: "hum", tabs: ["hum", "lyrics"] };
-  if (id === "spell-you") return { tab: "lyrics", tabs: ["lyrics"] };
   if (isPhotoSoloChallengeId(id)) return { tab: "photo", tabs: ["photo"] };
   if (PHOTO_CHALLENGE_IDS.has(id)) return { tab: "photo", tabs: ["photo", "lyrics"] };
   return { tab: "lyrics", tabs: ["lyrics"] };
@@ -25574,47 +25574,46 @@ function syncImageMoodSheetForCreateFlow() {
   const clipDirect = isNabadClipPhotoDirectFlow();
   const photoSolo80s = activePhotoSoloChallengeId() === "80s-you";
   const photoSoloSpell = activePhotoSoloChallengeId() === "spell-you";
+  const photoSoloAnalyze = photoSolo80s || photoSoloSpell;
   const sheet = els.imageMoodModal || document.getElementById("imageMoodModal");
-  sheet?.classList.toggle("photoMoodSheet--clipDirect", clipDirect || photoSoloSpell);
+  sheet?.classList.toggle("photoMoodSheet--clipDirect", clipDirect);
   const title = document.getElementById("imageMoodSheetTitle");
   const lead = document.getElementById("imageMoodLead");
   const kicker = sheet?.querySelector?.(".photoMoodKicker");
-  if (kicker) kicker.textContent = photoSolo80s ? "80s You" : photoSoloSpell ? "Spell You" : clipDirect ? "Nabad Clip" : "Photo mood";
+  if (kicker) kicker.textContent = photoSolo80s ? "80s You" : photoSoloSpell ? "Mood You" : clipDirect ? "Nabad Clip" : "Photo mood";
   if (title) {
     title.textContent = photoSolo80s
       ? "Your 80s portrait"
       : photoSoloSpell
-        ? "Your spell cover"
+        ? "Your photo"
         : clipDirect
           ? "Photo for your clip"
           : "Analyze your photo";
   }
   if (lead) {
-    lead.textContent = photoSolo80s
+    lead.textContent = photoSoloAnalyze
       ? "One quick read for mood, singer match, and lyrics — your photo is used once when the song generates."
-      : photoSoloSpell
-        ? "This photo becomes the song cover. Then name who you're spelling and pick one annoyance."
-        : clipDirect
-          ? "Your photo sets the mood. On the next screen, pick singer & style (optional lyrics) — then Generate clip."
-          : "We'll turn the vibe into style tags — and the scene into a lyric idea.";
+      : clipDirect
+        ? "Your photo sets the mood. On the next screen, pick singer & style (optional lyrics) — then Generate clip."
+        : "We'll turn the vibe into style tags — and the scene into a lyric idea.";
   }
   const analyzeBtn = document.getElementById("btnAnalyzeImageMood") || els.btnAnalyzeImageMood;
   const applyBtn = document.getElementById("btnApplyImageMood") || els.btnApplyImageMood;
   const resultsSection = sheet?.querySelector?.(".photoMoodSection--results");
   const coverRow = document.getElementById("imageMoodCoverRow");
   if (coverRow) {
-    coverRow.hidden = clipDirect || photoSolo80s || photoSoloSpell;
-    coverRow.setAttribute("aria-hidden", clipDirect || photoSolo80s || photoSoloSpell ? "true" : "false");
+    coverRow.hidden = clipDirect || photoSoloAnalyze;
+    coverRow.setAttribute("aria-hidden", clipDirect || photoSoloAnalyze ? "true" : "false");
   }
   if (analyzeBtn) {
-    analyzeBtn.hidden = clipDirect || photoSoloSpell;
-    analyzeBtn.setAttribute("aria-hidden", clipDirect || photoSoloSpell ? "true" : "false");
+    analyzeBtn.hidden = clipDirect;
+    analyzeBtn.setAttribute("aria-hidden", clipDirect ? "true" : "false");
   }
   if (resultsSection) {
-    resultsSection.hidden = clipDirect || photoSoloSpell;
-    resultsSection.setAttribute("aria-hidden", clipDirect || photoSoloSpell ? "true" : "false");
+    resultsSection.hidden = clipDirect;
+    resultsSection.setAttribute("aria-hidden", clipDirect ? "true" : "false");
   }
-  if (analyzeBtn && applyBtn && !photoSolo80s) {
+  if (analyzeBtn && applyBtn && !photoSoloAnalyze) {
     if (clipDirect) {
       applyBtn.classList.remove("photoMoodSecondary", "ghost");
       applyBtn.classList.add("photoMoodPrimary", "primary");
@@ -25631,6 +25630,7 @@ function syncPhotoMoodActionButtonsState({ analyzing = false } = {}) {
   const clipDirect = isNabadClipPhotoDirectFlow();
   const photoSolo80s = activePhotoSoloChallengeId() === "80s-you";
   const photoSoloSpell = activePhotoSoloChallengeId() === "spell-you";
+  const photoSoloAnalyze = photoSolo80s || photoSoloSpell;
   const analyzeBtn = document.getElementById("btnAnalyzeImageMood") || els.btnAnalyzeImageMood;
   const applyBtn = document.getElementById("btnApplyImageMood") || els.btnApplyImageMood;
   const sheet = els.imageMoodModal || document.getElementById("imageMoodModal");
@@ -25639,10 +25639,10 @@ function syncPhotoMoodActionButtonsState({ analyzing = false } = {}) {
   const hasResult = Boolean(imageMoodData);
   if (!analyzeBtn || !applyBtn) return;
 
-  sheet?.classList.toggle("photoMoodSheet--80sPortrait", photoSolo80s);
-  sheet?.classList.toggle("photoMoodSheet--spellCover", photoSoloSpell);
-  sheet?.classList.toggle("photoMoodSheet--80sPreAnalyze", photoSolo80s && !hasResult);
-  sheet?.classList.toggle("photoMoodSheet--80sPostAnalyze", photoSolo80s && hasResult);
+  sheet?.classList.toggle("photoMoodSheet--80sPortrait", photoSoloAnalyze);
+  sheet?.classList.toggle("photoMoodSheet--spellCover", false);
+  sheet?.classList.toggle("photoMoodSheet--80sPreAnalyze", photoSoloAnalyze && !hasResult);
+  sheet?.classList.toggle("photoMoodSheet--80sPostAnalyze", photoSoloAnalyze && hasResult);
 
   const setPrimary = (btn) => {
     btn.classList.remove("photoMoodSecondary", "ghost");
@@ -25664,18 +25664,7 @@ function syncPhotoMoodActionButtonsState({ analyzing = false } = {}) {
     return;
   }
 
-  if (photoSoloSpell) {
-    analyzeBtn.hidden = true;
-    applyBtn.hidden = false;
-    setPrimary(applyBtn);
-    const canApplyCoverOnly = (hasCoverData || hasFile) && !analyzing;
-    applyBtn.disabled = !canApplyCoverOnly;
-    applyBtn.textContent = "Use photo";
-    applyBtn.classList.toggle("isReady", Boolean(canApplyCoverOnly));
-    return;
-  }
-
-  if (photoSolo80s) {
+  if (photoSoloAnalyze) {
     analyzeBtn.hidden = false;
     if (hasResult) {
       analyzeBtn.disabled = analyzing;
@@ -25690,7 +25679,7 @@ function syncPhotoMoodActionButtonsState({ analyzing = false } = {}) {
       applyBtn.classList.toggle("isReady", !analyzing);
     } else {
       analyzeBtn.disabled = !hasFile || analyzing;
-      analyzeBtn.textContent = analyzing ? "Analyzing…" : "Analyze portrait";
+      analyzeBtn.textContent = analyzing ? "Analyzing…" : photoSoloSpell ? "Analyze photo" : "Analyze portrait";
       setPrimary(analyzeBtn);
       analyzeBtn.classList.toggle("isReady", Boolean(hasFile && !analyzing));
       analyzeBtn.classList.toggle("isBusy", analyzing);
@@ -25749,6 +25738,8 @@ function resetImageMoodSheetSession() {
   if (els.imageMoodOutput) {
     els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">${activePhotoSoloChallengeId() === "80s-you"
       ? "Choose a portrait, then tap Analyze portrait."
+      : activePhotoSoloChallengeId() === "spell-you"
+        ? "Choose a photo, then tap Analyze photo."
       : isNabadClipPhotoDirectFlow()
         ? "Choose a photo, then tap Use for clip."
         : "Choose a photo, then tap Analyze."}</div>`;
@@ -25773,9 +25764,24 @@ function resetImageMoodSheetSession() {
   syncImageMoodSheetUi();
 }
 
-function closeImageMoodSheet() {
+function leaveEmptyPhotoSoloCreateToDiscover() {
+  pendingSearchRemixMeta = null;
+  try { clearCreateChallengeContext(); } catch {}
+  try { setCreateChallengeHint(null); } catch {}
+  try { clearCreateChallengeFocus(); } catch {}
+  try { syncPhotoSoloChallengeCreateUi(); } catch {}
+  try { syncPhotoSoloBannerUi(null); } catch {}
+  try { syncGenerateOrbVisibility(); } catch {}
+  try { location.hash = "#/discover"; } catch {}
+  try { scheduleApplyRoute(); } catch {}
+}
+
+function closeImageMoodSheet({ fromUser = false } = {}) {
   const sheet = els.imageMoodModal || document.getElementById("imageMoodModal");
   if (!sheet) return;
+  const abandonEmptyPhotoSolo = Boolean(
+    fromUser && activePhotoSoloChallengeId() && !imageMoodAppliedForNextGen,
+  );
   sheet.hidden = true;
   sheet.setAttribute("aria-hidden", "true");
   try {
@@ -25789,6 +25795,9 @@ function closeImageMoodSheet() {
     return;
   }
   resetImageMoodSheetSession();
+  if (abandonEmptyPhotoSolo) {
+    leaveEmptyPhotoSoloCreateToDiscover();
+  }
 }
 
 const IMAGE_MOOD_SUBJECT_TAG_BLOCKLIST = new Set([
@@ -25967,7 +25976,9 @@ function applyImageMoodToSongFields() {
   const mood = sanitizeImageMoodForClient(imageMoodData);
   imageMoodData = mood;
   const tags = Array.isArray(mood.tags) ? mood.tags.filter(Boolean) : [];
-  if (!isSpellYouCreateFlow()) {
+  if (isSpellYouCreateFlow()) {
+    try { applySpellYouLockedStyle(); } catch {}
+  } else {
     applyImageMoodGalleryStyle(mood);
   }
   const wantsLyrics = String(mood.vocalSuggestion || "lyrics") !== "instrumental";
@@ -25992,7 +26003,7 @@ function applyImageMoodToSongFields() {
     const cur = String(els.sunoArtworkStyle.value || "").trim();
     if (!cur) els.sunoArtworkStyle.value = String(mood.artworkHint).trim();
   }
-  if (photoSolo && activePhotoSoloChallengeId() === "80s-you") {
+  if (photoSolo && ["80s-you", "spell-you"].includes(activePhotoSoloChallengeId())) {
     apply80sYouPortraitGender(mood);
   }
   const summaryTags = tags.slice(0, 4).join(", ");
@@ -77895,13 +77906,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (!m) {
       els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">${activePhotoSoloChallengeId() === "80s-you"
         ? "Choose a portrait, then tap Analyze portrait."
+        : activePhotoSoloChallengeId() === "spell-you"
+          ? "Choose a photo, then tap Analyze photo."
         : "No analysis yet."}</div>`;
       return;
     }
     const mood = sanitizeImageMoodForClient(m);
-    if (activePhotoSoloChallengeId() === "80s-you") {
-      const concept = String(mood.concept || "Synth-pop portrait mood").trim();
-      const subject = String(mood.subject || "Your retro look").trim();
+    if (["80s-you", "spell-you"].includes(activePhotoSoloChallengeId())) {
+      const concept = String(mood.concept || (activePhotoSoloChallengeId() === "spell-you" ? "Dark synth-pop mood" : "Synth-pop portrait mood")).trim();
+      const subject = String(mood.subject || (activePhotoSoloChallengeId() === "spell-you" ? "Your photo" : "Your retro look")).trim();
       els.imageMoodOutput.innerHTML = `
         <div class="imageMoodResultRow">
           <span>Portrait read</span>
@@ -77991,11 +78004,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   };
   const applyImageMood = async () => {
     if (!imageMoodData) {
-      if (isSpellYouCreateFlow()) {
-        closeImageMoodModal();
-        openSpellYouSheet();
-        return;
-      }
       if (isNabadClipPhotoDirectFlow()) {
         if (!(await applyPhotoForNabadClipDirect())) return;
         closeImageMoodModal();
@@ -78029,9 +78037,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           : "Photo locked in — pick singer & vocal character, then Generate.",
       );
     } else if (isSpellYouCreateFlow()) {
-      closeImageMoodModal();
-      openSpellYouSheet();
-      return;
+      setStatus(
+        wantsLyrics
+          ? "Photo locked in — pick singer, then Generate."
+          : "Photo locked in — pick singer & vocal character, then Generate.",
+      );
     } else {
       setStatus(
         isNabadClipPhotoDirectFlow()
@@ -78177,10 +78187,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     });
   }
   if (els.btnCloseImageMood) {
-    els.btnCloseImageMood.addEventListener("click", closeImageMoodModal);
+    els.btnCloseImageMood.addEventListener("click", () => closeImageMoodSheet({ fromUser: true }));
   }
   document.querySelectorAll("[data-image-mood-dismiss]").forEach((el) => {
-    el.addEventListener("click", closeImageMoodModal);
+    el.addEventListener("click", () => closeImageMoodSheet({ fromUser: true }));
   });
   if (els.imageMoodUpload) {
     els.imageMoodUpload.addEventListener("change", () => {
@@ -79313,15 +79323,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       return;
     }
     if (isLyriaClipGenerateFlow()) {
-      if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId() && !imageMoodAppliedForNextGen && !isSpellYouCreateFlow()) {
+      if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId() && !imageMoodAppliedForNextGen) {
         showToast("Upload and analyze your photo first.", { icon: "📷", durationMs: 3200 });
-        setStatus("Add your portrait on Photo — Analyze, then Generate.");
-        return;
-      }
-      if (isSpellYouCreateFlow() && !spellYouReadyForGenerate()) {
-        const msg = createGenerateBlockedToastMessage();
-        showToast(msg, { icon: "✦", durationMs: 3200 });
-        setStatus(msg);
+        setStatus("Add your photo on Photo — Analyze, then Generate.");
         return;
       }
       if (isTemplateSparkClipFlow() && !activePhotoSoloChallengeId() && !templateSparkClipLyricsReady()) {
@@ -79350,7 +79354,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const is80sInstrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
       if (is80sPhotoSolo || isSpellPhotoSolo) {
         try {
-          beginCoachPriorityStatus(isSpellPhotoSolo ? "Casting the spell…" : "80s moment…", { generating: true });
+          beginCoachPriorityStatus(isSpellPhotoSolo ? "Catching the mood…" : "80s moment…", { generating: true });
         } catch {}
         try { openProfileSongsWhileGenerating({ force: true }); } catch {}
       }
@@ -79411,8 +79415,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         }
         if (!finalPrompt && isSpellPhotoSolo && !is80sInstrumental) {
           applySpellYouLockedStyle();
-          applySpellYouIdeaIntoCreate();
-          finalPrompt = String(els.sunoPrompt?.value || "").trim();
+          try { updateCoachPriorityStatus("Crafting your lyrics…", { generating: true }); } catch {}
+          await draftSpellYouLyricsForGenerate(imageMoodData);
+          finalPrompt = sanitizeLyricsPrompt(String(els.sunoPrompt?.value || "").trim());
+          try { updateCoachPriorityStatus("Catching the mood…", { generating: true }); } catch {}
         }
         if (!lyriaRaw && !finalPrompt && !clipAllowImageOnly && !isTemplateSparkClipFlow() && !ideaClip) {
           try {
@@ -79668,16 +79674,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     if (!(await ensureSingabilityBeforeGenerate())) return;
     if (isSpellYouCreateFlow()) {
-      if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
       try { applySpellYouLockedStyle(); } catch {}
-      if (!String(els.sunoPrompt?.value || "").trim() && spellYouReadyForGenerate()) {
-        applySpellYouIdeaIntoCreate();
-      } else {
-        try { setLyricsInputMode("generate", { silent: true, preserveText: true }); } catch {}
-      }
-      if (!String(els.sunoPrompt?.value || "").trim()) {
-        try { showToast("Type who you're putting a spell on.", { icon: "✦", durationMs: 3200 }); } catch {}
-        setStatus("Type who you're putting a spell on.");
+      if (!imageMoodAppliedForNextGen) {
+        showToast("Upload and analyze your photo first.", { icon: "📷", durationMs: 3200 });
+        setStatus("Add your photo on Photo — Analyze, then Generate.");
         return;
       }
     }
@@ -79803,13 +79803,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const prosodyStrictness = String(els.sunoProsody?.value || "").trim();
       const beatStability = String(els.sunoBeatStability?.value || "").trim();
       let finalPrompt = lyriaRaw ? userPrompt : sanitizeLyricsPrompt(userPrompt);
-      const photoSoloNeedsVocals = isSpellYouCreateFlow()
-        || (is80sYouCreateFlow() && String(els.vocalInstrumentalOnly?.value || "0") !== "1");
+      const photoSoloNeedsVocals = (isSpellYouCreateFlow() || is80sYouCreateFlow())
+        && String(els.vocalInstrumentalOnly?.value || "0") !== "1";
       const imageOnlyInstrumental = Boolean(
         imageMoodAppliedForNextGen && !finalPrompt && !hasReference && !photoSoloNeedsVocals,
       );
       const shouldGenerateInstrumental = Boolean(
-        (instrumentalSelected && !isSpellYouCreateFlow()) || imageOnlyInstrumental,
+        instrumentalSelected || imageOnlyInstrumental,
       );
       const lyriaIdeaMode = lyriaIdeaModeForGenerate(userPrompt, {
         instrumental: shouldGenerateInstrumental,
@@ -84132,11 +84132,6 @@ function isCreateGenerateBlockedAwaitingLyrics() {
 
 function createGenerateBlockedToastMessage() {
   if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId()) {
-    if (isSpellYouCreateFlow()) {
-      if (!spellYouTargetName()) return "Type who you're putting a spell on.";
-      if (!sanitizeSpellYouAnnoyance(spellYouAnnoyanceRaw())) return "Pick or type one harmless annoyance.";
-      return "Ready — tap Generate.";
-    }
     return imageMoodAppliedForNextGen
       ? "Ready — tap Generate."
       : "Upload and analyze your photo first.";

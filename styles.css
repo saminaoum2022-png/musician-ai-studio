@@ -10361,11 +10361,7 @@ body:not([data-photo-solo-challenge]) #createSoloDialectRow,
 body:not([data-photo-solo-challenge="spell-you"]) #createSpellYouSummary{
   display: none !important;
 }
-body[data-photo-solo-challenge="spell-you"] #createSoloInstrumentalRow,
-body[data-photo-solo-challenge="spell-you"] #createSoloLangRow,
-body[data-photo-solo-challenge="spell-you"] #createSoloDialectRow,
-body[data-photo-solo-challenge="spell-you"] #createLyricsAttachPhoto,
-body[data-photo-solo-challenge="spell-you"] #createPhotoCta{
+body[data-photo-solo-challenge="spell-you"] #createLyricsAttachPhoto{
   display: none !important;
 }
 body[data-photo-solo-challenge] .createSoloInstrumentalRow{
@@ -10402,7 +10398,7 @@ body[data-photo-solo-challenge] .createPane--vibe,
 body[data-photo-solo-challenge] .createPane--edit{
   display: none !important;
 }
-body[data-photo-solo-challenge]:not([data-photo-solo-challenge="spell-you"]) .createPane--lyrics{
+body[data-photo-solo-challenge] .createPane--lyrics{
   display: none !important;
 }
 body[data-photo-solo-challenge] .createFlowStep .inputPanel--style:has(#sunoStyle),
@@ -10518,11 +10514,20 @@ button.createPhotoSoloBanner:active{
   -webkit-backdrop-filter: blur(8px);
 }
 body[data-photo-solo-challenge="spell-you"] button.createPhotoSoloBanner{
-  border-color: rgba(124, 92, 255, 0.28);
-  box-shadow: 0 12px 32px rgba(20, 8, 40, 0.28);
+  border-color: rgba(232, 168, 88, 0.22);
+  box-shadow: 0 12px 32px rgba(20, 10, 8, 0.28);
 }
 body[data-photo-solo-challenge="spell-you"] .createPhotoSoloBannerBg{
-  background-position: 72% 18%;
+  background-position: 82% 32%;
+}
+body[data-photo-solo-challenge="spell-you"] .createPhotoSoloBannerBody{
+  justify-items: start;
+  text-align: left;
+}
+body[data-photo-solo-challenge="spell-you"] .createPhotoSoloBannerScrim{
+  background:
+    linear-gradient(90deg, rgba(8,6,12,0.72) 0%, rgba(8,6,12,0.22) 46%, rgba(8,6,12,0.08) 100%),
+    linear-gradient(180deg, rgba(8,6,12,0.08) 0%, rgba(8,6,12,0.48) 100%);
 }
 .createSpellYouSummary[hidden]{
   display: none !important;
@@ -53544,7 +53549,7 @@ html[data-theme="light"] .chartTitle{
   transform: scale(1.02);
 }
 .discoverFeaturedChallengeHero--spellYou .discoverFeaturedChallengeHeroBg img{
-  object-position: 72% 22%;
+  object-position: 78% 28%;
 }
 .discoverFeaturedChallengeHeroScrim{
   position: absolute;

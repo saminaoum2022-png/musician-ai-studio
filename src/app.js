@@ -20774,6 +20774,92 @@ function applySpellYouLanguageToCreate() {
     try { syncArabicAddressPills(); } catch {}
   }
 }
+function isSpellYouSheetOpen() {
+  const sheet = document.getElementById("spellYouSheet");
+  return Boolean(sheet && !sheet.hidden);
+}
+
+function scrollSpellYouSheetFieldIntoView(input) {
+  if (!input) return;
+  const body = input.closest(".spellYouSheetBody");
+  if (!body) {
+    try { input.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" }); } catch {}
+    return;
+  }
+  try {
+    const rootRect = body.getBoundingClientRect();
+    const inputRect = input.getBoundingClientRect();
+    const padding = 20;
+    if (inputRect.bottom > rootRect.bottom - padding) {
+      body.scrollTop += inputRect.bottom - rootRect.bottom + padding;
+    } else if (inputRect.top < rootRect.top + padding) {
+      body.scrollTop -= rootRect.top + padding - inputRect.top;
+    }
+  } catch {
+    try { input.scrollIntoView({ block: "center", inline: "nearest" }); } catch {}
+  }
+}
+
+function applySpellYouKeyboardInset(rawInset) {
+  const sheet = document.getElementById("spellYouSheet");
+  if (!sheet) return;
+  const inset = isSpellYouSheetOpen() ? Math.max(0, Math.round(Number(rawInset) || 0)) : 0;
+  sheet.style.setProperty("--spell-you-keyboard-inset", `${inset}px`);
+  sheet.classList.toggle("spellYouKeyboardOpen", inset > 0);
+  if (inset > 0) {
+    const active = document.activeElement;
+    if (active && sheet.contains(active)) {
+      window.setTimeout(() => scrollSpellYouSheetFieldIntoView(active), 40);
+    }
+  }
+}
+
+function syncSpellYouSheetKeyboardInset() {
+  if (!isSpellYouSheetOpen()) {
+    applySpellYouKeyboardInset(0);
+    return;
+  }
+  if (getNativeKeyboardPlugin()) return;
+  const vv = window.visualViewport;
+  if (!vv) {
+    applySpellYouKeyboardInset(0);
+    return;
+  }
+  const inset = Math.max(0, Math.round(window.innerHeight - vv.height - (vv.offsetTop || 0)));
+  applySpellYouKeyboardInset(inset);
+}
+
+function scheduleSpellYouKeyboardInsetSync() {
+  syncSpellYouSheetKeyboardInset();
+  window.setTimeout(syncSpellYouSheetKeyboardInset, 60);
+  window.setTimeout(syncSpellYouSheetKeyboardInset, 180);
+  window.setTimeout(() => {
+    syncSpellYouSheetKeyboardInset();
+    const active = document.activeElement;
+    const sheet = document.getElementById("spellYouSheet");
+    if (active && sheet?.contains(active)) scrollSpellYouSheetFieldIntoView(active);
+  }, 360);
+}
+
+function bindSpellYouKeyboardInput(input) {
+  if (!input || input.dataset.spellYouKbInput === "1") return;
+  input.dataset.spellYouKbInput = "1";
+  input.addEventListener("focus", () => {
+    try { wireBottomSheetKeyboardOnce(); } catch {}
+    scheduleSpellYouKeyboardInsetSync();
+    window.setTimeout(() => scrollSpellYouSheetFieldIntoView(input), 80);
+    window.setTimeout(() => scrollSpellYouSheetFieldIntoView(input), 240);
+  });
+  input.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      const sheet = document.getElementById("spellYouSheet");
+      const active = document.activeElement;
+      const stillTyping = sheet && !sheet.hidden && sheet.contains(active) && active?.matches?.("input, textarea");
+      if (!stillTyping) applySpellYouKeyboardInset(0);
+    }, 80);
+  });
+}
+
 function openSpellYouSheet() {
   mountFixedOverlaysToBody();
   const sheet = document.getElementById("spellYouSheet");
@@ -20790,10 +20876,12 @@ function openSpellYouSheet() {
   try { document.body.classList.add("imageMoodSheetOpen"); } catch {}
   resetPanelScroll(sheet.querySelector(".spellYouSheetBody"));
   syncSpellYouContinueState();
+  try { wireBottomSheetKeyboardOnce(); } catch {}
 }
 function closeSpellYouSheet() {
   const sheet = document.getElementById("spellYouSheet");
   if (!sheet) return;
+  applySpellYouKeyboardInset(0);
   sheet.hidden = true;
   sheet.setAttribute("aria-hidden", "true");
   try { document.body.classList.remove("imageMoodSheetOpen"); } catch {}
@@ -20864,6 +20952,8 @@ function wireSpellYouCardOnce() {
     }
     try { syncGenerateOrbVisibility(); } catch {}
   };
+  bindSpellYouKeyboardInput(nameEl);
+  bindSpellYouKeyboardInput(customEl);
   nameEl?.addEventListener("input", onChange);
   customEl?.addEventListener("input", () => {
     if (String(customEl.value || "").trim()) {
@@ -72610,6 +72700,7 @@ function wireBottomSheetKeyboardOnce() {
   const onViewportChange = () => {
     if (isCoverRegenSheetOpen()) syncCoverRegenSheetKeyboardInset();
     if (isPublishReleaseSheetOpen()) syncPublishReleaseSheetKeyboardInset();
+    if (isSpellYouSheetOpen()) syncSpellYouSheetKeyboardInset();
   };
   if (vv) {
     vv.addEventListener("resize", onViewportChange);
@@ -72622,6 +72713,7 @@ function wireBottomSheetKeyboardOnce() {
     const h = info?.keyboardHeight;
     if (isCoverRegenSheetOpen()) applyCoverRegenKeyboardInset(h);
     if (isPublishReleaseSheetOpen()) applyPublishReleaseKeyboardInset(h);
+    if (isSpellYouSheetOpen()) applySpellYouKeyboardInset(h);
   });
   Keyboard.addListener("keyboardDidShow", (info) => {
     const h = info?.keyboardHeight;
@@ -72633,10 +72725,17 @@ function wireBottomSheetKeyboardOnce() {
       applyPublishReleaseKeyboardInset(h);
       scrollPublishReleaseCaptionIntoView();
     }
+    if (isSpellYouSheetOpen()) {
+      applySpellYouKeyboardInset(h);
+      const active = document.activeElement;
+      const sheet = document.getElementById("spellYouSheet");
+      if (active && sheet?.contains(active)) scrollSpellYouSheetFieldIntoView(active);
+    }
   });
   Keyboard.addListener("keyboardWillHide", () => {
     if (isCoverRegenSheetOpen()) applyCoverRegenKeyboardInset(0);
     if (isPublishReleaseSheetOpen()) applyPublishReleaseKeyboardInset(0);
+    if (isSpellYouSheetOpen()) applySpellYouKeyboardInset(0);
   });
 }
 

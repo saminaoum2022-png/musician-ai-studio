@@ -10579,6 +10579,25 @@ body[data-photo-solo-challenge="spell-you"] .createPhotoSoloBannerBg{
 .createSpellYouChips{
   flex-wrap: wrap;
 }
+.spellYouSheet{
+  --spell-you-keyboard-inset: 0px;
+  transition: padding-bottom 220ms ease;
+}
+.spellYouSheet.spellYouKeyboardOpen{
+  padding-bottom: calc(10px + var(--spell-you-keyboard-inset, 0px));
+}
+.spellYouSheet.spellYouKeyboardOpen .spellYouCard{
+  max-height: min(
+    78dvh,
+    calc(100dvh - var(--spell-you-keyboard-inset, 0px) - 20px - env(safe-area-inset-top, 0px))
+  );
+}
+.spellYouSheet.spellYouKeyboardOpen .photoMoodSub{
+  display: none;
+}
+.spellYouSheet.spellYouKeyboardOpen .spellYouSheetBody{
+  padding-bottom: 28px;
+}
 .spellYouSheetBody{
   padding-bottom: 8px;
 }

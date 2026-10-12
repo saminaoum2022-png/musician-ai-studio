@@ -68147,9 +68147,23 @@ function extensionFromAudioContentType(ct) {
   return "";
 }
 
+/** Web `apiUrl()` stays relative (`/api/...`); native is already https. Fetch accepts both. */
+function resolveBrowserFetchableAudioUrl(u) {
+  const s = String(u || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s) || s.startsWith("blob:") || s.startsWith("data:")) return s;
+  const path = s.startsWith("/") ? s : (/^api\//i.test(s) ? `/${s}` : "");
+  if (!path) return "";
+  try {
+    if (typeof location !== "undefined" && location.origin && location.origin !== "null") {
+      return new URL(path, location.origin).href;
+    }
+  } catch {}
+  return path;
+}
+
 /** Fetch the same playable URL as Library playback, then share / save the bytes (native + web). */
 async function downloadLibraryAudioTrack(track) {
-  const isHttpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
   let t = track;
   if (!t?.url) throw new Error("Missing audio URL");
 
@@ -68166,14 +68180,16 @@ async function downloadLibraryAudioTrack(track) {
 
   // Private song_archive drafts 403 without a signed stream (or JWT). Published
   // rows can stream with songId alone — that's why public downloads already worked.
-  let fetchUrl = await resolvePlayableAudioUrl(t.url, t);
-  if (!isHttpUrl(fetchUrl)) {
-    fetchUrl = normalizeAudioUrlForPlayback(
-      toAudioProxyUrl(unwrapInnermostHttpAudioUrl(t.url) || t.url, trackCloudShareId(t) || t.id)
-      || t.url,
+  let fetchUrl = resolveBrowserFetchableAudioUrl(await resolvePlayableAudioUrl(t.url, t));
+  if (!fetchUrl) {
+    fetchUrl = resolveBrowserFetchableAudioUrl(
+      normalizeAudioUrlForPlayback(
+        toAudioProxyUrl(unwrapInnermostHttpAudioUrl(t.url) || t.url, trackCloudShareId(t) || t.id)
+        || t.url,
+      ),
     );
   }
-  if (!isHttpUrl(fetchUrl)) throw new Error("This song isn't downloadable from this device.");
+  if (!fetchUrl) throw new Error("This song isn't downloadable from this device.");
 
   const trackTitle = String(t?.title || "song").trim() || "song";
   const baseSlug = trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song";
@@ -68635,7 +68651,6 @@ function trackSheetCtxIsOwnSong(ctx) {
 }
 
 async function fetchTrackAudioBlobForVideoExport(track) {
-  const isHttpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
   let t = track;
   if (!t?.url) throw new Error("Missing audio URL");
   const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
@@ -68648,11 +68663,13 @@ async function fetchTrackAudioBlobForVideoExport(track) {
       if (updated) t = updated;
     }
   }
-  let fetchUrl = await resolvePlayableAudioUrl(t.url, t);
-  if (!isHttpUrl(fetchUrl)) {
-    fetchUrl = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
+  let fetchUrl = resolveBrowserFetchableAudioUrl(await resolvePlayableAudioUrl(t.url, t));
+  if (!fetchUrl) {
+    fetchUrl = resolveBrowserFetchableAudioUrl(
+      normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay),
+    );
   }
-  if (!isHttpUrl(fetchUrl)) throw new Error("This song isn't downloadable from this device.");
+  if (!fetchUrl) throw new Error("This song isn't downloadable from this device.");
   await prepareApiAuthForFetch();
   const token = getSupabaseAuthToken();
   const headers = {};

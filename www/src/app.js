@@ -81990,7 +81990,7 @@ function mountCreateCustomStyleField(show) {
   if (els.sunoStyle && show) {
     els.sunoStyle.placeholder = "Type your own style — instruments, mood, tempo…";
   }
-  if (show && !isCreateSimpleMobileFill()) {
+  if (show) {
     window.requestAnimationFrame(() => {
       try {
         fields.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
@@ -82007,7 +82007,7 @@ function enterStudioCustomStyle() {
   try { syncLyriaStudioStyleUi(); } catch {}
   try { syncCreateSimpleAura(); } catch {}
   window.setTimeout(() => {
-    try { els.sunoStyle?.focus({ preventScroll: true }); } catch {}
+    try { els.sunoStyle?.focus(); } catch {}
   }, 80);
 }
 
@@ -84464,27 +84464,6 @@ function syncCreateSimpleViewportHeight() {
   }
   const pluginKb = _createKeyboardHeight > 0 ? _createKeyboardHeight : 0;
   const layoutH = window.innerHeight;
-  const top = flow.getBoundingClientRect().top;
-  if (!isNativeShell()) {
-    const vv = window.visualViewport;
-    const kbOpen = document.body.classList.contains("createKeyboardOpen");
-    const visH = kbOpen && vv && vv.height > 80 ? Math.round(vv.height) : layoutH;
-    const visTop = kbOpen && vv ? Math.round(vv.offsetTop || 0) : 0;
-    const topInView = Math.max(0, Math.round(top - visTop));
-    let bottomReserve = 12;
-    if (!kbOpen) {
-      const tb = document.querySelector(".mobileTabbar");
-      const r = tb?.getBoundingClientRect?.();
-      bottomReserve = r && r.height > 0
-        ? Math.round(layoutH - r.top) + 8
-        : 86;
-      if (miniStripStacksOnTabbar()) bottomReserve += MINI_STRIP_STACK_H;
-    }
-    const h = Math.round(visH - topInView - bottomReserve);
-    root.style.setProperty("--create-simple-flow-h", `${Math.max(180, h)}px`);
-    root.style.removeProperty("--create-simple-dock-bottom");
-    return;
-  }
   let dockBottom;
   if (pluginKb > 80) {
     // Lock to the plugin height. visualViewport moves during the iOS keyboard
@@ -84499,6 +84478,7 @@ function syncCreateSimpleViewportHeight() {
     // Tabbar layout box does not include the mini strip; the capsule grows via ::after.
     if (miniStripStacksOnTabbar()) dockBottom += MINI_STRIP_STACK_H;
   }
+  const top = flow.getBoundingClientRect().top;
   const h = Math.round(
     layoutH - top - dockBottom - CREATE_SIMPLE_DOCK_H - CREATE_SIMPLE_STACK_GAP
   );

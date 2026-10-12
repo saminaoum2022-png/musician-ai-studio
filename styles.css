@@ -24525,9 +24525,48 @@ body.trackSheetOpen .footer{
     min-height: clamp(160px, 28svh, 280px) !important;
     height: 100% !important;
   }
-  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createFlow.createComposeStack #lyricsFieldPanel{
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen:not(.createCustomStyleKeyboard) #createFlow.createComposeStack #lyricsFieldPanel{
     flex: 0 1 auto;
     min-height: 0;
+  }
+  /* Mobile web Custom style: keep Create + Write on screen. Safari must not
+     pan the focused style field into empty space above the keyboard. */
+  html.is-web-shell:has(body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard){
+    overflow: hidden;
+    height: var(--create-vv-height, 100dvh);
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard{
+    overflow: hidden;
+    position: fixed;
+    inset: 0 auto auto 0;
+    width: 100%;
+    height: var(--create-vv-height, 100dvh);
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard .app{
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    padding-bottom: 8px;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard #simpleBox,
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard #createFlow.createComposeStack{
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard #createFlow.createComposeStack #lyricsFieldPanel{
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard #createFlow.createComposeStack #lyricsFieldPanel .lyricsBox{
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain textarea,
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createCustomStyleKeyboard #sunoPrompt{
+    flex: 1 1 auto;
+    min-height: 72px !important;
+    height: 100% !important;
   }
   /* Simple Create (native): lyrics fills free space → Studio → Generate, always
      sized for an open keyboard. Height comes from syncCreateSimpleViewportHeight(). */

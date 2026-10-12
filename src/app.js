@@ -82028,7 +82028,7 @@ function mountCreateCustomStyleField(show) {
   if (els.sunoStyle && show) {
     els.sunoStyle.placeholder = "Type your own style — instruments, mood, tempo…";
   }
-  if (show) {
+  if (show && isNativeShell()) {
     window.requestAnimationFrame(() => {
       try {
         fields.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
@@ -82045,7 +82045,8 @@ function enterStudioCustomStyle() {
   try { syncLyriaStudioStyleUi(); } catch {}
   try { syncCreateSimpleAura(); } catch {}
   window.setTimeout(() => {
-    try { els.sunoStyle?.focus(); } catch {}
+    try { els.sunoStyle?.focus({ preventScroll: true }); } catch { try { els.sunoStyle?.focus(); } catch {} }
+    try { schedulePinCreateWebCustomStyleScroll(); } catch {}
   }, 80);
 }
 
@@ -84793,6 +84794,33 @@ function applyCreateKeyboardOpen(height) {
   } catch {}
   syncCreateComposeLayout();
   try { autoResizeLyricsBox(); } catch {}
+  try { schedulePinCreateWebCustomStyleScroll(); } catch {}
+}
+
+function isCreateMobileWebCustomStyleKeyboard() {
+  return createKeyboardUsesStableInsetOnly()
+    && !getNativeKeyboardPlugin()
+    && (
+      document.body.classList.contains("createCustomStyleKeyboard")
+      || _createCustomStyleKeyboardIntent
+    );
+}
+
+function pinCreateWebCustomStyleScroll() {
+  if (!isCreateMobileWebCustomStyleKeyboard()) return;
+  try { window.scrollTo(0, 0); } catch {}
+  try {
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  } catch {}
+}
+
+function schedulePinCreateWebCustomStyleScroll() {
+  if (!isCreateMobileWebCustomStyleKeyboard()) return;
+  pinCreateWebCustomStyleScroll();
+  requestAnimationFrame(pinCreateWebCustomStyleScroll);
+  window.setTimeout(pinCreateWebCustomStyleScroll, 80);
+  window.setTimeout(pinCreateWebCustomStyleScroll, 240);
 }
 
 function scheduleCreateKeyboardScroll() {
@@ -84904,6 +84932,9 @@ function handleCreateFieldFocus(target) {
     if (!alreadyOpen) {
       try { syncCreateComposeLayout(); } catch {}
     }
+    if (customStyle) {
+      try { schedulePinCreateWebCustomStyleScroll(); } catch {}
+    }
   }
   setGenerateInputFocus(target.closest(".inputPanel") || null);
   scheduleCreateMobileWebKeyboardSync();
@@ -84949,6 +84980,10 @@ function wireCreatePageKeyboardOnce() {
       });
     };
     vv?.addEventListener("resize", onViewportResize);
+    vv?.addEventListener("scroll", () => {
+      if (!isCreateMobileWebCustomStyleKeyboard()) return;
+      pinCreateWebCustomStyleScroll();
+    });
   }
 
   const root = getCreatePageRoot();

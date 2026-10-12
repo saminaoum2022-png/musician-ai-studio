@@ -10361,7 +10361,7 @@ body:not([data-photo-solo-challenge]) #createSoloDialectRow,
 body:not([data-photo-solo-challenge="spell-you"]) #createSpellYouSummary{
   display: none !important;
 }
-body[data-photo-solo-challenge="spell-you"] #createLyricsAttachPhoto{
+body[data-photo-solo-challenge="80s-you"] #createLyricsAttachPhoto{
   display: none !important;
 }
 body[data-photo-solo-challenge] .createSoloInstrumentalRow{
@@ -10398,12 +10398,19 @@ body[data-photo-solo-challenge] .createPane--vibe,
 body[data-photo-solo-challenge] .createPane--edit{
   display: none !important;
 }
-body[data-photo-solo-challenge] .createPane--lyrics{
+body[data-photo-solo-challenge]:not([data-photo-solo-challenge="spell-you"]) .createPane--lyrics{
   display: none !important;
 }
-body[data-photo-solo-challenge] .createFlowStep .inputPanel--style:has(#sunoStyle),
-body[data-photo-solo-challenge] .createFlowStep .inputPanel--style:has(#sunoTitle),
-body[data-photo-solo-challenge] .createFlowStep .inputPanel--style:has(#sunoArtworkStyle),
+body[data-photo-solo-challenge="spell-you"] #lyricsFieldPanel{
+  display: none !important;
+}
+body[data-photo-solo-challenge="spell-you"] #createLyricsAttachStack{
+  display: block !important;
+  margin-bottom: 12px;
+}
+body[data-photo-solo-challenge]:not([data-photo-solo-challenge="spell-you"]) .createFlowStep .inputPanel--style:has(#sunoStyle),
+body[data-photo-solo-challenge]:not([data-photo-solo-challenge="spell-you"]) .createFlowStep .inputPanel--style:has(#sunoTitle),
+body[data-photo-solo-challenge]:not([data-photo-solo-challenge="spell-you"]) .createFlowStep .inputPanel--style:has(#sunoArtworkStyle),
 body[data-photo-solo-challenge] #advancedSheet,
 body[data-photo-solo-challenge] #btnOpenAdvancedSheet,
 body[data-photo-solo-challenge] .generateRow > button.ghost{

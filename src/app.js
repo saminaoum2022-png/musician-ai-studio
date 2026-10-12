@@ -10646,10 +10646,7 @@ function applyDiscoveryIdeaToCreate(idea) {
     }
   }
   if (photoSoloChallenge) {
-    try { setActiveCreateTab("photo"); } catch {}
-    if (isSpellYouCreateFlow()) {
-      try { applySpellYouLockedStyle(); } catch {}
-    }
+    try { setActiveCreateTab(isSpellYouCreateFlow() && imageMoodAppliedForNextGen ? "lyrics" : "photo"); } catch {}
     if (!imageMoodAppliedForNextGen) {
       open80sYouPhotoSheetAfterBannerTap();
     }
@@ -20616,8 +20613,7 @@ async function draftSpellYouLyricsForGenerate(mood) {
     try { applyLyricsLanguageToDialect(); } catch {}
     try { apply80sYouArabicLyricsContext(); } catch {}
     try { ensureSpellYouArabicDefaults(); } catch {}
-    applySpellYouLockedStyle();
-    const style = String(els.sunoStyle?.value || spellYouLockedStyleFallback()).trim();
+    const style = String(els.sunoStyle?.value || "").trim();
     const dialect = String(els.sunoDialect?.value || "").trim();
     const dialectHint = lyricDialectHintFor80sYou();
     const challenge = challengePromptContext();
@@ -21011,7 +21007,9 @@ function syncPhotoSoloChallengeCreateUi() {
   if (isPhotoSolo) {
     try { syncSoloInstrumentalToggleUi(); } catch {}
     try { syncCreateSongTypeTabs(); } catch {}
-    try { setActiveCreateTab("photo"); } catch {}
+    try {
+      setActiveCreateTab(isSpell && imageMoodAppliedForNextGen ? "lyrics" : "photo");
+    } catch {}
     const photoSub = document.querySelector("#createPhotoCta .createPaneCtaSub");
     if (photoSub) {
       photoSub.textContent = is80s
@@ -25890,6 +25888,10 @@ function matchImageMoodToStudioStyle(mood) {
   if (!blob) return null;
   const hints = [
     { re: /\b(80s|synthpop|synth-pop|new wave|neon|retro synth)\b/i, id: "synthpop_80s", family: "international" },
+    { re: /\b(ethereal|ambient|cinematic|atmospheric|soundscape|dreamy|dream pop)\b/i, id: "lofi_hiphop", family: "international" },
+    { re: /\b(electronic|electronica|synth|digital|cyber|glitch)\b/i, id: "melodic_techno", family: "international" },
+    { re: /\b(night|midnight|nocturnal|city lights)\b/i, id: "synthpop_80s", family: "international" },
+    { re: /\b(warm|golden|intimate|acoustic|soft light)\b/i, id: "indie_folk", family: "international" },
     { re: /\b(indie folk|singer-songwriter|fingerpick|acoustic folk)\b/i, id: "indie_folk", family: "international" },
     { re: /\b(r&b|rnb|neo-?soul)\b/i, id: "contemporary_rnb", family: "international" },
     { re: /\b(rnb pop|pop r&b)\b/i, id: "rnb_pop", family: "international" },
@@ -25952,21 +25954,25 @@ function matchImageMoodToStudioStyle(mood) {
   return { id: best.style.id, family: best.family };
 }
 
-function applyImageMoodGalleryStyle(mood) {
-  if (isSpellYouCreateFlow() || activePhotoSoloChallengeId() === "80s-you") return false;
-  const matched = matchImageMoodToStudioStyle(mood);
-  if (matched) {
-    applyLyriaStudioStyle(matched.id, { family: matched.family, keepSinger: true });
-    return true;
+function fallbackImageMoodStudioStyle(mood) {
+  const blob = [mood?.concept, mood?.lyricSeed, ...(Array.isArray(mood?.tags) ? mood.tags : [])]
+    .filter(Boolean).join(" ").toLowerCase();
+  if (photoSoloShowsArabicDialect() || lyricsLanguage === "arabic"
+    || /[\u0600-\u06FF]/.test(blob)
+    || /\b(arabic|levantine|egyptian|khaleeji|oriental|dabke)\b/.test(blob)) {
+    return { id: "levantine-pop-fusion", family: "oriental" };
   }
-  const tags = Array.isArray(mood?.tags) ? mood.tags.filter(Boolean) : [];
-  if (!els.sunoStyle || !tags.length) return false;
-  els.sunoStyle.value = tags.slice(0, 12).join(", ");
-  _studioCustomPicked = true;
-  clearLyriaStudioStyleSelection({ clearStyleField: false });
-  try { mountCreateCustomStyleField(true); } catch {}
-  try { syncLyriaStudioStyleUi(); } catch {}
-  try { syncStyleUi(); } catch {}
+  if (/\b(electronic|ethereal|digital|synth|techno|ambient)\b/i.test(blob)) {
+    return { id: "melodic_techno", family: "international" };
+  }
+  return { id: "lofi_hiphop", family: "international" };
+}
+
+function applyImageMoodGalleryStyle(mood) {
+  if (activePhotoSoloChallengeId() === "80s-you") return false;
+  const matched = matchImageMoodToStudioStyle(mood) || fallbackImageMoodStudioStyle(mood);
+  if (!matched) return false;
+  applyLyriaStudioStyle(matched.id, { family: matched.family, keepSinger: true });
   return true;
 }
 
@@ -25976,20 +25982,19 @@ function applyImageMoodToSongFields() {
   const mood = sanitizeImageMoodForClient(imageMoodData);
   imageMoodData = mood;
   const tags = Array.isArray(mood.tags) ? mood.tags.filter(Boolean) : [];
-  if (isSpellYouCreateFlow()) {
-    try { applySpellYouLockedStyle(); } catch {}
-  } else {
+  if (activePhotoSoloChallengeId() !== "80s-you") {
     applyImageMoodGalleryStyle(mood);
   }
   const wantsLyrics = String(mood.vocalSuggestion || "lyrics") !== "instrumental";
-  const lyricSeed = String(mood.lyricSeed || "").trim();
+  const lyricSeed = String(mood.lyricSeed || "").trim() || String(mood.concept || "").trim();
   const photoSolo = Boolean(activePhotoSoloChallengeId());
+  const injectIdea = !photoSolo || isSpellYouCreateFlow();
   if (
     els.sunoPrompt &&
     lyricSeed &&
     wantsLyrics &&
     !String(els.sunoPrompt.value || "").trim() &&
-    !photoSolo
+    injectIdea
   ) {
     // Gemini lyricSeed is a scene brief, not finished lyrics — Idea → song.
     try { setLyricsInputMode("generate", { preserveText: true, silent: true }); } catch {}
@@ -26029,6 +26034,11 @@ function applyImageMoodToSongFields() {
     syncGenerateOrbVisibility();
   } catch {}
   try { syncCreateLyricsAttachStack(); } catch {}
+  if (isSpellYouCreateFlow()) {
+    try { setActiveCreateTab("lyrics"); } catch {}
+    try { syncCreateAttachedStyleRow(); } catch {}
+    try { syncCreateSimpleChrome(); } catch {}
+  }
 }
 let pendingGeneratedCoverDataUrl = "";
 const PHOTO_COVER_SESSION_KEY = "nabad.generation.photoCover.v1";
@@ -79397,9 +79407,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         const lyriaIdeaClip = lyriaIdeaModeForGenerate(userPrompt, { instrumental: false });
         const ideaClip = lyriaRaw ? false : createIdeaIsPromptToSong(userPrompt);
         if (ideaClip || lyriaIdeaClip) finalPrompt = "";
-        if (isSpellPhotoSolo) applySpellYouLockedStyle();
         const clipStyle = isSpellPhotoSolo
-          ? String(els.sunoStyle?.value || spellYouLockedStyleFallback()).trim()
+          ? String(els.sunoStyle?.value || "").trim()
           : lyriaIdeaClip
             ? userStyleRaw
             : lyriaRaw
@@ -79414,7 +79423,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           try { updateCoachPriorityStatus("Making your 80s clip…", { generating: true }); } catch {}
         }
         if (!finalPrompt && isSpellPhotoSolo && !is80sInstrumental) {
-          applySpellYouLockedStyle();
           try { updateCoachPriorityStatus("Crafting your lyrics…", { generating: true }); } catch {}
           await draftSpellYouLyricsForGenerate(imageMoodData);
           finalPrompt = sanitizeLyricsPrompt(String(els.sunoPrompt?.value || "").trim());
@@ -79674,7 +79682,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     if (!(await ensureSingabilityBeforeGenerate())) return;
     if (isSpellYouCreateFlow()) {
-      try { applySpellYouLockedStyle(); } catch {}
       if (!imageMoodAppliedForNextGen) {
         showToast("Upload and analyze your photo first.", { icon: "📷", durationMs: 3200 });
         setStatus("Add your photo on Photo — Analyze, then Generate.");
@@ -81983,6 +81990,7 @@ function enforceSimpleCreateVocalOnly() {
 }
 
 function createShouldHideStyleRow() {
+  if (isSpellYouCreateFlow()) return false;
   if (challengePromptContext()) return true;
   if (typeof currentRemixSource !== "undefined" && currentRemixSource) return true;
   const tid = String(pendingSearchRemixMeta?.searchTemplateId || "").trim();

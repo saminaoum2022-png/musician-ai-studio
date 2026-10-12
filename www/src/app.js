@@ -81636,9 +81636,7 @@ const CREATE_FLOW_MODE_LS_KEY = "nabad_create_flow_mode_v1";
 const CREATE_SOUND_MODE_LS_KEY = "nabad_create_sound_mode_v1";
 
 function lyriaStudioUiEnabled() {
-  const onGenerate = String(document.body.getAttribute("data-route") || "") === "generate";
-  const stagingEnv = String(window.__NABAD_CLIENT_ENV__?.environment || "") === "staging";
-  return onGenerate && (useLyriaMusicProvider() || stagingEnv);
+  return String(document.body.getAttribute("data-route") || "") === "generate";
 }
 
 function createSoundPanelUnified() {

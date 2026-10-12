@@ -12850,6 +12850,9 @@ body[data-route="generate"] .lyriaStudioStyleRow{
   flex-wrap: nowrap;
   overflow: hidden;
 }
+body[data-route="generate"] .lyriaStudioStyleRow[hidden]{
+  display: none !important;
+}
 body[data-route="generate"] .lyriaStudioStyleRow .studioStyleTile--custom{
   flex-shrink: 0;
 }

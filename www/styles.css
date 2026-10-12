@@ -24449,6 +24449,25 @@ body.trackSheetOpen .footer{
     flex-shrink: 0;
     padding-bottom: 2px;
   }
+  /* Mobile web Simple Create: expand the lyrics card when the keyboard is down.
+     Keyboard-open size stays compact. Native fill is unchanged. */
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"]:not(.createKeyboardOpen) #createFlow.createComposeStack #lyricsFieldPanel{
+    min-height: clamp(240px, 42svh, 380px);
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"]:not(.createKeyboardOpen) #createFlow.createComposeStack #lyricsFieldPanel .lyricsBox{
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"]:not(.createKeyboardOpen) #createFlow.createComposeStack #lyricsFieldPanel .lyricsBoxMain textarea,
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"]:not(.createKeyboardOpen) #sunoPrompt{
+    flex: 1 1 auto;
+    min-height: clamp(160px, 28svh, 280px) !important;
+    height: 100% !important;
+  }
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createKeyboardOpen #createFlow.createComposeStack #lyricsFieldPanel{
+    flex: 0 1 auto;
+    min-height: 0;
+  }
   /* Simple Create (native): lyrics fills free space → Studio → Generate, always
      sized for an open keyboard. Height comes from syncCreateSimpleViewportHeight(). */
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] .app,

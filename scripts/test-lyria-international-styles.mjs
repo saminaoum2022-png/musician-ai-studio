@@ -9,6 +9,8 @@ import {
   leftoverStylePlaceholders,
   defaultInternationalSlots,
 } from "../src/lyria-international-styles.mjs";
+import { applyVocalGenderToStyleLine } from "../src/lyria-vocal-gender.mjs";
+import { getOrientalStyle, fillOrientalStylePrompt } from "../src/lyria-oriental-styles.mjs";
 
 const require = createRequire(import.meta.url);
 const take = require("../api/_lib/song-take-card.js");
@@ -103,5 +105,28 @@ assert.equal(
   "slot change is a Take 2 delta",
 );
 assert.equal(take.createInputsEqual(base, { ...base }), true, "same international inputs equal");
+
+const egyptian = getOrientalStyle("egyptian-pop-2000s");
+const egyDefault = fillOrientalStylePrompt({ style: egyptian });
+if (!egyDefault.ok) fail(`egyptian default: ${egyDefault.error}`);
+assert.match(egyDefault.styleLine, /female lead vocal/);
+assert.doesNotMatch(egyDefault.styleLine, /\bmale\b/);
+
+const egyMale = fillOrientalStylePrompt({ style: egyptian, vocalGender: "m" });
+if (!egyMale.ok) fail(`egyptian male: ${egyMale.error}`);
+assert.match(egyMale.styleLine, /^male lead vocal/i);
+assert.match(egyMale.styleLine, /male baritone lead vocal/);
+assert.doesNotMatch(egyMale.styleLine, /\bfemale\b/);
+
+const staleFemale = "Egyptian pop, 2000s commercial Arabic pop, emotional female lead vocal upfront, bright Egyptian accordion";
+const swapped = applyVocalGenderToStyleLine(staleFemale, "m");
+assert.match(swapped, /^male lead vocal/i);
+assert.doesNotMatch(swapped, /\bfemale\b/);
+assert.match(swapped, /\bmale\b/);
+
+const vg = require("../api/_lib/lyria-vocal-gender.js");
+const serverLine = vg.applyVocalGenderToStyleLine(staleFemale, "m");
+assert.match(serverLine, /^male lead vocal/i);
+assert.doesNotMatch(serverLine, /\bfemale\b/);
 
 console.log("\nOK international studio styles");

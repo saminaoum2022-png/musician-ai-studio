@@ -13,6 +13,7 @@ const {
   resolveLyriaDialectLabel,
 } = require("./lyria-upstream");
 const { looksLikeArabizi } = require("./arabizi");
+const { applyVocalGenderToStyleLine } = require("./lyria-vocal-gender");
 
 function lyriaLegacyPromptsEnabled() {
   return /^(1|true|yes|on)$/i.test(String(process.env.LYRIA_LEGACY_PROMPTS || "").trim());
@@ -52,14 +53,6 @@ function stripArabicLyricContextIfUnused(body = {}, { lyrics = "" } = {}) {
   if (String(next.scriptFormat || "").toLowerCase() === "arabic") next.scriptFormat = "auto";
   if (lang === "arabic") delete next.lyricsLanguage;
   return next;
-}
-
-/** One short line from the Singer chip — Lyria only sees the text prompt. */
-function bareLyriaVocalSuffix(vocalGender = "") {
-  const g = String(vocalGender || "").trim().toLowerCase();
-  if (g === "m") return "male lead vocal";
-  if (g === "f") return "female lead vocal";
-  return "";
 }
 
 function styleContainsAny(style, patterns) {
@@ -129,12 +122,7 @@ function buildBareStudioStyleSuffixes(body = {}, { seedText = "" } = {}) {
 }
 
 function composeBareStyleLine(body = {}, { seedText = "" } = {}) {
-  let style = String(body?.style || "").trim();
-  const vocal = bareLyriaVocalSuffix(body?.vocalGender);
-  if (vocal) {
-    if (!style) style = vocal;
-    else if (!/\b(male|female)\s+lead\s+vocal\b/i.test(style)) style = `${style}, ${vocal}`;
-  }
+  let style = applyVocalGenderToStyleLine(String(body?.style || "").trim(), body?.vocalGender);
   const studio = buildBareStudioStyleSuffixes(body, { seedText });
   if (studio.length) {
     style = style ? `${style}, ${studio.join(", ")}` : studio.join(", ");

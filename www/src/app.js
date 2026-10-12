@@ -21,6 +21,7 @@ import {
   shortSlotLabel,
   fillInternationalStylePrompt,
   leftoverStylePlaceholders,
+  applyVocalGenderToStyleLine,
   INTERNATIONAL_SLOT_KEYS,
 } from "./lyria-international-styles.mjs";
 import {
@@ -5268,13 +5269,14 @@ function challengePromptMagicSeed(seed, challenge) {
 function resolveSingerGenderForGeneration(opts = {}) {
   const { personaId = "" } = opts;
   if (personaId) return "";
+  const sg = String(els.sunoSingerGender?.value || "").trim();
+  if (sg === "m" || sg === "f") return sg;
   const vp = String(els.sunoVoiceProfile?.value || "").trim();
   if (vp.includes("|")) {
     const g = vp.split("|")[0];
     return g === "f" || g === "m" ? g : "";
   }
-  const sg = String(els.sunoSingerGender?.value || "").trim();
-  return sg === "m" || sg === "f" ? sg : "";
+  return "";
 }
 
 function singerVoiceStyleNote(gender) {
@@ -10639,7 +10641,8 @@ function applyDiscoveryIdeaToCreate(idea) {
       });
     } catch {}
     if (els.sunoStyle && String(idea.style || "").trim()) {
-      els.sunoStyle.value = String(idea.style || "").trim();
+      const picked = resolveInternationalVocalGenderFromScreen();
+      els.sunoStyle.value = applyVocalGenderToStyleLine(String(idea.style || "").trim(), picked);
     }
   }
   const challenge = challengePromptContext();
@@ -79114,7 +79117,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         syncSingerGenderPills();
         try { syncClipVocalCharacterUi(); } catch {}
         try { renderReferenceHints(); } catch {}
-        if (activeSlottedStudioStyle()) writeLockedInternationalStyleLine();
+        writeLockedInternationalStyleLine();
       });
       // Keep pills in sync when a Range is picked in Options (its value
       // encodes the gender as an "m|"/"f|" prefix).
@@ -79450,6 +79453,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               }
             : {}),
         };
+        if ((clipVocalGender === "m" || clipVocalGender === "f") && payload.style) {
+          payload.style = applyVocalGenderToStyleLine(payload.style, clipVocalGender);
+        }
         if (templateSparkClip) {
           pendingSearchRemixMeta = null;
           clearCreateChallengeContext();
@@ -80028,6 +80034,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (intlLock.key) payload.songKey = intlLock.key;
         const intlSinger = resolveInternationalVocalGenderFromScreen();
         if (intlSinger === "duo") payload.vocalGender = "duo";
+      }
+      const sendSinger = String(payload.vocalGender || resolveInternationalVocalGenderFromScreen() || "").trim();
+      if ((sendSinger === "m" || sendSinger === "f") && payload.style) {
+        payload.style = applyVocalGenderToStyleLine(payload.style, sendSinger);
       }
       if (userAvoidTags && !lyriaRaw) payload.negativeTags = userAvoidTags;
       if (!lyriaRaw) payload.style = compactStyleForProvider(payload.style, 980);
@@ -81462,10 +81472,13 @@ function activeInternationalStudioStyle() {
 }
 
 function activeSlottedStudioStyle() {
-  if (_studioFamily === "oriental" && orientalStylesUiEnabled()) {
-    return getOrientalStyle(_activeLyriaStudioStyleId);
+  const id = _activeLyriaStudioStyleId;
+  if (orientalStylesUiEnabled()) {
+    const oriental = getOrientalStyle(id);
+    if (oriental) return oriental;
   }
-  if (_studioFamily === "international") return getInternationalStyle(_activeLyriaStudioStyleId);
+  const intl = getInternationalStyle(id);
+  if (intl) return intl;
   return null;
 }
 
@@ -81496,7 +81509,7 @@ function resolveInternationalVocalGenderFromScreen() {
 function fillActiveInternationalStyle() {
   const style = activeSlottedStudioStyle();
   if (!style) return { ok: false, error: "missing_style", leftover: [] };
-  const fill = _studioFamily === "oriental" ? fillOrientalStylePrompt : fillInternationalStylePrompt;
+  const fill = getOrientalStyle(style.id) ? fillOrientalStylePrompt : fillInternationalStylePrompt;
   return fill({
     style,
     vocalGender: resolveInternationalVocalGenderFromScreen(),
@@ -81505,13 +81518,19 @@ function fillActiveInternationalStyle() {
 }
 
 function writeLockedInternationalStyleLine() {
-  if (shelfCatalogStyleLocked()) {
-    return { ok: true, skipped: true, styleLine: String(els.sunoStyle?.value || "").trim() };
+  const gender = resolveInternationalVocalGenderFromScreen();
+  let line = "";
+  const slotted = activeSlottedStudioStyle();
+  if (slotted && !shelfCatalogStyleLocked()) {
+    const filled = fillActiveInternationalStyle();
+    if (!filled.ok) return filled;
+    line = filled.styleLine;
+  } else {
+    line = String(els.sunoStyle?.value || "").trim();
   }
-  const filled = fillActiveInternationalStyle();
-  if (!filled.ok) return filled;
-  if (els.sunoStyle) els.sunoStyle.value = filled.styleLine;
-  return filled;
+  if (gender === "m" || gender === "f") line = applyVocalGenderToStyleLine(line, gender);
+  if (els.sunoStyle && line) els.sunoStyle.value = line;
+  return { ok: true, styleLine: line, skipped: !slotted || shelfCatalogStyleLocked() };
 }
 
 const CREATE_FLOW_MODE_LS_KEY = "nabad_create_flow_mode_v1";
@@ -82772,7 +82791,10 @@ function applyLyriaStudioStyle(id, { keepSinger = false, family = "" } = {}) {
     } catch {}
   }
   _activeLyriaStudioStyleId = preset.id;
-  if (els.sunoStyle && !shelfCatalogStyleLocked()) els.sunoStyle.value = preset.styleLine;
+  if (els.sunoStyle && !shelfCatalogStyleLocked()) {
+    const picked = resolveInternationalVocalGenderFromScreen() || preset.defaultSinger;
+    els.sunoStyle.value = applyVocalGenderToStyleLine(preset.styleLine, picked);
+  }
   if (!keepSinger && !_userPickedSinger && (preset.defaultSinger === "m" || preset.defaultSinger === "f") && els.sunoSingerGender) {
     els.sunoSingerGender.value = preset.defaultSinger;
     try { syncSingerGenderPills(); } catch {}

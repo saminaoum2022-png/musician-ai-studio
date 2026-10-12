@@ -4,6 +4,10 @@
  * before anything reaches Lyria.
  */
 
+import { applyVocalGenderToStyleLine } from "./lyria-vocal-gender.mjs";
+
+export { applyVocalGenderToStyleLine, normalizeVocalGender } from "./lyria-vocal-gender.mjs";
+
 export const INTERNATIONAL_SLOT_KEYS = Object.freeze(["LEAD", "RHYTHM", "MOOD", "BPM", "KEY"]);
 
 /** @typedef {object} InternationalStudioStyle
@@ -457,7 +461,7 @@ export function fillInternationalStylePrompt({ style, vocalGender = "", slots = 
   const bpm = Number(resolved.BPM);
   return {
     ok: true,
-    styleLine: line,
+    styleLine: applyVocalGenderToStyleLine(line, vocalGender),
     bpm: Number.isFinite(bpm) && bpm > 0 ? bpm : 0,
     key: resolved.KEY,
     vocal,

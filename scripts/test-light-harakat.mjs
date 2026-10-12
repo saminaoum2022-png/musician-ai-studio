@@ -29,10 +29,19 @@ show("Idea (Gemini-written, address male)", ideaBefore, ideaAfter);
 assert.equal(ideaAfter.includes("كنتَ"), false, "male كنت stays plain");
 assert.match(ideaAfter, /عيونَك/);
 assert.match(ideaAfter, /ضحكتَك/);
-assert.match(ideaAfter, /حبيتَك/);
+assert.match(ideaAfter, /حَبَيْتَك/);
 assert.match(ideaAfter, /تفكّر/);
+assert.match(ideaAfter, /فيّي/);
 assert.equal(ideaAfter.includes("كَ"), false);
 assert.equal(/كِ/.test(ideaAfter.split(/\s/).find((w) => w.includes("عيون")) || ""), false);
+
+const geminiKeepsPronunciation = dialect.applyLightHarakatPolicy("عمْ بَحكي معك", {
+  source: "gemini",
+  address: "male",
+}).text;
+assert.match(geminiKeepsPronunciation, /عمْ/);
+assert.match(geminiKeepsPronunciation, /بَحكي/);
+assert.match(geminiKeepsPronunciation, /معَك/);
 
 const writeBefore = [
   "انت قلبك وكنت بعيد",

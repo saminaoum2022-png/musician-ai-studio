@@ -186,14 +186,14 @@ function buildLightHarakatRuleLines({ isMsa = false, source = "gemini" } = {}) {
     "Past-tense you: كنت for a man (plain — never كنتَ). كنتِ for a woman. Same pattern for all past verbs: رحت / رحتِ, حبيت / حبيتِ.",
     "Final -ak / -ik: put the short vowel on the letter BEFORE the final ك. The ك itself stays plain. Man: قلبَك، عيونَك، ضحكتَك. Woman: قلبِك، عيونِك، ضحكتِك. Never قلبكَ or قلبكِ.",
     "Shadda only where it changes the word (خلّص، هوّي، إنّو).",
-    "Everything else: plain Arabic script. No sukoon, no mid-word vowels, no tanween, no textbook tashkeel.",
+    "Do not vowelize every letter and do not add tanween. You MAY add sukoon and a few mid-word vowels where they help the singer pronounce the word.",
   ];
   if (source === "user") {
     lines.push(
       "USER LYRICS: keep every word and every diacritic the user typed. Never remove their marks. Add ONLY missing address marks to match arabic_address.",
     );
   } else {
-    lines.push("IDEA / GENERATE: apply the light rule on every line you write.");
+    lines.push("IDEA / GENERATE: add the light address marks on every line. You MAY keep shadda and a few pronunciation marks (sukoon, mid-word vowels) where they help the singer. Do not vowelize every letter, and do not strip marks that help pronunciation.");
   }
   return lines;
 }
@@ -206,9 +206,9 @@ COLLOQUIAL (Lebanese / Levantine / spoken Arabic):
 2. Past-tense "you": كنت for a man (plain — never كنتَ). كنتِ for a woman. Same pattern for all past verbs: رحت / رحتِ, حبيت / حبيتِ.
 3. Final -ak / -ik: put the short vowel on the letter BEFORE the final ك. The ك itself stays plain. Man: قلبَك، عيونَك، ضحكتَك. Woman: قلبِك، عيونِك، ضحكتِك. Never قلبكَ or قلبكِ.
 4. Shadda only where it changes the word (خلّص، هوّي، إنّو).
-5. Everything else: plain Arabic script. No sukoon, no mid-word vowels, no tanween, no textbook tashkeel.
+5. Do not vowelize every letter and do not add tanween. You MAY add sukoon and a few mid-word vowels where they help the singer pronounce the word.
 
-IDEA MODE (we write the lyrics): apply the light rule above on every line.
+IDEA MODE (we write the lyrics): apply the light address marks above on every line (إنتَ / إنتِ, vowel before ك, كنت / كنتِ). You MAY add shadda and a few pronunciation marks (sukoon, mid-word vowels) where they help the singer. Do not vowelize every letter. Do not strip marks that help pronunciation.
 
 WRITE MODE (user lyrics): keep every word and every diacritic the user typed. Never remove their marks. Add ONLY missing address marks to match arabic_address: إنتَ / إنتِ / إنتو, the vowel before final ك (قلبَك / قلبِك), and كنتِ for a woman. Male كنت stays plain. Leave every other word exactly as written.
 
@@ -1002,21 +1002,18 @@ function applyLightHarakatToRun(run, { source = "gemini", address = "", counts =
 }
 
 /**
- * Light harakat policy.
- * Gemini-written colloquial: strip extras (keep shadda), then add address marks.
- * User-written / Fusha: keep every mark; add only missing address marks.
+ * Light harakat policy — ADD missing address marks; do not wipe pronunciation tashkeel.
+ * Gemini-written and user-written: keep every mark already on the line.
+ * Then add إنتَ/إنتِ, vowel before final ك, and كنتِ for a woman.
+ * Corrections only: male كنتَ → كنت; never leave a short vowel on the kaf itself.
  */
 function applyLightHarakatPolicy(input, { source = "gemini", address = "", isMsa = false } = {}) {
   const original = String(input || "");
   if (!original || !/[\u0600-\u06FF]/.test(original)) {
     return { text: original, addressMarksAdded: 0 };
   }
-  let text = original;
-  if (source === "gemini" && !isMsa) {
-    text = stripSungMarksKeepShadda(text);
-  }
   const counts = { added: 0 };
-  const next = String(text).replace(/[\u0600-\u06FF]+/g, (run) => {
+  const next = String(original).replace(/[\u0600-\u06FF]+/g, (run) => {
     if (!/[\u0621-\u064A\u0671-\u06D3]/.test(run)) return run;
     return applyLightHarakatToRun(run, { source: isMsa ? "user" : source, address, counts });
   });

@@ -39222,17 +39222,19 @@ function guessFileMimeFromFilename(filename, isVideo) {
 async function deliverDownloadBlobToDevice(blob, { filename, title, isVideo } = {}) {
   const safeName = String(filename || (isVideo ? "clip.mp4" : "audio.mp3")).trim();
   const trackTitle = String(title || "Nabadai").trim();
-  const tryAnchorDownload = () => {
-    const blobUrl = URL.createObjectURL(blob);
+  const tryAnchorDownload = (fileBlob = blob) => {
+    const blobUrl = URL.createObjectURL(fileBlob);
     try {
       const a = document.createElement("a");
       a.href = blobUrl;
       a.download = safeName;
+      a.rel = "noopener";
+      a.target = "_blank";
       document.body.appendChild(a);
       a.click();
       a.remove();
     } finally {
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 8000);
     }
   };
   const nativeShareText = isVideo
@@ -39283,8 +39285,14 @@ async function deliverDownloadBlobToDevice(blob, { filename, title, isVideo } = 
       }
     }
   } else {
-    const mime = guessFileMimeFromFilename(safeName, isVideo);
-    const file = new File([blob], safeName, { type: mime });
+    // iOS Safari: canShare(audio/mpeg) is often true, then share() never
+    // shows a sheet (video/mp4 still works). Treat audio as a generic file.
+    const iosWebAudio = !isVideo && typeof isIosWebShell === "function" && isIosWebShell();
+    const mime = iosWebAudio
+      ? "application/octet-stream"
+      : guessFileMimeFromFilename(safeName, isVideo);
+    const shareBlob = iosWebAudio ? new Blob([blob], { type: mime }) : blob;
+    const file = new File([shareBlob], safeName, { type: mime });
     const canFileShare =
       typeof navigator !== "undefined" &&
       typeof navigator.share === "function" &&
@@ -39292,19 +39300,19 @@ async function deliverDownloadBlobToDevice(blob, { filename, title, isVideo } = 
       navigator.canShare({ files: [file] });
     if (canFileShare) {
       showToast(hintToast, { durationMs: 4800 });
-      void navigator
-        .share({
+      try {
+        await navigator.share({
           files: [file],
           title: trackTitle,
           text: isVideo ? `“${trackTitle}” — save to Photos or Files` : `“${trackTitle}” — save this audio`,
-        })
-        .catch((shareErr) => {
-          if (shareSheetCanceledError(shareErr)) return;
-          tryAnchorDownload();
-          showToast("Saved — check your Downloads folder.", { durationMs: 2800 });
         });
+      } catch (shareErr) {
+        if (shareSheetCanceledError(shareErr)) return;
+        tryAnchorDownload(shareBlob);
+        showToast("Saved — check your Downloads folder.", { durationMs: 2800 });
+      }
     } else {
-      tryAnchorDownload();
+      tryAnchorDownload(shareBlob);
       showToast(
         isVideo ? "Video saved — check your Downloads folder." : "Audio saved — check your Downloads folder.",
         { durationMs: 2800 },
@@ -56592,7 +56600,9 @@ function runTrackSheetAction(action, sourceEl) {
           await downloadLibraryAudioTrack(t);
           setStatus("Audio download is ready.");
         } catch (err) {
-          setStatus(`Audio download failed: ${err?.message || String(err)}`);
+          const m = err?.message || String(err);
+          setStatus(`Audio download failed: ${m}`);
+          try { showToast(m, { icon: "!", durationMs: 4400 }); } catch {}
         }
       })();
       return;
@@ -56786,7 +56796,9 @@ function runTrackSheetAction(action, sourceEl) {
           await downloadLibraryAudioTrack(t);
           setStatus("Audio download is ready.");
         } catch (err) {
-          setStatus(`Audio download failed: ${err?.message || String(err)}`);
+          const m = err?.message || String(err);
+          setStatus(`Audio download failed: ${m}`);
+          try { showToast(m, { icon: "!", durationMs: 4400 }); } catch {}
         }
       })();
       return;

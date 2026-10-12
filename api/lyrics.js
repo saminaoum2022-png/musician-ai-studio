@@ -36,6 +36,8 @@ const {
   stripAllArabicDiacritics,
   applyColloquialArabicOrthography,
   lightenSungArabicDiacritics,
+  applyLightHarakatPolicy,
+  buildLightHarakatRuleLines,
   buildGenerationAddresseeGenderLinesEn,
   buildGenerationAddresseeGenderLinesAr,
   normalizeAddresseeGenderInLyrics,
@@ -53,18 +55,27 @@ function postProcessGeneratedArabicLyrics(text, {
   arabicAddress = "",
   dialectHint = "",
 } = {}) {
-  if (!arabicScript || flags.isMsa) return text;
-  const colloquial = flags.isLebanese || flags.isLevantineColloquial || flags.isEgyptian;
-  const lyriaColloquial = lyricsTarget === "lyria" && colloquial;
-  if (lyriaColloquial && mode !== "enhance" && mode !== "fix_singing" && mode !== "to_arabizi") {
-    return stripColloquialTanween(String(text || ""));
+  if (!arabicScript) return text;
+  if (mode === "enhance" || mode === "fix_singing" || mode === "to_arabizi") {
+    if (flags.isMsa) return text;
+    const address = normalizeArabicAddress(arabicAddress, dialectHint);
+    let normalized = normalizeAddresseeGenderInLyrics(text, address, flags);
+    return stripColloquialTanween(normalized);
   }
+  if (lyricsTarget === "lyria") {
+    const address = normalizeArabicAddress(arabicAddress, dialectHint);
+    const source = mode === "arrange" || mode === "continue" ? "user" : "gemini";
+    return applyLightHarakatPolicy(text, {
+      source,
+      address,
+      isMsa: Boolean(flags.isMsa),
+    }).text;
+  }
+  if (flags.isMsa) return text;
+  const colloquial = flags.isLebanese || flags.isLevantineColloquial || flags.isEgyptian;
   const address = normalizeArabicAddress(arabicAddress, dialectHint);
   let normalized = normalizeAddresseeGenderInLyrics(text, address, flags);
   normalized = stripColloquialTanween(normalized);
-  if (mode === "enhance" || mode === "fix_singing" || mode === "to_arabizi") {
-    return normalized;
-  }
   normalized = stripAllArabicDiacritics(normalized);
   if (colloquial) {
     normalized = applyColloquialArabicOrthography(normalized, {
@@ -975,17 +986,17 @@ function buildPrompt({
       ? [
           ...buildGenerationAddresseeGenderLinesEn(resolvedAddress, flags),
           ...buildGenerationAddresseeGenderLinesAr(resolvedAddress, flags),
-          ...(resolvedAddress
+          ...(!forLyria && resolvedAddress
             ? [
               ...buildDiacriticsAddressLinesEn(resolvedAddress, flags),
               ...buildDiacriticsAddressLinesAr(resolvedAddress, flags),
             ]
             : []),
-          ...(forLyria && (flags.isLebanese || flags.isLevantineColloquial || flags.isEgyptian)
-            ? [
-              "LYRIA: MANDATORY addressee gender (إنتَ/إنتِ، حبيبي/حبيبتي) and kasra before ك in حبيتك; no كَ/كِ on kaf. OPTIONAL: extra harakat anywhere they help Lebanese/Masri sung pronunciation.",
-              "لليريا: إلزامي المخاطَب/المخاطَبة و-ak؛ اختياري زيادة حركات للفظ والغناء.",
-            ]
+          ...(forLyria && !useArabizi
+            ? buildLightHarakatRuleLines({
+              isMsa: flags.isMsa,
+              source: mode === "arrange" || mode === "continue" ? "user" : "gemini",
+            })
             : []),
         ]
       : [];

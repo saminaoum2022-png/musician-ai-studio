@@ -111,6 +111,10 @@ function parseGenerationProducerDetail(requestDetail) {
   let arabiziInstructionUsed = null;
   if (arabiziRaw === "true" || arabiziRaw === "1" || arabiziRaw === "yes") arabiziInstructionUsed = true;
   else if (arabiziRaw === "false" || arabiziRaw === "0" || arabiziRaw === "no") arabiziInstructionUsed = false;
+  const harakatMode = lineValue(text, "harakat_mode").toLowerCase();
+  const addedRaw = lineValue(text, "address_marks_added");
+  const addressMarksAdded = addedRaw === "" ? null : Number(addedRaw);
+  const harakatPerLine = lineValue(text, "harakat_per_line");
   return {
     producerStatus,
     producerReason,
@@ -119,6 +123,9 @@ function parseGenerationProducerDetail(requestDetail) {
     adaptedLyrics,
     lyriaPrompt,
     arabiziInstructionUsed,
+    harakatMode,
+    addressMarksAdded: Number.isFinite(addressMarksAdded) ? addressMarksAdded : null,
+    harakatPerLine,
   };
 }
 

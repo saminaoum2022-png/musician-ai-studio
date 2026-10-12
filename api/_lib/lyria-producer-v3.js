@@ -13,6 +13,10 @@ const {
   resolveLyriaArabicAddress,
 } = require("./lyria-upstream");
 const { isArabiziScript, ARABIZI_V3_PRESERVE_BLOCK } = require("./arabizi");
+const {
+  LIGHT_HARAKAT_V3_SECTION,
+  applyLightHarakatToV3Sections,
+} = require("./arabic-dialect-lyrics");
 
 const MAWWAL_SECONDS = 18;
 const MAWWAL_SECONDS_MIN = 15;
@@ -90,6 +94,8 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary, no extr
 - If arabic_address is male, female, or group: match ALL pronouns, verb endings and possessives to that address (female: إنتِ، عيونِك، ضحكتِك، حبيبتي، بتعرفي. male: إنتَ، عيونَك، ضحكتَك، حبيبي، بتعرف. group: إنتو، عيونكن، بتعرفوا). If the user's lyrics use a different address, adapt them to arabic_address.
 - If arabic_address is "auto" or empty: infer the addressee from the lyrics (إنتَ / إنتِ / إنتو and matching endings) and stay consistent. If still unclear, pick the most natural address the lyrics imply. Do not invent a different addressee than the lyrics suggest.
 
+${LIGHT_HARAKAT_V3_SECTION}
+
 === PREVIOUS TAKE ===
 If previous_take is present:
 - previous_take is a reference, not a lock. Any field the user changed (arabic_address, vocal_gender, style, lyrics, dialect / dialect_hint) always wins over previous_take. Rewrite only what that change needs: address change means rewrite the pronouns and endings; singer change means adjust the vocal wording and the gendered lines the singer says about themself; style change means adjust the arrangement; dialect change means rewrite the lyrics into that dialect (Lebanese, Egyptian, Gulf, etc.) while keeping the same meaning. Keep everything else (structure, bars, line count, meaning) the same.
@@ -136,7 +142,7 @@ Do not write intensity into any lyric or arrangement string — it is a number f
   - BPM above 115 (dabke, dance, mahraganat): 6-9
 - Every line is a complete small phrase. No 1-2 word fragments, no run-on sentences.
 - No commas, semicolons, colons, dashes, bullets or quotes inside lines. Use line breaks only.
-- Keep every Arabic diacritic (harakat, shadda, sukun) exactly as the user wrote it. Never remove them. If you rewrite a word, add harakat only where needed for correct Lebanese pronunciation, especially the address endings (ـِك for female, ـَك for male).
+- Honor ARABIC HARAKAT (LIGHT) above. Never vowelize every letter. Never put fatha/kasra on the kaf itself (قلبكَ / قلبكِ).
 - Honor arabic_address as in ARABIC ADDRESS above. This is not the singer's gender.
 - Never put timing, BPM, style words, dialect notes or instructions in lyrics.
 - BACKING echoes are optional and rare. Leave "backing": [] unless style_tags explicitly asks for chants, choir, or group vocals. Never invent backing just to fill the chorus.
@@ -145,12 +151,12 @@ Do not write intensity into any lyric or arrangement string — it is a number f
 - Write original lyrics in the language you detected. If Arabic, use the dialect from dialect_hint, or Lebanese colloquial when dialect is unclear. Natural spoken words, not formal Arabic (fusha).
 - Never copy phrases from idea_brief into the lyrics; express the idea in new words.
 - The chorus is the hook: short, memorable, emotionally clear, and the title-like line comes first or last.
-- Honor arabic_address as in ARABIC ADDRESS above — only if you are writing Arabic or Arabizi. This is not the singer's gender.
+- Honor ARABIC HARAKAT (LIGHT) and arabic_address as in ARABIC ADDRESS above — only if you are writing Arabic or Arabizi. This is not the singer's gender.
 - Script: follow the language of idea_brief. Do not default to Arabic. If script_format is "arabic", write Arabic script. If script_format is "arabizi", write Arabizi using letters only: "a" for ع, "h" for ح, "kh" for خ, "gh" for غ, "'" for ء. No numerals. If script_format is "english", "auto", empty, or any other non-Arabic value, write in the language of the idea.
 
 === WRITE MODE (lyrics_raw set) ===
 - Keep the meaning of the user's lyrics. Never invent new verses, new story events, or a new message.
-- Keep every Arabic diacritic (harakat, shadda, sukun) exactly as the user wrote it. Never remove them. If you rewrite a word, add harakat only where needed for correct Lebanese pronunciation, especially the address endings (ـِك for female, ـَك for male).
+- Honor ARABIC HARAKAT (LIGHT) above: keep every word and every diacritic the user typed; add only missing address marks.
 - Honor arabic_address as in ARABIC ADDRESS above — only if the lyrics are Arabic or Arabizi.
 - If lyrics_raw is English or another non-Arabic language, keep that language. Do not translate into Arabic.
 - You MAY adapt for singability: split or join lines, place lines into sections, repeat the chorus, and make small wording fixes so the lines sit in the groove.
@@ -529,7 +535,14 @@ function normalizeLyriaProducerV3Output(raw, { instrumental = false, input = {} 
     }
   }
 
-  return { sections, v3: true };
+  const harakat = applyLightHarakatToV3Sections(sections, input);
+  return {
+    sections: harakat.sections,
+    v3: true,
+    harakatMode: harakat.harakatMode,
+    addressMarksAdded: harakat.addressMarksAdded,
+    harakatPerLine: harakat.harakatPerLine,
+  };
 }
 
 function assignTimestamps(sections, { bpm, meter }) {

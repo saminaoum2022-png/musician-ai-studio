@@ -3338,6 +3338,14 @@ function parseLyriaRequestDetail(detail) {
       if (/^(false|0|no)$/.test(raw)) return false;
       return null;
     })(),
+    harakatMode: lineValue("harakat_mode").toLowerCase(),
+    addressMarksAdded: (() => {
+      const raw = lineValue("address_marks_added");
+      if (raw === "") return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    })(),
+    harakatPerLine: lineValue("harakat_per_line"),
   };
 }
 
@@ -3361,6 +3369,18 @@ function arabiziInstructionBadge(used) {
   if (used === true) return ` · <span class="badge active">Arabizi instruction: used</span>`;
   if (used === false) return ` · <span class="badge">Arabizi instruction: not used</span>`;
   return "";
+}
+
+function harakatAdminLine({ harakatMode, addressMarksAdded, harakatPerLine } = {}) {
+  const mode = String(harakatMode || "").trim();
+  const per = String(harakatPerLine || "").trim();
+  const hasAdded = addressMarksAdded != null && addressMarksAdded !== "";
+  if (!mode && !hasAdded && !per) return "";
+  const bits = [];
+  if (mode) bits.push(`Harakat: ${escapeHtml(mode)}`);
+  if (hasAdded) bits.push(`address marks added ${escapeHtml(String(addressMarksAdded))}`);
+  if (per && per !== "—") bits.push(`per line ${escapeHtml(per)}`);
+  return bits.length ? `<p class="sectionNote genHarakatLine">${bits.join(" · ")}</p>` : "";
 }
 
 function producerBadgeHtml(status, reason) {
@@ -3493,7 +3513,12 @@ function renderGenerationDetail(data) {
          ${lyriaMeta?.photoInput ? ` · Photo: ${escapeHtml(lyriaMeta.photoInput)}` : ""}
          ${lyriaMeta?.flow ? ` · ${escapeHtml(lyriaMeta.flow)}` : ""}
          ${arabiziInstructionBadge(g.arabiziInstructionUsed ?? parsed?.arabiziInstructionUsed)}
-       </p>`
+       </p>
+       ${harakatAdminLine({
+         harakatMode: g.harakatMode || parsed?.harakatMode,
+         addressMarksAdded: g.addressMarksAdded ?? parsed?.addressMarksAdded,
+         harakatPerLine: g.harakatPerLine || parsed?.harakatPerLine,
+       })}`
     : "";
 
   const toggles = generationPromptLyricsToggles({
@@ -4244,6 +4269,11 @@ function renderGenerations(data) {
           ${g.providerCostUsd != null ? ` · ${fmtUsd(g.providerCostUsd)}` : ""}
           ${arabiziInstructionBadge(g.arabiziInstructionUsed)}
         </div>
+        ${harakatAdminLine({
+          harakatMode: g.harakatMode,
+          addressMarksAdded: g.addressMarksAdded,
+          harakatPerLine: g.harakatPerLine,
+        })}
         ${failReason ? `<p class="genCardError">${escapeHtml(failReason)}</p>` : ""}
         <p class="genCardSummary">${escapeHtml(g.prompt || "—")}</p>
         <div class="genCardToggles">${toggles.promptBlock}${toggles.lyricsBlock}</div>

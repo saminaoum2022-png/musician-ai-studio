@@ -540,6 +540,20 @@ function buildLyriaFullSongAdminExtra({
     ...(model ? [`lyria_model: ${model}`] : []),
     ...producerLines,
     `lyrics_mode: ${idea ? "idea" : "write"}`,
+    `harakat_mode: ${String(producerResult?.harakatMode || "light").trim() || "light"}`,
+    `address_marks_added: ${Number.isFinite(Number(producerResult?.addressMarksAdded)) ? Number(producerResult.addressMarksAdded) : 0}`,
+    `harakat_per_line: ${
+      Array.isArray(producerResult?.harakatPerLine) && producerResult.harakatPerLine.length
+        ? producerResult.harakatPerLine.join(",")
+        : (idea ? adaptedLyrics : adaptedLyrics || originalLyrics)
+          ? String(idea ? adaptedLyrics : adaptedLyrics || originalLyrics)
+            .split(/\n/)
+            .map((line) => line.trim())
+            .filter((line) => line && !/^\[[^\]]+\]$/.test(line))
+            .map((line) => (String(line).match(/[\u064B-\u0652\u0670]/g) || []).length)
+            .join(",")
+          : "—"
+    }`,
     ...adminMultilineField("original_lyrics", idea ? "" : originalLyrics),
     ...adminMultilineField("adapted_lyrics", idea ? "" : adaptedLyrics),
     ...(dialectLabel ? [`dialect: ${dialectLabel}`] : []),

@@ -82109,7 +82109,12 @@ function toggleCreateLyricsAttachMenu() {
   const btn = document.getElementById("btnCreateLyricsAttach");
   if (!menu || !btn) return;
   const vibeItem = menu.querySelector(".createLyricsAttachMenuItem--vibe");
-  if (vibeItem) vibeItem.hidden = !nabadVibeEnabled();
+  if (vibeItem) {
+    const showVibe = nabadVibeEnabled();
+    vibeItem.hidden = !showVibe;
+    vibeItem.style.display = showVibe ? "" : "none";
+    vibeItem.setAttribute("aria-hidden", showVibe ? "false" : "true");
+  }
   const open = menu.hidden;
   if (!open) {
     closeCreateLyricsAttachMenu();
@@ -82137,6 +82142,7 @@ function handleCreateLyricsAttachChoice(kind) {
     return;
   }
   if (kind === "vibe") {
+    if (!nabadVibeEnabled()) return;
     openVibeReadSheet();
   }
 }

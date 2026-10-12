@@ -13484,6 +13484,9 @@ html:not([data-theme="light"]) .createLyricsAttachMenu{
 .createLyricsAttachMenu[hidden]{
   display: none !important;
 }
+.createLyricsAttachMenuItem[hidden]{
+  display: none !important;
+}
 .createLyricsAttachMenuItem{
   display: flex;
   align-items: center;

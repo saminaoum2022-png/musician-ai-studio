@@ -5,6 +5,8 @@
 import { HUM_TRACK_INSTRUMENTS, getHumTrackPreset } from "./hum-track-instruments.js";
 import { humTrackIconMarkup } from "./hum-track-icons.js";
 import { createAdaptivePollLoop, stopPollLoop } from "./generation-poll.js";
+import { extractMelodyFromBlob } from "./melody/extract.js";
+import { formatMelodyLine } from "./melody/postprocess.js";
 
 let ctx = null;
 let wired = false;
@@ -591,6 +593,19 @@ async function submitHumTrackGeneration() {
           instrumentPreset: instrumentId,
           elevenlabsUseFinetune: ctx?.getElevenlabsFinetunePref?.() !== false,
         };
+        try {
+          const melody = await extractMelodyFromBlob(humTrackBlob);
+          const melodyLine = formatMelodyLine(melody);
+          if (melodyLine) {
+            payload.melodyLine = melodyLine;
+            payload.melodyBpm = Number(melody.tempoBpm) || undefined;
+          } else {
+            ctx?.showToast?.(
+              "Couldn't read the hummed notes clearly — hum slower and louder for a closer match.",
+              { icon: "♪", durationMs: 5200 },
+            );
+          }
+        } catch {}
         try {
           const refMs = await ctx?.estimateBlobDurationMs?.(sendFile);
           if (refMs) {

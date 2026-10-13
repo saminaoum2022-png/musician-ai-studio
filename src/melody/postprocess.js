@@ -209,3 +209,25 @@ function clampNum(n, min, max, fallback) {
   return Math.max(min, Math.min(max, x));
 }
 
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+export function midiToNoteName(midi) {
+  const n = clampInt(midi, 24, 96);
+  return `${NOTE_NAMES[(n % 12 + 12) % 12]}${Math.floor(n / 12) - 1}`;
+}
+
+/** Compact note line for an instrumental prompt, e.g. "C4 E4 G4 A4 G4 E4 C4". */
+export function formatMelodyLine(melody, { maxNotes = 32 } = {}) {
+  const notes = Array.isArray(melody?.notes) ? melody.notes : [];
+  if (!notes.length) return "";
+  const names = [];
+  for (const note of notes) {
+    if (names.length >= maxNotes) break;
+    const name = midiToNoteName(note?.midi);
+    if (!name) continue;
+    if (names[names.length - 1] === name) continue;
+    names.push(name);
+  }
+  return names.join(" ");
+}
+

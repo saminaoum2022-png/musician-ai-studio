@@ -1786,16 +1786,40 @@ function humTrackConditionStrength(value) {
  * with a prompt (not a composition_plan). Attaching the hum as
  * conditioning_ref remixes the vocal instead of playing an instrument.
  */
+function sanitizeHumTrackMelodyLine(raw) {
+  const notes = String(raw || "").toUpperCase().match(/[A-G]#?[0-8]/g);
+  if (!notes?.length) return "";
+  const out = [];
+  for (const note of notes) {
+    if (out.length >= 32) break;
+    if (out[out.length - 1] === note) continue;
+    out.push(note);
+  }
+  return out.join(" ");
+}
+
 function buildElevenHumTrackForceInstrumentalPrompt({
   instrumentLabel = "",
   style = "",
+  melodyLine = "",
+  melodyBpm = 0,
 } = {}) {
   const instrument = String(instrumentLabel || "").trim() || "solo instrument";
   const styleLine = String(style || "").trim();
+  const notes = sanitizeHumTrackMelodyLine(melodyLine);
+  const bpm = Number(melodyBpm);
+  const tempo = Number.isFinite(bpm) && bpm >= 60 && bpm <= 180 ? `${Math.round(bpm)} BPM` : "";
   return [
     `Solo ${instrument} instrumental performance.`,
     `One instrument only: ${instrument}.`,
     styleLine,
+    notes
+      ? `Play this exact hummed melody note-for-note on ${instrument}: ${notes}.`
+      : "",
+    notes
+      ? "Repeat that phrase to fill the track. Do not invent a different tune."
+      : "",
+    tempo ? `Tempo ${tempo}.` : "",
     "Melodic lead only.",
     "No vocals. No humming. No singing. No human voice. No processed vocals.",
     "Studio instrumental recording.",

@@ -1219,6 +1219,8 @@ async function runElevenlabsGenerationJob({
       finalPrompt = buildElevenHumTrackForceInstrumentalPrompt({
         instrumentLabel: preset.label,
         style: stylePrompt || preset.style,
+        melodyLine: body?.melodyLine || body?.humMelodyLine,
+        melodyBpm: body?.melodyBpm || body?.humMelodyBpm,
       });
       elevenPlanSource = "hum_track_force_instrumental_prompt";
       console.log(
@@ -1325,6 +1327,9 @@ async function runElevenlabsGenerationJob({
         humTrackInstrumental ? "eleven_force_instrumental: true" : "",
         humTrackInstrumental && finalPrompt
           ? `eleven_prompt: ${String(finalPrompt).slice(0, 800)}`
+          : "",
+        humTrackInstrumental && (body?.melodyLine || body?.humMelodyLine)
+          ? `eleven_melody: ${String(body?.melodyLine || body?.humMelodyLine).slice(0, 200)}`
           : "",
         humTrackInstrumental
           ? "eleven_reference: not_attached (conditioning_ref was keeping the hummed voice)"

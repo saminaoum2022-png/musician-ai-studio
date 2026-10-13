@@ -1,6 +1,49 @@
 import { pitchPointsToMelody } from "./postprocess.js";
 
 /**
+ * Decode a recorded hum and turn it into quantized melody notes.
+ * @param {Blob|File} blob
+ * @returns {Promise<import("./postprocess.js").Melody>}
+ */
+export async function extractMelodyFromBlob(blob) {
+  if (!blob || !blob.size) return { tempoBpm: 96, meter: "4/4", notes: [] };
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return { tempoBpm: 96, meter: "4/4", notes: [] };
+  const ac = new AudioCtx();
+  try {
+    const audio = await ac.decodeAudioData((await blob.arrayBuffer()).slice(0));
+    return extractMelodyFromAudioBuffer(audio);
+  } catch {
+    return { tempoBpm: 96, meter: "4/4", notes: [] };
+  } finally {
+    try { await ac.close(); } catch {}
+  }
+}
+
+export function extractMelodyFromAudioBuffer(audioBuffer, opts = {}) {
+  const sampleRate = Number(audioBuffer?.sampleRate) || 44100;
+  const channel = audioBuffer?.getChannelData?.(0);
+  if (!channel?.length) return { tempoBpm: 96, meter: "4/4", notes: [] };
+  const hop = 1024;
+  const win = 2048;
+  const points = [];
+  const buf = new Float32Array(win);
+  const maxSamples = Math.min(channel.length, Math.floor(sampleRate * 45));
+  for (let i = 0; i + win <= maxSamples; i += hop) {
+    buf.set(channel.subarray(i, i + win));
+    const rms = calcRms(buf);
+    const f0 = rms > 0.008 ? autoCorrelatePitch(new Float32Array(buf), sampleRate) : 0;
+    if (f0) points.push({ tSec: i / sampleRate, f0Hz: f0 });
+  }
+  return pitchPointsToMelody(points, {
+    bpm: opts.bpm || 96,
+    meter: "4/4",
+    maxSeconds: Math.min(45, Number(audioBuffer.duration) || 45),
+    autoTempo: true,
+  });
+}
+
+/**
  * @typedef {{ tSec:number, f0Hz:number }} PitchPoint
  * @typedef {import("./postprocess.js").Melody} Melody
  *

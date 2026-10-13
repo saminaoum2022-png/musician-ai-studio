@@ -1215,22 +1215,45 @@ async function runElevenlabsGenerationJob({
       }
     } else if (!isSongInpaint && humTrackInstrumental) {
       const preset = resolveHumTrackPreset(body?.instrumentPreset);
-      finalCompositionPlan = null;
-      finalPrompt = buildElevenHumTrackForceInstrumentalPrompt({
-        instrumentLabel: preset.label,
-        style: stylePrompt || preset.style,
-        melodyLine: body?.melodyLine || body?.humMelodyLine,
-        melodyBpm: body?.melodyBpm || body?.humMelodyBpm,
-      });
-      elevenPlanSource = "hum_track_force_instrumental_prompt";
-      console.log(
-        "[music/generate] elevenlabs hum track force_instrumental",
-        taskId,
-        preset.label,
-        finalPrompt.length,
-      );
-      if (!finalPrompt) {
-        await fail("Hum Track prompt failed — pick an instrument and try again.");
+      const melodyLine = body?.melodyLine || body?.humMelodyLine;
+      if (referenceSongId) {
+        finalCompositionPlan = buildElevenHumTrackCompositionPlan({
+          stylePrompt: stylePrompt || preset.style,
+          musicLengthMs,
+          referenceSongId,
+          referenceRangeMs,
+          conditionStrength: "medium",
+          negativeTags: body?.negativeTags || preset.negativeTags,
+          instrumentLabel: preset.label,
+          melodyLine,
+        });
+        elevenPlanSource = "hum_track_instrument_reference";
+        console.log(
+          "[music/generate] elevenlabs hum track reference plan",
+          taskId,
+          preset.label,
+          finalCompositionPlan?.chunks?.length || 0,
+          "chunks",
+        );
+      }
+      if (!finalCompositionPlan?.chunks?.length) {
+        finalCompositionPlan = null;
+        finalPrompt = buildElevenHumTrackForceInstrumentalPrompt({
+          instrumentLabel: preset.label,
+          style: stylePrompt || preset.style,
+          melodyLine,
+          melodyBpm: body?.melodyBpm || body?.humMelodyBpm,
+        });
+        elevenPlanSource = "hum_track_force_instrumental_prompt";
+        console.log(
+          "[music/generate] elevenlabs hum track force_instrumental fallback",
+          taskId,
+          preset.label,
+          finalPrompt.length,
+        );
+      }
+      if (!finalCompositionPlan?.chunks?.length && !finalPrompt) {
+        await fail("Hum Track needs your hum recording — record or upload again, then retry.");
         return;
       }
     } else if (Boolean(body?.humTrack) && instrumental && !humTrackInstrumental) {
@@ -1324,16 +1347,22 @@ async function runElevenlabsGenerationJob({
         humTrackInstrumental
           ? "eleven_endpoint: POST /v1/music/detailed"
           : "",
-        humTrackInstrumental ? "eleven_force_instrumental: true" : "",
+        humTrackInstrumental && finalCompositionPlan
+          ? "eleven_force_instrumental: omitted (plan + hum reference, Suno-style)"
+          : humTrackInstrumental
+            ? "eleven_force_instrumental: true"
+            : "",
         humTrackInstrumental && finalPrompt
           ? `eleven_prompt: ${String(finalPrompt).slice(0, 800)}`
           : "",
         humTrackInstrumental && (body?.melodyLine || body?.humMelodyLine)
           ? `eleven_melody: ${String(body?.melodyLine || body?.humMelodyLine).slice(0, 200)}`
           : "",
-        humTrackInstrumental
-          ? "eleven_reference: not_attached (conditioning_ref was keeping the hummed voice)"
-          : "",
+        humTrackInstrumental && referenceSongId
+          ? `eleven_reference: attached ${String(referenceSongId).slice(0, 12)}`
+          : humTrackInstrumental
+            ? "eleven_reference: missing"
+            : "",
         finalCompositionPlan?.sections?.length
           ? `eleven_sections: ${finalCompositionPlan.sections.length}`
           : "",
@@ -2130,7 +2159,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   let referenceSongId = null;
   let referenceRangeMs = null;
   let referenceConditionStrength = body?.referenceConditionStrength || "high";
-  if (hasReference && !body?.humTrack) {
+  if (hasReference) {
     const refResolved = await resolveElevenReferenceAudio(body);
     if (!refResolved.ok) {
       return sendJson(res, 400, {

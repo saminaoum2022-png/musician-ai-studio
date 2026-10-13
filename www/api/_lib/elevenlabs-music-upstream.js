@@ -182,13 +182,13 @@ function ensureMinPositiveStyles(tags, { instrumental = false } = {}) {
   return out;
 }
 
-function splitElevenStyleTags(stylePrompt) {
+function splitElevenStyleTags(stylePrompt, { instrumental = false } = {}) {
   const tags = String(stylePrompt || "")
     .split(/[,|]/)
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 20);
-  return ensureMinPositiveStyles(tags).slice(0, 50);
+  return ensureMinPositiveStyles(tags, { instrumental }).slice(0, 50);
 }
 
 function splitElevenNegativeStyleTags(negativeTags, { instrumental = false } = {}) {
@@ -403,13 +403,16 @@ function finalizeElevenSongPlan(
   });
   out = applyNegativeStylesToPlan(out, negativeTags, { instrumental });
   out = scaleCompositionPlanDuration(out, musicLengthMs);
-  const styleTags = splitElevenStyleTags(stylePrompt);
+  const styleTags = splitElevenStyleTags(stylePrompt, { instrumental });
   if (out.chunks[0]) {
-    out.chunks[0].positive_styles = ensureMinPositiveStyles([
-      ...new Set(
-        [...styleTags, ...(out.chunks[0].positive_styles || [])].map((s) => String(s).trim()).filter(Boolean),
-      ),
-    ]).slice(0, 50);
+    out.chunks[0].positive_styles = ensureMinPositiveStyles(
+      [
+        ...new Set(
+          [...styleTags, ...(out.chunks[0].positive_styles || [])].map((s) => String(s).trim()).filter(Boolean),
+        ),
+      ],
+      { instrumental },
+    ).slice(0, 50);
   }
   return out;
 }
@@ -1839,6 +1842,7 @@ function buildElevenHumTrackCompositionPlan({
   conditionStrength = "medium",
   negativeTags = "",
   instrumentLabel = "",
+  melodyLine = "",
 } = {}) {
   const lengthMs = Math.min(
     120000,
@@ -1852,7 +1856,8 @@ function buildElevenHumTrackCompositionPlan({
   );
   const strength = humTrackConditionStrength(conditionStrength);
   const instrument = String(instrumentLabel || "").trim() || "solo instrument";
-  const styles = splitElevenStyleTags(String(stylePrompt || "").trim());
+  const styles = splitElevenStyleTags(String(stylePrompt || "").trim(), { instrumental: true });
+  const notes = sanitizeHumTrackMelodyLine(melodyLine);
   const negative_styles = splitElevenNegativeStyleTags(negativeTags, { instrumental: true });
   for (const extra of [
     "human voice",
@@ -1878,13 +1883,14 @@ function buildElevenHumTrackCompositionPlan({
     "do not keep the hummed voice",
     "clear melodic lead",
     "studio instrumental",
-  ]).slice(0, 50);
+  ], { instrumental: true }).slice(0, 50);
 
+  const noteHint = notes ? ` hummed melody ${notes};` : "";
   return finalizeElevenSongPlan(
     {
       chunks: [
         {
-          text: `[Main]\n{instrumental — solo ${instrument} only; play the hummed melody on ${instrument}; no human voice; no humming; no singing; no processed vocals}`,
+          text: `[Main]\n{instrumental — solo ${instrument} only; play the${noteHint} reference melody on ${instrument}; no human voice; no humming; no singing; no processed vocals}`,
           duration_ms: lengthMs,
           positive_styles,
           negative_styles: negative_styles.slice(0, 50),

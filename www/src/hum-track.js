@@ -581,8 +581,8 @@ async function submitHumTrackGeneration() {
         const tok = ctx.getSupabaseAuthToken?.();
         const payload = {
           title: `Hum Track · ${label}`,
-          style: "",
-          negativeTags: "",
+          style: preset.style,
+          negativeTags: preset.negativeTags,
           prompt: "",
           instrumental: true,
           hasReference: true,

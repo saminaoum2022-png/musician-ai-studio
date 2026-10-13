@@ -1115,7 +1115,10 @@ async function runElevenlabsGenerationJob({
     let finalCompositionPlan = null;
     let elevenPlanSource = null;
 
-    if (!editCompositionPlan && !elevenLegacyPlansEnabled()) {
+    const humTrackInstrumental =
+      Boolean(body?.humTrack) && instrumental && referenceSongId && !editCompositionPlan;
+
+    if (!editCompositionPlan && !elevenLegacyPlansEnabled() && !humTrackInstrumental) {
       const bare = resolveBareElevenCompose(body);
       if (!bare.ok) {
         await fail(bare.error);
@@ -1129,8 +1132,6 @@ async function runElevenlabsGenerationJob({
         chunks: finalCompositionPlan?.chunks?.length || 0,
       });
     } else if (!editCompositionPlan) {
-    const humTrackInstrumental =
-      Boolean(body?.humTrack) && instrumental && referenceSongId && !editCompositionPlan;
     const appLikeReference =
       Boolean(referenceSongId) && !editCompositionPlan && !Boolean(body?.humTrack);
 
@@ -1973,9 +1974,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
 }
 
 async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
-  if (elevenLegacyPlansEnabled()) {
-    applyHumTrackGenerateDefaults(body);
-  }
+  applyHumTrackGenerateDefaults(body);
   const apiKey = process.env.ELEVENLABS_API_KEY || "";
   if (!apiKey) return sendJson(res, 500, { error: "Missing ELEVENLABS_API_KEY on server" });
 
@@ -2054,7 +2053,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     : String(body?.prompt || "").trim();
   const stylePrompt = isSongEdit
     ? "song edit"
-    : elevenLegacyPlansEnabled()
+    : elevenLegacyPlansEnabled() || Boolean(body?.humTrack)
       ? buildMusicPrompt(body)
       : String(body?.style || "").trim();
   const title = String(body?.title || "").trim() || (isSongEdit ? "Edited song" : "");
@@ -2147,7 +2146,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     referenceRangeMs = Number(body?.referenceDurationMs) > 0
       ? Number(body.referenceDurationMs)
       : estimateReferenceDurationMs(refResolved.buffer);
-    if (body?.humTrack && elevenLegacyPlansEnabled()) {
+    if (body?.humTrack) {
       const refMs = Math.max(3000, Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)));
       musicLengthMs = Math.max(
         35000,
@@ -2164,7 +2163,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     );
   }
 
-  if (!isSongEdit && !elevenLegacyPlansEnabled()) {
+  if (!isSongEdit && !elevenLegacyPlansEnabled() && !body?.humTrack) {
     const bareCheck = resolveBareElevenCompose(body);
     if (!bareCheck.ok && !hasReference) {
       return sendJson(res, 400, {

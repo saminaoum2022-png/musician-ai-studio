@@ -12262,6 +12262,101 @@ body.playerLyricsOpen .playerLyricsChip{
 }
 .lyricsSingabilityPanel.isExpanded .lyricsSingabilityDetails{
   display:block;
+  max-height: min(34svh, 248px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.lyricsSingabilityBlock{ margin-top:10px; }
+.lyricsSingabilityBlockTitle{
+  margin:0 0 5px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:0.04em;
+  text-transform:uppercase;
+  color:rgba(233,238,251,0.55);
+}
+.lyricsSingabilityMeaning{
+  margin:0;
+  font-size:12.5px;
+  line-height:1.4;
+  color:rgba(232,238,247,0.72);
+}
+.lyricsSingabilityPulse{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:6px;
+}
+.lyricsSingabilityPulseCell{
+  border-radius:10px;
+  background:rgba(0,0,0,0.18);
+  border:1px solid rgba(255,255,255,0.06);
+  padding:7px 8px;
+}
+.lyricsSingabilityPulseCell span{
+  display:block;
+  font-size:10px;
+  font-weight:700;
+  color:var(--muted);
+  margin-bottom:2px;
+}
+.lyricsSingabilityPulseCell b{
+  font-size:12.5px;
+  font-weight:750;
+}
+.lyricsSingabilityStyles{ display:grid; gap:6px; }
+.lyricsSingabilityStyleChip{
+  width:100%;
+  text-align:start;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.04);
+  padding:8px 10px;
+  color:inherit;
+  cursor:pointer;
+}
+.lyricsSingabilityStyleChip.isOn{
+  border-color:rgba(201,162,39,0.45);
+  background:rgba(201,162,39,0.10);
+}
+.lyricsSingabilityStyleChip b{ display:block; font-size:13px; }
+.lyricsSingabilityStyleChip i{
+  font-style:normal;
+  float:right;
+  color:#c9a227;
+  font-size:11px;
+  font-weight:700;
+}
+.lyricsSingabilityStyleChip p{
+  margin:3px 0 0;
+  font-size:11.5px;
+  color:rgba(232,238,247,0.58);
+  line-height:1.35;
+}
+.lyricsSingabilityRows{
+  margin:0;
+  padding:0;
+  list-style:none;
+  display:grid;
+  gap:6px;
+}
+.lyricsSingabilityRows li{
+  padding:8px 10px;
+  border-radius:8px;
+  background:rgba(0,0,0,0.18);
+  border-left:3px solid rgba(148,163,184,0.7);
+  font-size:13px;
+}
+.lyricsSingabilityRows li.isShort{ border-left-color:#f59e0b; }
+.lyricsSingabilityRows .rowLine{
+  display:block;
+  text-align:right;
+  direction:rtl;
+  font-weight:600;
+}
+.lyricsSingabilityRows .rowMeta{
+  display:block;
+  font-size:11px;
+  color:var(--muted);
 }
 .lyricsSingabilityNote{
   margin:0 0 8px;
@@ -12698,6 +12793,10 @@ body[data-route="generate"][data-create-layout="simple"] #lyricsFieldPanel #btnL
 }
 body[data-route="generate"][data-create-layout="simple"] #lyricsSingabilityPanel{
   flex: 0 0 auto;
+  margin-top: 8px;
+}
+html.is-web-shell body[data-route="generate"][data-create-layout="simple"] #lyricsSingabilityPanel.isExpanded .lyricsSingabilityDetails{
+  max-height: min(28svh, 200px);
 }
 body[data-route="generate"] #simpleBox.createSimpleLayout{
   position: relative;
@@ -24590,7 +24689,8 @@ body.trackSheetOpen .footer{
   html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createWebViewportFit #createSimpleStudioHost,
   html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createWebViewportFit #createSoundCustomFields,
   html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createWebViewportFit #createFlow.createComposeStack .createFlowStep--generate,
-  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createWebViewportFit #createGenerateDock{
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createWebViewportFit #createGenerateDock,
+  html.is-web-shell body[data-route="generate"][data-create-layout="simple"].createWebViewportFit #lyricsSingabilityPanel{
     flex: 0 0 auto;
     flex-shrink: 0;
   }
@@ -24615,6 +24715,9 @@ body.trackSheetOpen .footer{
     margin-bottom: 0;
     overflow: hidden;
     gap: 0;
+  }
+  html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #lyricsSingabilityPanel{
+    flex: 0 0 auto;
   }
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack > .createFlowStep:first-child,
   html.is-native-shell body[data-route="generate"][data-create-layout="simple"] #createFlow.createComposeStack .createSectionStack,

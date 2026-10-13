@@ -1432,19 +1432,6 @@
                       <div id="createSimpleSingerSlot" class="createSimpleSingerSlot" hidden></div>
                       <span id="createLyricsLineCount" class="createLyricsLineCount" hidden></span>
                     </div>
-                    <div id="lyricsSingabilityPanel" class="lyricsSingabilityPanel" hidden aria-live="polite">
-                      <button type="button" id="lyricsSingabilityToggle" class="lyricsSingabilityCardHead" aria-expanded="false">
-                        <span id="lyricsSingabilityScore" class="lyricsSingabilityScore"></span>
-                        <span id="lyricsSingabilitySummary" class="lyricsSingabilitySummary"></span>
-                        <span id="lyricsSingabilityExpandHint" class="lyricsSingabilityExpandHint" aria-hidden="true"></span>
-                      </button>
-                      <div id="lyricsSingabilityDetails" class="lyricsSingabilityDetails">
-                        <p id="lyricsSingabilityNote" class="lyricsSingabilityNote" hidden></p>
-                        <dl id="lyricsSingabilityRecs" class="lyricsSingabilityRecs" hidden></dl>
-                        <ul id="lyricsSingabilityList" class="lyricsSingabilityList"></ul>
-                        <div id="lyricsSingabilityActions" class="lyricsSingabilityActions" hidden role="toolbar" aria-label="Suggested lyric fixes"></div>
-                      </div>
-                    </div>
                   </div>
                   <div id="createSimpleAddressRow" class="createSimpleAddressRow" hidden>
                     <span class="createSimpleAddressLabel">Talking to</span>
@@ -1456,6 +1443,35 @@
                   </div>
                   <div class="row imageMoodRow">
                     <span id="imageMoodSummary" class="imageMoodSummary" hidden></span>
+                  </div>
+                </div>
+                <div id="lyricsSingabilityPanel" class="lyricsSingabilityPanel" hidden aria-live="polite">
+                  <button type="button" id="lyricsSingabilityToggle" class="lyricsSingabilityCardHead" aria-expanded="false">
+                    <span id="lyricsSingabilityScore" class="lyricsSingabilityScore"></span>
+                    <span id="lyricsSingabilitySummary" class="lyricsSingabilitySummary"></span>
+                    <span id="lyricsSingabilityExpandHint" class="lyricsSingabilityExpandHint" aria-hidden="true"></span>
+                  </button>
+                  <div id="lyricsSingabilityDetails" class="lyricsSingabilityDetails">
+                    <p id="lyricsSingabilityNote" class="lyricsSingabilityNote" hidden></p>
+                    <div id="lyricsSingabilityMeaningBlock" class="lyricsSingabilityBlock" hidden>
+                      <h3 class="lyricsSingabilityBlockTitle">Meaning</h3>
+                      <p id="lyricsSingabilityMeaning" class="lyricsSingabilityMeaning"></p>
+                    </div>
+                    <div id="lyricsSingabilityPulseBlock" class="lyricsSingabilityBlock" hidden>
+                      <h3 class="lyricsSingabilityBlockTitle">Pulse</h3>
+                      <div id="lyricsSingabilityPulse" class="lyricsSingabilityPulse"></div>
+                    </div>
+                    <div id="lyricsSingabilityStylesBlock" class="lyricsSingabilityBlock" hidden>
+                      <h3 class="lyricsSingabilityBlockTitle">Studio styles</h3>
+                      <div id="lyricsSingabilityStyles" class="lyricsSingabilityStyles"></div>
+                    </div>
+                    <div id="lyricsSingabilityRowsBlock" class="lyricsSingabilityBlock" hidden>
+                      <h3 class="lyricsSingabilityBlockTitle">Per row</h3>
+                      <ul id="lyricsSingabilityRows" class="lyricsSingabilityRows"></ul>
+                    </div>
+                    <dl id="lyricsSingabilityRecs" class="lyricsSingabilityRecs" hidden></dl>
+                    <ul id="lyricsSingabilityList" class="lyricsSingabilityList"></ul>
+                    <div id="lyricsSingabilityActions" class="lyricsSingabilityActions" hidden role="toolbar" aria-label="Suggested lyric fixes"></div>
                   </div>
                 </div>
                 <div id="createSimpleStudioHost" class="createSimpleStudioHost" hidden></div>

@@ -1,6 +1,7 @@
 /** Local + merged singability helpers for lyrics before AI singing. */
 
 import { looksLikeArabizi, normalizeArabiziRhymeKey } from "./arabizi.js";
+import { listLyriaStudioStyles } from "./lyria-studio-styles.js";
 
 const SECTION_TAG_RE = /^\[(.+?)\]\s*$/i;
 
@@ -314,4 +315,74 @@ export function singabilityLevelClass(level) {
   if (level === "high") return "isHigh";
   if (level === "low") return "isLow";
   return "isMedium";
+}
+
+function studioStyleBpm(style) {
+  const m = String(style?.subtitle || style?.styleLine || "").match(/(\d{2,3})\s*BPM/i);
+  return m ? Number(m[1]) : null;
+}
+
+function parseBpmRange(raw) {
+  const nums = String(raw || "").match(/\d{2,3}/g);
+  if (!nums?.length) return null;
+  const a = Number(nums[0]);
+  const b = nums[1] ? Number(nums[1]) : a;
+  if (!Number.isFinite(a)) return null;
+  return { lo: Math.min(a, b), hi: Math.max(a, b) };
+}
+
+/** Studio styles that match recommended BPM / feel / meaning. */
+export function pickStudioStylesForSingability(rec = {}, { limit = 3 } = {}) {
+  const range = parseBpmRange(rec?.bpm);
+  const feel = `${rec?.feel || ""} ${rec?.rhythm || ""} ${rec?.notes || ""}`.toLowerCase();
+  const mid = range ? (range.lo + range.hi) / 2 : null;
+  return listLyriaStudioStyles()
+    .map((style) => {
+      const bpm = studioStyleBpm(style);
+      const blob = `${style.label} ${style.subtitle || ""} ${style.styleLine || ""}`.toLowerCase();
+      let score = 0;
+      if (range && bpm) {
+        if (bpm >= range.lo - 8 && bpm <= range.hi + 8) score += 4;
+        else score -= Math.min(4, Math.abs(bpm - mid) / 28);
+      }
+      if (/ballad|slow|intimate|quiet/.test(feel) && /ballad|slow|intimate/.test(blob)) score += 3;
+      if (/dabke|dance|club/.test(feel) && /dabke|dance|house/.test(blob)) score += 3;
+      if (/pop/.test(feel) && /pop/.test(blob)) score += 1;
+      if (/tarab|mawwal/.test(feel) && /tarab|mawwal/.test(blob)) score += 2;
+      return { id: style.id, label: style.label, subtitle: style.subtitle || "", bpm, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .filter((s) => s.score > 0 || range);
+}
+
+export function singabilityLineRows(text) {
+  const sections = parseLyricSections(text);
+  const rows = [];
+  for (const sec of sections) {
+    const keys = sec.lines.map((line) => rhymeKey(lastWord(line)));
+    const letterOf = {};
+    let next = 65;
+    const letters = keys.map((k) => {
+      if (!k) return "·";
+      if (!letterOf[k]) letterOf[k] = String.fromCharCode(next++);
+      return letterOf[k];
+    });
+    const syls = sec.lines.map((line) => syllableProxy(line));
+    const median = [...syls].sort((a, b) => a - b)[Math.floor(syls.length / 2)] || 0;
+    sec.lines.forEach((line, i) => {
+      const words = line.trim().split(/\s+/).filter(Boolean).length;
+      const syl = syls[i];
+      rows.push({
+        section: sec.name,
+        line: i + 1,
+        text: line,
+        words,
+        syl,
+        rhyme: letters[i],
+        short: median > 0 && syl <= median - 3,
+      });
+    });
+  }
+  return rows;
 }

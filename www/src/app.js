@@ -3,7 +3,9 @@ import {
   hasLyricSectionTags,
   looksLikeArabizi,
   normalizeSingabilityReport,
+  pickStudioStylesForSingability,
   singabilityLevelClass,
+  singabilityLineRows,
 } from "./lyrics-singability.js";
 import { createNabadSplash } from "./nabad-splash.js";
 import { isArabiziLyricsLanguage } from "./arabizi.js";
@@ -958,6 +960,14 @@ const els = {
   lyricsSingabilityRecs: document.getElementById("lyricsSingabilityRecs"),
   lyricsSingabilityDetails: document.getElementById("lyricsSingabilityDetails"),
   lyricsSingabilityList: document.getElementById("lyricsSingabilityList"),
+  lyricsSingabilityMeaningBlock: document.getElementById("lyricsSingabilityMeaningBlock"),
+  lyricsSingabilityMeaning: document.getElementById("lyricsSingabilityMeaning"),
+  lyricsSingabilityPulseBlock: document.getElementById("lyricsSingabilityPulseBlock"),
+  lyricsSingabilityPulse: document.getElementById("lyricsSingabilityPulse"),
+  lyricsSingabilityStylesBlock: document.getElementById("lyricsSingabilityStylesBlock"),
+  lyricsSingabilityStyles: document.getElementById("lyricsSingabilityStyles"),
+  lyricsSingabilityRowsBlock: document.getElementById("lyricsSingabilityRowsBlock"),
+  lyricsSingabilityRows: document.getElementById("lyricsSingabilityRows"),
   lyricsSingabilityActions: document.getElementById("lyricsSingabilityActions"),
   sunoSingerGender: document.getElementById("sunoSingerGender"),
   clipVocalProfileId: document.getElementById("clipVocalProfileId"),
@@ -7445,34 +7455,62 @@ function sanitizeSingabilityReport(report, lyricsText) {
   return { ...computeLocalSingability(lyricsText), source: "local" };
 }
 
-function renderSingabilityRecommendations(rec, lyricsText) {
-  const el = els.lyricsSingabilityRecs;
-  if (!el) return;
-  if (!rec || typeof rec !== "object") {
-    el.hidden = true;
-    el.innerHTML = "";
-    return;
+function renderSingabilityRecommendations(recIn, lyricsText) {
+  const meaningBlock = els.lyricsSingabilityMeaningBlock;
+  const meaningEl = els.lyricsSingabilityMeaning;
+  const pulseBlock = els.lyricsSingabilityPulseBlock;
+  const pulseEl = els.lyricsSingabilityPulse;
+  const stylesBlock = els.lyricsSingabilityStylesBlock;
+  const stylesEl = els.lyricsSingabilityStyles;
+  const rowsBlock = els.lyricsSingabilityRowsBlock;
+  const rowsEl = els.lyricsSingabilityRows;
+  const recEl = els.lyricsSingabilityRecs;
+  const rec = recIn && typeof recIn === "object" ? recIn : {};
+  const feel = String(rec.feel || "").trim();
+  const notes = String(rec.notes || "").trim();
+  const meaning = [feel, notes].filter(Boolean).join(" — ");
+  if (meaningBlock && meaningEl) {
+    meaningBlock.hidden = !meaning;
+    meaningEl.textContent = meaning;
   }
-  const ar = /[\u0600-\u06FF]/.test(String(lyricsText || ""));
-  const labels = ar
-    ? { lineLength: "طول السطر", rhythm: "إيقاع", bpm: "BPM", feel: "إحساس", notes: "ملاحظة" }
-    : { lineLength: "Line length", rhythm: "Rhythm / iqaa", bpm: "BPM", feel: "Feel", notes: "Notes" };
-  const rows = [
-    ["lineLength", rec.lineLength],
-    ["rhythm", rec.rhythm],
-    ["bpm", rec.bpm],
-    ["feel", rec.feel],
-    ["notes", rec.notes],
-  ].filter(([, v]) => String(v || "").trim());
-  if (!rows.length) {
-    el.hidden = true;
-    el.innerHTML = "";
-    return;
+  const bpm = String(rec.bpm || "").trim();
+  const rhythm = String(rec.rhythm || "").trim();
+  const pulseBits = [
+    ["BPM", bpm],
+    ["Rhythm", rhythm],
+    ["Feel", feel],
+  ].filter(([, v]) => v);
+  if (pulseBlock && pulseEl) {
+    pulseBlock.hidden = !pulseBits.length;
+    pulseEl.innerHTML = pulseBits
+      .map(([k, v]) => `<div class="lyricsSingabilityPulseCell"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`)
+      .join("");
   }
-  el.hidden = false;
-  el.innerHTML = rows
-    .map(([k, v]) => `<dt>${escapeHtml(labels[k] || k)}</dt><dd>${escapeHtml(String(v))}</dd>`)
-    .join("");
+  const styles = pickStudioStylesForSingability(rec);
+  if (stylesBlock && stylesEl) {
+    stylesBlock.hidden = !styles.length;
+    stylesEl.innerHTML = styles.map((s, i) => {
+      const why = s.bpm
+        ? `Fits these rows around ${s.bpm} BPM.`
+        : String(s.subtitle || "");
+      return `<button type="button" class="lyricsSingabilityStyleChip${i === 0 ? " isOn" : ""}" data-studio-style-id="${escapeHtml(s.id)}"><i>${escapeHtml(s.subtitle || "")}</i><b>${escapeHtml(s.label)}</b><p>${escapeHtml(why)}</p></button>`;
+    }).join("");
+  }
+  const lineRows = singabilityLineRows(lyricsText);
+  if (rowsBlock && rowsEl) {
+    rowsBlock.hidden = !lineRows.length;
+    rowsEl.innerHTML = lineRows.slice(0, 12).map((row) => {
+      const meta = `${row.words}w · ${row.syl}syl · ${row.rhyme}${row.short ? " — short vs neighbors" : ""}`;
+      return `<li class="${row.short ? "isShort" : ""}"><span class="rowLine">${escapeHtml(row.text)}</span><span class="rowMeta">${escapeHtml(meta)}</span></li>`;
+    }).join("");
+  }
+  if (recEl) {
+    const extra = String(rec.lineLength || "").trim();
+    recEl.hidden = !extra;
+    recEl.innerHTML = extra
+      ? `<dt>Line length</dt><dd>${escapeHtml(extra)}</dd>`
+      : "";
+  }
 }
 
 function renderLyricsSingabilityPanel(report) {
@@ -7514,7 +7552,10 @@ function renderLyricsSingabilityPanel(report) {
       : "—";
   }
   if (els.lyricsSingabilitySummary) {
-    els.lyricsSingabilitySummary.textContent = verdict;
+    const rec = clean.recommendations || {};
+    const feel = String(rec.feel || "").trim();
+    const bpm = String(rec.bpm || "").trim();
+    els.lyricsSingabilitySummary.textContent = feel && bpm ? `${feel} · ${bpm}` : (feel || verdict);
   }
   if (els.lyricsSingabilityNote) {
     els.lyricsSingabilityNote.hidden = !note;
@@ -78341,6 +78382,18 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       requireProFeature("Singability");
     });
   }
+  if (els.lyricsSingabilityStyles) {
+    els.lyricsSingabilityStyles.addEventListener("click", (ev) => {
+      const btn = ev.target?.closest?.("[data-studio-style-id]");
+      if (!btn) return;
+      const id = String(btn.getAttribute("data-studio-style-id") || "").trim();
+      if (!id) return;
+      els.lyricsSingabilityStyles.querySelectorAll(".lyricsSingabilityStyleChip").forEach((el) => {
+        el.classList.toggle("isOn", el === btn);
+      });
+      try { applyLyriaStudioStyle(id, { keepSinger: true }); } catch {}
+    });
+  }
   if (els.lyricsSingabilityActions) {
     els.lyricsSingabilityActions.addEventListener("click", (e) => {
       const btn = e.target?.closest?.("[data-singability-action]");
@@ -84878,6 +84931,9 @@ function applyCreateKeyboardOpen(height) {
     document.body.classList.add("createLyricsKeyboard");
   }
   document.body.classList.add("createKeyboardOpen");
+  if (document.documentElement.classList.contains("is-web-shell")) {
+    try { setSingabilityExpanded(false); } catch {}
+  }
   try { syncCreateKeyboardStyleVisibility(); } catch {}
   try {
     document.documentElement.style.setProperty("--create-keyboard-inset", `${kb}px`);

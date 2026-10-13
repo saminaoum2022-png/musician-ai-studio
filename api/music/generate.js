@@ -1218,8 +1218,9 @@ async function runElevenlabsGenerationJob({
         musicLengthMs,
         referenceSongId,
         referenceRangeMs,
-        conditionStrength: referenceConditionStrength,
+        conditionStrength: "medium",
         negativeTags: body?.negativeTags,
+        instrumentLabel: resolveHumTrackPreset(body?.instrumentPreset).label,
       });
       elevenPlanSource = "hum_track_instrument_reference";
       console.log(

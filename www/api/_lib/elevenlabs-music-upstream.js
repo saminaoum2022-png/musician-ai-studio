@@ -1763,16 +1763,13 @@ function applyElevenReferenceToCompositionPlan(
 
 /**
  * Hum Track (instrumental): translate a hummed clip to one solo instrument.
- * Avoids Gemini multi-chunk plans that re-attach the raw hum on most sections.
+ * High condition_strength on a hummed vocal keeps the singer's voice (processed
+ * hum). Medium follows pitch/rhythm without locking timbre.
  */
-function filterHumTrackNegativeStyles(tags) {
-  const drop = new Set(["humming", "hum", "a cappella"]);
-  return String(tags || "")
-    .split(/[,|]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .filter((t) => !drop.has(t.toLowerCase()))
-    .join(", ");
+function humTrackConditionStrength(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "low") return "low";
+  return "medium";
 }
 
 function buildElevenHumTrackCompositionPlan({
@@ -1780,8 +1777,9 @@ function buildElevenHumTrackCompositionPlan({
   musicLengthMs,
   referenceSongId,
   referenceRangeMs = 30000,
-  conditionStrength = "high",
+  conditionStrength = "medium",
   negativeTags = "",
+  instrumentLabel = "",
 } = {}) {
   const lengthMs = Math.min(
     120000,
@@ -1793,23 +1791,32 @@ function buildElevenHumTrackCompositionPlan({
     3000,
     Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)),
   );
-  const strength = ["low", "medium", "high", "xhigh"].includes(String(conditionStrength))
-    ? String(conditionStrength)
-    : "high";
+  const strength = humTrackConditionStrength(conditionStrength);
+  const instrument = String(instrumentLabel || "").trim() || "solo instrument";
   const styles = splitElevenStyleTags(String(stylePrompt || "").trim());
-  const filteredNegInput = filterHumTrackNegativeStyles(negativeTags);
-  const negative_styles = splitElevenNegativeStyleTags(filteredNegInput, { instrumental: true }).filter(
-    (t) => !/^(humming|hum)$/i.test(String(t || "").trim()),
-  );
-  for (const extra of ["human voice", "speech", "vocals", "singing"]) {
+  const negative_styles = splitElevenNegativeStyleTags(negativeTags, { instrumental: true });
+  for (const extra of [
+    "human voice",
+    "speech",
+    "vocals",
+    "singing",
+    "humming",
+    "hummed vocals",
+    "processed vocals",
+    "vocoder",
+    "a cappella",
+  ]) {
     if (negative_styles.length >= 50) break;
     if (!negative_styles.some((t) => t.toLowerCase() === extra)) negative_styles.push(extra);
   }
   const positive_styles = ensureMinPositiveStyles([
+    `solo ${instrument}`,
+    `${instrument} melody`,
     ...styles,
     "solo instrument only",
     "perform hummed melody on solo instrument",
-    "match reference hum pitch and rhythm",
+    "match reference hum pitch and rhythm only",
+    "do not keep the hummed voice",
     "clear melodic lead",
     "studio instrumental",
   ]).slice(0, 50);
@@ -1818,11 +1825,11 @@ function buildElevenHumTrackCompositionPlan({
     {
       chunks: [
         {
-          text: "[Main]\n{instrumental — translate the reference hum into the solo instrument; sustained melodic performance; no human voice in the output}",
+          text: `[Main]\n{instrumental — solo ${instrument} only; play the hummed melody on ${instrument}; no human voice; no humming; no singing; no processed vocals}`,
           duration_ms: lengthMs,
           positive_styles,
           negative_styles: negative_styles.slice(0, 50),
-          context_adherence: "high",
+          context_adherence: "medium",
           conditioning_ref: {
             song_id: songId,
             range: { start_ms: 0, end_ms: refEnd },
@@ -1833,7 +1840,7 @@ function buildElevenHumTrackCompositionPlan({
     },
     {
       stylePrompt: String(stylePrompt || "").trim(),
-      negativeTags: filteredNegInput,
+      negativeTags,
       musicLengthMs: lengthMs,
       instrumental: true,
       useNabadVocalIdentity: false,

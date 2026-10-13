@@ -586,7 +586,7 @@ async function submitHumTrackGeneration() {
           prompt: "",
           instrumental: true,
           hasReference: true,
-          referenceConditionStrength: "high",
+          referenceConditionStrength: "medium",
           humTrack: true,
           instrumentPreset: instrumentId,
           elevenlabsUseFinetune: ctx?.getElevenlabsFinetunePref?.() !== false,

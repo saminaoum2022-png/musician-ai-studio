@@ -60,6 +60,7 @@ const {
   buildElevenReferenceCompositionPlan,
   buildElevenAppLikeReferenceCompositionPlan,
   buildElevenHumTrackCompositionPlan,
+  buildElevenHumTrackForceInstrumentalPrompt,
   buildElevenSongCompositionPlan,
   buildElevenEditCompositionPlan,
   elevenlabsComposeInpaint,
@@ -1116,7 +1117,7 @@ async function runElevenlabsGenerationJob({
     let elevenPlanSource = null;
 
     const humTrackInstrumental =
-      Boolean(body?.humTrack) && instrumental && referenceSongId && !editCompositionPlan;
+      Boolean(body?.humTrack) && instrumental && !editCompositionPlan;
 
     if (!editCompositionPlan && !elevenLegacyPlansEnabled() && !humTrackInstrumental) {
       const bare = resolveBareElevenCompose(body);
@@ -1213,24 +1214,21 @@ async function runElevenlabsGenerationJob({
         elevenPlanSource = "reference_app_like_fallback";
       }
     } else if (!isSongInpaint && humTrackInstrumental) {
-      finalCompositionPlan = buildElevenHumTrackCompositionPlan({
-        stylePrompt,
-        musicLengthMs,
-        referenceSongId,
-        referenceRangeMs,
-        conditionStrength: "medium",
-        negativeTags: body?.negativeTags,
-        instrumentLabel: resolveHumTrackPreset(body?.instrumentPreset).label,
+      const preset = resolveHumTrackPreset(body?.instrumentPreset);
+      finalCompositionPlan = null;
+      finalPrompt = buildElevenHumTrackForceInstrumentalPrompt({
+        instrumentLabel: preset.label,
+        style: stylePrompt || preset.style,
       });
-      elevenPlanSource = "hum_track_instrument_reference";
+      elevenPlanSource = "hum_track_force_instrumental_prompt";
       console.log(
-        "[music/generate] elevenlabs hum track plan",
+        "[music/generate] elevenlabs hum track force_instrumental",
         taskId,
-        finalCompositionPlan?.chunks?.length || 0,
-        "chunks",
+        preset.label,
+        finalPrompt.length,
       );
-      if (!finalCompositionPlan?.chunks?.length) {
-        await fail("Hum Track plan failed — re-record a 15–30 second hum and try again.");
+      if (!finalPrompt) {
+        await fail("Hum Track prompt failed — pick an instrument and try again.");
         return;
       }
     } else if (Boolean(body?.humTrack) && instrumental && !humTrackInstrumental) {
@@ -1321,6 +1319,16 @@ async function runElevenlabsGenerationJob({
       [
         adminDetailBase,
         elevenPlanSource ? `eleven_plan: ${elevenPlanSource}` : "",
+        humTrackInstrumental
+          ? "eleven_endpoint: POST /v1/music/detailed"
+          : "",
+        humTrackInstrumental ? "eleven_force_instrumental: true" : "",
+        humTrackInstrumental && finalPrompt
+          ? `eleven_prompt: ${String(finalPrompt).slice(0, 800)}`
+          : "",
+        humTrackInstrumental
+          ? "eleven_reference: not_attached (conditioning_ref was keeping the hummed voice)"
+          : "",
         finalCompositionPlan?.sections?.length
           ? `eleven_sections: ${finalCompositionPlan.sections.length}`
           : "",
@@ -2117,7 +2125,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   let referenceSongId = null;
   let referenceRangeMs = null;
   let referenceConditionStrength = body?.referenceConditionStrength || "high";
-  if (hasReference) {
+  if (hasReference && !body?.humTrack) {
     const refResolved = await resolveElevenReferenceAudio(body);
     if (!refResolved.ok) {
       return sendJson(res, 400, {

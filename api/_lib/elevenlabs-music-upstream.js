@@ -20,6 +20,14 @@ const ELEVEN_POSITIVE_STYLE_PAD = [
   "dynamic mix",
 ];
 
+const ELEVEN_INSTRUMENTAL_STYLE_PAD = [
+  "professional studio production",
+  "clear melodic lead",
+  "polished arrangement",
+  "dynamic mix",
+  "single instrument focus",
+];
+
 /** Always-on vocal negatives (pitch/clarity only — do not block expressive singing). */
 const ELEVEN_VOCAL_NEGATIVE_ALWAYS = [
   "off-key vocals",
@@ -164,9 +172,10 @@ function splitLyricLines(text) {
     .map((l) => l.slice(0, 200));
 }
 
-function ensureMinPositiveStyles(tags) {
+function ensureMinPositiveStyles(tags, { instrumental = false } = {}) {
   const out = [...tags.map(String).filter(Boolean)];
-  for (const p of ELEVEN_POSITIVE_STYLE_PAD) {
+  const pad = instrumental ? ELEVEN_INSTRUMENTAL_STYLE_PAD : ELEVEN_POSITIVE_STYLE_PAD;
+  for (const p of pad) {
     if (out.length >= 7) break;
     if (!out.some((t) => t.toLowerCase() === p.toLowerCase())) out.push(p);
   }
@@ -1772,6 +1781,32 @@ function humTrackConditionStrength(value) {
   return "medium";
 }
 
+/**
+ * Guaranteed instrumental Hum Track. Eleven only honors force_instrumental
+ * with a prompt (not a composition_plan). Attaching the hum as
+ * conditioning_ref remixes the vocal instead of playing an instrument.
+ */
+function buildElevenHumTrackForceInstrumentalPrompt({
+  instrumentLabel = "",
+  style = "",
+} = {}) {
+  const instrument = String(instrumentLabel || "").trim() || "solo instrument";
+  const styleLine = String(style || "").trim();
+  return [
+    `Solo ${instrument} instrumental performance.`,
+    `One instrument only: ${instrument}.`,
+    styleLine,
+    "Melodic lead only.",
+    "No vocals. No humming. No singing. No human voice. No processed vocals.",
+    "Studio instrumental recording.",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 4000);
+}
+
 function buildElevenHumTrackCompositionPlan({
   stylePrompt = "",
   musicLengthMs,
@@ -2368,6 +2403,7 @@ module.exports = {
   buildElevenReferenceCompositionPlan,
   buildElevenAppLikeReferenceCompositionPlan,
   buildElevenHumTrackCompositionPlan,
+  buildElevenHumTrackForceInstrumentalPrompt,
   buildElevenSongCompositionPlan,
   applyElevenReferenceOnFirstChunk,
   buildElevenEditCompositionPlan,

@@ -5,8 +5,6 @@
 import { HUM_TRACK_INSTRUMENTS, getHumTrackPreset } from "./hum-track-instruments.js";
 import { humTrackIconMarkup } from "./hum-track-icons.js";
 import { createAdaptivePollLoop, stopPollLoop } from "./generation-poll.js";
-import { extractMelodyFromBlob } from "./melody/extract.js";
-import { formatMelodyLine } from "./melody/postprocess.js";
 
 let ctx = null;
 let wired = false;
@@ -548,20 +546,15 @@ async function submitHumTrackGeneration() {
     return;
   }
 
-  // Admin Settings → engine drives Hum Track (production users stay on Suno).
+  // Hum Track needs Suno's cover/reference lock (audioWeight). ElevenLabs
+  // either keeps the hummed voice or invents a new melody.
   const provider = String(ctx?.getMusicProviderPref?.() || "suno").trim().toLowerCase();
   const isAdmin = Boolean(ctx?.isAdmin?.());
-  const useEleven =
-    isAdmin && provider === "elevenlabs";
-  const useUnsupportedAlt =
-    isAdmin && (provider === "lyria" || provider === "minimax");
-  if (useUnsupportedAlt) {
-    const label = provider === "lyria" ? "Lyria" : "MiniMax";
+  if (isAdmin && provider && provider !== "suno") {
     ctx?.showToast?.(
-      `${label} doesn't support Hum Track yet — switch Settings → engine to Suno or ElevenLabs.`,
-      { icon: "!", durationMs: 7200 },
+      "Hum Track stays on Suno so it can follow your hummed melody.",
+      { icon: "♪", durationMs: 4200 },
     );
-    return;
   }
 
   humTrackGenerating = true;
@@ -579,74 +572,6 @@ async function submitHumTrackGeneration() {
 
   try {
     await ctx.trackCreditsAround("Hum Track", async () => {
-      if (useEleven) {
-        const tok = ctx.getSupabaseAuthToken?.();
-        const payload = {
-          title: `Hum Track · ${label}`,
-          style: preset.style,
-          negativeTags: preset.negativeTags,
-          prompt: "",
-          instrumental: true,
-          hasReference: true,
-          referenceConditionStrength: "medium",
-          humTrack: true,
-          instrumentPreset: instrumentId,
-          elevenlabsUseFinetune: ctx?.getElevenlabsFinetunePref?.() !== false,
-        };
-        try {
-          const melody = await extractMelodyFromBlob(humTrackBlob);
-          const melodyLine = formatMelodyLine(melody);
-          if (melodyLine) {
-            payload.melodyLine = melodyLine;
-            payload.melodyBpm = Number(melody.tempoBpm) || undefined;
-          } else {
-            ctx?.showToast?.(
-              "Couldn't read the hummed notes clearly — hum slower and louder for a closer match.",
-              { icon: "♪", durationMs: 5200 },
-            );
-          }
-        } catch {}
-        try {
-          const refMs = await ctx?.estimateBlobDurationMs?.(sendFile);
-          if (refMs) {
-            payload.referenceDurationMs = refMs;
-            const trackMs = Math.max(35000, Math.min(90000, Math.round(refMs) + 15000));
-            payload.musicLengthMs = trackMs;
-            payload.duration = Math.ceil(trackMs / 1000);
-          }
-        } catch {}
-        if (!payload.musicLengthMs) {
-          payload.musicLengthMs = 45000;
-          payload.duration = 45;
-        }
-        const fd = new FormData();
-        fd.append("payload", JSON.stringify(payload));
-        fd.append("referenceFile", sendFile, sendFile.name);
-        const rr = await fetch(ctx.apiUrl("/api/music/generate?provider=elevenlabs"), {
-          method: "POST",
-          headers: tok ? { Authorization: `Bearer ${tok}` } : undefined,
-          body: fd,
-        });
-        const dd = await rr.json().catch(() => ({}));
-        if (rr.status === 402 || dd?.code === "insufficient_credits") {
-          const need = Number(dd?.needed ?? 12);
-          const have = Number(dd?.balance || 0);
-          throw new Error(
-            `Not enough credits (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`,
-          );
-        }
-        if (!rr.ok) {
-          throw new Error(
-            dd?.error || dd?.msg || dd?.message || "ElevenLabs Hum Track failed to start",
-          );
-        }
-        const taskId = ctx.extractTaskIdLoose(dd);
-        if (!taskId) throw new Error("No task id returned from server");
-        // Immediate ready (rare) — still arm poll so library path is consistent.
-        armHumTrackGeneration(taskId, instrumentId, label, { provider: "elevenlabs" });
-        return dd;
-      }
-
       const fd = new FormData();
       fd.append("action", "add_instrumental");
       fd.append("referenceMode", "vocal_instrumental");

@@ -82345,10 +82345,9 @@ function toggleCreateLyricsAttachMenu() {
   }
   const humItem = menu.querySelector("[data-create-attach=\"hum\"]");
   if (humItem) {
-    const showHumTrack = NABAD_HUM_TRACK_PUBLIC_SHIPPED === true;
-    humItem.hidden = !showHumTrack;
-    humItem.style.display = showHumTrack ? "" : "none";
-    humItem.setAttribute("aria-hidden", showHumTrack ? "false" : "true");
+    humItem.hidden = false;
+    humItem.style.display = "";
+    humItem.setAttribute("aria-hidden", "false");
   }
   const open = menu.hidden;
   if (!open) {
@@ -82369,12 +82368,12 @@ function handleCreateLyricsAttachChoice(kind) {
     return;
   }
   if (kind === "hum") {
-    if (NABAD_HUM_TRACK_PUBLIC_SHIPPED !== true) return;
     if (!proFeatureAllowed()) {
       requireProFeature("Hum");
       return;
     }
-    openHumTrackFlow();
+    vocalRecorderContext = { title: "Hum" };
+    openVocalRecorderModal();
     return;
   }
   if (kind === "vibe") {
@@ -82464,7 +82463,7 @@ function syncCreateLyricsAttachStack() {
   if (humCard) {
     humCard.hidden = !hasHum;
     if (hasHum) {
-      if (humTitle) humTitle.textContent = refFile.name || "Melody guide";
+      if (humTitle) humTitle.textContent = refFile.name || "Hum";
       let originLabel = "Attached";
       if (vocalRefOrigin === "upload") originLabel = "Uploaded file";
       else if (vocalRefOrigin === "record") originLabel = "Recorded take";
@@ -82570,6 +82569,7 @@ function wireCreateLyricsAttachOnce() {
       requireProFeature("Hum");
       return;
     }
+    vocalRecorderContext = { title: "Hum" };
     openVocalRecorderModal();
   });
   document.getElementById("createLyricsAttachVibe")?.addEventListener("click", (e) => {

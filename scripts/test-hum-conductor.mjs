@@ -46,6 +46,17 @@ const emptyAligned = hc.alignStyleToConductor("", norm);
 assert.ok(/\b96 BPM\b/.test(emptyAligned));
 assert.ok(/Maqam Bayat in D/i.test(emptyAligned));
 
+const clash = hc.alignStyleToConductor(
+  "Arabic Pop, Levantine acoustic folk, minor key, 110 BPM, D minor, Key: D minor",
+  norm,
+);
+assert.ok(/\b96 BPM\b/.test(clash), `bpm: ${clash}`);
+assert.ok(/Maqam Bayat in D/i.test(clash), `maqam: ${clash}`);
+assert.equal(/\bD minor\b/i.test(clash), false, `must drop D minor: ${clash}`);
+assert.equal(/\bKey:\s*D/i.test(clash), false, `must drop Key: ${clash}`);
+assert.equal(/\bminor key\b/i.test(clash), false, `must drop minor key: ${clash}`);
+assert.ok(/Levantine acoustic folk/i.test(clash), "keep studio clothes");
+
 const track = hc.buildHumToTrackLyriaPrompt({
   styleLine: aligned,
   conductor: norm,
@@ -72,7 +83,8 @@ const v3Prompt = [
 
 const sung = hc.stitchConductorMotifIntoLyriaPrompt(v3Prompt, norm);
 if (!sung.ok) fail(`sung stitch: ${sung.error}`);
-assert.ok(sung.prompt.includes("Hummed motif"));
+assert.ok(/Hummed motif/i.test(sung.prompt));
+assert.ok(/written notes/i.test(sung.prompt));
 assert.ok(sung.prompt.includes(goldMotif.slice(0, 40)));
 assert.ok(sung.prompt.indexOf("Hummed motif") < sung.prompt.indexOf("Lyrics:"));
 assert.equal(sung.mode, "sung_motif");

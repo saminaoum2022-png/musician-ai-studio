@@ -706,6 +706,7 @@ async function runLyriaGenerationJob({
       body.style = aligned;
       stylePrompt = aligned;
       if (conductorResult.bpm) body.bpm = conductorResult.bpm;
+      if (conductorResult.maqam) body.songKey = "";
       body._humConductor = conductorResult;
     }
     const take2 = await resolveTake2Replay({ userId, isAdmin, body });

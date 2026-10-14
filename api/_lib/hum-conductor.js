@@ -154,6 +154,19 @@ function maqamPhrase(conductor) {
   return "";
 }
 
+/** Drop Western key tags so they cannot fight a hummed maqam. */
+function stripWesternKeyConflicts(style) {
+  return String(style || "")
+    .replace(/\bKey:\s*[A-G][#b]?\s*(?:natural|minor|major|min|maj)?\b/gi, "")
+    .replace(/\b(?:in\s+)?[A-G][#b]?\s*(?:natural|minor|major|min|maj)\b/gi, "")
+    .replace(/\b(?:minor|major)\s+key\b/gi, "")
+    .replace(/\s+,/g, ",")
+    .replace(/,\s*,/g, ",")
+    .replace(/\s+/g, " ")
+    .replace(/^,\s*|\s*,\s*$/g, "")
+    .trim();
+}
+
 /** Hum bpm / maqam / tonic win over a conflicting studio style line. */
 function alignStyleToConductor(style, conductor) {
   let s = String(style || "").replace(/\s+/g, " ").trim();
@@ -168,6 +181,7 @@ function alignStyleToConductor(style, conductor) {
   }
   const phrase = maqamPhrase(conductor);
   if (phrase) {
+    s = stripWesternKeyConflicts(s);
     if (/\bmaqam\s+[\w-]+(?:\s+in\s+[A-G][#b]?)?/i.test(s)) {
       s = s.replace(/\bmaqam\s+[\w-]+(?:\s+in\s+[A-G][#b]?)?/i, phrase);
     } else {
@@ -218,7 +232,7 @@ function stitchConductorMotifIntoLyriaPrompt(prompt, conductor) {
       ? "Play the motif twice, with clear silence between phrases. Keep the rests as written."
       : "Keep the rests as written.";
   const block = [
-    "Hummed motif (play this melody on Chorus and Instrumental):",
+    "Hummed motif (play these written notes on Chorus and Instrumental; follow the accidentals and rests as written):",
     motif,
     playBit,
   ].join("\n");

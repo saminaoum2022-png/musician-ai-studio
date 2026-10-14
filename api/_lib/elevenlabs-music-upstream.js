@@ -1565,12 +1565,6 @@ function applyElevenHumReferenceOnFirstVocalChunk(
     Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)),
   );
   const strength = conditionStrength === "low" ? "low" : "medium";
-  const band = [
-    "full arrangement under the vocal",
-    "drums and bass present",
-    "do not copy the dry hummed mix",
-    "rich instrumentation",
-  ];
   const attachAt = plan.chunks.findIndex((c) => {
     if (isIntroPlanChunkText(c?.text)) return false;
     if (instrumental) return true;
@@ -1580,7 +1574,7 @@ function applyElevenHumReferenceOnFirstVocalChunk(
   const chunks = plan.chunks.map((c, idx) => {
     const { conditioning_ref: _r, condition_strength: _s, ...rest } = c;
     const positive_styles = ensureMinPositiveStyles([
-      ...band,
+      "do not copy the dry hummed mix",
       ...(rest.positive_styles || []),
     ]).slice(0, 50);
     if (idx !== target) return { ...rest, positive_styles };

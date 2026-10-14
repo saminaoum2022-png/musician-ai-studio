@@ -3,6 +3,7 @@
  */
 
 const ORIGIN_ORDER = [
+  "revibe",
   "remix",
   "mashup",
   "photo",
@@ -14,6 +15,7 @@ const ORIGIN_ORDER = [
 ];
 
 const ORIGIN_LABELS = {
+  revibe: "Revibe",
   remix: "Remix",
   mashup: "Mashup",
   photo: "Photo Mood",
@@ -37,6 +39,8 @@ const ORIGIN_SVG_INNER = {
   spark:
     '<path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
   remix:
+    '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M7 7h3.4c1.6 0 3 .8 3.8 2.1l1.1 1.8M7 17h3.4c1.6 0 3-.8 3.8-2.1l1.1-1.8M17 6l3 3-3 3M17 12l3 3-3 3M4 7h3M4 17h3"/>',
+  revibe:
     '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M7 7h3.4c1.6 0 3 .8 3.8 2.1l1.1 1.8M7 17h3.4c1.6 0 3-.8 3.8-2.1l1.1-1.8M17 6l3 3-3 3M17 12l3 3-3 3M4 7h3M4 17h3"/>',
   mashup:
     '<circle cx="8" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="16" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M12 8v8"/>',
@@ -70,6 +74,7 @@ export function collectSongOriginKeys(track) {
 
   if (meta.mashupOf && typeof meta.mashupOf === "object") push("mashup");
   else if (String(meta.engine || "").toLowerCase() === "mashup") push("mashup");
+  else if (meta.revibe === true || String(meta.revibe || "").toLowerCase() === "true" || meta.remixOf?.revibe) push("revibe");
   else if (meta.remixOf && typeof meta.remixOf === "object") push("remix");
   else if (meta.remixOfHubPostId) push("remix");
 

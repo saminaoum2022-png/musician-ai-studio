@@ -28,6 +28,11 @@ function nabadVibeEnabled() {
   return envFlagEnabled("NABAD_VIBE_ENABLED", { defaultOn: isPreview });
 }
 
+/** Discover/hub Revibe — on unless NABAD_REVIBE_ENABLED=0. Separate from admin Create + Vibe. */
+function nabadRevibeEnabled() {
+  return envFlagEnabled("NABAD_REVIBE_ENABLED", { defaultOn: true });
+}
+
 function safeJson(s) {
   try {
     return JSON.parse(s);
@@ -262,6 +267,7 @@ async function callGeminiVibeRead({ apiKey, dataUrl, mimeType }) {
 
 module.exports = {
   nabadVibeEnabled,
+  nabadRevibeEnabled,
   buildVibeReadPrompt,
   normalizeVibeReadResult,
   callGeminiVibeRead,

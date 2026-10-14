@@ -10,8 +10,17 @@ export const NABAD_PRODUCER_PUBLIC_SHIPPED = false;
 /**
  * When true: Vibe Create tab is live for users.
  * Keep false until explicit launch — dev phone testing uses baked nabadVibeUi instead.
+ * This is NOT Revibe (Discover/hub). Revibe has its own flag.
  */
 export const NABAD_VIBE_PUBLIC_SHIPPED = false;
+
+/**
+ * When true: Discover / player / library show Revibe instead of Remix.
+ * Revibe reads style + structure (inspiration only) and generates on Lyria.
+ * Admin Vibe in Create + stays a separate, hidden feature.
+ * Public — Discover / player / library. Do not confuse with admin Vibe.
+ */
+export const NABAD_REVIBE_PUBLIC_SHIPPED = true;
 
 /**
  * When true: Edit Create tab (ElevenLabs section rewrite) is live for users.

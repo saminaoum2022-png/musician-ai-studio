@@ -362,7 +362,7 @@ import {
   screenshotProf,
   screenshotSanitizeCopy,
 } from "./screenshot-mode.js";
-import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED, NABAD_HUM_CONDUCTOR_PUBLIC_SHIPPED, NABAD_HUM_TRACK_PUBLIC_SHIPPED, NABAD_LYRIA_CREATE_PUBLIC_SHIPPED, NABAD_MASHUP_PUBLIC_SHIPPED, NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED, NABAD_PERSONA_PUBLIC_SHIPPED } from "./feature-flags.js";
+import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED, NABAD_HUM_CONDUCTOR_PUBLIC_SHIPPED, NABAD_HUM_TRACK_PUBLIC_SHIPPED, NABAD_LYRIA_CREATE_PUBLIC_SHIPPED, NABAD_MASHUP_PUBLIC_SHIPPED, NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED, NABAD_PERSONA_PUBLIC_SHIPPED, NABAD_REVIBE_PUBLIC_SHIPPED } from "./feature-flags.js";
 import {
   applyGoldToAvatarWrap,
   applyGoldNameGradient,
@@ -7136,6 +7136,13 @@ function syncLyricsPlaceholder() {
     els.sunoPrompt.placeholder = "Describe the mood, instruments, or feel…";
     return;
   }
+  if (currentRemixSource?.revibe) {
+    els.sunoPrompt.placeholder =
+      lyricsInputMode === "generate"
+        ? "Your idea — a mood, story, or a few words. We'll keep this track's sound.\n\ne.g. A late-night song about missing someone in Beirut."
+        : "Write your lyrics…";
+    return;
+  }
   if (currentRemixSource) {
     els.sunoPrompt.placeholder =
       lyricsInputMode === "generate"
@@ -13732,7 +13739,7 @@ function renderDiscoverCommunityStatsSection(tracks) {
 
 function discoverContentTypeForTrack(t) {
   if (mashupAttributionForTrack(t)) return { key: "mashup", label: "Mashup" };
-  if (remixAttributionForTrack(t)) return { key: "remix", label: "Remix" };
+  if (remixAttributionForTrack(t)) return { key: "remix", label: trackIsRevibe(t) ? "Revibe" : "Remix" };
   const tpl = templateMetaForTrack(t);
   if (tpl) {
     const title = String(tpl.searchTemplateTitle || "").toLowerCase();
@@ -13924,7 +13931,7 @@ function discoverOriginLineText(track) {
   const remix = remixAttributionForTrack(track);
   if (remix) {
     const title = String(remix.title || "Original song").trim();
-    return `Remix of ${title}`;
+    return `${publicRemixOfPrefix(track)} ${title}`;
   }
   const tpl = templateMetaForTrack(track);
   if (tpl) {
@@ -15156,12 +15163,12 @@ function renderDiscoverFeedForYou(tracks, profMap) {
   const remixList = remixTracks.length
     ? remixTracks.map((t) => {
       const of = remixAttributionForTrack(t);
-      const chip = of ? `<span class="discoverRemixChip">Remix of ${escapeHtml(String(of.title || "the original").slice(0, 28))}</span>` : "";
+      const chip = of ? `<span class="discoverRemixChip">${escapeHtml(publicRemixOfPrefix(t))} ${escapeHtml(String(of.title || "the original").slice(0, 28))}</span>` : "";
       return discoverFeedSongRowHtml(t, profMap, {
         rowClass: "discoverFeedSongRow--remix",
         compactMeta: true,
         remixChipHtml: chip,
-        remixBtnHtml: `<button type="button" class="discoverRemixBtn" data-discover-remix="${escapeHtml(String(t.id || ""))}">Remix this</button>`,
+        remixBtnHtml: `<button type="button" class="discoverRemixBtn" data-discover-remix="${escapeHtml(String(t.id || ""))}">${escapeHtml(publicRemixThisLabel())}</button>`,
       });
     }).join("")
     : `<p class="discoverHubQuietNote">Remixes and mashups will appear as creators publish.</p>`;
@@ -16268,12 +16275,12 @@ async function startDiscoverRemix(trackId) {
   const t = discoverFeedTrackById(trackId);
   if (!t) return;
   if (!authSession?.user?.id) {
-    showToast("Sign in to remix songs from Discover.", { icon: "!", durationMs: 3800 });
+    showToast(nabadRevibeEnabled() ? "Sign in to revibe songs from Discover." : "Sign in to remix songs from Discover.", { icon: "!", durationMs: 3800 });
     location.hash = "#/auth";
     return;
   }
   if (!trackAllowsRemix({ meta: t.meta || {}, url: t.url, taskId: t.taskId, audioId: t.audioId })) {
-    showToast("The creator disabled remixes for this song.", { icon: "!", durationMs: 3600 });
+    showToast(nabadRevibeEnabled() ? "The creator disabled revibes for this song." : "The creator disabled remixes for this song.", { icon: "!", durationMs: 3600 });
     return;
   }
   const prof = resolveProfileForFeedCreator(t.userId, _discoveryLastProfMap || new Map());
@@ -28316,7 +28323,35 @@ function remixAttributionFromSource(src) {
     creatorUsername,
     artUrl: String(src.coverUrl || src.artUrl || "").trim(),
     audioUrl: sourceUrl,
+    ...(src.revibe ? { revibe: true } : {}),
   };
+}
+
+function nabadRevibeEnabled() {
+  return Boolean(NABAD_REVIBE_PUBLIC_SHIPPED);
+}
+
+function publicRemixActionLabel() {
+  return nabadRevibeEnabled() ? "Revibe" : "Remix";
+}
+
+function publicRemixThisLabel() {
+  return nabadRevibeEnabled() ? "Revibe this" : "Remix this";
+}
+
+function trackIsRevibe(track) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  if (meta.revibe === true || String(meta.revibe || "").toLowerCase() === "true") return true;
+  const remixOf = meta.remixOf || meta.remix_of;
+  return Boolean(
+    remixOf
+    && typeof remixOf === "object"
+    && (remixOf.revibe === true || String(remixOf.revibe || "").toLowerCase() === "true"),
+  );
+}
+
+function publicRemixOfPrefix(track) {
+  return trackIsRevibe(track) ? "Revibe of" : "Remix of";
 }
 
 function remixAttributionForTrack(track) {
@@ -30146,11 +30181,19 @@ function renderRemixSourceBanner() {
   els.remixSourceBanner.hidden = false;
   const title = String(currentRemixSource.title || "Track").trim() || "Track";
   const creator = String(currentRemixSource.creator || "").trim();
+  const revibe = Boolean(currentRemixSource.revibe);
+  const kicker = els.remixSourceBanner.querySelector(".remixSourceBannerKicker");
+  if (kicker) kicker.textContent = revibe ? "Revibing" : "Remixing";
+  if (els.remixSourceCancel) {
+    els.remixSourceCancel.setAttribute("aria-label", revibe ? "Cancel revibe" : "Cancel remix");
+  }
   if (els.remixSourceTitle) {
     els.remixSourceTitle.textContent = creator ? `${title} · @${creator}` : title;
   }
   if (els.remixSourceSub) {
-    els.remixSourceSub.textContent = "Tap Generate to write a reply, or type your angle below.";
+    els.remixSourceSub.textContent = revibe
+      ? "New song in this sound — not a cover. Write an idea or tap Generate."
+      : "Tap Generate to write a reply, or type your angle below.";
   }
   if (els.remixSourceCover) {
     const cover = String(currentRemixSource.coverUrl || "").trim();
@@ -30273,7 +30316,7 @@ async function fetchAudioForRemix(rawUrl, opts = {}) {
 // overlay that stays up until the Create page opens or the load fails.
 let _remixLoadingOverlayEl = null;
 
-function showRemixLoadingOverlay(title) {
+function showRemixLoadingOverlay(title, opts = {}) {
   let el = _remixLoadingOverlayEl;
   if (!el) {
     el = document.createElement("div");
@@ -30288,10 +30331,14 @@ function showRemixLoadingOverlay(title) {
     document.body.appendChild(el);
     _remixLoadingOverlayEl = el;
   }
+  const kickerEl = el.querySelector(".remixLoadingTitle");
+  if (kickerEl) kickerEl.textContent = String(opts.kicker || "Loading remix").trim() || "Loading remix";
   const sub = el.querySelector(".remixLoadingSub");
   if (sub) {
     const t = String(title || "").trim();
-    sub.textContent = t ? `Preparing "${t.slice(0, 48)}"…` : "Fetching the source audio…";
+    sub.textContent = t
+      ? (opts.kicker ? `Listening to "${t.slice(0, 48)}"…` : `Preparing "${t.slice(0, 48)}"…`)
+      : "Fetching the source audio…";
   }
   // Show synchronously — no rAF/transition dance. The remix prep saturates
   // the main thread right after this call, so a class added "next frame"
@@ -30303,7 +30350,149 @@ function hideRemixLoadingOverlay() {
   if (_remixLoadingOverlayEl) _remixLoadingOverlayEl.hidden = true;
 }
 
+function applyRevibeReadToSongFields(data, fallbackStyle) {
+  const tags = Array.isArray(data?.styleTags) ? data.styleTags.filter(Boolean) : [];
+  const promptLine = String(data?.stylePrompt || "").trim();
+  const fromPrompt = promptLine ? promptLine.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const merged = [...new Set([...tags, ...fromPrompt])].slice(0, 14);
+  const fallback = String(fallbackStyle || "").trim();
+  if (els.sunoStyle) {
+    els.sunoStyle.value = merged.length ? merged.join(", ") : fallback;
+  }
+  const structureTemplate = String(data?.structureTemplate || "").trim();
+  if (els.sunoPrompt) {
+    const existing = String(els.sunoPrompt.value || "").trim();
+    if (!existing && structureTemplate) {
+      els.sunoPrompt.value = structureTemplate;
+      try { autoResizeLyricsBox(); } catch {}
+    } else if (structureTemplate && existing && !hasLyricSectionTags(existing)) {
+      els.sunoPrompt.value = `${structureTemplate}\n\n${existing}`.trim();
+      try { autoResizeLyricsBox(); } catch {}
+    }
+  }
+  try { renderStyleSelectedChips(); } catch {}
+  try { syncGenerateOrbVisibility(); } catch {}
+}
+
+/** Discover / hub / library Revibe — style + structure only. No vocal-ref, no Suno. */
+async function startHubRevibe(post) {
+  if (!post || !post.url) {
+    showToast("Cannot revibe: this post has no audio.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  showRemixLoadingOverlay(post.title, { kicker: "Reading the vibe" });
+  try {
+    if (post.id && (!post.meta || (!post.meta.lyricsInput && !post.meta.styleInput))) {
+      try {
+        const fullMeta = await hubFetchPostMetaFull(post.id);
+        if (fullMeta && typeof fullMeta === "object") {
+          post = { ...post, meta: { ...(post.meta || {}), ...fullMeta } };
+        }
+      } catch {}
+    }
+    try {
+      clearVocalReferenceSelection({ preserveRemixBanner: true });
+    } catch {}
+    setStatus("Reading this track's vibe…");
+    let remixAudioUrl = String(post.url || "").trim();
+    const remixLeafForRefresh = unwrapInnermostHttpAudioUrl(remixAudioUrl) || remixAudioUrl;
+    const remixIsOurArchive =
+      isArchivedSongStorageUrl(remixLeafForRefresh)
+      || /\/api\/songs\/stream\?/i.test(remixLeafForRefresh);
+    try {
+      if (remixIsOurArchive) throw new Error("skip_refresh_archived");
+      const refreshed = await tryRefreshLibraryTrackAudioFromSuno({
+        taskId: post.taskId || post?.meta?.taskId || "",
+        audioId: post.audioId || post?.meta?.audioId || "",
+        url: unwrapInnermostHttpAudioUrl(remixAudioUrl) || remixAudioUrl,
+      });
+      if (refreshed?.url) remixAudioUrl = String(refreshed.url).trim();
+    } catch {}
+    const blob = await fetchAudioForRemix(remixAudioUrl, { songId: post.songId || post.id || "" });
+    if (blob.size < 40 * 1024) {
+      throw new Error("Source audio looks too short — pick a full song or try again");
+    }
+    const mime = blob.type && blob.type !== "application/octet-stream" ? blob.type : "audio/mpeg";
+    const ext = mime.includes("mpeg") ? "mp3" : (mime.split("/")[1] || "mp3").split(";")[0];
+    const safeBase = String(post.title || "revibe-source")
+      .replace(/[^a-z0-9_-]+/gi, "-")
+      .slice(0, 48) || "revibe-source";
+    const file = new File([blob], `${safeBase}.${ext}`, { type: mime });
+    try { setCreateSongType("vocal"); } catch {
+      if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = "0";
+      if (els.vocalModeFull) els.vocalModeFull.classList.add("active");
+      if (els.vocalModeInstrumental) els.vocalModeInstrumental.classList.remove("active");
+    }
+    const fallbackStyle = String(post?.meta?.styleInput || "").trim();
+    let vibeData = null;
+    try {
+      const prep = await prepareAudioForVibeRead(file);
+      const dataUrl = String(prep?.dataUrl || "").trim();
+      const authToken = getSupabaseAuthToken();
+      if (dataUrl.startsWith("data:audio/") && authToken) {
+        const r = await apiFetch("/api/music/vibe-read", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          nativeReadTimeoutMs: 120000,
+          nativeConnectTimeoutMs: 30000,
+          body: JSON.stringify({ audio: dataUrl, purpose: "revibe" }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok) vibeData = d;
+        else console.warn("[hub revibe] vibe-read failed", d?.error || r.status);
+      }
+    } catch (analyzeErr) {
+      console.warn("[hub revibe] analyze failed, using original style", analyzeErr);
+    }
+    setRemixSource({
+      id: post.id,
+      songId: post.songId || post.id || "",
+      ownerUserId: post.ownerUserId || "",
+      taskId: post.taskId || post?.meta?.taskId || "",
+      audioId: post.audioId || post?.meta?.audioId || "",
+      title: post.title || "",
+      creator: post.creator || "",
+      coverUrl: post.artUrl || "",
+      originalUrl: remixAudioUrl || post.url || "",
+      meta: post.meta || null,
+      sourceLyrics: "",
+      revibe: true,
+    });
+    if (els.sunoPrompt) {
+      els.sunoPrompt.value = "";
+      try { autoResizeLyricsBox(); } catch {}
+    }
+    try { setLyricsInputMode("generate", { silent: true }); } catch {}
+    try { syncLyricsPlaceholder(); } catch {}
+    applyRevibeReadToSongFields(vibeData, fallbackStyle);
+    if (els.sunoTitle) els.sunoTitle.value = `${post.title || "Track"} Revibe`;
+    location.hash = "#/generate";
+    setStatus(
+      vibeData
+        ? `Revibe ready: ${post.title || "Track"} — write an idea or tap Generate. Inspiration only, not a cover.`
+        : `Revibe ready: ${post.title || "Track"} — using this track's style. Write an idea or tap Generate.`,
+    );
+    try { syncGenerateOrbVisibility(); } catch {}
+  } catch (e) {
+    console.error("[hub revibe] failed", e);
+    const baseMsg = String(e?.message || "error");
+    const friendly = /failed to fetch|networkerror|load failed/i.test(baseMsg)
+      ? "Network blocked the source — check your connection or try again."
+      : baseMsg;
+    showToast(`Could not load revibe source: ${friendly}`, { icon: "!", durationMs: 3600 });
+    setStatus("Revibe could not be loaded.");
+  } finally {
+    hideRemixLoadingOverlay();
+  }
+}
+
 async function startHubRemix(post) {
+  if (nabadRevibeEnabled()) {
+    return startHubRevibe(post);
+  }
   if (!post || !post.url) {
     showToast("Cannot remix: this post has no audio.", { icon: "!", durationMs: 3200 });
     return;
@@ -32471,7 +32660,7 @@ function createAttachmentForcesSuno() {
     if (String(getActivePersonaId() || "").trim()) return true;
   } catch {}
   try {
-    if (currentRemixSource) return true;
+    if (currentRemixSource && !currentRemixSource.revibe) return true;
   } catch {}
   try {
     if (typeof getVocalReferenceFile === "function" && getVocalReferenceFile()) {
@@ -55792,7 +55981,7 @@ function renderTrackSheetPublic(ctx) {
   const allowRemix = !isSound && trackAllowsRemix(trackRef) && Boolean(ctx?.url);
   const allowMashup = nabadMashupEnabled() && allowRemix && trackAllowsMashup(trackRef) && Boolean(mashupSongCloudId(trackRef));
   q.innerHTML = `
-    ${allowRemix ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="remix">Remix</button>` : ""}
+    ${allowRemix ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="remix">${escapeHtml(publicRemixActionLabel())}</button>` : ""}
     ${allowMashup ? `<button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="mashup">Mashup</button>` : ""}
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="share">Share</button>
   `;
@@ -55826,7 +56015,7 @@ function renderTrackSheetDiscover(ctx) {
   const allowRemix = !isSound && trackAllowsRemix(trackRef) && Boolean(ctx?.url);
   const allowMashup = nabadMashupEnabled() && allowRemix && trackAllowsMashup(trackRef) && Boolean(mashupSongCloudId(trackRef));
   q.innerHTML = `
-    ${allowRemix ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="remix">Remix</button>` : ""}
+    ${allowRemix ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="remix">${escapeHtml(publicRemixActionLabel())}</button>` : ""}
     ${allowMashup ? `<button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="mashup">Mashup</button>` : ""}
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="share">Share</button>
   `;
@@ -55869,7 +56058,7 @@ function renderTrackSheetLibrary(track) {
     ? ""
     : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_rename">Rename song</button>`;
   const quickRemix = remixEligible
-    ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="library_remix">Remix</button>`
+    ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="library_remix">${escapeHtml(publicRemixActionLabel())}</button>`
     : "";
   const mashupEligible = nabadMashupEnabled() && remixEligible && Boolean(mashupSongCloudId(track));
   const quickMashup = mashupEligible
@@ -55933,7 +56122,7 @@ function renderTrackSheetProfileLib(t) {
   const remixEligible = !isSound && Boolean(t?.url && String(t.url).trim());
   const featuredLabel = isFeaturedOnProfile(t) ? "Remove featured track" : "Feature on profile";
   const quickRemix = remixEligible
-    ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="profile_lib_remix">Remix</button>`
+    ? `<button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="profile_lib_remix">${escapeHtml(publicRemixActionLabel())}</button>`
     : "";
   q.innerHTML = `
     ${quickRemix}
@@ -56547,11 +56736,11 @@ async function startTake2FromLibraryTrack(track) {
 
 async function startLibraryRemixForLibraryTrack(t) {
   if (!t?.url || !String(t.url).trim()) {
-    showToast("This song has no audio to remix.", { icon: "!", durationMs: 3200 });
+    showToast(nabadRevibeEnabled() ? "This song has no audio to revibe." : "This song has no audio to remix.", { icon: "!", durationMs: 3200 });
     return;
   }
   if (!authSession?.user?.id) {
-    showToast("Sign in to remix a library song.", { icon: "!", durationMs: 3800 });
+    showToast(nabadRevibeEnabled() ? "Sign in to revibe a library song." : "Sign in to remix a library song.", { icon: "!", durationMs: 3800 });
     try {
       location.hash = "#/auth";
     } catch {}
@@ -56559,7 +56748,7 @@ async function startLibraryRemixForLibraryTrack(t) {
   }
   // Overlay covers the whole prep (audio refresh + lyric recovery +
   // source download in startHubRemix). startHubRemix hides it when done.
-  showRemixLoadingOverlay(t.title);
+  showRemixLoadingOverlay(t.title, nabadRevibeEnabled() ? { kicker: "Reading the vibe" } : {});
   try {
     let track = t;
     try {
@@ -56568,7 +56757,7 @@ async function startLibraryRemixForLibraryTrack(t) {
     } catch {}
     const rawInner = unwrapInnermostHttpAudioUrl(track.url);
     if (!String(rawInner || "").trim()) {
-      showToast("Could not resolve audio for remix.", { icon: "!", durationMs: 3400 });
+      showToast(nabadRevibeEnabled() ? "Could not resolve audio for revibe." : "Could not resolve audio for remix.", { icon: "!", durationMs: 3400 });
       return;
     }
     let remixUrl =
@@ -56816,7 +57005,7 @@ function runTrackSheetAction(action, sourceEl) {
     }
     if (action === "remix") {
       if (!authSession?.user?.id) {
-        showToast("Sign in to remix songs from Discover.", { icon: "!", durationMs: 3800 });
+        showToast(nabadRevibeEnabled() ? "Sign in to revibe songs from Discover." : "Sign in to remix songs from Discover.", { icon: "!", durationMs: 3800 });
         shut();
         try {
           location.hash = "#/auth";
@@ -56825,7 +57014,7 @@ function runTrackSheetAction(action, sourceEl) {
       }
       const trackRef = { meta: ctx.meta || {}, url: ctx.url, taskId: ctx.taskId, audioId: ctx.audioId };
       if (!trackAllowsRemix(trackRef)) {
-        showToast("The creator disabled remixes for this song.", { icon: "!", durationMs: 3600 });
+        showToast(nabadRevibeEnabled() ? "The creator disabled revibes for this song." : "The creator disabled remixes for this song.", { icon: "!", durationMs: 3600 });
         return;
       }
       shut();
@@ -62557,9 +62746,9 @@ function renderHub() {
           <span class="hubReactIcon" aria-hidden="true">➤</span>
           <span class="hubReactLabel">Share</span>
         </button>
-        <button class="hubReelRailBtn hubReelRemixBtn" data-hub-remix="${p.id}" aria-label="Remix this song">
+        <button class="hubReelRailBtn hubReelRemixBtn" data-hub-remix="${p.id}" aria-label="${escapeHtml(publicRemixThisLabel())} song">
           <span class="hubReelRemixIcon" aria-hidden="true">↻</span>
-          <span class="hubReelRemixLabel">Remix</span>
+          <span class="hubReelRemixLabel">${escapeHtml(publicRemixActionLabel())}</span>
         </button>
         <button class="hubReelRailBtn hubReelMoreBtn" data-hub-more="${p.id}" aria-label="More options">
           <span aria-hidden="true">⋯</span>
@@ -62572,7 +62761,7 @@ function renderHub() {
           <span class="hubTimeAgo">${escapeHtml(relativeTime(p.ts))}</span>
         </div>
         <h3 class="hubReelTitle">${safeTitle}</h3>
-        ${p.remixOf ? `<div class="hubRemixOf hubReelRemixLine">Remix of: ${escapeHtml(p.remixOf)}</div>` : ""}
+        ${p.remixOf ? `<div class="hubRemixOf hubReelRemixLine">${escapeHtml(publicRemixOfPrefix({ meta: p.meta }))}: ${escapeHtml(p.remixOf)}</div>` : ""}
         ${p?.meta?.searchTemplateTitle ? `<div class="hubSearchTemplateLine hubReelTemplateLine">From Search · ${escapeHtml(String(p.meta.searchTemplateTitle))}</div>` : ""}
       </footer>
       <div class="libMenu hubMoreMenu hubReelMoreMenu" id="hubMore_${p.id}" style="display:none">
@@ -77796,7 +77985,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         : detectLyricsMode(seed);
     let requestSeed = challenge ? challengePromptMagicSeed(seed, challenge) : seed;
     let remixReplyBody = null;
-    if (!challenge && currentRemixSource) {
+    if (!challenge && currentRemixSource && !currentRemixSource.revibe) {
       const sourceLyrics = await ensureRemixSourceLyrics();
       if (!sourceLyrics) {
         showToast("Original lyrics still loading — wait a moment, then try ✦ Generate again.", { icon: "!", durationMs: 3200 });
@@ -80153,9 +80342,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         }
       }
       const hubRemixLocked = Boolean(
-        currentRemixSource?.originalUrl ||
+        !currentRemixSource?.revibe && (
+          currentRemixSource?.originalUrl ||
           currentRemixSource?.url ||
-          vocalRefOrigin === "remix",
+          vocalRefOrigin === "remix"
+        ),
       );
       const modeLabel = referenceInstrumentalOnly
         ? "Instrumental from melody"
@@ -80245,7 +80436,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const lyriaIdeaMode = lyriaIdeaModeForGenerate(userPrompt, {
         instrumental: shouldGenerateInstrumental,
         hasReference,
-        hasRemix: Boolean(currentRemixSource),
+        hasRemix: Boolean(currentRemixSource) && !currentRemixSource.revibe,
       });
       const ideaNotLyrics = lyriaRaw
         ? false
@@ -80253,7 +80444,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             createIdeaIsPromptToSong(userPrompt)
               && !shouldGenerateInstrumental
               && !hasReference
-              && !currentRemixSource,
+              && !(currentRemixSource && !currentRemixSource.revibe),
           );
       let ideaSimpleMode = false;
       const ideaPromptToSongAlt =
@@ -80603,6 +80794,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         lyricsEditedByUser,
         remixOfHubPostId: currentRemixSource?.id || null,
         ...(currentRemixSource ? { remixOf: remixAttributionFromSource(currentRemixSource) } : {}),
+        ...(currentRemixSource?.revibe ? { revibe: true } : {}),
         ...remixMeta,
         ...(photoCoverMeta || {}),
         ...(vibeReadAppliedForNextGen ? { vibeReadApplied: true } : {}),
@@ -82464,7 +82656,7 @@ function enforceSimpleCreateVocalOnly() {
 function createShouldHideStyleRow() {
   if (isSpellYouCreateFlow()) return false;
   if (challengePromptContext()) return true;
-  if (typeof currentRemixSource !== "undefined" && currentRemixSource) return true;
+  if (typeof currentRemixSource !== "undefined" && currentRemixSource && !currentRemixSource.revibe) return true;
   const tid = String(pendingSearchRemixMeta?.searchTemplateId || "").trim();
   return Boolean(tid && !tid.startsWith("continue:"));
 }

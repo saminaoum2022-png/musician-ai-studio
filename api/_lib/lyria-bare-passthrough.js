@@ -36,8 +36,30 @@ function lyriaSeedLooksNonArabicLatin(text) {
   return (s.match(/[A-Za-z]/g) || []).length >= 8;
 }
 
+function isInstrumentalBody(body = {}, instrumental = false) {
+  return (
+    instrumental === true
+    || body?.instrumental === true
+    || body?.instrumental === 1
+    || String(body?.instrumental || "") === "1"
+  );
+}
+
+function stripInstrumentalLyricContext(body = {}) {
+  const next = { ...body };
+  delete next.dialect;
+  delete next.dialectHint;
+  delete next.arabicAddress;
+  delete next.address;
+  delete next.lyricsLanguage;
+  const script = String(next.scriptFormat || "").toLowerCase();
+  if (script === "arabic" || script === "arabizi") next.scriptFormat = "auto";
+  return next;
+}
+
 /** Drop dialect/addressee when the box is clearly not Arabic (English, French, etc.). */
-function stripArabicLyricContextIfUnused(body = {}, { lyrics = "" } = {}) {
+function stripArabicLyricContextIfUnused(body = {}, { lyrics = "", instrumental = false } = {}) {
+  if (isInstrumentalBody(body, instrumental)) return stripInstrumentalLyricContext(body);
   const idea = isLyriaIdeaPromptBody(body);
   const seed = idea
     ? String(body?.ideaBrief || lyrics || body?.prompt || "").trim()
@@ -61,7 +83,8 @@ function styleContainsAny(style, patterns) {
 }
 
 /** Studio-style: dialect / language / addressee as short English tags on the style line. */
-function buildBareStudioStyleSuffixes(body = {}, { seedText = "" } = {}) {
+function buildBareStudioStyleSuffixes(body = {}, { seedText = "", instrumental = false } = {}) {
+  if (isInstrumentalBody(body, instrumental)) return [];
   const suffixes = [];
   const style = String(body?.style || "").trim();
   const scriptFormat = String(body?.scriptFormat || "").trim().toLowerCase();
@@ -121,9 +144,12 @@ function buildBareStudioStyleSuffixes(body = {}, { seedText = "" } = {}) {
   return suffixes;
 }
 
-function composeBareStyleLine(body = {}, { seedText = "" } = {}) {
-  let style = applyVocalGenderToStyleLine(String(body?.style || "").trim(), body?.vocalGender);
-  const studio = buildBareStudioStyleSuffixes(body, { seedText });
+function composeBareStyleLine(body = {}, { seedText = "", instrumental = false } = {}) {
+  const inst = isInstrumentalBody(body, instrumental);
+  let style = inst
+    ? String(body?.style || "").trim()
+    : applyVocalGenderToStyleLine(String(body?.style || "").trim(), body?.vocalGender);
+  const studio = buildBareStudioStyleSuffixes(body, { seedText, instrumental: inst });
   if (studio.length) {
     style = style ? `${style}, ${studio.join(", ")}` : studio.join(", ");
   }
@@ -176,10 +202,10 @@ function resolveBareLyriaPrompt(body, { lyrics = "", instrumental = false, photo
 
   const ideaMode = isLyriaIdeaPromptBody(body);
   const ideaBrief = ideaMode ? String(body?.ideaBrief || "").trim() : "";
-  const lyricText = ideaMode ? "" : String(lyrics || body?.prompt || "").trim();
+  const lyricText = instrumental || ideaMode ? "" : String(lyrics || body?.prompt || "").trim();
   const seedText = ideaMode ? ideaBrief : lyricText;
-  const style = composeBareStyleLine(body, { seedText });
-  const secondBlock = ideaMode ? buildBareIdeaPromptBlock(ideaBrief) : lyricText;
+  const style = composeBareStyleLine(body, { seedText, instrumental });
+  const secondBlock = instrumental ? "" : ideaMode ? buildBareIdeaPromptBlock(ideaBrief) : lyricText;
 
   if (instrumental) {
     const prompt = style || secondBlock;

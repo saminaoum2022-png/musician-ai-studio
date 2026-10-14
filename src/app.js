@@ -5476,6 +5476,7 @@ function lyriaBareArabicContextFields() {
 }
 
 function lyriaBareLyricsLanguageField() {
+  if (isCreateInstrumentalSelected()) return {};
   const lang = effectiveLyricsLanguage();
   if (!lang || lang === "auto") return {};
   return { lyricsLanguage: lang };
@@ -7325,6 +7326,7 @@ function resolveLyricsScriptFormat() {
 }
 
 function isArabicLyricsFlowActive() {
+  if (isCreateInstrumentalSelected()) return false;
   const lang = effectiveLyricsLanguage();
   if (isExplicitNonArabicLyricsLanguage(lang)) return false;
   if (isArabiziLyricsLanguage(lang)) return true;
@@ -7385,6 +7387,7 @@ function syncLyricsLangPills() {
 
 /** Arabic dialect chips only for Arabic / Arabizi lyrics. */
 function shouldShowArabicDialectRow() {
+  if (isCreateInstrumentalSelected()) return false;
   return isArabicLyricsFlowActive();
 }
 
@@ -8024,8 +8027,9 @@ async function ensureSingabilityBeforeGenerate() {
   return true;
 }
 
-/** Dialect + addressee are required only for Arabic / Arabizi — never English or other languages. */
+/** Dialect + addressee are required only for Arabic / Arabizi vocals — never instrumental. */
 function arabicLyricsNeedDialectAndAddress() {
+  if (isCreateInstrumentalSelected()) return false;
   return isArabicLyricsFlowActive();
 }
 
@@ -8132,7 +8136,7 @@ function syncArabicLyricsControlsVisibility() {
     const showPanelExtras = shouldShowArabicAddress() || showDialect || shouldShowLyricsDiacritics();
     els.lyricsFieldPanel.classList.toggle("showArabicLyricControls", showPanelExtras);
   }
-  if (!arabicLyricsNeedDialectAndAddress()) {
+  if (!isCreateInstrumentalSelected() && !arabicLyricsNeedDialectAndAddress()) {
     if (lyricsDialect) lyricsDialect = "";
     if (els.sunoDialect) els.sunoDialect.value = "";
     if (els.sunoDialectHint) els.sunoDialectHint.value = "";
@@ -8262,7 +8266,9 @@ function setCreateSongType(type) {
   if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = instrumental;
   if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = instrumental;
   if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = instrumental;
+  try { syncArabicLyricsControlsVisibility(); } catch {}
   try { syncArabicGenerateGate(); } catch {}
+  try { syncCreateNabadHeard(); } catch {}
   try { syncSoloInstrumentalToggleUi(); } catch {}
   try { syncCreateSongTypeTabs(); } catch {}
   try { syncPhotoSoloVocalSections(); } catch {}
@@ -8322,6 +8328,7 @@ function textHasArabicScript(t) {
 
 /** Arabic address chips only for Arabic / Arabizi lyrics. */
 function shouldShowArabicAddress() {
+  if (isCreateInstrumentalSelected()) return false;
   return isArabicLyricsFlowActive();
 }
 
@@ -80411,7 +80418,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const photoImageForLyria = useLyriaForThisGenerate() ? resolvePhotoImagePayloadForLyria() : "";
       const lyriaIdeaPayload = lyriaIdeaMode;
       const payload = {
-        prompt: ideaPromptToSongAlt || lyriaIdeaPayload ? "" : finalPrompt,
+        prompt: shouldGenerateInstrumental || ideaPromptToSongAlt || lyriaIdeaPayload ? "" : finalPrompt,
         style: ideaSimpleMode
           ? (intlLock?.ok ? intlLock.styleLine : (lockShelfStyle ? userStyleRaw : ""))
           : ideaPromptToSongAlt && !intlLock?.ok
@@ -80422,14 +80429,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         customMode: !ideaSimpleMode,
         instrumental: shouldGenerateInstrumental,
         model: modelForRequest,
-        ...(lyriaRaw
+        ...(shouldGenerateInstrumental
+          ? {}
+          : lyriaRaw
           ? { ...lyriaBareArabicContextFields(), ...lyriaBareLyricsLanguageField() }
           : {
               ...(dialect ? { dialect: String(dialect) } : {}),
               ...(lyricDialectHint ? { dialectHint: String(lyricDialectHint) } : {}),
               ...(arabicAddress ? { arabicAddress: String(arabicAddress) } : {}),
             }),
-        ...(useLyriaForThisGenerate() ? { scriptFormat: resolveLyricsScriptFormat() } : {}),
+        ...(useLyriaForThisGenerate() && !shouldGenerateInstrumental ? { scriptFormat: resolveLyricsScriptFormat() } : {}),
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
         ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
         ...(ideaPromptToSongAlt || lyriaIdeaPayload ? { ideaPrompt: true, ideaBrief: userPrompt } : {}),

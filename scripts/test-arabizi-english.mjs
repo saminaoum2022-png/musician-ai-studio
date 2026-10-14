@@ -58,4 +58,48 @@ assert.equal(
   "English seed must not get dialect/addressee style tags",
 );
 
+const instStripped = bare.stripArabicLyricContextIfUnused(
+  {
+    instrumental: true,
+    prompt: "حبيبي أنت نور عيني",
+    dialect: "Lebanese Arabic",
+    arabicAddress: "female",
+    lyricsLanguage: "arabic",
+    scriptFormat: "arabic",
+    style: "Levantine pop, oud, 110 BPM",
+  },
+  { lyrics: "حبيبي أنت نور عيني" },
+);
+assert.equal(instStripped.dialect, undefined, "instrumental must drop dialect");
+assert.equal(instStripped.arabicAddress, undefined, "instrumental must drop addressee");
+assert.equal(instStripped.lyricsLanguage, undefined, "instrumental must drop lyrics language");
+assert.equal(instStripped.scriptFormat, "auto");
+
+const instSuffixes = bare.buildBareStudioStyleSuffixes(
+  {
+    instrumental: true,
+    lyricsLanguage: "arabic",
+    dialect: "Lebanese Arabic",
+    arabicAddress: "female",
+  },
+  { seedText: "حبيبي أنت نور عيني" },
+);
+assert.deepEqual(instSuffixes, [], "instrumental must not add lyrics/addressee style tags");
+
+const instBare = bare.resolveBareLyriaPrompt(
+  {
+    instrumental: true,
+    style: "Levantine pop, bright synth lead, 110 BPM",
+    dialect: "Lebanese Arabic",
+    arabicAddress: "female",
+    lyricsLanguage: "arabic",
+    prompt: "حبيبي أنت نور عيني",
+  },
+  { lyrics: "حبيبي أنت نور عيني", instrumental: true },
+);
+assert.equal(instBare.ok, true, "instrumental needs only a style line");
+assert.match(instBare.prompt, /Levantine pop/);
+assert.doesNotMatch(instBare.prompt, /colloquial|singing to/);
+assert.equal(instBare.prompt.includes("حبيبي"), false, "instrumental prompt must ignore Arabic lyrics");
+
 console.log("ok test-arabizi-english");

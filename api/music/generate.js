@@ -678,7 +678,7 @@ async function runLyriaGenerationJob({
   fallbackLyriaPrompt = "",
 }) {
   body = stripShelfArabizi(body || {});
-  body = stripArabicLyricContextIfUnused(body, { lyrics });
+  body = stripArabicLyricContextIfUnused(body, { lyrics, instrumental });
   const arabiziEnabled = await isArabiziInstructionEnabled();
   const fail = async (msg, requestDetailOverride) => {
     if (!isAdmin) {
@@ -1907,6 +1907,17 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   const instrumentalEarly = parseInstrumentalFlag(body);
   if (instrumentalEarly) {
     body.style = tidyInstrumentalStyleLine(body?.style);
+    body.instrumental = true;
+    body.prompt = "";
+    delete body.ideaPrompt;
+    delete body.ideaBrief;
+    delete body.dialect;
+    delete body.dialectHint;
+    delete body.arabicAddress;
+    delete body.address;
+    delete body.lyricsLanguage;
+    const script = String(body.scriptFormat || "").toLowerCase();
+    if (script === "arabic" || script === "arabizi") body.scriptFormat = "auto";
   }
   const leftoverStyle = String(body?.style || "").match(/\{[A-Z][A-Z0-9_]*\}/g);
   if (leftoverStyle?.length) {

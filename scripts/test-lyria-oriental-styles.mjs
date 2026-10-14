@@ -100,6 +100,33 @@ assert.match(d.styleLine, /energetic charismatic female lead vocal/);
 const leftover = leftoverStylePlaceholders("Arabic pop, {LEAD}, 120 BPM");
 assert.deepEqual(leftover, ["{LEAD}"]);
 
+const inst = fillOrientalStylePrompt({
+  style: getOrientalStyle("levantine-pop-fusion"),
+  vocalGender: "m",
+  instrumental: true,
+});
+if (!inst.ok) fail(`instrumental fill: ${inst.error}`);
+assert.doesNotMatch(inst.styleLine, /\{VOCAL\}/);
+assert.doesNotMatch(inst.styleLine, /\bvocal\b/i);
+assert.match(inst.styleLine, /bright modern synth lead/);
+assert.equal(leftoverStylePlaceholders(inst.styleLine).length, 0);
+
+const noVocalStyle = {
+  ...getOrientalStyle("levantine-pop-fusion"),
+  vocal_male: "",
+  vocal_female: "",
+};
+const sungNeedsVocal = fillOrientalStylePrompt({ style: noVocalStyle, vocalGender: "m" });
+assert.equal(sungNeedsVocal.ok, false, "sung style still requires {VOCAL}");
+const instNoVocal = fillOrientalStylePrompt({
+  style: noVocalStyle,
+  vocalGender: "",
+  instrumental: true,
+});
+if (!instNoVocal.ok) fail(`instrumental without vocal copy: ${instNoVocal.error}`);
+assert.doesNotMatch(instNoVocal.styleLine, /\{VOCAL\}/);
+assert.equal(leftoverStylePlaceholders(instNoVocal.styleLine).length, 0);
+
 const base = take.normalizeCreateInputs({
   style: a.styleLine,
   vocalGender: "m",

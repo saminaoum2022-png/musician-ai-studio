@@ -429,15 +429,30 @@ export function resolveInternationalVocalText(style, vocalGender) {
   return String(fallback || "").trim();
 }
 
+export function tidyInstrumentalStyleLine(line) {
+  return String(line || "")
+    .replace(/\{VOCAL\}/g, "")
+    .replace(/\s*,\s*,+/g, ",")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\s,]+|[\s,]+$/g, "")
+    .trim();
+}
+
 /**
  * Fill {VOCAL}{LEAD}{RHYTHM}{MOOD}{BPM}{KEY}. Fail if any {…} remains.
+ * Instrumental drops {VOCAL} instead of requiring a singer line.
  * @returns {{ ok: true, styleLine: string, bpm: number, key: string, vocal: string, slots: object } | { ok: false, error: string, leftover: string[], styleLine?: string }}
  */
-export function fillInternationalStylePrompt({ style, vocalGender = "", slots = {} } = {}) {
+export function fillInternationalStylePrompt({
+  style,
+  vocalGender = "",
+  slots = {},
+  instrumental = false,
+} = {}) {
   if (!style?.style_prompt) {
     return { ok: false, error: "missing_style", leftover: [] };
   }
-  const vocal = resolveInternationalVocalText(style, vocalGender);
+  const vocal = instrumental ? "" : resolveInternationalVocalText(style, vocalGender);
   const resolved = { VOCAL: vocal };
   for (const key of INTERNATIONAL_SLOT_KEYS) {
     resolved[key] = resolveSlotValue(style, key, slots[key]);
@@ -446,6 +461,7 @@ export function fillInternationalStylePrompt({ style, vocalGender = "", slots = 
   for (const [key, val] of Object.entries(resolved)) {
     line = line.split(`{${key}}`).join(val);
   }
+  if (instrumental) line = tidyInstrumentalStyleLine(line);
   const leftover = leftoverStylePlaceholders(line);
   if (leftover.length || leftoverStylePlaceholders(Object.values(resolved).join(" ")).length) {
     return {
@@ -455,13 +471,13 @@ export function fillInternationalStylePrompt({ style, vocalGender = "", slots = 
       styleLine: line,
     };
   }
-  if (!vocal) {
+  if (!instrumental && !vocal) {
     return { ok: false, error: "Style prompt still has unfilled slots: {VOCAL}", leftover: ["{VOCAL}"] };
   }
   const bpm = Number(resolved.BPM);
   return {
     ok: true,
-    styleLine: applyVocalGenderToStyleLine(line, vocalGender),
+    styleLine: instrumental ? line : applyVocalGenderToStyleLine(line, vocalGender),
     bpm: Number.isFinite(bpm) && bpm > 0 ? bpm : 0,
     key: resolved.KEY,
     vocal,

@@ -209,6 +209,19 @@ function newTaskId(provider) {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "")}`;
 }
 
+function tidyInstrumentalStyleLine(line) {
+  return String(line || "")
+    .replace(/\{VOCAL\}/g, "")
+    .replace(/\s*,\s*,+/g, ",")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\s,]+|[\s,]+$/g, "")
+    .trim();
+}
+
+function parseInstrumentalFlag(body) {
+  return body?.instrumental === true || body?.instrumental === 1 || String(body?.instrumental || "") === "1";
+}
+
 function applyHumTrackGenerateDefaults(body) {
   if (!body?.humTrack) return;
   const preset = resolveHumTrackPreset(body?.instrumentPreset);
@@ -509,6 +522,9 @@ function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
   if (conductor?.ok && producerResult?.conductorTrack) {
     return "pipeline: hum_conductor → lyria (hum_to_track)";
   }
+  if (producerResult?.instrumentalOnly) {
+    return "pipeline: lyria_instrumental · style + no vocals";
+  }
   if (conductor?.ok && producerResult?.v3 && producerResult.ok) {
     return "pipeline: hum_conductor → lyria_producer_v3 → lyria";
   }
@@ -743,12 +759,13 @@ async function runLyriaGenerationJob({
           .join("\n")
         : "";
     }
-    const skipV3ForHumToTrack = Boolean(body._humConductor?.ok && instrumental && !take2.replay);
+    const skipV3ForInstrumental = Boolean(instrumental && !take2.replay);
+    const skipV3ForHumToTrack = Boolean(body._humConductor?.ok && skipV3ForInstrumental);
     const useProducerV3 =
       !take2.replay
       && !lyriaLegacyPromptsEnabled()
       && resolveLyriaProducerV3Enabled(body, isAdmin)
-      && !skipV3ForHumToTrack;
+      && !skipV3ForInstrumental;
     if (skipV3ForHumToTrack) {
       const stitched = buildHumToTrackLyriaPrompt({
         styleLine: stylePrompt || body?.style,
@@ -761,6 +778,14 @@ async function runLyriaGenerationJob({
       lyriaPrompt = stitched.prompt;
       body._humConductorMode = "hum_to_track";
       producerResult = { ok: true, used: false, v3: false, conductorTrack: true };
+    } else if (skipV3ForInstrumental) {
+      const head = tidyInstrumentalStyleLine(stylePrompt || body?.style || fallbackLyriaPrompt || "");
+      if (!head) {
+        await fail("Instrumental needs a Studio style or custom tags.");
+        return;
+      }
+      lyriaPrompt = /instrumental/i.test(head) ? head : `${head}. Instrumental only.`;
+      producerResult = { ok: true, used: false, v3: false, instrumentalOnly: true };
     } else if (useProducerV3) {
       const v3input = buildLyriaProducerV3Input(
         take2.previousTake ? { ...body, previousTake: take2.previousTake } : body,
@@ -1879,6 +1904,10 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
+  const instrumentalEarly = parseInstrumentalFlag(body);
+  if (instrumentalEarly) {
+    body.style = tidyInstrumentalStyleLine(body?.style);
+  }
   const leftoverStyle = String(body?.style || "").match(/\{[A-Z][A-Z0-9_]*\}/g);
   if (leftoverStyle?.length) {
     return sendJson(res, 400, {
@@ -1912,8 +1941,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
 
   const lyrics = String(body?.prompt || "").trim();
   const stylePrompt = buildLyriaDirectStylePrompt(body);
-  const instrumental =
-    body?.instrumental === true || body?.instrumental === 1 || String(body?.instrumental || "") === "1";
+  const instrumental = instrumentalEarly;
   const title = applyTake2Title(String(body?.title || "").trim(), body);
   const taskId = newTaskId("lyria");
   const audioId = `${taskId}_a`;

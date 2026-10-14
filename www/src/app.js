@@ -8233,6 +8233,9 @@ function setCreateSongType(type) {
   try { syncCreateSongTypeTabs(); } catch {}
   try { syncPhotoSoloVocalSections(); } catch {}
   try { syncTemplateSparkClipGenerateReady(); syncGenerateOrbVisibility(); } catch {}
+  try {
+    if (activeSlottedStudioStyle()) writeLockedInternationalStyleLine();
+  } catch {}
 }
 
 function setGenerateFieldsLocked(locked) {
@@ -21129,6 +21132,8 @@ function syncCreateSongTypeTabs() {
   }
   const singerPanel = document.getElementById("singerVoicePanel");
   if (singerPanel && !activePhotoSoloChallengeId()) singerPanel.hidden = instrumental;
+  const simpleSinger = document.getElementById("createSimpleSingerSlot");
+  if (simpleSinger) simpleSinger.hidden = instrumental;
 }
 
 function syncSoloInstrumentalToggleUi() {
@@ -80458,8 +80463,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (intlSinger === "duo") payload.vocalGender = "duo";
       }
       const sendSinger = String(payload.vocalGender || resolveInternationalVocalGenderFromScreen() || "").trim();
-      if ((sendSinger === "m" || sendSinger === "f") && payload.style) {
+      if (!shouldGenerateInstrumental && (sendSinger === "m" || sendSinger === "f") && payload.style) {
         payload.style = applyVocalGenderToStyleLine(payload.style, sendSinger);
+      }
+      if (shouldGenerateInstrumental) {
+        delete payload.vocalGender;
       }
       if (userAvoidTags && !lyriaRaw) payload.negativeTags = userAvoidTags;
       if (!lyriaRaw) payload.style = compactStyleForProvider(payload.style, 980);
@@ -80835,6 +80843,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           }
           let r;
           let d;
+          if (conductorHum && elevenlabsReferenceUpload?.file?.size) {
+            const humFile = elevenlabsReferenceUpload.file;
+            if (humFile.size <= 3.5 * 1024 * 1024) {
+              try {
+                payload.referenceAudio = await blobToDataUrl(humFile);
+                payload.hasReference = true;
+                elevenlabsReferenceUpload = null;
+              } catch {}
+            }
+          }
           if (elevenlabsReferenceUpload?.file?.size) {
             const fd = new FormData();
             const { referenceAudio: _dropRef, ...restPayload } = payload;
@@ -81969,11 +81987,13 @@ function fillActiveInternationalStyle() {
     style,
     vocalGender: resolveInternationalVocalGenderFromScreen(),
     slots: _internationalStyleSlots,
+    instrumental: isCreateInstrumentalSelected(),
   });
 }
 
 function writeLockedInternationalStyleLine() {
   const gender = resolveInternationalVocalGenderFromScreen();
+  const instrumental = isCreateInstrumentalSelected();
   let line = "";
   const slotted = activeSlottedStudioStyle();
   if (slotted && !shelfCatalogStyleLocked()) {
@@ -81983,7 +82003,9 @@ function writeLockedInternationalStyleLine() {
   } else {
     line = String(els.sunoStyle?.value || "").trim();
   }
-  if (gender === "m" || gender === "f") line = applyVocalGenderToStyleLine(line, gender);
+  if (!instrumental && (gender === "m" || gender === "f")) {
+    line = applyVocalGenderToStyleLine(line, gender);
+  }
   if (els.sunoStyle && line) els.sunoStyle.value = line;
   return { ok: true, styleLine: line, skipped: !slotted || shelfCatalogStyleLocked() };
 }
@@ -83072,7 +83094,7 @@ function mountCreateStudioBlockForFlowMode(mode) {
     if (singerPills && singerSlot && singerPills.parentElement !== singerSlot) {
       singerSlot.appendChild(singerPills);
     }
-    if (singerSlot) singerSlot.hidden = false;
+    if (singerSlot) singerSlot.hidden = isCreateInstrumentalSelected();
   } else {
     if (singerPills && singerHead && singerPills.parentElement !== singerHead) {
       singerHead.appendChild(singerPills);

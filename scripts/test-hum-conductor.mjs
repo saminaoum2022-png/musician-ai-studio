@@ -11,6 +11,14 @@ function fail(msg) {
   process.exit(1);
 }
 
+const fakeAudio = Buffer.alloc(256, 7).toString("base64");
+assert.ok(hc.resolveConductorAudio({ referenceAudio: `data:audio/mp4;base64,${fakeAudio}` }));
+assert.ok(
+  hc.resolveConductorAudio({ referenceAudio: `data:application/octet-stream;base64,${fakeAudio}` }),
+  "iOS FileReader often sends octet-stream, not audio/*",
+);
+assert.equal(hc.resolveConductorAudio({ referenceAudio: "data:audio/mp4;base64,QQ==" }), null);
+
 assert.equal(hc.resolveHumConductorEnabled({ humConductor: "1" }, false), false, "non-admin never on");
 assert.equal(hc.resolveHumConductorEnabled({ humConductor: "1" }, true), true);
 assert.equal(hc.resolveHumConductorEnabled({ humConductor: "0" }, true), false);

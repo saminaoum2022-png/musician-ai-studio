@@ -73,11 +73,13 @@ function resolveConductorAudio(body = {}) {
     return { buffer: buf, mimeType: mime };
   }
   const dataUrl = String(body?.referenceAudio || "").trim();
-  const m = dataUrl.match(/^data:(audio\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  const m = dataUrl.match(/^data:([^;]*);base64,(.+)$/i);
   if (m?.[2]) {
     const buffer = Buffer.from(m[2], "base64");
     if (buffer.length >= 128 && buffer.length <= MAX_AUDIO_BYTES) {
-      return { buffer, mimeType: m[1] };
+      const rawMime = String(m[1] || "").trim().toLowerCase();
+      const mime = rawMime.startsWith("audio/") ? rawMime.split(";")[0] : "audio/mp4";
+      return { buffer, mimeType: mime };
     }
   }
   return null;

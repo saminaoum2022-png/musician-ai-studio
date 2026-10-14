@@ -40559,7 +40559,7 @@ function ensurePublishReleaseSheet() {
           </div>
         </div>
         <div class="pubGroup" role="group" aria-label="Collaboration permissions">
-          <label class="pubSwitchRow"><span class="pubSwitchText"><b>Allow remixes</b><small>Others can build on your song</small></span><input id="publishAllowRemix" class="pubSwitch" type="checkbox" checked /></label>
+          <label class="pubSwitchRow"><span class="pubSwitchText"><b>${nabadRevibeEnabled() ? "Allow revibe" : "Allow remixes"}</b><small>${nabadRevibeEnabled() ? "Others can start a new song in this sound" : "Others can build on your song"}</small></span><input id="publishAllowRemix" class="pubSwitch" type="checkbox" checked /></label>
           <label class="pubSwitchRow pubSwitchRow--mashup"${nabadMashupEnabled() ? "" : " hidden"}><span class="pubSwitchText"><b>Allow mashups</b><small>Others can blend it with theirs</small></span><input id="publishAllowMashup" class="pubSwitch" type="checkbox" checked /></label>
         </div>
         <div id="publishReleaseMeta" class="publishReleaseMeta pubMeta" hidden></div>

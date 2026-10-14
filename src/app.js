@@ -30350,14 +30350,41 @@ function hideRemixLoadingOverlay() {
   if (_remixLoadingOverlayEl) _remixLoadingOverlayEl.hidden = true;
 }
 
-function applyRevibeReadToSongFields(data, fallbackStyle) {
+function revibeStyleBriefFromRead(data, fallbackStyle) {
   const tags = Array.isArray(data?.styleTags) ? data.styleTags.filter(Boolean) : [];
-  const promptLine = String(data?.stylePrompt || "").trim();
-  const fromPrompt = promptLine ? promptLine.split(",").map((s) => s.trim()).filter(Boolean) : [];
-  const merged = [...new Set([...tags, ...fromPrompt])].slice(0, 14);
+  const moods = Array.isArray(data?.moodTags) ? data.moodTags.filter(Boolean) : [];
+  const brief = [...new Set([...tags, ...moods])].slice(0, 8);
+  if (brief.length) return brief.join(", ");
+  const prompt = String(data?.stylePrompt || "").trim();
+  if (prompt) {
+    return prompt.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 8).join(", ");
+  }
+  const concept = String(data?.concept || "").trim();
+  if (concept && !/^vibe read ready\.?$/i.test(concept)) return concept.slice(0, 90);
   const fallback = String(fallbackStyle || "").trim();
+  if (!fallback) return "";
+  return fallback.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 8).join(", ");
+}
+
+function revibeStyleFullFromRead(data, fallbackStyle) {
+  const prompt = String(data?.stylePrompt || "").trim();
+  if (prompt) return prompt;
+  const tags = Array.isArray(data?.styleTags) ? data.styleTags.filter(Boolean) : [];
+  if (tags.length) return tags.join(", ");
+  return String(fallbackStyle || "").trim();
+}
+
+function applyRevibeReadToSongFields(data, fallbackStyle) {
+  const brief = revibeStyleBriefFromRead(data, fallbackStyle);
+  const full = revibeStyleFullFromRead(data, fallbackStyle);
+  if (currentRemixSource) {
+    currentRemixSource.revibeRead = data || null;
+    currentRemixSource.revibeStyleBrief = brief;
+    currentRemixSource.revibeStyleFull = full || brief;
+  }
+  try { enterStudioCustomStyle({ keepStyleField: true, focus: false }); } catch {}
   if (els.sunoStyle) {
-    els.sunoStyle.value = merged.length ? merged.join(", ") : fallback;
+    els.sunoStyle.value = brief;
   }
   const structureTemplate = String(data?.structureTemplate || "").trim();
   if (els.sunoPrompt) {
@@ -30470,6 +30497,10 @@ async function startHubRevibe(post) {
     applyRevibeReadToSongFields(vibeData, fallbackStyle);
     if (els.sunoTitle) els.sunoTitle.value = `${post.title || "Track"} Revibe`;
     location.hash = "#/generate";
+    try { enterStudioCustomStyle({ keepStyleField: true, focus: false }); } catch {}
+    if (els.sunoStyle && currentRemixSource?.revibeStyleBrief) {
+      els.sunoStyle.value = currentRemixSource.revibeStyleBrief;
+    }
     setStatus(
       vibeData
         ? `Revibe ready: ${post.title || "Track"} — write an idea or tap Generate. Inspiration only, not a cover.`
@@ -80377,6 +80408,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const lyriaRaw = lyriaSendRawBoxesOnly();
       const userPrompt = (els.sunoPrompt?.value || "").trim();
       let userStyleRaw = String(els.sunoStyle?.value || "").trim();
+      if (currentRemixSource?.revibe && !String(_activeLyriaStudioStyleId || "").trim()) {
+        const brief = String(currentRemixSource.revibeStyleBrief || "").trim();
+        const full = String(currentRemixSource.revibeStyleFull || "").trim();
+        if (full && (!userStyleRaw || userStyleRaw === brief)) {
+          userStyleRaw = full;
+        }
+      }
       const lockShelfStyle = shelfCatalogStyleLocked();
       if (lockShelfStyle && !userStyleRaw) {
         userStyleRaw = String(pendingSearchRemixMeta?.catalogStyle || "").trim();
@@ -82623,13 +82661,14 @@ function mountCreateCustomStyleField(show) {
   }
 }
 
-function enterStudioCustomStyle() {
+function enterStudioCustomStyle(opts = {}) {
   _studioCustomPicked = true;
-  clearLyriaStudioStyleSelection({ clearStyleField: true });
+  clearLyriaStudioStyleSelection({ clearStyleField: opts.keepStyleField !== true });
   mountCreateCustomStyleField(true);
   renderLyriaStudioStyleRow();
   try { syncLyriaStudioStyleUi(); } catch {}
   try { syncCreateSimpleAura(); } catch {}
+  if (opts.focus === false) return;
   window.setTimeout(() => {
     try { els.sunoStyle?.focus({ preventScroll: true }); } catch { try { els.sunoStyle?.focus(); } catch {} }
     try { syncCreateWebViewportFit(); } catch {}
@@ -83385,7 +83424,12 @@ function syncCreateFlowLayoutUi() {
   if (mode === "simple" && enabled) {
     try { setActiveCreateTab("lyrics"); } catch {}
     enforceSimpleCreateVocalOnly();
-    if (!_activeLyriaStudioStyleId && !_studioCustomPicked && !shelfCatalogStyleLocked()) {
+    if (
+      !_activeLyriaStudioStyleId
+      && !_studioCustomPicked
+      && !shelfCatalogStyleLocked()
+      && !currentRemixSource?.revibe
+    ) {
       try { applyLyriaStudioStyle("levantine-pop-fusion", { family: defaultStudioStylesTab() }); } catch {}
     }
     try { ensureSimpleSingerDefault(); } catch {}

@@ -72,9 +72,14 @@ const withRef = eleven.buildElevenCompositionPlanFromLyriaV3({
 });
 if (!withRef.ok) fail(`eleven v3 ref: ${withRef.error}`);
 assert.equal(withRef.planSource, "lyria_producer_v3_reference");
-assert.ok(withRef.plan.chunks[0].conditioning_ref?.song_id === "song_test_ref_1");
-assert.equal(withRef.plan.chunks[0].conditioning_ref.range.end_ms, 8000);
-assert.ok(!withRef.plan.chunks[1].conditioning_ref);
+assert.ok(!withRef.plan.chunks[0].conditioning_ref, "intro must stay free of the dry hum");
+const verseRef = withRef.plan.chunks.find((c) => /\[Verse 1\]/.test(c.text));
+assert.ok(verseRef?.conditioning_ref?.song_id === "song_test_ref_1");
+assert.equal(verseRef.conditioning_ref.range.end_ms, 8000);
+assert.equal(verseRef.condition_strength, "medium");
+assert.ok(withRef.plan.chunks.every((c) =>
+  (c.positive_styles || []).some((t) => /full arrangement|drums and bass/i.test(t)),
+), "every chunk should keep a band under the vocal");
 
 const missing = eleven.buildElevenCompositionPlanFromLyriaV3({ stitch: { ok: false } });
 assert.equal(missing.ok, false);

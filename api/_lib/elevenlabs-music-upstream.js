@@ -1543,6 +1543,60 @@ function buildElevenAppLikePlanCreatePrompt({
   return bits.join("\n\n").slice(0, 4000);
 }
 
+/**
+ * Hum / vocal reference on a v3 plan: lock melody on the first sung section,
+ * never on Intro. A dry hum on chunk 0 makes Eleven copy the sparse mix
+ * across the whole song.
+ */
+function applyElevenHumReferenceOnFirstVocalChunk(
+  plan,
+  {
+    referenceSongId,
+    referenceRangeMs = 30000,
+    conditionStrength = "medium",
+    instrumental = false,
+  } = {},
+) {
+  if (!plan?.chunks?.length || !referenceSongId) return plan;
+  const songId = String(referenceSongId || "").trim();
+  if (!songId) return plan;
+  const refEnd = Math.max(
+    3000,
+    Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)),
+  );
+  const strength = conditionStrength === "low" ? "low" : "medium";
+  const band = [
+    "full arrangement under the vocal",
+    "drums and bass present",
+    "do not copy the dry hummed mix",
+    "rich instrumentation",
+  ];
+  const attachAt = plan.chunks.findIndex((c) => {
+    if (isIntroPlanChunkText(c?.text)) return false;
+    if (instrumental) return true;
+    return isElevenVocalPlanChunk(c?.text, { instrumental: false });
+  });
+  const target = attachAt >= 0 ? attachAt : 0;
+  const chunks = plan.chunks.map((c, idx) => {
+    const { conditioning_ref: _r, condition_strength: _s, ...rest } = c;
+    const positive_styles = ensureMinPositiveStyles([
+      ...band,
+      ...(rest.positive_styles || []),
+    ]).slice(0, 50);
+    if (idx !== target) return { ...rest, positive_styles };
+    return {
+      ...rest,
+      positive_styles,
+      conditioning_ref: {
+        song_id: songId,
+        range: { start_ms: 0, end_ms: refEnd },
+      },
+      condition_strength: strength,
+    };
+  });
+  return { chunks };
+}
+
 /** Eleven docs: conditioning on the first chunk influences the entire song. */
 function applyElevenReferenceOnFirstChunk(
   plan,
@@ -1991,10 +2045,11 @@ function buildElevenCompositionPlanFromLyriaV3({
     },
   );
   if (referenceSongId) {
-    plan = applyElevenReferenceOnFirstChunk(plan, {
+    plan = applyElevenHumReferenceOnFirstVocalChunk(plan, {
       referenceSongId,
       referenceRangeMs,
       conditionStrength,
+      instrumental,
     });
   }
   if (!plan?.chunks?.length) {

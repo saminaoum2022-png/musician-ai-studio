@@ -362,7 +362,7 @@ import {
   screenshotProf,
   screenshotSanitizeCopy,
 } from "./screenshot-mode.js";
-import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED, NABAD_HUM_TRACK_PUBLIC_SHIPPED, NABAD_LYRIA_CREATE_PUBLIC_SHIPPED, NABAD_MASHUP_PUBLIC_SHIPPED, NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED, NABAD_PERSONA_PUBLIC_SHIPPED } from "./feature-flags.js";
+import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED, NABAD_HUM_CONDUCTOR_PUBLIC_SHIPPED, NABAD_HUM_TRACK_PUBLIC_SHIPPED, NABAD_LYRIA_CREATE_PUBLIC_SHIPPED, NABAD_MASHUP_PUBLIC_SHIPPED, NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED, NABAD_PERSONA_PUBLIC_SHIPPED } from "./feature-flags.js";
 import {
   applyGoldToAvatarWrap,
   applyGoldNameGradient,
@@ -9078,14 +9078,21 @@ function setGeminiProducerPref(on) {
   syncSettingsGeminiProducerRow();
 }
 
-/** Admin A/B: Gemini hears Hum and writes a Lyria motif (default off). */
+function humConductorPublicShipped() {
+  return Boolean(NABAD_HUM_CONDUCTOR_PUBLIC_SHIPPED);
+}
+
+/** Public: on. Admin Settings can still turn it off. */
 function getHumConductorPref() {
-  if (!creditsState.isAdmin) return false;
-  try {
-    const saved = localStorage.getItem(HUM_CONDUCTOR_LS_KEY);
-    if (saved === "1" || saved === "true") return true;
-  } catch {}
-  return false;
+  if (creditsState.isAdmin) {
+    try {
+      const saved = localStorage.getItem(HUM_CONDUCTOR_LS_KEY);
+      if (saved === "0" || saved === "false") return false;
+      if (saved === "1" || saved === "true") return true;
+    } catch {}
+    return humConductorPublicShipped();
+  }
+  return humConductorPublicShipped();
 }
 
 function setHumConductorPref(on) {
@@ -32458,7 +32465,7 @@ function useMinimaxMusicProvider() {
   return creditsState.isAdmin && getMusicProviderPref() === "minimax";
 }
 
-/** Remix, persona, mashup, and hum/audio reference stay on Suno. */
+/** Remix and persona stay on Suno. A Hum with Conductor stays on Lyria. */
 function createAttachmentForcesSuno() {
   try {
     if (String(getActivePersonaId() || "").trim()) return true;
@@ -32467,7 +32474,16 @@ function createAttachmentForcesSuno() {
     if (currentRemixSource) return true;
   } catch {}
   try {
-    if (typeof getVocalReferenceFile === "function" && getVocalReferenceFile()) return true;
+    if (typeof getVocalReferenceFile === "function" && getVocalReferenceFile()) {
+      if (
+        getHumConductorPref()
+        && vocalRefOrigin !== "remix"
+        && !currentRemixSource
+      ) {
+        return false;
+      }
+      return true;
+    }
   } catch {}
   return false;
 }
@@ -80470,8 +80486,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       // Capture before clearing shelf meta — otherwise generate falls back to Suno.
       const shelfLyriaFull = String(payload.templateSparkFull || "") === "1";
       const conductorHum = Boolean(
-        creditsState.isAdmin
-        && getHumConductorPref()
+        getHumConductorPref()
         && hasReference
         && vocalRefOrigin !== "remix"
         && !hubRemixLocked,
@@ -80527,8 +80542,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (creditsState.isAdmin) {
         payload.geminiProducer = getGeminiProducerPref() ? "1" : "0";
         payload.lyriaProducerV3 = getGeminiProducerPref() ? "1" : "0";
-        payload.humConductor = conductorHum ? "1" : "0";
       }
+      if (conductorHum) payload.humConductor = "1";
       applyScratchDisplayTitleToPayload(payload, {
         instrumental: shouldGenerateInstrumental,
         clip: false,
@@ -80575,7 +80590,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         musicProvider: conductorHum || shelfLyriaFull ? "lyria" : getMusicProviderPref(),
         templateSparkFull: shelfLyriaFull || undefined,
         geminiProducer: creditsState.isAdmin ? getGeminiProducerPref() : undefined,
-        humConductor: creditsState.isAdmin ? conductorHum : undefined,
+        humConductor: conductorHum || undefined,
         imageOnlyInstrumental,
         instrumentalSelected,
         referenceInstrumentalOnly,

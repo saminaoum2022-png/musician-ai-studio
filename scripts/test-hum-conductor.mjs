@@ -19,10 +19,10 @@ assert.ok(
 );
 assert.equal(hc.resolveConductorAudio({ referenceAudio: "data:audio/mp4;base64,QQ==" }), null);
 
-assert.equal(hc.resolveHumConductorEnabled({ humConductor: "1" }, false), false, "non-admin never on");
+assert.equal(hc.resolveHumConductorEnabled({ humConductor: "1" }, false), true, "public Hum Conductor");
 assert.equal(hc.resolveHumConductorEnabled({ humConductor: "1" }, true), true);
 assert.equal(hc.resolveHumConductorEnabled({ humConductor: "0" }, true), false);
-assert.equal(hc.resolveHumConductorEnabled({}, true), false, "admin default off");
+assert.equal(hc.resolveHumConductorEnabled({}, true), false, "off unless the client asks");
 
 const goldMotif =
   "Bar 1 starts with legato D4-C4, staccato Bb3 followed immediately by a precise sixteenth-note rest, smooth legato A3-G3, staccato A3, legato Bb3, and staccato C4. Bar 2 plays legato D4-E half-flat4, a sixteenth-note rest, staccato D4, legato C4, and staccato Bb3 followed by a full quarter-note breath silence.";

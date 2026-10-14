@@ -45,10 +45,17 @@ export const NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED = true;
 
 /**
  * When true: blank Create (and templates) use Lyria 3.5 for everyone.
- * Remix / persona / mashup / hum-reference stay on Suno.
+ * Remix / persona / mashup stay on Suno. Hum uses Conductor → Lyria when
+ * NABAD_HUM_CONDUCTOR_PUBLIC_SHIPPED is true.
  * Batch 2 — keep true. Admin Settings → engine still overrides for admins.
  */
 export const NABAD_LYRIA_CREATE_PUBLIC_SHIPPED = true;
+
+/**
+ * When true: a Hum in Create goes through Hum Conductor → Lyria for everyone.
+ * Remix and persona stay on Suno. Admin Settings can still turn Conductor off.
+ */
+export const NABAD_HUM_CONDUCTOR_PUBLIC_SHIPPED = true;
 
 /**
  * When true: Persona (voice clone) is live — Create pill, home card, Settings.

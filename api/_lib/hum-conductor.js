@@ -57,9 +57,8 @@ function flagOff(raw) {
   return raw === "0" || raw === 0 || raw === false || raw === "false";
 }
 
-/** Admin Settings toggle. Default off. Never on for non-admin. */
-function resolveHumConductorEnabled(body, isAdmin = false) {
-  if (!isAdmin) return false;
+/** Client sends humConductor=1 for a Hum (not remix). Open to every signed-in user. */
+function resolveHumConductorEnabled(body, _isAdmin = false) {
   const raw = body?.humConductor;
   if (flagOff(raw)) return false;
   if (flagOn(raw)) return true;

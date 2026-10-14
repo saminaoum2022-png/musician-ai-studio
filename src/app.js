@@ -3387,6 +3387,9 @@ function apiFetch(path, opts = {}) {
 /** Encode Blob/ArrayBuffer bodies for CapacitorHttp (String(blob) → "[object Blob]" garbage). */
 async function bodyForCapacitorHttp(body) {
   if (body == null || body === "") return undefined;
+  if (typeof FormData !== "undefined" && body instanceof FormData) {
+    return formDataToMusicGenerateJson(body);
+  }
   if (typeof body === "string") return body;
   if (typeof Blob !== "undefined" && body instanceof Blob) {
     return new Promise((resolve, reject) => {
@@ -3414,6 +3417,9 @@ async function capacitorHttpFetch(url, init = {}, timeouts = {}) {
     const method = String(init.method || "GET").toUpperCase();
     const hdrs = { ...(init.headers || {}) };
     let data;
+    if (typeof FormData !== "undefined" && init.body instanceof FormData) {
+      hdrs["Content-Type"] = "application/json";
+    }
     if (init.body != null && init.body !== "") {
       data = await bodyForCapacitorHttp(init.body);
     }
@@ -30562,6 +30568,48 @@ function blobToDataUrl(blob) {
     reader.onerror = () => reject(reader.error || new Error("read failed"));
     reader.readAsDataURL(blob);
   });
+}
+
+/** iOS FileReader often labels m4a as octet-stream. Conductor only accepts audio/*. */
+async function blobToConductorDataUrl(blob) {
+  const raw = await blobToDataUrl(blob);
+  const comma = raw.indexOf(",");
+  const header = comma >= 0 ? raw.slice(0, comma) : "";
+  const b64 = comma >= 0 ? raw.slice(comma + 1) : "";
+  if (!b64) return "";
+  let mime = String(header.match(/^data:([^;,]*)/i)?.[1] || "").trim().toLowerCase();
+  if (!mime.startsWith("audio/")) {
+    const name = String(blob?.name || "").toLowerCase();
+    mime = name.endsWith(".wav")
+      ? "audio/wav"
+      : name.endsWith(".mp3")
+        ? "audio/mpeg"
+        : "audio/mp4";
+  }
+  return `data:${mime};base64,${b64}`;
+}
+
+async function formDataToMusicGenerateJson(fd) {
+  let parsed = {};
+  const payloadRaw = fd.get("payload");
+  if (typeof payloadRaw === "string" && payloadRaw.trim()) {
+    try {
+      parsed = JSON.parse(payloadRaw);
+    } catch {
+      parsed = {};
+    }
+  }
+  const refUrl = String(fd.get("referenceAudioUrl") || "").trim();
+  if (refUrl) parsed.referenceAudioUrl = refUrl;
+  const file = fd.get("referenceFile");
+  if (file && typeof file === "object") {
+    const dataUrl = await blobToConductorDataUrl(file);
+    if (dataUrl) {
+      parsed.referenceAudio = dataUrl;
+      parsed.hasReference = true;
+    }
+  }
+  return JSON.stringify(parsed);
 }
 
 async function estimateBlobDurationMs(blob) {
@@ -80855,7 +80903,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             if (elevenlabsReferenceUpload.remixUrl) {
               fd.append("referenceAudioUrl", elevenlabsReferenceUpload.remixUrl);
             }
-            r = await fetch(apiUrl(generateApiPath), {
+            r = await apiFetch(generateApiPath, {
               method: "POST",
               headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
               body: fd,

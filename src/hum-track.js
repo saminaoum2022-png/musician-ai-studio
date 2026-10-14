@@ -5,6 +5,11 @@
 import { HUM_TRACK_INSTRUMENTS, getHumTrackPreset } from "./hum-track-instruments.js";
 import { humTrackIconMarkup } from "./hum-track-icons.js";
 import { createAdaptivePollLoop, stopPollLoop } from "./generation-poll.js";
+import { NABAD_HUM_TRACK_PUBLIC_SHIPPED } from "./feature-flags.js";
+
+function humTrackUiEnabled() {
+  return NABAD_HUM_TRACK_PUBLIC_SHIPPED === true;
+}
 
 let ctx = null;
 let wired = false;
@@ -702,6 +707,7 @@ export function triggerHumTrackGenerate() {
 }
 
 export function openHumTrackFlow() {
+  if (!humTrackUiEnabled()) return;
   if (typeof ctx?.requireProAccess === "function" && !ctx.requireProAccess("Hum")) {
     return;
   }

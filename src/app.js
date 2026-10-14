@@ -361,7 +361,7 @@ import {
   screenshotProf,
   screenshotSanitizeCopy,
 } from "./screenshot-mode.js";
-import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED, NABAD_LYRIA_CREATE_PUBLIC_SHIPPED, NABAD_MASHUP_PUBLIC_SHIPPED, NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED, NABAD_PERSONA_PUBLIC_SHIPPED } from "./feature-flags.js";
+import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED, NABAD_HUM_TRACK_PUBLIC_SHIPPED, NABAD_LYRIA_CREATE_PUBLIC_SHIPPED, NABAD_MASHUP_PUBLIC_SHIPPED, NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED, NABAD_PERSONA_PUBLIC_SHIPPED } from "./feature-flags.js";
 import {
   applyGoldToAvatarWrap,
   applyGoldNameGradient,
@@ -11257,7 +11257,7 @@ function rerollActiveSpark() {
 function applyChallengeStartById(id, challengesMap) {
   const raw = String(id || "").trim();
   if (raw === "hum-track") {
-    openHumTrackFlow();
+    if (NABAD_HUM_TRACK_PUBLIC_SHIPPED === true) openHumTrackFlow();
     return;
   }
   const key = resolveSparkId(raw);
@@ -16446,6 +16446,7 @@ function bindHomeDeskOnce(page) {
         return;
       }
       if (card === "humtrack") {
+        if (NABAD_HUM_TRACK_PUBLIC_SHIPPED !== true) return;
         if (!requireProFeature("Hum")) return;
         openHumTrackFlow();
         return;
@@ -36560,7 +36561,10 @@ function syncCreateProLocks() {
     setWebProFeaturePill(els.btnOpenAdvancedSheet, locked, "pill");
   }
   const humCard = document.querySelector('[data-home-card="humtrack"]');
-  if (humCard) setWebProFeaturePillOnHomeCard(humCard, locked);
+  if (humCard) {
+    if (NABAD_HUM_TRACK_PUBLIC_SHIPPED !== true) hideRetiredFeatureEl(humCard);
+    else setWebProFeaturePillOnHomeCard(humCard, locked);
+  }
   if (locked) {
     try {
       if (typeof getActiveCreateTabMode === "function" && getActiveCreateTabMode() === "hum") {
@@ -82339,6 +82343,13 @@ function toggleCreateLyricsAttachMenu() {
     vibeItem.style.display = showVibe ? "" : "none";
     vibeItem.setAttribute("aria-hidden", showVibe ? "false" : "true");
   }
+  const humItem = menu.querySelector("[data-create-attach=\"hum\"]");
+  if (humItem) {
+    const showHumTrack = NABAD_HUM_TRACK_PUBLIC_SHIPPED === true;
+    humItem.hidden = !showHumTrack;
+    humItem.style.display = showHumTrack ? "" : "none";
+    humItem.setAttribute("aria-hidden", showHumTrack ? "false" : "true");
+  }
   const open = menu.hidden;
   if (!open) {
     closeCreateLyricsAttachMenu();
@@ -82358,6 +82369,7 @@ function handleCreateLyricsAttachChoice(kind) {
     return;
   }
   if (kind === "hum") {
+    if (NABAD_HUM_TRACK_PUBLIC_SHIPPED !== true) return;
     if (!proFeatureAllowed()) {
       requireProFeature("Hum");
       return;

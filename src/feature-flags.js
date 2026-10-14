@@ -57,6 +57,12 @@ export const NABAD_LYRIA_CREATE_PUBLIC_SHIPPED = true;
 export const NABAD_PERSONA_PUBLIC_SHIPPED = false;
 
 /**
+ * When true: Hum Track (solo instrumental from a hum) is live in Create / Home.
+ * Keep false for now — the old Create Hum tab (melody reference → song) stays.
+ */
+export const NABAD_HUM_TRACK_PUBLIC_SHIPPED = false;
+
+/**
  * When true: Mashup (blend two tracks) is live — player sheet, #/mashup route.
  * Keep false until explicit launch. Remix stays; Mashup is parked.
  */

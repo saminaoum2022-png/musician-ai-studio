@@ -80843,16 +80843,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           }
           let r;
           let d;
-          if (conductorHum && elevenlabsReferenceUpload?.file?.size) {
-            const humFile = elevenlabsReferenceUpload.file;
-            if (humFile.size <= 3.5 * 1024 * 1024) {
-              try {
-                payload.referenceAudio = await blobToDataUrl(humFile);
-                payload.hasReference = true;
-                elevenlabsReferenceUpload = null;
-              } catch {}
-            }
-          }
           if (elevenlabsReferenceUpload?.file?.size) {
             const fd = new FormData();
             const { referenceAudio: _dropRef, ...restPayload } = payload;

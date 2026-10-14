@@ -3348,6 +3348,40 @@ function isLongRunningNativeApiPath(path) {
   return nativeHttpTimeoutsForApiPath(path).readTimeout > NATIVE_HTTP_DEFAULT_READ_MS;
 }
 
+/** Hum/reference upload must stay as multipart (not Capacitor JSON). WKWebView `fetch` drops these. */
+function postGenerateFormData(path, { token, formData, timeoutMs = NATIVE_HTTP_LONG_COMPOSE_READ_MS }) {
+  const url = apiUrl(path);
+  const headers = getApiFetchHeaders(token ? { Authorization: `Bearer ${token}` } : {});
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.timeout = Math.max(60000, Number(timeoutMs) || NATIVE_HTTP_LONG_COMPOSE_READ_MS);
+    xhr.responseType = "text";
+    Object.entries(headers).forEach(([key, value]) => {
+      if (value == null) return;
+      if (String(key).toLowerCase() === "content-type") return;
+      xhr.setRequestHeader(key, String(value));
+    });
+    xhr.onload = () => {
+      const text = String(xhr.responseText || "");
+      let parsed = {};
+      try {
+        parsed = text.trim() ? JSON.parse(text) : {};
+      } catch {
+        parsed = { error: text.replace(/<[^>]+>/g, " ").trim().slice(0, 240) };
+      }
+      resolve({
+        ok: xhr.status >= 200 && xhr.status < 300,
+        status: xhr.status,
+        json: async () => parsed,
+      });
+    };
+    xhr.onerror = () => reject(new TypeError("Failed to fetch"));
+    xhr.ontimeout = () => reject(new Error("timed out"));
+    xhr.send(formData);
+  });
+}
+
 function apiFetch(path, opts = {}) {
   const { nativeReadTimeoutMs, nativeConnectTimeoutMs, ...fetchOpts } = opts;
   const headers = getApiFetchHeaders(fetchOpts.headers || {});
@@ -80862,10 +80896,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             if (elevenlabsReferenceUpload.remixUrl) {
               fd.append("referenceAudioUrl", elevenlabsReferenceUpload.remixUrl);
             }
-            r = await fetch(apiUrl(generateApiPath), {
-              method: "POST",
-              headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-              body: fd,
+            r = await postGenerateFormData(generateApiPath, {
+              token: authToken,
+              formData: fd,
             });
             d = await r.json().catch(() => ({}));
           } else {

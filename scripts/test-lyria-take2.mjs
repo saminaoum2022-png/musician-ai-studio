@@ -34,6 +34,10 @@ const markedPrompt = [
   "Levantine pop, 96 BPM, Maqam Bayat in D.",
   "Chorus, 8 bars: groove",
   "",
+  "Hummed motif (play these written notes on Chorus and Instrumental; follow the accidentals and rests as written):",
+  "Bar 1 starts with legato D4-C4, staccato Bb3 followed immediately by a precise sixteenth-note rest.",
+  "Play the motif twice, with clear silence between phrases. Keep the rests as written.",
+  "",
   "Lyrics:",
   "",
   "[Verse 1]",
@@ -48,6 +52,8 @@ assert.ok(overlaid.includes("شوفِك"), `overlay kasra: ${overlaid}`);
 assert.ok(overlaid.includes("يلامِس"), "overlay kasra on يلامس");
 assert.ok(overlaid.includes("[Verse 1]"), "keep section tags");
 assert.ok(overlaid.includes("Chorus, 8 bars"), "keep arrangement");
+assert.ok(overlaid.includes("Hummed motif"), "keep conductor motif");
+assert.ok(overlaid.includes("legato D4-C4"), "keep written notes");
 
 assert.equal(take.nextTakeTitle("Ya Dini", 2), "Ya Dini (Take 2)");
 assert.equal(take.nextTakeTitle("Ya Dini (Take 2)", 3), "Ya Dini (Take 3)");

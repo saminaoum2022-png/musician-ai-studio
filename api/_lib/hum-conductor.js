@@ -233,6 +233,48 @@ function buildHumToTrackLyriaPrompt({ styleLine = "", conductor } = {}) {
   return { ok: true, prompt, mode: "hum_to_track" };
 }
 
+function extractConductorMotifFromLyriaPrompt(prompt) {
+  const src = String(prompt || "");
+  if (!src.trim()) return null;
+  const hummed = src.match(
+    /Hummed motif[^\n]*:\s*\n([\s\S]*?)(?:\n(?:Play the motif|Keep the rests)|(?:\nLyrics:))/i,
+  );
+  let motif = hummed?.[1] ? hummed[1].trim() : "";
+  let mode = "sung_motif";
+  if (!motif || motif.length < MIN_MOTIF_CHARS) {
+    const articulation = src.match(
+      /strict note articulation:\s*([\s\S]+?)(?:\.\s*(?:Play the motif|Keep the rests)|$)/i,
+    );
+    motif = articulation?.[1] ? articulation[1].trim().replace(/\.\s*$/, "") : "";
+    mode = "hum_to_track";
+  }
+  if (!motif || motif.length < MIN_MOTIF_CHARS) return null;
+  const bpmHit = src.match(/\b(\d{2,3})\s*BPM\b/i);
+  const maqamHit = src.match(/Maqam\s+([A-Za-z]+)(?:\s+in\s+([A-G](?:#|b| half-flat)?))?/i);
+  return {
+    motif_prose: motif.slice(0, MAX_MOTIF_CHARS),
+    mode,
+    bpm: bpmHit ? clampInt(bpmHit[1], 40, 220, 0) : 0,
+    maqam: maqamHit?.[1] || "",
+    tonic: maqamHit?.[2] || "",
+  };
+}
+
+function savedConductorFromLyriaPrompt(prompt) {
+  const extracted = extractConductorMotifFromLyriaPrompt(prompt);
+  if (!extracted) return null;
+  return {
+    ok: true,
+    used: true,
+    replayed: true,
+    mode: extracted.mode,
+    motif_prose: extracted.motif_prose,
+    bpm: extracted.bpm || undefined,
+    maqam: extracted.maqam || undefined,
+    tonic: extracted.tonic || undefined,
+  };
+}
+
 function stitchConductorMotifIntoLyriaPrompt(prompt, conductor) {
   const motif = String(conductor?.motif_prose || "").trim();
   const src = String(prompt || "").trim();
@@ -271,6 +313,7 @@ function appendHumConductorAdminDetail(conductor, extra = {}) {
   if (conductor.model) lines.push(`hum_conductor_model: ${conductor.model}`);
   if (conductor.latencyMs != null) lines.push(`hum_conductor_ms: ${conductor.latencyMs}`);
   if (!applied && conductor.error) lines.push(`hum_conductor_error: ${conductor.error}`);
+  if (conductor.replayed) lines.push("hum_conductor_replayed: 1");
   if (applied) {
     lines.push(`hum_conductor_bpm: ${conductor.bpm || ""} ${conductor.meter || ""}`.trim());
     if (conductor.maqam || conductor.tonic) {
@@ -381,6 +424,8 @@ module.exports = {
   alignStyleToConductor,
   buildHumToTrackLyriaPrompt,
   stitchConductorMotifIntoLyriaPrompt,
+  extractConductorMotifFromLyriaPrompt,
+  savedConductorFromLyriaPrompt,
   appendHumConductorAdminDetail,
   callGeminiHumConductor,
   maqamPhrase,

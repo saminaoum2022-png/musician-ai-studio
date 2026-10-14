@@ -80509,9 +80509,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           );
           payload.title = takeTitle;
           if (els.sunoTitle) els.sunoTitle.value = takeTitle;
+          if (_take2Session.finalPrompt) {
+            payload.take2FinalPrompt = _take2Session.finalPrompt;
+          }
           if (createInputsEqualIgnoringHarakat(createInputsSnap, _take2Session.createInputs) && _take2Session.finalPrompt) {
             payload.take2Replay = true;
-            payload.take2FinalPrompt = _take2Session.finalPrompt;
           } else if (_take2Session.producerJson) {
             payload.previousTake = _take2Session.producerJson;
           }

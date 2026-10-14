@@ -414,6 +414,7 @@ async function resolveTake2Replay({ userId, isAdmin, body } = {}) {
     return {
       replay: true,
       finalPrompt,
+      parentFinalPrompt: str(card?.finalPrompt || body?.take2FinalPrompt),
       producerJson: card?.producerJson || previousTake,
       createInputs: card?.createInputs || null,
       parentSongId,
@@ -424,6 +425,7 @@ async function resolveTake2Replay({ userId, isAdmin, body } = {}) {
   return {
     replay: false,
     previousTake: previousTake || card?.producerJson || null,
+    parentFinalPrompt: str(card?.finalPrompt || body?.take2FinalPrompt),
     parentSongId,
     parentTaskId,
     card,

@@ -102,6 +102,25 @@ assert.ok(sung.prompt.includes(goldMotif.slice(0, 40)));
 assert.ok(sung.prompt.indexOf("Hummed motif") < sung.prompt.indexOf("Lyrics:"));
 assert.equal(sung.mode, "sung_motif");
 
+const carried = hc.extractConductorMotifFromLyriaPrompt(sung.prompt);
+assert.ok(carried, "extract hummed motif from take-1 prompt");
+assert.equal(carried.mode, "sung_motif");
+assert.ok(carried.motif_prose.includes("legato D4-C4"));
+assert.equal(carried.maqam, "Bayat");
+assert.equal(carried.tonic, "D");
+assert.equal(carried.bpm, 96);
+const saved = hc.savedConductorFromLyriaPrompt(sung.prompt);
+assert.equal(saved.replayed, true);
+assert.ok(saved.motif_prose.includes("sixteenth-note rest"));
+
+const restitch = hc.stitchConductorMotifIntoLyriaPrompt(v3Prompt, saved);
+assert.ok(restitch.prompt.includes(goldMotif.slice(0, 40)), "take 2 stitch uses saved notes");
+
+const trackExtract = hc.extractConductorMotifFromLyriaPrompt(track.prompt);
+assert.ok(trackExtract, "extract hum-to-track motif");
+assert.equal(trackExtract.mode, "hum_to_track");
+assert.ok(trackExtract.motif_prose.includes("legato D4-C4"));
+
 const detail = hc.appendHumConductorAdminDetail({ ok: true, ...norm, model: "gemini-3.6-flash" }, { mode: "hum_to_track" });
 assert.ok(detail.includes("hum_conductor: applied"));
 assert.ok(detail.includes("hum_conductor_motif:"));

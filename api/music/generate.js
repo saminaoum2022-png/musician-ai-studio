@@ -139,6 +139,7 @@ const {
   alignStyleToConductor,
   buildHumToTrackLyriaPrompt,
   stitchConductorMotifIntoLyriaPrompt,
+  savedConductorFromLyriaPrompt,
   appendHumConductorAdminDetail,
   callGeminiHumConductor,
 } = require("../_lib/hum-conductor");
@@ -496,6 +497,15 @@ function scheduleBackgroundWork(promise) {
 
 function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
   const conductor = body?._humConductor;
+  if (conductor?.replayed && producerResult?.replay) {
+    return "pipeline: take2 replay · hum_conductor motif carried";
+  }
+  if (conductor?.replayed && producerResult?.conductorTrack) {
+    return "pipeline: take2 · hum_conductor motif carried → lyria (hum_to_track)";
+  }
+  if (conductor?.replayed) {
+    return "pipeline: take2 · hum_conductor motif carried → lyria_producer_v3 → lyria";
+  }
   if (conductor?.ok && producerResult?.conductorTrack) {
     return "pipeline: hum_conductor → lyria (hum_to_track)";
   }
@@ -683,8 +693,16 @@ async function runLyriaGenerationJob({
     const useLyriaV2 = resolveLyriaPromptV2Enabled(body, isAdmin);
     let producerResult = { ok: false };
     let v3DisplayLyrics = "";
+    const take2 = await resolveTake2Replay({ userId, isAdmin, body });
+    const parentPrompt = take2.finalPrompt
+      || take2.parentFinalPrompt
+      || "";
+    const savedConductor = savedConductorFromLyriaPrompt(parentPrompt);
     const wantConductor = resolveHumConductorEnabled(body, isAdmin);
-    if (wantConductor) {
+    if (savedConductor) {
+      body._humConductor = savedConductor;
+      body._humConductorMode = take2.replay ? "replay" : `${savedConductor.mode || "sung_motif"}_carried`;
+    } else if (wantConductor) {
       const humAudio = resolveConductorAudio(body);
       if (!humAudio) {
         await fail("Hum Conductor needs a Hum recording.");
@@ -709,7 +727,6 @@ async function runLyriaGenerationJob({
       if (conductorResult.maqam) body.songKey = "";
       body._humConductor = conductorResult;
     }
-    const take2 = await resolveTake2Replay({ userId, isAdmin, body });
     if (take2.replay && take2.finalPrompt) {
       lyriaPrompt = take2.finalPrompt;
       producerResult = {
@@ -726,7 +743,7 @@ async function runLyriaGenerationJob({
           .join("\n")
         : "";
     }
-    const skipV3ForHumToTrack = Boolean(body._humConductor?.ok && instrumental);
+    const skipV3ForHumToTrack = Boolean(body._humConductor?.ok && instrumental && !take2.replay);
     const useProducerV3 =
       !take2.replay
       && !lyriaLegacyPromptsEnabled()

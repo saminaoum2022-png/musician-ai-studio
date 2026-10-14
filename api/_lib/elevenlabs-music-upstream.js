@@ -1914,6 +1914,105 @@ function buildElevenHumTrackCompositionPlan({
 }
 
 /**
+ * Map Lyria Producer v3 timed sections onto an ElevenLabs composition_plan.
+ * Bars → duration_ms via the same v3 timestamps Lyria uses.
+ */
+function buildElevenCompositionPlanFromLyriaV3({
+  stitch,
+  instrumental = false,
+  negativeTags = "",
+  musicLengthMs,
+  vocalGender = "",
+  voiceTimbre = "",
+  dialectHint = "",
+  lyrics = "",
+  scriptFormat = "",
+  useNabadVocalIdentity = true,
+  referenceSongId = "",
+  referenceRangeMs,
+  conditionStrength = "high",
+} = {}) {
+  const sections = Array.isArray(stitch?.sections) ? stitch.sections : [];
+  if (!stitch?.ok || !sections.length) {
+    return { ok: false, error: "no_sections" };
+  }
+  const bpm = Number(stitch.bpm) > 0 ? Number(stitch.bpm) : 105;
+  const styleLine = String(stitch.styleLine || "").trim();
+  const chunks = [];
+  for (const s of sections) {
+    const name = String(s?.name || "").trim() || "Section";
+    const lines = instrumental
+      ? []
+      : (Array.isArray(s.lyrics) ? s.lyrics.map((l) => String(l || "").trim()).filter(Boolean) : []);
+    const isBed = instrumental
+      || name === "Intro"
+      || name === "Outro"
+      || name === "Instrumental"
+      || (name === "Mawwal" && !lines.length);
+    const tag = `[${name}]`;
+    const text = lines.length
+      ? `${tag}\n${lines.join("\n")}`
+      : `${tag}\n{instrumental}`;
+    const timed = Math.round((Number(s.endSec) || 0) - (Number(s.startSec) || 0));
+    const durSec = Math.max(3, timed || (name === "Mawwal" ? 18 : 8));
+    const duration_ms = Math.max(3000, Math.min(120000, durSec * 1000));
+    const arrangement = String(s.arrangement || "").trim();
+    const positive = [`${Math.round(bpm)} BPM`, arrangement].filter(Boolean);
+    const negative = isBed ? ["vocals", "lyrics", "singing", "spoken word"] : [];
+    chunks.push({
+      text: text.slice(0, 4000),
+      duration_ms,
+      positive_styles: ensureMinPositiveStyles(positive, { instrumental: isBed }).slice(0, 50),
+      negative_styles: negative.slice(0, 50),
+      context_adherence: resolveChunkContextAdherence(text),
+    });
+  }
+  if (chunks.length < 2) {
+    return { ok: false, error: "too_few_chunks" };
+  }
+  const barLengthMs = chunks.reduce((sum, c) => sum + (Number(c.duration_ms) || 0), 0);
+  const planLengthMs = Math.max(
+    30000,
+    Math.min(300000, barLengthMs || Number(musicLengthMs) || 180000),
+  );
+  let plan = finalizeElevenSongPlan(
+    { chunks },
+    {
+      stylePrompt: styleLine,
+      negativeTags,
+      musicLengthMs: planLengthMs,
+      instrumental,
+      vocalGender,
+      voiceTimbre,
+      dialectHint,
+      lyrics: lyrics || String(stitch.displayLyrics || ""),
+      scriptFormat,
+      useNabadVocalIdentity: instrumental ? false : useNabadVocalIdentity,
+    },
+  );
+  if (referenceSongId) {
+    plan = applyElevenReferenceOnFirstChunk(plan, {
+      referenceSongId,
+      referenceRangeMs,
+      conditionStrength,
+    });
+  }
+  if (!plan?.chunks?.length) {
+    return { ok: false, error: "empty_plan" };
+  }
+  const composedMs = plan.chunks.reduce((sum, c) => sum + (Number(c.duration_ms) || 0), 0);
+  return {
+    ok: true,
+    plan,
+    planSource: referenceSongId ? "lyria_producer_v3_reference" : "lyria_producer_v3",
+    chunkCount: plan.chunks.length,
+    bpm,
+    meter: stitch.meter || "",
+    musicLengthMs: Math.max(30000, Math.min(300000, composedMs || planLengthMs)),
+  };
+}
+
+/**
  * Single-chunk fallback when plan API / Gemini chunks are unavailable.
  * Prefer applyElevenReferenceToCompositionPlan on a multi-chunk plan (Phase D).
  */
@@ -2431,6 +2530,7 @@ module.exports = {
   buildElevenMusicPrompt,
   buildElevenPlanCreatePrompt,
   buildElevenReferenceCompositionPlan,
+  buildElevenCompositionPlanFromLyriaV3,
   buildElevenAppLikeReferenceCompositionPlan,
   buildElevenHumTrackCompositionPlan,
   buildElevenHumTrackForceInstrumentalPrompt,

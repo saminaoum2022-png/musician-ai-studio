@@ -9,7 +9,8 @@
  * Env:
  * - MINIMAX_API_KEY, MINIMAX_KEY_KIND, MINIMAX_MUSIC_MODEL, MINIMAX_GENERATE_ENABLED
  * - GEMINI_API_KEY / GOOGLE_API_KEY, LYRIA_MUSIC_MODEL, LYRIA_GENERATE_ENABLED
- * - CLIP_GEMINI_PRODUCER_ENABLED=1 — Gemini prompt enrichment for clips + ElevenLabs (staging preview)
+ * - CLIP_GEMINI_PRODUCER_ENABLED=1 — Gemini prompt enrichment for clips + legacy ElevenLabs plans
+ * - ElevenLabs Create uses Lyria Producer v3 (same sections/bars) unless geminiProducer is off
  * - Lyria default: bare passthrough (style + lyrics only). LYRIA_LEGACY_PROMPTS=1 restores Nabad stack.
  * - LYRIA_PRODUCER_V3 — Flash section planner for public Create (default on). Does not rewrite style.
  * - LYRIA_PROMPT_V2=1 — optional minimal Lyria prompt v2 (legacy mode only); skips Gemini producer on Lyria
@@ -58,6 +59,7 @@ const { clipVocalProfileById } = require("../_lib/clip-vocal-profiles");
 const {
   buildElevenMusicPrompt,
   buildElevenReferenceCompositionPlan,
+  buildElevenCompositionPlanFromLyriaV3,
   buildElevenAppLikeReferenceCompositionPlan,
   buildElevenHumTrackCompositionPlan,
   buildElevenHumTrackForceInstrumentalPrompt,
@@ -1118,8 +1120,87 @@ async function runElevenlabsGenerationJob({
 
     const humTrackInstrumental =
       Boolean(body?.humTrack) && instrumental && !editCompositionPlan;
+    const useProducerV3 =
+      !editCompositionPlan
+      && !humTrackInstrumental
+      && Boolean(geminiApiKey)
+      && resolveLyriaProducerV3Enabled(body, isAdmin);
 
-    if (!editCompositionPlan && !elevenLegacyPlansEnabled() && !humTrackInstrumental) {
+    if (useProducerV3) {
+      const arabiziEnabled = await isArabiziInstructionEnabled();
+      const durationSec = Math.max(60, Math.min(180, Math.round((Number(musicLengthMs) || 180000) / 1000)));
+      const v3input = buildLyriaProducerV3Input(body, { lyrics, durationSec });
+      const v3MaxAttempts = 3;
+      let v3LastError = "plan_failed";
+      for (let attempt = 1; attempt <= v3MaxAttempts; attempt++) {
+        producerResult = await enrichLyriaSongWithGeminiProducerV3({
+          apiKey: geminiApiKey,
+          enabled: true,
+          input: v3input,
+          preserveArabizi: shouldApplyArabiziDigitInstruction({
+            enabled: arabiziEnabled,
+            body,
+            lyrics,
+          }),
+        });
+        producerResult.v3 = true;
+        producerResult.v3Attempts = attempt;
+        producerResult.fallback = false;
+        if (producerResult.ok && Array.isArray(producerResult.sections) && producerResult.sections.length) {
+          const stitched = buildLyriaPromptV3({
+            body,
+            producerResult,
+            instrumental,
+            lyricsRaw: lyrics,
+          });
+          if (stitched.ok) {
+            const built = buildElevenCompositionPlanFromLyriaV3({
+              stitch: stitched,
+              instrumental,
+              negativeTags: body?.negativeTags,
+              musicLengthMs,
+              vocalGender: String(body?.vocalGender || "").trim(),
+              voiceTimbre: String(body?.voiceTimbre || "").trim(),
+              dialectHint: mergeLyriaDialectHint(body),
+              lyrics: stitched.displayLyrics || lyrics,
+              scriptFormat: String(body?.scriptFormat || "").trim(),
+              useNabadVocalIdentity: !referenceSongId,
+              referenceSongId,
+              referenceRangeMs,
+              conditionStrength: referenceConditionStrength,
+            });
+            if (built.ok && built.plan?.chunks?.length) {
+              finalCompositionPlan = built.plan;
+              elevenPlanSource = built.planSource || "lyria_producer_v3";
+              producerResult.v3Stitch = stitched;
+              if (Number(built.musicLengthMs) > 0) {
+                musicLengthMs = built.musicLengthMs;
+              }
+              if (stitched.displayLyrics) effectiveLyrics = stitched.displayLyrics;
+              if (stitched.styleLine) effectiveStyle = stitched.styleLine;
+              v3LastError = "";
+              break;
+            }
+            v3LastError = built.error || "eleven_v3_plan_failed";
+          } else {
+            v3LastError = stitched.error || "v3_stitch_failed";
+          }
+        } else {
+          v3LastError = producerResult.error || "invalid_json";
+        }
+      }
+      if (!finalCompositionPlan?.chunks?.length) {
+        await fail(`Producer couldn't plan this song (${v3LastError}). Try again.`);
+        return;
+      }
+      console.info(
+        "[music/generate] elevenlabs lyria_producer_v3",
+        taskId,
+        elevenPlanSource,
+        `${finalCompositionPlan.chunks.length} chunks`,
+        referenceSongId ? "ref_on_chunk_0" : "",
+      );
+    } else if (!editCompositionPlan && !elevenLegacyPlansEnabled() && !humTrackInstrumental) {
       const bare = resolveBareElevenCompose(body);
       if (!bare.ok) {
         await fail(bare.error);
@@ -1343,6 +1424,17 @@ async function runElevenlabsGenerationJob({
     const adminDetailBefore = appendProducerAdminDetail(
       [
         adminDetailBase,
+        producerResult?.v3
+          ? (producerResult.ok
+            ? "pipeline: lyria_producer_v3 → elevenlabs"
+            : `pipeline: lyria_producer_v3 error · ${producerResult.error || "plan_failed"}`)
+          : "",
+        producerResult?.v3
+          ? appendLyriaProducerV3AdminDetail(
+            producerResult,
+            producerResult.v3Stitch || { error: producerResult.error },
+          )
+          : "",
         elevenPlanSource ? `eleven_plan: ${elevenPlanSource}` : "",
         humTrackInstrumental
           ? "eleven_endpoint: POST /v1/music/detailed"

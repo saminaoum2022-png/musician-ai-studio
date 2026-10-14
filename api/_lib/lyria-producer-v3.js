@@ -3,7 +3,7 @@
 /**
  * Lyria Producer v3 — Flash plans sections + lyrics; style stays verbatim.
  * Admin-only via LYRIA_PRODUCER_V3 (default on) and existing Gemini-producer pref.
- * Does not replace the clip / ElevenLabs / Mureka producers.
+ * ElevenLabs Create uses the same planner, then maps bars onto composition chunks.
  */
 
 const { stripInlinePunctuationFromSungLine } = require("./sung-lyrics-punctuation");

@@ -27,6 +27,28 @@ assert.equal(
   false,
   "singer change is a delta",
 );
+assert.equal(take.isHarakatOnlyLyricsChange("يا ريت فيني شوفك", "يا ريت فيني شوفِك"), true);
+assert.equal(take.isHarakatOnlyLyricsChange("يا ريت فيني شوفك", "يا ريت فيني شوفك اليوم"), false);
+
+const markedPrompt = [
+  "Levantine pop, 96 BPM, Maqam Bayat in D.",
+  "Chorus, 8 bars: groove",
+  "",
+  "Lyrics:",
+  "",
+  "[Verse 1]",
+  "يا ريت فيني شوفك على طول",
+  "قلبي يلامس قلبك",
+].join("\n");
+const overlaid = take.overlayHarakatOnLyriaPrompt(
+  markedPrompt,
+  "يا ريت فيني شوفِك على طول\nقلبي يلامِس قلبِك",
+);
+assert.ok(overlaid.includes("شوفِك"), `overlay kasra: ${overlaid}`);
+assert.ok(overlaid.includes("يلامِس"), "overlay kasra on يلامس");
+assert.ok(overlaid.includes("[Verse 1]"), "keep section tags");
+assert.ok(overlaid.includes("Chorus, 8 bars"), "keep arrangement");
+
 assert.equal(take.nextTakeTitle("Ya Dini", 2), "Ya Dini (Take 2)");
 assert.equal(take.nextTakeTitle("Ya Dini (Take 2)", 3), "Ya Dini (Take 3)");
 assert.equal(take.applyTake2Title("Ya Dini", { take2ParentSongId: "abc", take2Number: 2 }), "Ya Dini (Take 2)");

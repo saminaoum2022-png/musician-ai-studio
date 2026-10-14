@@ -96,6 +96,41 @@ function str(v) {
   return String(v == null ? "" : v).trim();
 }
 
+const ARABIC_MARKS_RE = /[\u064B-\u065F\u0670\u0640]/g;
+const ARABIC_WORD_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+/g;
+
+function stripArabicMarks(text) {
+  return String(text || "").replace(ARABIC_MARKS_RE, "");
+}
+
+function isHarakatOnlyLyricsChange(a, b) {
+  return stripArabicMarks(a).replace(/\s+/g, " ").trim()
+    === stripArabicMarks(b).replace(/\s+/g, " ").trim();
+}
+
+/** Copy tashkeel from the user's current lyrics onto matching words in a Lyria prompt. */
+function overlayHarakatOnLyriaPrompt(prompt, sourceLyrics) {
+  const src = String(prompt || "");
+  const source = String(sourceLyrics || "").trim();
+  if (!src || !source) return src;
+  const marked = new Map();
+  const srcWords = source.match(ARABIC_WORD_RE) || [];
+  for (const word of srcWords) {
+    const bare = stripArabicMarks(word);
+    if (bare) marked.set(bare, word);
+  }
+  if (!marked.size) return src;
+  const lyricsIdx = src.search(/\nLyrics:\s*\n/i);
+  if (lyricsIdx < 0) return src;
+  const head = src.slice(0, lyricsIdx);
+  const lyrics = src.slice(lyricsIdx);
+  const overlaid = lyrics.replace(ARABIC_WORD_RE, (word) => {
+    const bare = stripArabicMarks(word);
+    return (bare && marked.get(bare)) || word;
+  });
+  return `${head}${overlaid}`;
+}
+
 function bool(v) {
   return v === true || v === 1 || v === "1" || v === "true";
 }
@@ -369,8 +404,13 @@ async function resolveTake2Replay({ userId, isAdmin, body } = {}) {
     if (fetched.ok) card = fetched.card;
   }
   if (wantReplay) {
-    const finalPrompt = str(card?.finalPrompt || body?.take2FinalPrompt);
+    let finalPrompt = str(card?.finalPrompt || body?.take2FinalPrompt);
     if (!finalPrompt) return { replay: false, previousTake, error: "missing_replay_prompt" };
+    const currentLyrics = str(body?.prompt)
+      || str(body?.take2CreateInputs?.prompt);
+    if (currentLyrics) {
+      finalPrompt = overlayHarakatOnLyriaPrompt(finalPrompt, currentLyrics);
+    }
     return {
       replay: true,
       finalPrompt,
@@ -396,6 +436,9 @@ module.exports = {
   createInputsEqual,
   createInputsFingerprint,
   compactProducerJson,
+  stripArabicMarks,
+  isHarakatOnlyLyricsChange,
+  overlayHarakatOnLyriaPrompt,
   stripTakeSuffix,
   nextTakeTitle,
   applyTake2Title,

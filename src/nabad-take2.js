@@ -114,6 +114,24 @@ export function createInputsEqual(a, b) {
   return JSON.stringify(INPUT_KEYS.map((k) => left[k])) === JSON.stringify(INPUT_KEYS.map((k) => right[k]));
 }
 
+const ARABIC_MARKS_RE = /[\u064B-\u065F\u0670\u0640]/g;
+
+export function stripArabicMarks(text) {
+  return String(text || "").replace(ARABIC_MARKS_RE, "");
+}
+
+export function isHarakatOnlyLyricsChange(a, b) {
+  return stripArabicMarks(a).replace(/\s+/g, " ").trim()
+    === stripArabicMarks(b).replace(/\s+/g, " ").trim();
+}
+
+export function createInputsEqualIgnoringHarakat(a, b) {
+  const left = normalizeCreateInputs(a);
+  const right = normalizeCreateInputs(b);
+  return JSON.stringify(INPUT_KEYS.map((k) => (k === "prompt" ? stripArabicMarks(left[k]) : left[k])))
+    === JSON.stringify(INPUT_KEYS.map((k) => (k === "prompt" ? stripArabicMarks(right[k]) : right[k])));
+}
+
 function isLyriaTake2Task(track) {
   return String(track?.taskId || "").trim().startsWith("lyr_");
 }

@@ -71,6 +71,7 @@ import {
   take2RowHtml,
   normalizeCreateInputs,
   createInputsEqual,
+  createInputsEqualIgnoringHarakat,
   nextTakeTitle,
   nextTakeNumber,
   rootSongId,
@@ -56410,23 +56411,29 @@ async function startTake2FromLibraryTrack(track) {
   const parentId = rootSongId(track);
   const takeNumber = nextTakeNumber(loadLibrary(), parentId);
   const baseTitle = stripTakeSuffix(card.createInputs?.title || track.title || "Song");
+  const cardInputs = normalizeCreateInputs({
+    ...(card.createInputs || {}),
+    title: baseTitle,
+  });
+  const screenLyrics = String(els.sunoPrompt?.value || "").trim();
   _take2Session = {
     parentSongId: parentId,
     parentTaskId: rootTaskId(track),
     takeNumber,
-    createInputs: normalizeCreateInputs({
-      ...(card.createInputs || {}),
-      title: baseTitle,
-    }),
+    createInputs: cardInputs,
     producerJson: card.producerJson || null,
     finalPrompt: String(card.finalPrompt || "").trim(),
     sourceTaskId: String(card.taskId || track.taskId || "").trim(),
   };
-  applyTake2Prefill(_take2Session.createInputs);
+  const take2Prefill = {
+    ...cardInputs,
+    prompt: screenLyrics || cardInputs.prompt,
+  };
+  applyTake2Prefill(take2Prefill);
   hideCreateResultCards();
   setGenerateFieldsLocked(false);
   enterGenerateSubFlow("", () => {
-    try { applyTake2Prefill(_take2Session.createInputs); } catch {}
+    try { applyTake2Prefill(take2Prefill); } catch {}
   });
   showToast("Take 2 — same inputs. Edit or Generate.", { icon: "♪", durationMs: 3200 });
 }
@@ -80502,7 +80509,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           );
           payload.title = takeTitle;
           if (els.sunoTitle) els.sunoTitle.value = takeTitle;
-          if (createInputsEqual(createInputsSnap, _take2Session.createInputs) && _take2Session.finalPrompt) {
+          if (createInputsEqualIgnoringHarakat(createInputsSnap, _take2Session.createInputs) && _take2Session.finalPrompt) {
             payload.take2Replay = true;
             payload.take2FinalPrompt = _take2Session.finalPrompt;
           } else if (_take2Session.producerJson) {

@@ -134,6 +134,15 @@ const {
   appendLyriaProducerV3AdminDetail,
 } = require("../_lib/lyria-producer-v3");
 const {
+  resolveHumConductorEnabled,
+  resolveConductorAudio,
+  alignStyleToConductor,
+  buildHumToTrackLyriaPrompt,
+  stitchConductorMotifIntoLyriaPrompt,
+  appendHumConductorAdminDetail,
+  callGeminiHumConductor,
+} = require("../_lib/hum-conductor");
+const {
   applyTake2Title,
   buildCreateInputsFromBody,
   compactProducerJson,
@@ -486,6 +495,16 @@ function scheduleBackgroundWork(promise) {
 }
 
 function lyriaPipelineAdminLine(body, isAdmin, producerResult) {
+  const conductor = body?._humConductor;
+  if (conductor?.ok && producerResult?.conductorTrack) {
+    return "pipeline: hum_conductor → lyria (hum_to_track)";
+  }
+  if (conductor?.ok && producerResult?.v3 && producerResult.ok) {
+    return "pipeline: hum_conductor → lyria_producer_v3 → lyria";
+  }
+  if (conductor?.ok) {
+    return "pipeline: hum_conductor → lyria";
+  }
   if (producerResult?.v3) {
     return producerResult.ok
       ? "pipeline: lyria_producer_v3 → lyria"
@@ -531,9 +550,15 @@ function buildLyriaFullSongAdminExtra({
     : String(appendProducerAdminDetail("", producerResult) || "")
       .split("\n")
       .filter(Boolean);
+  const conductorLines = String(appendHumConductorAdminDetail(body?._humConductor, {
+    mode: body?._humConductorMode || "",
+  }) || "")
+    .split("\n")
+    .filter(Boolean);
   return [
     lyriaPipelineAdminLine(body, isAdmin, producerResult),
     ...(model ? [`lyria_model: ${model}`] : []),
+    ...conductorLines,
     ...producerLines,
     `lyrics_mode: ${idea ? "idea" : "write"}`,
     `harakat_mode: ${String(producerResult?.harakatMode || "light").trim() || "light"}`,
@@ -658,6 +683,31 @@ async function runLyriaGenerationJob({
     const useLyriaV2 = resolveLyriaPromptV2Enabled(body, isAdmin);
     let producerResult = { ok: false };
     let v3DisplayLyrics = "";
+    const wantConductor = resolveHumConductorEnabled(body, isAdmin);
+    if (wantConductor) {
+      const humAudio = resolveConductorAudio(body);
+      if (!humAudio) {
+        await fail("Hum Conductor needs a Hum recording.");
+        return;
+      }
+      const conductorResult = await callGeminiHumConductor({
+        apiKey,
+        buffer: humAudio.buffer,
+        mimeType: humAudio.mimeType,
+      });
+      if (!conductorResult.ok) {
+        body._humConductor = conductorResult;
+        await fail(
+          `Hum Conductor couldn't read this hum (${conductorResult.error || "plan_failed"}). Try again.`,
+        );
+        return;
+      }
+      const aligned = alignStyleToConductor(stylePrompt || body?.style, conductorResult);
+      body.style = aligned;
+      stylePrompt = aligned;
+      if (conductorResult.bpm) body.bpm = conductorResult.bpm;
+      body._humConductor = conductorResult;
+    }
     const take2 = await resolveTake2Replay({ userId, isAdmin, body });
     if (take2.replay && take2.finalPrompt) {
       lyriaPrompt = take2.finalPrompt;
@@ -675,11 +725,25 @@ async function runLyriaGenerationJob({
           .join("\n")
         : "";
     }
+    const skipV3ForHumToTrack = Boolean(body._humConductor?.ok && instrumental);
     const useProducerV3 =
       !take2.replay
       && !lyriaLegacyPromptsEnabled()
-      && resolveLyriaProducerV3Enabled(body, isAdmin);
-    if (useProducerV3) {
+      && resolveLyriaProducerV3Enabled(body, isAdmin)
+      && !skipV3ForHumToTrack;
+    if (skipV3ForHumToTrack) {
+      const stitched = buildHumToTrackLyriaPrompt({
+        styleLine: stylePrompt || body?.style,
+        conductor: body._humConductor,
+      });
+      if (!stitched.ok) {
+        await fail(`Hum Conductor couldn't build this motif (${stitched.error || "no_motif"}). Try again.`);
+        return;
+      }
+      lyriaPrompt = stitched.prompt;
+      body._humConductorMode = "hum_to_track";
+      producerResult = { ok: true, used: false, v3: false, conductorTrack: true };
+    } else if (useProducerV3) {
       const v3input = buildLyriaProducerV3Input(
         take2.previousTake ? { ...body, previousTake: take2.previousTake } : body,
         { lyrics, durationSec },
@@ -786,6 +850,14 @@ async function runLyriaGenerationJob({
           durationSec,
           scriptFormat: String(body?.scriptFormat || "").trim(),
         });
+      }
+    }
+
+    if (body._humConductor?.ok && !skipV3ForHumToTrack && !take2.replay) {
+      const motifStitch = stitchConductorMotifIntoLyriaPrompt(lyriaPrompt, body._humConductor);
+      if (motifStitch.ok) {
+        lyriaPrompt = motifStitch.prompt;
+        body._humConductorMode = motifStitch.mode;
       }
     }
 
@@ -1769,10 +1841,23 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
-  if (body?.personaId || body?.hasReference) {
+  if (body?.personaId) {
     return sendJson(res, 400, {
-      error: "Persona and voice reference aren't available for this mode yet.",
+      error: "Persona isn't available for this mode yet.",
       code: "lyria_unsupported",
+    });
+  }
+  const conductorOn = resolveHumConductorEnabled(body, isAdmin);
+  if (body?.hasReference && !conductorOn) {
+    return sendJson(res, 400, {
+      error: "Voice reference isn't available for this mode yet.",
+      code: "lyria_unsupported",
+    });
+  }
+  if (conductorOn && !resolveConductorAudio(body)) {
+    return sendJson(res, 400, {
+      error: "Hum Conductor needs a Hum recording.",
+      code: "hum_conductor_missing_audio",
     });
   }
 
@@ -1819,14 +1904,14 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   );
   const photoImages = resolveLyriaPhotosFromBody(body);
 
-  if (!instrumental && !lyrics && !stylePrompt && !photoImages.length) {
+  if (!instrumental && !lyrics && !stylePrompt && !photoImages.length && !conductorOn) {
     return sendJson(res, 400, {
       error: "Add lyrics, style, or attach a photo mood before generating.",
       code: "lyria_missing_prompt",
     });
   }
 
-  if (!lyriaLegacyPromptsEnabled()) {
+  if (!lyriaLegacyPromptsEnabled() && !conductorOn) {
     const bareCheck = resolveBareLyriaPrompt(body, {
       lyrics,
       instrumental,
@@ -2786,7 +2871,10 @@ function readElevenlabsMultipartBody(req) {
 
 async function readGenerateRequestBody(req, provider) {
   const ct = String(req.headers["content-type"] || "").toLowerCase();
-  if (provider === "elevenlabs" && ct.includes("multipart/form-data")) {
+  if (
+    ct.includes("multipart/form-data")
+    && (provider === "elevenlabs" || provider === "lyria")
+  ) {
     return readElevenlabsMultipartBody(req);
   }
   return readJson(req);

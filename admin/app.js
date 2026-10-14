@@ -3537,9 +3537,14 @@ function renderGenerationDetail(data) {
 
   const producerArrangement = String(g.producerArrangement || "").trim();
   const elevenSentPlan = String(g.elevenSentPlan || "").trim();
+  const humConductorMotif = String(g.humConductorMotif || "").trim();
   const producerArrangementBlock = producerArrangement
     ? `<div class="detailMetaBlock"><strong>Producer v3 arrangement</strong></div>
        <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(producerArrangement)}</pre>`
+    : "";
+  const humConductorBlock = humConductorMotif
+    ? `<div class="detailMetaBlock"><strong>Hum Conductor motif</strong></div>
+       <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(humConductorMotif)}</pre>`
     : "";
   const elevenPlanBlock = elevenSentPlan
     ? `<div class="detailMetaBlock"><strong>Plan sent to ElevenLabs</strong></div>
@@ -3671,6 +3676,7 @@ function renderGenerationDetail(data) {
       ${promptBlock}
       ${lyriaMetaBlock}
       ${lyriaPromptBlock}
+      ${humConductorBlock}
       ${producerArrangementBlock}
       ${elevenPlanBlock}
       ${lyricsCompareBlock}

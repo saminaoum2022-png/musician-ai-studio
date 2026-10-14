@@ -8941,6 +8941,7 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   if (!show) {
     syncSettingsElevenFinetuneRow("suno");
     syncSettingsGeminiProducerRow();
+    syncSettingsHumConductorRow();
     return;
   }
   const p = normalizeMusicProviderPref(pref) || "suno";
@@ -8954,12 +8955,14 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   if (sub) sub.textContent = musicProviderSubline(p);
   syncSettingsElevenFinetuneRow(p);
   syncSettingsGeminiProducerRow();
+  syncSettingsHumConductorRow();
   try { syncElevenSongLengthPanel(); } catch {}
   try { syncCreateSongTitleField(); } catch {}
 }
 
 const ELEVENLABS_FINETUNE_LS_KEY = "nabadElevenFinetune";
 const GEMINI_PRODUCER_LS_KEY = "nabadGeminiProducer";
+const HUM_CONDUCTOR_LS_KEY = "nabadHumConductor";
 
 /** Admin ElevenLabs: use NabadAi DNA finetune (default on). */
 function getElevenlabsFinetunePref() {
@@ -9001,6 +9004,51 @@ function setGeminiProducerPref(on) {
     localStorage.setItem(GEMINI_PRODUCER_LS_KEY, next ? "1" : "0");
   } catch {}
   syncSettingsGeminiProducerRow();
+}
+
+/** Admin A/B: Gemini hears Hum and writes a Lyria motif (default off). */
+function getHumConductorPref() {
+  if (!creditsState.isAdmin) return false;
+  try {
+    const saved = localStorage.getItem(HUM_CONDUCTOR_LS_KEY);
+    if (saved === "1" || saved === "true") return true;
+  } catch {}
+  return false;
+}
+
+function setHumConductorPref(on) {
+  if (!creditsState.isAdmin) return;
+  const next = Boolean(on);
+  try {
+    localStorage.setItem(HUM_CONDUCTOR_LS_KEY, next ? "1" : "0");
+  } catch {}
+  syncSettingsHumConductorRow();
+}
+
+function syncSettingsHumConductorRow() {
+  const row = document.getElementById("settingsHumConductorRow");
+  const root = document.getElementById("settingsHumConductorPicker");
+  const sub = document.getElementById("settingsHumConductorSub");
+  const show = Boolean(creditsState.isAdmin);
+  if (row) {
+    row.hidden = !show;
+    row.style.display = show ? "" : "none";
+  }
+  if (!show) return;
+  const conductorOn = getHumConductorPref();
+  if (root) {
+    root.querySelectorAll("[data-hum-conductor]").forEach((btn) => {
+      const wantOn = String(btn.getAttribute("data-hum-conductor") || "") === "1";
+      const active = wantOn === conductorOn;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-checked", active ? "true" : "false");
+    });
+  }
+  if (sub) {
+    sub.textContent = conductorOn
+      ? "On — Gemini hears your Hum for Lyria. Instrumental + custom style = Hum to Track"
+      : "Off — Gemini does not read your Hum for Lyria";
+  }
 }
 
 function syncSettingsGeminiProducerRow() {
@@ -9137,6 +9185,30 @@ function wireSettingsMusicProviderOnce() {
           producerOn
             ? "Gemini producer ON — rewrites style/lyrics before Lyria."
             : "Gemini producer OFF — direct prompt to Lyria (A/B).",
+          { icon: "♪", durationMs: 3600 },
+        );
+      } catch {}
+    });
+  }
+  const conductorRoot = document.getElementById("settingsHumConductorPicker");
+  if (conductorRoot && conductorRoot.dataset.boundHumConductor !== "1") {
+    conductorRoot.dataset.boundHumConductor = "1";
+    conductorRoot.addEventListener("click", (ev) => {
+      const btn = ev.target?.closest?.("[data-hum-conductor]");
+      if (!btn || !conductorRoot.contains(btn)) return;
+      ev.preventDefault();
+      if (!creditsState.isAdmin) return;
+      const conductorOn = String(btn.getAttribute("data-hum-conductor") || "") === "1";
+      if (conductorOn === getHumConductorPref()) return;
+      try {
+        if (typeof haptic === "function") haptic("light");
+      } catch {}
+      setHumConductorPref(conductorOn);
+      try {
+        showToast(
+          conductorOn
+            ? "Hum Conductor ON — Gemini hears your Hum, then Lyria plays the motif."
+            : "Hum Conductor OFF — Hum stays on Suno / ElevenLabs as before.",
           { icon: "♪", durationMs: 3600 },
         );
       } catch {}
@@ -32355,6 +32427,14 @@ function adminProviderCapabilityBlockReason({
   if (hasReference) {
     if (pref === "elevenlabs") {
       // ElevenLabs supports hum/vocal reference (including Hum Track instrumental-from-melody).
+      return "";
+    }
+    if (
+      getHumConductorPref()
+      && vocalRefOrigin !== "remix"
+      && !currentRemixSource
+    ) {
+      // Admin Hum Conductor routes this generate to Lyria.
       return "";
     }
     const flow =
@@ -80286,7 +80366,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       };
       // Capture before clearing shelf meta — otherwise generate falls back to Suno.
       const shelfLyriaFull = String(payload.templateSparkFull || "") === "1";
-      const generateApiPath = shelfLyriaFull
+      const conductorHum = Boolean(
+        creditsState.isAdmin
+        && getHumConductorPref()
+        && hasReference
+        && vocalRefOrigin !== "remix"
+        && !hubRemixLocked,
+      );
+      const generateApiPath = conductorHum || shelfLyriaFull
         ? "/api/music/generate?provider=lyria"
         : musicGenerateApiPath();
       const vp = String(els.sunoVoiceProfile?.value || "").trim();
@@ -80302,7 +80389,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           payload.vocalGender = singerGender;
         }
       }
-      if ((useLyriaForThisGenerate() || shelfLyriaFull) && !shouldGenerateInstrumental) {
+      if ((useLyriaForThisGenerate() || shelfLyriaFull || conductorHum) && !shouldGenerateInstrumental) {
         // Nabad Signature Vocal Identity — gender from singer pick; ignore legacy clip characters.
         const lyriaVocalGender =
           resolveSingerGenderForGeneration({ personaId: personaIdSel })
@@ -80334,6 +80421,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (creditsState.isAdmin) {
         payload.geminiProducer = getGeminiProducerPref() ? "1" : "0";
         payload.lyriaProducerV3 = getGeminiProducerPref() ? "1" : "0";
+        payload.humConductor = conductorHum ? "1" : "0";
       }
       applyScratchDisplayTitleToPayload(payload, {
         instrumental: shouldGenerateInstrumental,
@@ -80378,9 +80466,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         singerGender: (els.sunoSingerGender?.value || "").trim(),
         clipVocalProfileId: payload.clipVocalProfileId || undefined,
         model: payload.model,
-        musicProvider: shelfLyriaFull ? "lyria" : getMusicProviderPref(),
+        musicProvider: conductorHum || shelfLyriaFull ? "lyria" : getMusicProviderPref(),
         templateSparkFull: shelfLyriaFull || undefined,
         geminiProducer: creditsState.isAdmin ? getGeminiProducerPref() : undefined,
+        humConductor: creditsState.isAdmin ? conductorHum : undefined,
         imageOnlyInstrumental,
         instrumentalSelected,
         referenceInstrumentalOnly,
@@ -80400,7 +80489,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ...(_pendingSparkMeta || {}),
       };
       const createInputsSnap = collectCreateInputsFromScreen();
-      if (useLyriaForThisGenerate() || shelfLyriaFull) {
+      if (useLyriaForThisGenerate() || shelfLyriaFull || conductorHum) {
         payload.take2CreateInputs = createInputsSnap;
         if (_take2Session) {
           payload.take2ParentSongId = _take2Session.parentSongId;
@@ -80422,7 +80511,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         }
       }
       lastGenerationMeta.takeCard = {
-        hasCard: Boolean(useLyriaForThisGenerate() || shelfLyriaFull),
+        hasCard: Boolean(useLyriaForThisGenerate() || shelfLyriaFull || conductorHum),
         createInputs: createInputsSnap,
         parentSongId: _take2Session?.parentSongId || "",
         parentTaskId: _take2Session?.parentTaskId || "",
@@ -80452,8 +80541,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           // hum/remix through Suno upload-cover. Suno stems only when engine is Suno
           // (or non-admin). ElevenLabs reference uses /api/music/generate below.
           const elevenReferenceGenerate =
-            hasReference && useAltMusicProvider() && getMusicProviderPref() === "elevenlabs";
-          if (hasReference && !elevenReferenceGenerate && !useAltMusicProvider()) {
+            hasReference && !conductorHum && useAltMusicProvider() && getMusicProviderPref() === "elevenlabs";
+          if (hasReference && !elevenReferenceGenerate && !useAltMusicProvider() && !conductorHum) {
             const sendFile = resolveVocalReferenceForSubmit();
             const remixSourceRaw = String(
               currentRemixSource?.originalUrl || currentRemixSource?.url || "",
@@ -80612,8 +80701,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           }
 
           const authToken = getSupabaseAuthToken();
-          if (useAltMusicProvider() || shelfLyriaFull) {
-            const altProvider = shelfLyriaFull ? "lyria" : getMusicProviderPref();
+          if (useAltMusicProvider() || shelfLyriaFull || conductorHum) {
+            const altProvider = conductorHum || shelfLyriaFull ? "lyria" : getMusicProviderPref();
             const providerLabel = musicProviderShortLabel(altProvider);
             const lateBlock = adminProviderCapabilityBlockReason({
               hasReference,
@@ -80632,7 +80721,30 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               setStatus(lateBlock);
               return;
             }
-            if (hasReference && altProvider === "elevenlabs") {
+            if (conductorHum) {
+              const sendFile = resolveVocalReferenceForSubmit();
+              if (!sendFile?.size) {
+                throw new Error(
+                  "Lost the vocal reference before upload. Tap Hum again, then Generate.",
+                );
+              }
+              payload.hasReference = true;
+              elevenlabsReferenceUpload = {
+                file: sendFile,
+                remixUrl: "",
+              };
+              try {
+                showToast("Hum Conductor is listening… then Lyria will play the motif.", {
+                  icon: "♪",
+                  durationMs: 180000,
+                });
+              } catch {}
+              setStatus(
+                shouldGenerateInstrumental
+                  ? "Hum Conductor → Lyria (Hum to Track)… usually 2–3 minutes."
+                  : "Hum Conductor → Producer → Lyria… usually 2–3 minutes.",
+              );
+            } else if (hasReference && altProvider === "elevenlabs") {
               const sendFile = resolveVocalReferenceForSubmit();
               if (!sendFile?.size) {
                 throw new Error(
@@ -80653,21 +80765,23 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                   remixUrl && (vocalRefOrigin === "remix" || hubRemixLocked) ? remixUrl : "",
               };
             }
-            try {
-              showToast(`${providerLabel} composing… keep the app open (about 1–3 min).`, {
-                icon: "♪",
-                durationMs: 180000,
-              });
-            } catch {}
-            setStatus(
-              altProvider === "lyria"
-                ? "Lyria is composing your song… usually 2–3 minutes. You can browse the app — we'll update when it's ready."
-                : altProvider === "elevenlabs"
-                  ? hasReference
-                    ? "ElevenLabs is matching your hum/voice… usually 1–3 minutes."
-                    : "ElevenLabs is composing your song… usually 1–3 minutes. You can browse the app — we'll update when it's ready."
-                  : "MiniMax is composing your song… usually 1–2 minutes. Keep the app open.",
-            );
+            if (!conductorHum) {
+              try {
+                showToast(`${providerLabel} composing… keep the app open (about 1–3 min).`, {
+                  icon: "♪",
+                  durationMs: 180000,
+                });
+              } catch {}
+              setStatus(
+                altProvider === "lyria"
+                  ? "Lyria is composing your song… usually 2–3 minutes. You can browse the app — we'll update when it's ready."
+                  : altProvider === "elevenlabs"
+                    ? hasReference
+                      ? "ElevenLabs is matching your hum/voice… usually 1–3 minutes."
+                      : "ElevenLabs is composing your song… usually 1–3 minutes. You can browse the app — we'll update when it's ready."
+                    : "MiniMax is composing your song… usually 1–2 minutes. Keep the app open.",
+              );
+            }
           }
           let r;
           let d;
@@ -80723,7 +80837,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             setCreditsBalance(Number(d._credits.balance));
             creditsState.loaded = true;
           }
-          if (useAltMusicProvider() && getMusicProviderPref() === "elevenlabs" && hasReference && r.ok) {
+          if (
+            r.ok
+            && hasReference
+            && (conductorHum || (useAltMusicProvider() && getMusicProviderPref() === "elevenlabs"))
+          ) {
             try {
               clearVocalReferenceSelection();
             } catch {}

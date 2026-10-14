@@ -17,7 +17,7 @@ function extractMarkedBlock(text, name) {
     const rest = src.slice(header.index + header[0].length).replace(/^\r?\n/, "");
     const end = new RegExp(`^end_${name}\\s*$`, "im").exec(rest);
     if (end) return rest.slice(0, end.index).replace(/\s+$/, "");
-    const next = rest.search(/^(producer|producer_reason|lyrics_mode|original_lyrics|adapted_lyrics|lyria_prompt|flow|model|api|pipeline):/im);
+    const next = rest.search(/^(producer|producer_reason|lyrics_mode|original_lyrics|adapted_lyrics|lyria_prompt|flow|model|api|pipeline|hum_conductor):/im);
     return (next >= 0 ? rest.slice(0, next) : rest).replace(/\s+$/, "");
   }
   const same = new RegExp(`^${name}:\\s+(.+)$`, "im").exec(src);
@@ -72,6 +72,9 @@ function inferProducerStatus(text) {
   const pipe = /^pipeline:\s*(.+)$/im.exec(src);
   const pipeLine = String(pipe?.[1] || "");
   if (/lyria_producer_v3\s+(fallback|error)/i.test(pipeLine)) return "fallback";
+  if (/hum_conductor\s*→/i.test(pipeLine) && !/fallback|error/i.test(pipeLine)) {
+    return "applied";
+  }
   if (/lyria_producer_v3\s*→\s*lyria/i.test(pipeLine) && !/fallback/i.test(pipeLine)) {
     return "applied";
   }
@@ -109,6 +112,7 @@ function parseGenerationProducerDetail(requestDetail) {
   const lyriaPrompt = extractLyriaPrompt(text);
   const producerArrangement = extractMarkedBlock(text, "lyria_producer_v3_arrangement");
   const elevenSentPlan = extractMarkedBlock(text, "eleven_sent_plan");
+  const humConductorMotif = extractMarkedBlock(text, "hum_conductor_motif");
   const arabiziRaw = lineValue(text, "arabizi_instruction_used").toLowerCase();
   let arabiziInstructionUsed = null;
   if (arabiziRaw === "true" || arabiziRaw === "1" || arabiziRaw === "yes") arabiziInstructionUsed = true;
@@ -126,6 +130,7 @@ function parseGenerationProducerDetail(requestDetail) {
     lyriaPrompt,
     producerArrangement,
     elevenSentPlan,
+    humConductorMotif,
     arabiziInstructionUsed,
     harakatMode,
     addressMarksAdded: Number.isFinite(addressMarksAdded) ? addressMarksAdded : null,
@@ -140,6 +145,7 @@ function stripDuplicateProducerMeta(requestDetail) {
     .replace(/^end_lyria_prompt\s*$/gim, "")
     .replace(/^lyria_producer_v3_arrangement:[\s\S]*?^end_lyria_producer_v3_arrangement\s*$/gim, "")
     .replace(/^eleven_sent_plan:[\s\S]*?^end_eleven_sent_plan\s*$/gim, "")
+    .replace(/^hum_conductor_motif:[\s\S]*?^end_hum_conductor_motif\s*$/gim, "")
     .replace(/^original_lyrics:[\s\S]*?^end_original_lyrics\s*$/gim, "")
     .replace(/^adapted_lyrics:[\s\S]*?^end_adapted_lyrics\s*$/gim, "")
     .replace(/\n{3,}/g, "\n\n")

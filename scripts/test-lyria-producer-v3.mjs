@@ -178,6 +178,8 @@ const mawwalAdmin = v3.appendLyriaProducerV3AdminDetail(
 );
 assert.ok(/producer: applied/.test(mawwalAdmin));
 assert.ok(/Mawwal:\d+s/.test(mawwalAdmin), mawwalAdmin);
+assert.ok(/lyria_producer_v3_arrangement:/.test(mawwalAdmin));
+assert.ok(/Mawwal · free time ·/.test(mawwalAdmin), mawwalAdmin);
 
 assert.equal(v3.resolveLyriaProducerV3Enabled({}, false), true);
 assert.equal(v3.resolveLyriaProducerV3Enabled({ lyriaProducerV3: "0" }, false), false);

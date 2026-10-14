@@ -766,6 +766,15 @@ function appendLyriaProducerV3AdminDetail(producerResult, stitch) {
       }
       return `${s.name}:${s.bars || 0}`;
     }).join(",")}`);
+    lines.push("lyria_producer_v3_arrangement:");
+    for (const s of secs) {
+      const bars = s.name === "Mawwal"
+        ? "free time"
+        : `${s.bars || 0} bars`;
+      const arr = String(s.arrangement || "").trim() || "—";
+      lines.push(`${s.name} · ${bars} · ${arr}`);
+    }
+    lines.push("end_lyria_producer_v3_arrangement");
   }
   return lines.join("\n");
 }

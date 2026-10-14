@@ -107,6 +107,8 @@ function parseGenerationProducerDetail(requestDetail) {
   const originalLyrics = extractMarkedBlock(text, "original_lyrics");
   const adaptedLyrics = extractMarkedBlock(text, "adapted_lyrics");
   const lyriaPrompt = extractLyriaPrompt(text);
+  const producerArrangement = extractMarkedBlock(text, "lyria_producer_v3_arrangement");
+  const elevenSentPlan = extractMarkedBlock(text, "eleven_sent_plan");
   const arabiziRaw = lineValue(text, "arabizi_instruction_used").toLowerCase();
   let arabiziInstructionUsed = null;
   if (arabiziRaw === "true" || arabiziRaw === "1" || arabiziRaw === "yes") arabiziInstructionUsed = true;
@@ -122,6 +124,8 @@ function parseGenerationProducerDetail(requestDetail) {
     originalLyrics,
     adaptedLyrics,
     lyriaPrompt,
+    producerArrangement,
+    elevenSentPlan,
     arabiziInstructionUsed,
     harakatMode,
     addressMarksAdded: Number.isFinite(addressMarksAdded) ? addressMarksAdded : null,
@@ -134,6 +138,8 @@ function stripDuplicateProducerMeta(requestDetail) {
     .replace(/^gemini_producer(?:_model|_error|_ms)?:.*$/gim, "")
     .replace(/^lyria_prompt:[\s\S]*/im, "")
     .replace(/^end_lyria_prompt\s*$/gim, "")
+    .replace(/^lyria_producer_v3_arrangement:[\s\S]*?^end_lyria_producer_v3_arrangement\s*$/gim, "")
+    .replace(/^eleven_sent_plan:[\s\S]*?^end_eleven_sent_plan\s*$/gim, "")
     .replace(/^original_lyrics:[\s\S]*?^end_original_lyrics\s*$/gim, "")
     .replace(/^adapted_lyrics:[\s\S]*?^end_adapted_lyrics\s*$/gim, "")
     .replace(/\n{3,}/g, "\n\n")

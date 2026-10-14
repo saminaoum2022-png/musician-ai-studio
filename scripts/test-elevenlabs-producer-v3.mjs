@@ -86,6 +86,11 @@ assert.equal(
   false,
 );
 
+const dump = eleven.formatElevenPlanForAdmin(withRef.plan);
+assert.ok(/\[Verse 1\]/.test(dump) && /REF medium/.test(dump), dump);
+assert.ok(/\[Intro\]/.test(dump) && /no_ref/.test(dump), dump);
+assert.ok(/arr:/.test(dump), dump);
+
 const missing = eleven.buildElevenCompositionPlanFromLyriaV3({ stitch: { ok: false } });
 assert.equal(missing.ok, false);
 

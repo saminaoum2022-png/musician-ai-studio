@@ -3535,6 +3535,20 @@ function renderGenerationDetail(data) {
          <p class="sectionNote">Not stored for this generation (logged before Lyria observability). The user prompt summary above is what Nabad composed; the exact payload sent to Google Lyria was not saved.</p>`
       : "");
 
+  const producerArrangement = String(g.producerArrangement || "").trim();
+  const elevenSentPlan = String(g.elevenSentPlan || "").trim();
+  const producerArrangementBlock = producerArrangement
+    ? `<div class="detailMetaBlock"><strong>Producer v3 arrangement</strong></div>
+       <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(producerArrangement)}</pre>`
+    : "";
+  const elevenPlanBlock = elevenSentPlan
+    ? `<div class="detailMetaBlock"><strong>Plan sent to ElevenLabs</strong></div>
+       <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(elevenSentPlan)}</pre>`
+    : (g.provider === "elevenlabs"
+      ? `<div class="detailMetaBlock"><strong>Plan sent to ElevenLabs</strong></div>
+         <p class="sectionNote">Not stored on this generation — we only saved bar counts. The next generate will show each section’s instruments, lyrics, and whether the hum was attached.</p>`
+      : "");
+
   const lyricsCompareBlock = toggles.lyricsBlock
     ? `<div class="detailMetaBlock"><strong>Write lyrics</strong></div>${toggles.lyricsBlock}`
     : "";
@@ -3657,6 +3671,8 @@ function renderGenerationDetail(data) {
       ${promptBlock}
       ${lyriaMetaBlock}
       ${lyriaPromptBlock}
+      ${producerArrangementBlock}
+      ${elevenPlanBlock}
       ${lyricsCompareBlock}
       ${requestBlock}
       ${outputBlock}

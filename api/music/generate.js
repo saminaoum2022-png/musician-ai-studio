@@ -60,6 +60,7 @@ const {
   buildElevenMusicPrompt,
   buildElevenReferenceCompositionPlan,
   buildElevenCompositionPlanFromLyriaV3,
+  formatElevenPlanForAdmin,
   buildElevenAppLikeReferenceCompositionPlan,
   buildElevenHumTrackCompositionPlan,
   buildElevenHumTrackForceInstrumentalPrompt,
@@ -1461,6 +1462,7 @@ async function runElevenlabsGenerationJob({
         finalCompositionPlan?.chunks?.length
           ? `eleven_chunks: ${finalCompositionPlan.chunks.length}`
           : "",
+        ...adminMultilineField("eleven_sent_plan", formatElevenPlanForAdmin(finalCompositionPlan)),
         inpaintDetail,
         referenceSongId && finalCompositionPlan?.chunks?.length
           ? `reference_chunks: ${finalCompositionPlan.chunks.filter((c) => c.conditioning_ref).length}`

@@ -1961,6 +1961,32 @@ function buildElevenHumTrackCompositionPlan({
   );
 }
 
+/** Compact dump of the composition_plan we actually POST to ElevenLabs. */
+function formatElevenPlanForAdmin(plan) {
+  const chunks = Array.isArray(plan?.chunks) ? plan.chunks : [];
+  if (!chunks.length) return "";
+  const lines = [];
+  for (const c of chunks) {
+    const tag = String(c.text || "").split(/\r?\n/)[0].trim() || "[Section]";
+    const sec = Math.round((Number(c.duration_ms) || 0) / 1000);
+    const ref = c.conditioning_ref
+      ? `REF ${c.condition_strength || "on"}`
+      : "no_ref";
+    const lyrics = String(c.text || "")
+      .split(/\r?\n/)
+      .slice(1)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .join(" / ")
+      .slice(0, 280);
+    const styles = (c.positive_styles || []).map(String).filter(Boolean).slice(0, 14).join(", ");
+    lines.push(`${tag} · ${sec}s · ${ref}`);
+    if (styles) lines.push(`  arr: ${styles.slice(0, 360)}`);
+    if (lyrics) lines.push(`  text: ${lyrics}`);
+  }
+  return lines.join("\n").slice(0, 8000);
+}
+
 /**
  * Map Lyria Producer v3 timed sections onto an ElevenLabs composition_plan.
  * Bars → duration_ms via the same v3 timestamps Lyria uses.
@@ -2580,6 +2606,7 @@ module.exports = {
   buildElevenPlanCreatePrompt,
   buildElevenReferenceCompositionPlan,
   buildElevenCompositionPlanFromLyriaV3,
+  formatElevenPlanForAdmin,
   buildElevenAppLikeReferenceCompositionPlan,
   buildElevenHumTrackCompositionPlan,
   buildElevenHumTrackForceInstrumentalPrompt,

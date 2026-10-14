@@ -37,6 +37,19 @@ assert.ok(norm.motif_prose.includes("sixteenth-note rest"));
 
 assert.equal(hc.normalizeConductorResult({ bpm: 96, motif_prose: "too short" }), null);
 
+assert.equal(
+  hc.rewriteHalfFlatSpellings("legato D4-Edb4-F4-G4, staccato Bb3, Edb"),
+  "legato D4-E half-flat4-F4-G4, staccato Bb3, E half-flat",
+);
+const edbNorm = hc.normalizeConductorResult({
+  bpm: 96,
+  maqam: "Bayat",
+  tonic: "D",
+  motif_prose: goldMotif.replace("E half-flat4", "Edb4"),
+});
+assert.ok(edbNorm.motif_prose.includes("E half-flat4"));
+assert.equal(/Edb/i.test(edbNorm.motif_prose), false);
+
 const aligned = hc.alignStyleToConductor("piano, arabic, 110 BPM, Maqam Hijaz in A", norm);
 assert.ok(/\b96 BPM\b/.test(aligned), `bpm should follow hum: ${aligned}`);
 assert.ok(/Maqam Bayat in D/i.test(aligned), `maqam should follow hum: ${aligned}`);

@@ -25,7 +25,8 @@ const HUM_CONDUCTOR_SYSTEM_PROMPT = `You are the NabadAi hum conductor. Listen t
 
 Write a motif that Google Lyria can play. Keep the hummed rhythm, rests, and articulation.
 Name the maqam or key and the tonic you hear. Use accidental spellings that match it
-(Bayat / Bayati: half-flats are allowed). Group notes by bar. Mark legato, staccato, and rests
+(Bayat / Bayati: half-flats are allowed). Write half-flats as "E half-flat4", never "Edb", "Ebb", or "db".
+Bb and F# are fine for ordinary flats and sharps. Group notes by bar. Mark legato, staccato, and rests
 (sixteenth rest, eighth rest, quarter breath, sustained half note).
 
 Do not write lyrics. Do not plan a full song (no verse/chorus form).
@@ -119,9 +120,19 @@ function clampInt(n, min, max, fallback) {
   return Math.min(max, Math.max(min, v));
 }
 
+/** Gemini sometimes writes Edb for a koron; Lyria reads that as double-flat (D). */
+function rewriteHalfFlatSpellings(motif) {
+  return String(motif || "")
+    .replace(/\b([A-G])(?:db|bb)(\d)?\b/gi, (_, note, oct) => (
+      `${note.toUpperCase()} half-flat${oct || ""}`
+    ));
+}
+
 function normalizeConductorResult(raw) {
   if (!raw || typeof raw !== "object") return null;
-  const motif = String(raw.motif_prose || raw.motifProse || raw.motif || "").replace(/\s+/g, " ").trim();
+  const motif = rewriteHalfFlatSpellings(
+    String(raw.motif_prose || raw.motifProse || raw.motif || "").replace(/\s+/g, " ").trim(),
+  );
   if (motif.length < MIN_MOTIF_CHARS) return null;
   const meterRaw = String(raw.meter || raw.timeSignature || "4/4").trim();
   const meter = meterRaw === "6/8" ? "6/8" : "4/4";
@@ -365,6 +376,7 @@ module.exports = {
   HUM_CONDUCTOR_SYSTEM_PROMPT,
   resolveHumConductorEnabled,
   resolveConductorAudio,
+  rewriteHalfFlatSpellings,
   normalizeConductorResult,
   alignStyleToConductor,
   buildHumToTrackLyriaPrompt,

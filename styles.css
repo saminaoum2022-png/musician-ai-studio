@@ -13805,6 +13805,35 @@ html:not([data-theme="light"]) .createStudioSheet{
   font-size: 12px;
   letter-spacing: 0.04em;
 }
+#createStudioStylesSheet.createStudioSheet{
+  display: flex;
+  flex-direction: column;
+  max-height: min(72vh, 660px);
+}
+#createStudioStylesSheet #createStudioStylesSheetList.studioStyleSheetTiles{
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.createStudioSheetInstrumental{
+  flex: 0 0 auto;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid rgba(231, 238, 255, 0.1);
+}
+#createStudioStylesSheet .createInstrumentalTick{
+  margin-left: 0;
+  width: 100%;
+  justify-content: flex-start;
+  padding: 4px 0;
+}
+body[data-photo-solo-challenge] #createStudioSheetInstrumental,
+body[data-photo-solo-challenge] #btnStudioInstrumentalTick{
+  display: none !important;
+}
+html[data-theme="light"] .createStudioSheetInstrumental{
+  border-top-color: rgba(40, 46, 58, 0.12);
+}
 .createStudioSheetList.createStudioSheetPills{
   display: flex;
   flex-wrap: wrap;

@@ -1032,6 +1032,7 @@ const els = {
   lyricsModeWrite: document.getElementById("lyricsModeWrite"),
   lyricsModeGenerate: document.getElementById("lyricsModeGenerate"),
   btnCreateInstrumentalTick: document.getElementById("btnCreateInstrumentalTick"),
+  btnStudioInstrumentalTick: document.getElementById("btnStudioInstrumentalTick"),
   imageMoodSummary: document.getElementById("imageMoodSummary"),
   imageMoodModal: document.getElementById("imageMoodModal"),
   btnCloseImageMood: document.getElementById("btnCloseImageMood"),
@@ -7996,7 +7997,7 @@ function arabicLyricsNeedDialectAndAddress() {
 
 /** True when Arabic flow is active and dialect + address are both chosen. */
 function arabicLyricChoicesReady() {
-  const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  const instrumentalOnly = isCreateInstrumentalSelected();
   if (instrumentalOnly) return true;
   if (!arabicLyricsNeedDialectAndAddress()) return true;
   const dialectOk = Boolean(lyricsDialect && lyricsDialect !== "auto" && LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect]);
@@ -8178,6 +8179,32 @@ function setLyricsDialect(dialect) {
   bindDialectRow(document.getElementById("createSoloDialectChipRow"));
   syncLyricsLangPills();
 })();
+
+function styleTextRequestsInstrumental(text) {
+  return /\binstrumentals?\b/i.test(String(text || ""));
+}
+
+function isCreateInstrumentalSelected() {
+  if (String(els.vocalInstrumentalOnly?.value || "0") === "1") return true;
+  try {
+    if (isStudioCustomStyleActive()) {
+      return styleTextRequestsInstrumental(els.sunoStyle?.value);
+    }
+  } catch {}
+  return false;
+}
+
+function syncInstrumentalFromCustomStyleTags() {
+  try {
+    if (!isStudioCustomStyleActive()) return;
+  } catch {
+    return;
+  }
+  const wants = styleTextRequestsInstrumental(els.sunoStyle?.value);
+  const on = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  if (wants === on) return;
+  setCreateSongType(wants ? "instrumental" : "vocal");
+}
 
 function setCreateSongType(type) {
   if (type === "instrumental" && !requireProForWebFeature("Instrumental")) return;
@@ -21088,6 +21115,17 @@ function syncCreateSongTypeTabs() {
     tick.setAttribute("aria-hidden", hideTick ? "true" : "false");
     tick.classList.toggle("isOn", instrumental);
     tick.setAttribute("aria-pressed", instrumental ? "true" : "false");
+  }
+  const studioTick = els.btnStudioInstrumentalTick || document.getElementById("btnStudioInstrumentalTick");
+  const studioTickWrap = document.getElementById("createStudioSheetInstrumental");
+  if (studioTick) {
+    let hideStudio = false;
+    try { hideStudio = Boolean(activePhotoSoloChallengeId()); } catch {}
+    studioTick.hidden = hideStudio;
+    studioTick.setAttribute("aria-hidden", hideStudio ? "true" : "false");
+    studioTick.classList.toggle("isOn", instrumental);
+    studioTick.setAttribute("aria-pressed", instrumental ? "true" : "false");
+    if (studioTickWrap) studioTickWrap.hidden = hideStudio;
   }
   const singerPanel = document.getElementById("singerVoicePanel");
   if (singerPanel && !activePhotoSoloChallengeId()) singerPanel.hidden = instrumental;
@@ -80005,6 +80043,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const promptText = String(els.sunoPrompt?.value || "").trim();
     const vocalRefFile = resolveVocalReferenceForSubmit();
     const hasUploadedReference = Boolean(vocalRefFile);
+    if (isCreateInstrumentalSelected() && String(els.vocalInstrumentalOnly?.value || "0") !== "1") {
+      setCreateSongType("instrumental");
+    }
     const instrumentalSelected = String(els.vocalInstrumentalOnly?.value || "0") === "1";
     // Hum + Vocal uses upload-cover so Suno re-sings the melody. Hum +
     // Instrumental must stay on upload-cover too, but with `instrumental`
@@ -83344,6 +83385,7 @@ function syncLyriaStudioStyleUi() {
   renderInternationalStyleSlots();
   mountCreateCustomStyleField(isStudioCustomStyleActive());
   syncCreateSoundPanelUi();
+  try { syncInstrumentalFromCustomStyleTags(); } catch {}
   try { syncCreateSoundSettingsSummary(); } catch {}
   try { syncCreateAttachedStyleRow(); } catch {}
 }
@@ -84494,7 +84536,7 @@ function isCreateTabGeneratingAnim() {
 /** Generate tab looks "ready" only when lyrics are actually prepared (not just style). */
 function isCreateGenerateBlockedAwaitingLyrics() {
   if (isCreateTabGeneratingAnim()) return false;
-  const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  const instrumental = isCreateInstrumentalSelected();
   if (instrumental) return false;
   if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId()) {
     return !photoSoloChallengeCanGenerate();
@@ -84533,7 +84575,7 @@ function createTabCanGenerate() {
   if (flow === "sounds") return Boolean(String(els.soundPrompt?.value || "").trim());
   const hasLyrics = Boolean(String(els.sunoPrompt?.value || "").trim());
   const hasStyle = Boolean(String(els.sunoStyle?.value || "").trim());
-  const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  const instrumental = isCreateInstrumentalSelected();
   if (instrumental) return hasStyle || imageMoodAppliedForNextGen;
   if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId()) return photoSoloChallengeCanGenerate();
   if (isTemplateSparkClipFlow()) return templateSparkClipLyricsReady();
@@ -91047,11 +91089,20 @@ if (createSongTypeTabs) {
     setCreateSongType(btn.getAttribute("data-create-song-type") === "instrumental" ? "instrumental" : "vocal");
   });
 }
+function onCreateInstrumentalTickClick() {
+  const on = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  haptic("light");
+  setCreateSongType(on ? "vocal" : "instrumental");
+}
 if (els.btnCreateInstrumentalTick) {
-  els.btnCreateInstrumentalTick.addEventListener("click", () => {
-    const on = String(els.vocalInstrumentalOnly?.value || "0") === "1";
-    haptic("light");
-    setCreateSongType(on ? "vocal" : "instrumental");
+  els.btnCreateInstrumentalTick.addEventListener("click", onCreateInstrumentalTickClick);
+}
+if (els.btnStudioInstrumentalTick) {
+  els.btnStudioInstrumentalTick.addEventListener("click", onCreateInstrumentalTickClick);
+}
+if (els.sunoStyle) {
+  els.sunoStyle.addEventListener("input", () => {
+    try { syncInstrumentalFromCustomStyleTags(); } catch {}
   });
 }
 const createSoloTypePills = document.getElementById("createSoloTypePills");

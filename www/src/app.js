@@ -82461,6 +82461,18 @@ function studioStyleAura(id) {
   return STUDIO_COVER_AURA[file] || NABAD_CUSTOM_AURA;
 }
 
+function bumpAuraAlpha(rgba, mul, cap) {
+  const m = String(rgba || "").match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)/);
+  if (!m) return rgba;
+  const a = Math.min(cap, Number(m[4] == null ? 1 : m[4]) * mul);
+  return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${a})`;
+}
+
+function studioTileAuraStyle(id) {
+  const tone = studioStyleAura(id);
+  return `--studio-aura-ring:${bumpAuraAlpha(tone.a, 2.3, 0.9)};--studio-aura-a:${bumpAuraAlpha(tone.a, 1.05, 0.4)};--studio-aura-b:${bumpAuraAlpha(tone.b, 1.15, 0.34)}`;
+}
+
 const SIMPLE_ARABIC_ROW_IDS = Object.freeze([
   "levantine-pop-fusion",
   "cyber-dabke",
@@ -82514,14 +82526,15 @@ const INTERNATIONAL_STYLE_SECTIONS = Object.freeze([
   Object.freeze({ id: "chill", name: "Retro & chill", ids: Object.freeze(["synthpop_80s", "lofi_hiphop"]) }),
 ]);
 
-function simpleStudioRowFromPool(pool, active) {
-  const pick = (pool || []).filter(Boolean);
-  const visible = pick.slice(0, 4);
-  if (active && !visible.some((p) => p.id === active.id)) {
-    visible.unshift(active);
-    return visible.slice(0, 4);
+function simpleStudioCarouselPresets(featured, rest, active) {
+  const feat = (featured || []).filter(Boolean);
+  const ids = new Set(feat.map((p) => p.id));
+  const tail = (rest || []).filter((p) => p && p.id && !ids.has(p.id));
+  let list = feat.concat(tail);
+  if (active && active.id && !list.some((p) => p.id === active.id)) {
+    list = [active, ...list];
   }
-  return visible;
+  return list;
 }
 
 function getSimpleStudioRowPresets() {
@@ -82529,24 +82542,28 @@ function getSimpleStudioRowPresets() {
   const tab = normalizeStudioStylesTab(_studioStylesSheetTab);
   const international = tab === "international";
   const oriental = tab === "oriental" && orientalStylesUiEnabled();
-  // Keep the default carousel order. Only pin a style to the front when it
-  // was picked from All styles and is not already in this row.
   if (international) {
-    return simpleStudioRowFromPool(
-      listInternationalStyles().slice(0, 4).map((s) => internationalStyleUi(s)),
+    const all = listInternationalStyles().map((s) => internationalStyleUi(s));
+    return simpleStudioCarouselPresets(
+      all.slice(0, 4),
+      all,
       getInternationalStyle(activeId) ? studioStyleUiRecord(activeId) : null,
     );
   }
   if (oriental) {
-    return simpleStudioRowFromPool(
-      listOrientalStyles().slice(0, 4).map((s) => orientalStyleUi(s)),
+    const all = listOrientalStyles().map((s) => orientalStyleUi(s));
+    return simpleStudioCarouselPresets(
+      all.slice(0, 4),
+      all,
       _studioFamily === "oriental" && getOrientalStyle(activeId)
         ? studioStyleUiRecord(activeId)
         : null,
     );
   }
-  return simpleStudioRowFromPool(
-    SIMPLE_ARABIC_ROW_IDS.map((id) => getLyriaStudioStyle(id)),
+  const arabic = SIMPLE_ARABIC_ROW_IDS.map((id) => getLyriaStudioStyle(id)).filter(Boolean);
+  return simpleStudioCarouselPresets(
+    arabic.slice(0, 4),
+    arabic,
     _studioFamily === "arabic" ? getLyriaStudioStyle(activeId) : null,
   );
 }
@@ -82682,12 +82699,12 @@ function studioStyleTileHtml(preset, activeId, opts = {}) {
   const idAttr = opts.sheet ? "data-lyria-studio-sheet-id" : "data-lyria-studio-id";
   const family = String(opts.family || preset.studioFamily || "").trim();
   const familyAttr = family ? ` data-studio-family="${escapeHtml(family)}"` : "";
-  return `<button type="button" class="studioStyleTile${on ? " isActive" : ""}" ${idAttr}="${escapeHtml(preset.id)}"${familyAttr} aria-pressed="${on ? "true" : "false"}" aria-label="${escapeHtml(name)}${on && !opts.sheet ? ", settings" : ""}"><span class="studioStyleTileCover" style="background-image:url('${studioCoverUrl(preset.id)}')">${sliders}</span><span class="studioStyleTileName">${escapeHtml(name)}</span></button>`;
+  return `<button type="button" class="studioStyleTile${on ? " isActive" : ""}" ${idAttr}="${escapeHtml(preset.id)}"${familyAttr} aria-pressed="${on ? "true" : "false"}" aria-label="${escapeHtml(name)}${on && !opts.sheet ? ", settings" : ""}" style="${studioTileAuraStyle(preset.id)}"><span class="studioStyleTileCover" style="background-image:url('${studioCoverUrl(preset.id)}')">${sliders}</span><span class="studioStyleTileName">${escapeHtml(name)}</span></button>`;
 }
 
 function studioCustomTileHtml(on, opts = {}) {
   const attr = opts.sheet ? "data-lyria-studio-sheet-custom" : "data-lyria-studio-custom";
-  return `<button type="button" class="studioStyleTile studioStyleTile--custom${on ? " isActive" : ""}" ${attr}="1" aria-pressed="${on ? "true" : "false"}" aria-label="Custom style"><span class="studioStyleTileCover studioStyleTileCover--custom"><span class="studioStyleTileCustomMark" aria-hidden="true">Aa</span></span><span class="studioStyleTileName">Custom</span></button>`;
+  return `<button type="button" class="studioStyleTile studioStyleTile--custom${on ? " isActive" : ""}" ${attr}="1" aria-pressed="${on ? "true" : "false"}" aria-label="Custom style" style="${studioTileAuraStyle("")}"><span class="studioStyleTileCover studioStyleTileCover--custom"><span class="studioStyleTileCustomMark" aria-hidden="true">Aa</span></span><span class="studioStyleTileName">Custom</span></button>`;
 }
 
 function isStudioCustomStyleActive() {
@@ -83662,18 +83679,42 @@ function applyLyriaStudioStyle(id, { keepSinger = false, family = "" } = {}) {
   try { syncGenerateOrbVisibility(); } catch {}
 }
 
+function syncStudioStyleRowTrackFade(row) {
+  const host = row || els.lyriaStudioStyleRow;
+  const track = host?.querySelector?.(".lyriaStudioStyleRowTrack");
+  if (!host || !track) return;
+  host.classList.toggle("isTrackScrolled", track.scrollLeft > 6);
+}
+
+function bindStudioStyleRowTrackFade(row) {
+  const track = row?.querySelector?.(".lyriaStudioStyleRowTrack");
+  if (!track || track.dataset.boundFade) return;
+  track.dataset.boundFade = "1";
+  track.addEventListener("scroll", () => syncStudioStyleRowTrackFade(row), { passive: true });
+  syncStudioStyleRowTrackFade(row);
+}
+
+let _studioRowTrackBound = false;
+
 function renderLyriaStudioStyleRow() {
   const row = els.lyriaStudioStyleRow;
   if (!row) return;
-  const active = String(_activeLyriaStudioStyleId || "");
+  const prevTrack = row.querySelector(".lyriaStudioStyleRowTrack");
   const tab = normalizeStudioStylesTab(_studioStylesSheetTab);
+  const sameTab = row.dataset.studioRowTab === tab;
+  const prevScroll = _studioRowTrackBound && sameTab && prevTrack ? prevTrack.scrollLeft : 0;
+  const active = String(_activeLyriaStudioStyleId || "");
   const home = getSimpleStudioRowPresets();
-  const kb = isCreateKeyboardStyleRow();
-  const fill = kb ? keyboardStudioRowFillPresets(tab, home) : [];
   const homeFamily = tab === "international" ? "international" : tab === "oriental" ? "oriental" : "arabic";
-  const tiles = home.map((preset) => studioStyleTileHtml(preset, active, { family: homeFamily })).join("")
-    + fill.map((preset) => studioStyleTileHtml(preset, active, { family: preset.studioFamily })).join("");
-  row.innerHTML = `<div class="lyriaStudioStyleRowTrack">${tiles}</div>${studioCustomTileHtml(isStudioCustomStyleActive())}`;
+  const tiles = home.map((preset) => studioStyleTileHtml(preset, active, { family: homeFamily })).join("");
+  row.innerHTML = `${studioCustomTileHtml(isStudioCustomStyleActive())}<div class="lyriaStudioStyleRowTrack">${tiles}</div>`;
+  row.dataset.studioRowTab = tab;
+  const track = row.querySelector(".lyriaStudioStyleRowTrack");
+  if (track) {
+    track.scrollLeft = prevScroll;
+    bindStudioStyleRowTrackFade(row);
+    _studioRowTrackBound = true;
+  }
   try { syncCreateSimpleStyleTabs(); } catch {}
   try { syncCreateNabadHeard(); } catch {}
 }

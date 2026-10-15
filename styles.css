@@ -12849,7 +12849,7 @@ body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost
 }
 body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .createStudioBlock{
   margin: 0;
-  padding: 0;
+  padding: 0 8px;
   border: none !important;
   background: transparent !important;
   box-shadow: none !important;
@@ -12941,9 +12941,13 @@ body[data-route="generate"][data-create-layout="advanced"] .createSimpleSparkBtn
 body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .lyriaStudioStyleRow,
 body[data-route="generate"][data-create-layout="advanced"] #createSoundPanel .lyriaStudioStyleRow{
   margin-top: 0;
-  padding: 12px 0 4px;
-  gap: 12px;
-  overflow: hidden;
+  padding: 0;
+  gap: 6px;
+  overflow: visible;
+  align-items: flex-start;
+  mask-image: none;
+  -webkit-mask-image: none;
+  scroll-snap-type: none;
 }
 body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .lyriaStudioStyleRow{
   max-height: 180px;
@@ -12956,11 +12960,17 @@ body[data-route="generate"][data-create-layout="advanced"] #createSoundPanel .ly
   flex: 1;
   min-width: 0;
   gap: inherit;
+  padding: 6px 0 4px 6px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  mask-image: linear-gradient(90deg, #000 88%, transparent);
-  -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 26px), transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 26px), transparent 100%);
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .lyriaStudioStyleRow.isTrackScrolled .lyriaStudioStyleRowTrack,
+body[data-route="generate"][data-create-layout="advanced"] #createSoundPanel .lyriaStudioStyleRow.isTrackScrolled .lyriaStudioStyleRowTrack{
+  mask-image: linear-gradient(90deg, transparent 0%, #000 10px, #000 calc(100% - 26px), transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 10px, #000 calc(100% - 26px), transparent 100%);
 }
 body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .lyriaStudioStyleRowTrack::-webkit-scrollbar,
 body[data-route="generate"][data-create-layout="advanced"] #createSoundPanel .lyriaStudioStyleRowTrack::-webkit-scrollbar{
@@ -12977,13 +12987,57 @@ body[data-route="generate"] .lyriaStudioStyleRow{
   display: flex;
   align-items: flex-start;
   flex-wrap: nowrap;
-  overflow: hidden;
+  overflow: visible;
 }
 body[data-route="generate"] .lyriaStudioStyleRow[hidden]{
   display: none !important;
 }
 body[data-route="generate"] .lyriaStudioStyleRow .studioStyleTile--custom{
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  overflow: visible;
+  padding: 6px 0 0;
+}
+body[data-route="generate"] .lyriaStudioStyleRow .studioStyleTile--custom .studioStyleTileCover{
+  overflow: visible;
+}
+body[data-route="generate"] .lyriaStudioStyleRow .studioStyleTile--custom .studioStyleTileCover::after{
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 10px;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(90deg, rgba(8, 10, 16, 0.38) 0%, rgba(8, 10, 16, 0.12) 58%, transparent 100%);
+  transition: opacity 160ms ease;
+}
+body[data-route="generate"] .lyriaStudioStyleRow.isTrackScrolled .studioStyleTile--custom .studioStyleTileCover::after{
+  opacity: 1;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .studioStyleTile{
+  width: 64px;
+  overflow: visible;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .studioStyleTileCover{
+  width: 64px;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .studioStyleTileCover{
+  height: 64px;
+  border-radius: 14px;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .studioStyleTileName{
+  margin-top: 5px;
+  font-size: 10.5px;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .studioStyleTileGear{
+  width: 24px;
+  height: 24px;
+}
+body[data-route="generate"][data-create-layout="simple"] #createSimpleStudioHost .studioStyleTileCustomMark{
+  font-size: 16px;
 }
 body[data-route="generate"] .studioStyleTile{
   flex: 0 0 auto;
@@ -13073,7 +13127,9 @@ body[data-route="generate"].hasCreateCustomStyle #sunoStyle{
   border-radius: 14px;
 }
 body[data-route="generate"] .studioStyleTile.isActive .studioStyleTileCover{
-  box-shadow: inset 0 0 0 2px #c9a227, 0 8px 18px rgba(201,162,39,0.22);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 250, 245, 0.62),
+    inset 0 0 10px rgba(255, 255, 255, 0.14);
 }
 body[data-route="generate"] .studioStyleTileName{
   display: -webkit-box;
@@ -68184,6 +68240,13 @@ body[data-route="generate"] #advancedSheet.createAdvancedAccordion .createAdvanc
 body[data-route="generate"] .styleSuggestRow{
   -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%);
           mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%);
+}
+body[data-route="generate"] .lyriaStudioStyleRow.styleSuggestRow{
+  overflow: visible;
+  margin-top: 0;
+  scroll-snap-type: none;
+  -webkit-mask-image: none;
+          mask-image: none;
 }
 
 /* AI assist chips — violet-tint glass, no glow (only the Generate CTA is lit). */

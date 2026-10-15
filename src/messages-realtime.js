@@ -74,6 +74,7 @@ function normalizeRow(raw) {
     id,
     thread_id: String(raw.thread_id || ""),
     sender_id: String(raw.sender_id || ""),
+    recipient_id: String(raw.recipient_id || ""),
     body: String(raw.body || ""),
     created_at: String(raw.created_at || ""),
     delivered_at: deliveredAt || null,
@@ -92,14 +93,20 @@ function getOrCreateClient(supabaseUrl, supabaseAnonKey) {
   return _client;
 }
 
-export async function refreshDmThreadRealtimeAuth(accessToken) {
-  const token = String(accessToken || "").trim();
-  if (!_client || !token) return;
+async function applyRealtimeAuth(token) {
+  const t = String(token || "").trim();
+  if (!_client || !t) return false;
   try {
-    _client.realtime.setAuth(token);
+    await _client.realtime.setAuth(t);
+    return true;
   } catch (e) {
     console.warn("[dm-realtime] setAuth failed", e);
+    return false;
   }
+}
+
+export async function refreshDmThreadRealtimeAuth(accessToken) {
+  return applyRealtimeAuth(accessToken);
 }
 
 export async function stopDmThreadRealtime() {
@@ -121,20 +128,63 @@ export async function stopDmThreadRealtime() {
   }
 }
 
-export async function stopDmInboxRealtime() {
+let _inboxOpChain = Promise.resolve();
+let _onInboxStatusHandler = null;
+
+function enqueueInboxOp(fn) {
+  const run = _inboxOpChain.then(fn, fn);
+  _inboxOpChain = run.then(() => {}, () => {});
+  return run;
+}
+
+function channelTopic(channel) {
+  return String(channel?.topic || channel?.subTopic || "").trim();
+}
+
+function channelAlreadyJoined(channel) {
+  const state = String(channel?.state || "").toLowerCase();
+  return state === "joined" || state === "joining" || state === "subscribed";
+}
+
+async function removeChannelsMatching(client, needle) {
+  if (!client || typeof client.getChannels !== "function") return;
+  const match = String(needle || "").trim();
+  if (!match) return;
+  const channels = client.getChannels() || [];
+  for (const ch of channels) {
+    if (!channelTopic(ch).includes(match)) continue;
+    try {
+      await client.removeChannel(ch);
+    } catch (e) {
+      console.warn("[dm-realtime] leftover channel remove failed", e);
+    }
+  }
+}
+
+async function stopDmInboxRealtimeUnlocked() {
   const client = _client;
   const channel = _inboxChannel;
+  const uid = String(_activeInboxUserId || "").trim();
   _inboxChannel = null;
   _activeInboxUserId = "";
   _inboxChannelReady = false;
   _onInboxInsertHandler = null;
   _onInboxUpdateHandler = null;
-  if (!client || !channel) return;
-  try {
-    await client.removeChannel(channel);
-  } catch (e) {
-    console.warn("[dm-realtime] inbox unsubscribe failed", e);
+  _onInboxStatusHandler = null;
+  if (channel) {
+    try {
+      await client?.removeChannel(channel);
+    } catch (e) {
+      console.warn("[dm-realtime] inbox unsubscribe failed", e);
+    }
   }
+  if (client && uid) {
+    await removeChannelsMatching(client, `dm-inbox:${uid}`);
+  }
+}
+
+export async function stopDmInboxRealtime() {
+  return enqueueInboxOp(() => stopDmInboxRealtimeUnlocked());
 }
 
 export async function subscribeDmThread({
@@ -163,8 +213,7 @@ export async function subscribeDmThread({
     _onThreadInsertHandler = onInsert;
     _onThreadUpdateHandler = onMessageUpdate;
     _onReadUpdateHandler = onReadUpdate;
-    await refreshDmThreadRealtimeAuth(token);
-    return true;
+    return applyRealtimeAuth(token);
   }
 
   await stopDmThreadRealtime();
@@ -174,12 +223,7 @@ export async function subscribeDmThread({
   _onThreadUpdateHandler = onMessageUpdate;
   _onReadUpdateHandler = onReadUpdate;
 
-  try {
-    client.realtime.setAuth(token);
-  } catch (e) {
-    console.warn("[dm-realtime] setAuth failed", e);
-    return false;
-  }
+  if (!(await applyRealtimeAuth(token))) return false;
 
   const channel = client
     .channel(`dm-thread:${tid}`, {
@@ -272,72 +316,98 @@ export async function subscribeDmInbox({
   const token = String(accessToken || "").trim();
   if (!uid || !token || !isDmPostgresRealtimeEnabled()) return false;
 
-  const client = getOrCreateClient(supabaseUrl, supabaseAnonKey);
-  if (!client) return false;
+  return enqueueInboxOp(async () => {
+    const client = getOrCreateClient(supabaseUrl, supabaseAnonKey);
+    if (!client) return false;
 
-  if (_activeInboxUserId === uid && _inboxChannel) {
+    if (_activeInboxUserId === uid && _inboxChannel) {
+      _onInboxInsertHandler = onInsert;
+      _onInboxUpdateHandler = onUpdate;
+      _onInboxStatusHandler = onStatus;
+      if (!(await applyRealtimeAuth(token))) return false;
+      if (_inboxChannelReady) {
+        try { onStatus?.("SUBSCRIBED"); } catch {}
+      }
+      return true;
+    }
+
+    await stopDmInboxRealtimeUnlocked();
     _onInboxInsertHandler = onInsert;
     _onInboxUpdateHandler = onUpdate;
-    await refreshDmThreadRealtimeAuth(token);
-    return true;
-  }
+    _onInboxStatusHandler = onStatus;
 
-  await stopDmInboxRealtime();
-  _onInboxInsertHandler = onInsert;
-  _onInboxUpdateHandler = onUpdate;
+    if (!(await applyRealtimeAuth(token))) return false;
 
-  try {
-    client.realtime.setAuth(token);
-  } catch (e) {
-    console.warn("[dm-realtime] setAuth failed", e);
-    return false;
-  }
+    await removeChannelsMatching(client, `dm-inbox:${uid}`);
 
-  const channel = client
-    .channel(`dm-inbox:${uid}`, {
+    const topic = `dm-inbox:${uid}:${Date.now().toString(36)}`;
+    let channel = client.channel(topic, {
       config: { broadcast: { self: false } },
-    })
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "dm_messages",
-      },
-      (payload) => {
-        const row = normalizeRow(payload?.new);
-        if (row) {
-          try { _onInboxInsertHandler?.(row); } catch (e) { console.warn("[dm-realtime] inbox onInsert", e); }
-        }
-      },
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "dm_messages",
-      },
-      (payload) => {
-        const row = normalizeRow(payload?.new);
-        if (row) {
-          try { _onInboxUpdateHandler?.(row); } catch (e) { console.warn("[dm-realtime] inbox onUpdate", e); }
-        }
-      },
-    )
-    .subscribe((status, err) => {
-      _inboxChannelReady = status === "SUBSCRIBED";
-      try {
-        onStatus?.(status, err);
-      } catch {}
-      try {
-        console.info("[dm-realtime]", { inbox: uid, status, error: err?.message || "" });
-      } catch {}
     });
+    if (channelAlreadyJoined(channel)) {
+      try { await client.removeChannel(channel); } catch {}
+      channel = client.channel(`${topic}:n`, {
+        config: { broadcast: { self: false } },
+      });
+    }
+    if (channelAlreadyJoined(channel)) {
+      console.warn("[dm-realtime] inbox channel already subscribed; skip");
+      return false;
+    }
 
-  _inboxChannel = channel;
-  _activeInboxUserId = uid;
-  return true;
+    if (!(await applyRealtimeAuth(token))) return false;
+    try {
+      channel = channel
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "dm_messages",
+            filter: `recipient_id=eq.${uid}`,
+          },
+          (payload) => {
+            const row = normalizeRow(payload?.new);
+            if (!row) return;
+            const rid = String(row.recipient_id || "").trim();
+            if (rid && rid !== uid) return;
+            try { _onInboxInsertHandler?.(row); } catch (e) { console.warn("[dm-realtime] inbox onInsert", e); }
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "dm_messages",
+            filter: `sender_id=eq.${uid}`,
+          },
+          (payload) => {
+            const row = normalizeRow(payload?.new);
+            if (!row) return;
+            if (String(row.sender_id || "").trim() !== uid) return;
+            try { _onInboxUpdateHandler?.(row); } catch (e) { console.warn("[dm-realtime] inbox onUpdate", e); }
+          },
+        )
+        .subscribe((status, err) => {
+          _inboxChannelReady = status === "SUBSCRIBED";
+          try {
+            _onInboxStatusHandler?.(status, err);
+          } catch {}
+          try {
+            console.info("[dm-realtime]", { inbox: uid, status, error: err?.message || "" });
+          } catch {}
+        });
+    } catch (e) {
+      console.warn("[dm-realtime] inbox subscribe failed", e);
+      try { await client.removeChannel(channel); } catch {}
+      return false;
+    }
+
+    _inboxChannel = channel;
+    _activeInboxUserId = uid;
+    return true;
+  });
 }
 
 export async function disconnectDmRealtime() {

@@ -36479,6 +36479,9 @@ function saveAuthSession(sess, { persist = true } = {}) {
     }
   } catch {}
   if (nextUserId) void ensurePersonalizedUsernameSyncedToCloud();
+  if (nextUserId && authSession?.access_token) {
+    void refreshDmThreadRealtimeAuthOnly();
+  }
 }
 function getSupabaseAuthToken() {
   return authSession?.access_token || "";

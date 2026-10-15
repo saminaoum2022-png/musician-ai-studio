@@ -1058,11 +1058,27 @@ async function insertMessage({ threadId, senderId, body, clientMessageId = "" })
     sender_id: senderId,
     body,
   };
-  const ins = await svcFetch("dm_messages", {
+  const threadR = await svcFetch(
+    `dm_threads?select=user_a,user_b&id=eq.${encodeURIComponent(threadId)}&limit=1`,
+  );
+  const thread = Array.isArray(threadR.data) && threadR.data[0] ? threadR.data[0] : null;
+  const recipientId = thread
+    ? (String(thread.user_a) === String(senderId) ? thread.user_b : thread.user_a)
+    : "";
+  if (recipientId) row.recipient_id = recipientId;
+  let ins = await svcFetch("dm_messages", {
     method: "POST",
     headers: { Prefer: "return=representation" },
     body: JSON.stringify(row),
   });
+  if (!ins.ok && row.recipient_id && /recipient_id|42703|PGRST204/i.test(String(ins.text || ""))) {
+    delete row.recipient_id;
+    ins = await svcFetch("dm_messages", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify(row),
+    });
+  }
   if (!ins.ok) return { ok: false, error: ins.text || "Send failed" };
   const message = Array.isArray(ins.data) && ins.data[0] ? ins.data[0] : null;
   await Promise.all([

@@ -47,6 +47,33 @@ export function isOnboardingActive() {
   }
 }
 
+export const ONBOARDING_GRACE_MS = 2 * 24 * 60 * 60 * 1000;
+export const ONBOARDING_COMPLETE_EVENT = "nabad:onboarding-complete";
+
+function seedOnboardingDoneLocal(uid) {
+  try {
+    if (!isOnboardingComplete(uid)) localStorage.setItem(onboardingUserKey(uid), "1");
+  } catch {}
+}
+
+/**
+ * Server truth → local flag. Only accounts created in the last 2 days (and not
+ * marked done on the profile) are treated as new signups who should see onboarding.
+ * Skipped while the tour is running so a mid-tour refresh does not cut it short.
+ */
+export function noteOnboardingAccountAge(userId, createdAt) {
+  const uid = String(userId || "").trim();
+  const t = Date.parse(String(createdAt || ""));
+  if (!uid || !Number.isFinite(t) || isOnboardingActive()) return;
+  if (Date.now() - t > ONBOARDING_GRACE_MS) seedOnboardingDoneLocal(uid);
+}
+
+export function noteOnboardingServerDone(userId, doneAt) {
+  const uid = String(userId || "").trim();
+  if (!uid || !doneAt || isOnboardingActive()) return;
+  seedOnboardingDoneLocal(uid);
+}
+
 export function markOnboardingComplete(userId) {
   const uid = String(userId || "").trim();
   try {
@@ -56,6 +83,9 @@ export function markOnboardingComplete(userId) {
   try {
     sessionStorage.removeItem(ONBOARDING_ACTIVE_KEY);
   } catch {}
+  if (uid) {
+    try { window.dispatchEvent(new CustomEvent(ONBOARDING_COMPLETE_EVENT, { detail: { userId: uid } })); } catch {}
+  }
 }
 
 export function resetOnboarding(userId) {

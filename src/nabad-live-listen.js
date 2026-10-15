@@ -18,6 +18,9 @@ import { NABAD_LIVE_LISTEN_PUBLIC_SHIPPED } from "./feature-flags.js";
 const TICK_MS = 2500;
 const HEARTBEAT_MS = 6000;
 const POLL_MS = 4000;
+/** Safety net only: realtime delivers invites instantly. */
+const INVITE_POLL_MS = 20000;
+const INVITE_RESUBSCRIBE_MS = 25 * 60 * 1000;
 const JOIN_WAIT_MS = 12000;
 const SEEK_COOLDOWN_MS = 800;
 /** Host skip / rewind / scrub — guest follows this jump. */
@@ -38,6 +41,13 @@ let _inviteOpening = false;
 let _joinBusy = false;
 let _lastTickSentAt = 0;
 let _invitePollTimer = 0;
+let _inviteInboxUid = "";
+let _inviteInboxSubscribedAt = 0;
+let _inviteVisibilityBound = false;
+
+function isPageHidden() {
+  try { return document.visibilityState === "hidden"; } catch { return false; }
+}
 let _lastSeekAt = 0;
 let _seekInFlight = false;
 let _cueCtx = null;
@@ -1135,6 +1145,7 @@ function startHostTimers() {
 function startGuestPoll() {
   stopTimers();
   _pollTimer = window.setInterval(() => {
+    if (isPageHidden()) return;
     if (!isLiveListenGuest() || !_state?.session?.id) return;
     void (async () => {
       try {
@@ -1326,6 +1337,8 @@ function offerIncomingSession(session) {
 
 async function pollIncomingInvites() {
   if (!nabadLiveListenGuestEnabled() || isLiveListenHost() || isLiveListenGuest()) return;
+  if (isPageHidden()) return;
+  if (!String(bridge.getUserId?.() || "").trim() || !String(bridge.getAuthToken?.() || "").trim()) return;
   try {
     const data = await api("get", { incoming: true });
     const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
@@ -1334,10 +1347,34 @@ async function pollIncomingInvites() {
   } catch {}
 }
 
+export function stopLiveListenGuestInbox() {
+  if (_invitePollTimer) window.clearInterval(_invitePollTimer);
+  _invitePollTimer = 0;
+  _inviteInboxUid = "";
+  _inviteInboxSubscribedAt = 0;
+}
+
 export function startLiveListenGuestInbox() {
   if (!nabadLiveListenGuestEnabled()) return;
+  // Signed out: no invites to receive, so no polling and no realtime channel.
+  const uid = String(bridge.getUserId?.() || "").trim();
+  if (!uid || !String(bridge.getAuthToken?.() || "").trim()) {
+    stopLiveListenGuestInbox();
+    return;
+  }
+  // Called after every credits refresh — already running for this user is a no-op.
+  const fresh = Date.now() - _inviteInboxSubscribedAt < INVITE_RESUBSCRIBE_MS;
+  if (_invitePollTimer && _inviteInboxUid === uid && fresh) return;
   if (_invitePollTimer) window.clearInterval(_invitePollTimer);
-  _invitePollTimer = window.setInterval(() => { void pollIncomingInvites(); }, 4000);
+  _invitePollTimer = window.setInterval(() => { void pollIncomingInvites(); }, INVITE_POLL_MS);
+  _inviteInboxUid = uid;
+  _inviteInboxSubscribedAt = Date.now();
+  if (!_inviteVisibilityBound) {
+    _inviteVisibilityBound = true;
+    document.addEventListener("visibilitychange", () => {
+      if (!isPageHidden() && _invitePollTimer) void pollIncomingInvites();
+    });
+  }
   void pollIncomingInvites();
   void (async () => {
     try {

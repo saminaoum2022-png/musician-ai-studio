@@ -163,7 +163,10 @@ import {
   getInitialBootHash,
   getPostOnboardingHash,
   initOnboarding,
+  noteOnboardingAccountAge,
+  noteOnboardingServerDone,
   ONBOARDING_ACTIVE_KEY,
+  ONBOARDING_COMPLETE_EVENT,
   onOnboardingRouteActive,
   parseOnboardingRoute,
   shouldShowOnboardingForUser,
@@ -21682,6 +21685,7 @@ async function finishPostAuthNavigation() {
   if (postAuthUid) {
     void ensureOwnerProfileIdentityHydrated({ reason: "post-auth", force: true });
   }
+  await resolveOnboardingFromServerBriefly(postAuthUid);
   if (postAuthUid && shouldShowOnboardingForUser(postAuthUid)) {
     try { sessionStorage.setItem(ONBOARDING_ACTIVE_KEY, "1"); } catch {}
     try { location.hash = "#/onboarding"; } catch {}
@@ -36467,6 +36471,7 @@ function saveAuthSession(sess, { persist = true } = {}) {
   const prevUserId = String(authSession?.user?.id || "");
   authSession = sess ? normalizeAuthSession(sess) : null;
   const nextUserId = String(authSession?.user?.id || "");
+  if (nextUserId) noteOnboardingAccountAge(nextUserId, authSession?.user?.created_at);
   if (isRealAuthUserSwitch(prevUserId, nextUserId)) {
     onAuthAccountSwitched(prevUserId, nextUserId);
     try { refreshProfileHandleFromActiveProfile(); } catch {}
@@ -40159,6 +40164,42 @@ async function supabaseUpsertProfile(profile) {
     });
   } catch {}
 }
+/** Self-update of profiles.onboarding_done_at only; DB guard keeps it one-way and server-timed. */
+async function persistOnboardingDoneToProfile(userId) {
+  const uid = String(userId || "").trim();
+  const token = getSupabaseAuthToken();
+  if (!uid || !token || uid !== String(authSession?.user?.id || "")) return;
+  try {
+    await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${encodeURIComponent(uid)}`, {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({ onboarding_done_at: new Date().toISOString() }),
+    });
+  } catch {}
+}
+
+try {
+  window.addEventListener(ONBOARDING_COMPLETE_EVENT, (e) => {
+    void persistOnboardingDoneToProfile(e?.detail?.userId);
+  });
+} catch {}
+
+/** New device / Incognito: ask the profile row before sending a signed-in user to onboarding. */
+async function resolveOnboardingFromServerBriefly(uid) {
+  if (!uid || !shouldShowOnboardingForUser(uid)) return;
+  try {
+    await Promise.race([
+      supabaseLoadProfile({ reason: "onboarding-gate" }),
+      new Promise((resolve) => window.setTimeout(resolve, 2500)),
+    ]);
+  } catch {}
+}
+
 async function supabaseLoadProfile(opts = {}) {
   const reason = String(opts.reason || "unknown");
   const force = Boolean(opts.force);
@@ -40231,6 +40272,12 @@ async function supabaseLoadProfile(opts = {}) {
   };
   _profileLoadCache = profile;
   _profileLoadCacheAt = Date.now();
+  if (p.onboarding_done_at) {
+    noteOnboardingServerDone(profile.id, p.onboarding_done_at);
+  } else if ("onboarding_done_at" in p && shouldSkipIntroOrOnboardingRoute(profile.id)) {
+    // Finished on this device before the server column existed (or the PATCH was missed).
+    void persistOnboardingDoneToProfile(profile.id);
+  }
   return profile;
   };
   if (force) {
@@ -45945,6 +45992,7 @@ function syncMessagesInboxPresenceCard() {
 
 function presenceTick() {
   try { void sendMyPresence(computeMyPresenceStatus()); } catch {}
+  if (document.hidden) return;
   try {
     const route = String(document.body.getAttribute("data-route") || "");
     if (route === "messages") {
@@ -46813,6 +46861,7 @@ async function refreshMessagesUnreadBadge({ force = false } = {}) {
   }
   const now = Date.now();
   if (_messagesUnreadFetchInFlight) return;
+  if (!force && document.hidden) return;
   if (!force && now - _messagesUnreadLastFetchedAt < 45000) return;
   _messagesUnreadFetchInFlight = true;
   try {
@@ -47754,6 +47803,7 @@ function restartMessagesInboxPoll() {
   if (String(document.body.getAttribute("data-route") || "") !== "messages") return;
   const interval = _messagesInboxRealtimeReady ? MESSAGES_INBOX_POLL_LIVE_MS : MESSAGES_INBOX_POLL_MS;
   _messagesInboxPollTimer = window.setInterval(() => {
+    if (document.hidden) return;
     if (String(document.body.getAttribute("data-route") || "") !== "messages") {
       stopMessagesInboxPoll();
       return;
@@ -47949,6 +47999,7 @@ function startMessagesConnectPoll(threadId) {
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid || isCoachThreadId(tid)) return;
   _messagesConnectPollTimer = window.setInterval(() => {
+    if (document.hidden) return;
     if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
       stopMessagesConnectPoll();
       return;
@@ -47996,6 +48047,7 @@ function restartThreadSafetyPoll(threadId) {
     ? MESSAGES_THREAD_SAFETY_POLL_LIVE_MS
     : MESSAGES_THREAD_SAFETY_POLL_MS;
   _messagesRealtimePollTimer = window.setInterval(() => {
+    if (document.hidden) return;
     if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
       stopMessagesThreadRealtime();
       return;
@@ -48017,6 +48069,7 @@ function restartThreadReadPoll(threadId) {
     ? MESSAGES_THREAD_RECEIPT_POLL_LIVE_MS
     : MESSAGES_THREAD_READ_POLL_MS;
   _messagesReadPollTimer = window.setInterval(() => {
+    if (document.hidden) return;
     if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
       stopMessagesThreadRealtime();
       return;
@@ -48036,6 +48089,7 @@ function startMessagesThreadRealtime(threadId) {
   if (!tid) return;
   restartThreadSafetyPoll(tid);
   _messagesPresencePollTimer = window.setInterval(() => {
+    if (document.hidden) return;
     if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
       stopMessagesThreadRealtime();
       return;
@@ -89461,6 +89515,7 @@ void (async () => {
   }
 
   const bootUid = String(authSession?.user?.id || "").trim();
+  await resolveOnboardingFromServerBriefly(bootUid);
   const needsOnboardingBoot = bootUid && shouldShowOnboardingForUser(bootUid);
   if (needsOnboardingBoot && !_passwordResetActive) {
     redirectToOnboardingIfNeeded();

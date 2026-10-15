@@ -1572,6 +1572,8 @@ var vibeReadData = null;
 var vibeReadAppliedForNextGen = false;
 var vibeReadSourceName = "";
 var songEditSession = null;
+/** Keep the Edit pane open across Create route/layout resyncs (simple Create otherwise forces Lyrics). */
+var _holdCreateEditPane = false;
 let currentProofPost = null;
 let hubAudio = null;
 let hubAudioPostId = null;
@@ -21587,6 +21589,11 @@ function clearCreateFlow() {
 /** Drop alt create flows (Hum Track / Sounds / Persona) when leaving #/generate. */
 function leaveGenerateRouteCleanup() {
   if (isPersonaFlowActive()) abandonPersonaFlow();
+  if (_holdCreateEditPane || songEditSession) {
+    _holdCreateEditPane = false;
+    try { resetSongEditSession(); } catch {}
+    try { document.body.removeAttribute("data-create-edit"); } catch {}
+  }
   if (hasActiveCreateSession()) return;
   pendingSearchRemixMeta = null;
   clearCreateChallengeContext();
@@ -21616,6 +21623,7 @@ function syncCreateFlowUi() {
     else if (flow === "sounds") title.textContent = "Sounds";
     else if (flow === "persona") title.textContent = "Persona";
     else if (flow === "nabadclip") title.textContent = "Nabad Clip";
+    else if (shouldHoldCreateEditPane()) title.textContent = "Edit structure";
     else title.textContent = "Create";
   }
 }
@@ -26937,6 +26945,30 @@ function resetSongEditSession() {
   try { syncCreateGenerateDock(); } catch {}
 }
 
+function shouldHoldCreateEditPane() {
+  try {
+    if (!nabadSongEditEnabled()) return false;
+    if (_holdCreateEditPane) return true;
+    if (songEditSession) return true;
+    const wrap = document.querySelector(".createPanes");
+    return String(wrap?.dataset?.mode || "") === "edit";
+  } catch {
+    return Boolean(_holdCreateEditPane || songEditSession);
+  }
+}
+
+function syncCreateEditLayoutAttr() {
+  try {
+    if (shouldHoldCreateEditPane() && getActiveCreateTabMode() === "edit") {
+      document.body.setAttribute("data-create-edit", "1");
+    } else {
+      document.body.removeAttribute("data-create-edit");
+    }
+  } catch {
+    try { document.body.removeAttribute("data-create-edit"); } catch {}
+  }
+}
+
 async function openSongEditFromLibraryTrack(track) {
   if (!nabadSongEditEnabled()) {
     showToast("Edit is admin-only on this build.", { icon: "!", durationMs: 3200 });
@@ -26947,8 +26979,17 @@ async function openSongEditFromLibraryTrack(track) {
     showToast("This song has no audio to edit.", { icon: "!", durationMs: 3200 });
     return;
   }
-  try { location.hash = "#/generate"; } catch {}
-  try { setActiveCreateTab("edit"); } catch {}
+  _holdCreateEditPane = true;
+  const openEditPane = () => {
+    try { setActiveCreateTab("edit"); } catch {}
+    try { syncCreateFlowUi(); } catch {}
+  };
+  try {
+    enterGenerateSubFlow(null, openEditPane);
+  } catch {
+    try { location.hash = "#/generate"; } catch {}
+    openEditPane();
+  }
   const title = String(track?.title || "").trim();
   setCreateEditAttachmentPreview("Loading this song…", title || "Song");
   try {
@@ -82996,7 +83037,7 @@ function syncCreateLyricsComposerChrome() {
       tabs.style.display = "";
     }
   }
-  if (composer) {
+  if (composer && !shouldHoldCreateEditPane()) {
     try { setActiveCreateTab("lyrics"); } catch {}
   }
   syncCreateLyricsAttachStack();
@@ -83433,7 +83474,9 @@ function syncCreateFlowLayoutUi() {
   if (simpleWrap) simpleWrap.hidden = mode !== "simple" || !enabled;
   if (els.createFlowModeBar) els.createFlowModeBar.hidden = true;
   if (mode === "simple" && enabled) {
-    try { setActiveCreateTab("lyrics"); } catch {}
+    if (!shouldHoldCreateEditPane()) {
+      try { setActiveCreateTab("lyrics"); } catch {}
+    }
     enforceSimpleCreateVocalOnly();
     if (
       !_activeLyriaStudioStyleId
@@ -91342,6 +91385,8 @@ function setActiveCreateTab(mode, opts = {}) {
     if (opts.requestPro) return;
   }
   if (mode === "edit" && !nabadSongEditEnabled()) mode = "lyrics";
+  if (nabadSongEditEnabled() && _holdCreateEditPane && mode !== "edit") mode = "edit";
+  if (mode === "edit") _holdCreateEditPane = true;
   ["photo", "hum", "lyrics", "vibe", "edit"].forEach((k) => {
     const el = createTabEls[k];
     if (!el || el.hidden) return;
@@ -91350,7 +91395,7 @@ function setActiveCreateTab(mode, opts = {}) {
     el.setAttribute("aria-selected", active ? "true" : "false");
   });
   if (createPanesWrap) createPanesWrap.dataset.mode = mode;
-  const composerLyricsOnly = isCreateLyricsComposerLayout();
+  const composerLyricsOnly = isCreateLyricsComposerLayout() && mode !== "edit";
   document.querySelectorAll(".createPane").forEach((p) => {
     if (composerLyricsOnly) {
       p.hidden = p.dataset.mode !== "lyrics";
@@ -91358,6 +91403,7 @@ function setActiveCreateTab(mode, opts = {}) {
       p.hidden = p.dataset.mode !== mode;
     }
   });
+  try { syncCreateEditLayoutAttr(); } catch {}
   try { syncCreateGenerateDock(); } catch {}
 }
 if (createTabEls.lyrics) {

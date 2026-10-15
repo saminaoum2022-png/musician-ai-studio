@@ -12644,7 +12644,7 @@ body[data-route="generate"][data-create-layout="simple"] #btnCreateInstrumentalT
 body[data-route="generate"][data-create-layout="simple"] #createSimpleLangPanel{
   display: none !important;
 }
-body[data-route="generate"][data-create-layout="simple"] .createPane:not(.createPane--lyrics){
+body[data-route="generate"][data-create-layout="simple"]:not([data-create-edit="1"]) .createPane:not(.createPane--lyrics){
   display: none !important;
 }
 body[data-route="generate"][data-create-layout="simple"] .createFlowStep[aria-label="Sound and title"]{
@@ -13393,8 +13393,21 @@ body[data-route="generate"][data-create-layout="simple"] #clipVocalCharacterRow{
 body[data-route="generate"][data-create-composer="1"] .createTabs{
   display: none !important;
 }
-body[data-route="generate"][data-create-composer="1"] .createPane:not(.createPane--lyrics){
+body[data-route="generate"][data-create-composer="1"]:not([data-create-edit="1"]) .createPane:not(.createPane--lyrics){
   display: none !important;
+}
+body[data-route="generate"][data-create-edit="1"] .createPane--lyrics,
+body[data-route="generate"][data-create-edit="1"] #createLyricsAttachFabWrap{
+  display: none !important;
+}
+body[data-route="generate"][data-create-edit="1"] .createPane--edit{
+  display: flex !important;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+body[data-route="generate"][data-create-edit="1"] .createPanes{
+  flex: 1 1 auto;
+  min-height: 0;
 }
 body[data-route="generate"][data-create-composer="1"] #lyricsFieldPanel .row.imageMoodRow{
   display: none !important;

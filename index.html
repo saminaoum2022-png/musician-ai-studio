@@ -238,7 +238,7 @@
     <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./assets/splash/ios/startup-430x932@3x.png" />
     <link rel="apple-touch-startup-image" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./assets/splash/ios/startup-440x956@3x.png" />
     <link rel="preload" href="./assets/icons/splash-mark.png" as="image" />
-    <link rel="preload" href="./assets/splash/nabad-wordmark.png" as="image" />
+    <link rel="preload" href="./assets/splash/nabad-wordmark-suffix.png" as="image" />
     <link rel="canonical" href="https://www.nabadai.com/" />
     <!--
       Network preflight hints. Supabase + CDN audio origins warm up faster on first tap.
@@ -4026,7 +4026,7 @@
           </header>
 
           <div class="creditsHeroBare">
-            <span class="creditsWalletValue" id="creditsBalanceBig">0</span>
+            <span class="creditsWalletValue isLoading" id="creditsBalanceBig">—</span>
             <span class="creditsWalletLabel">available to create</span>
             <a href="#/pro" class="creditsWalletCta" data-route-link="pro">Get more credits</a>
             <p id="creditsHeroEmail" class="creditsWalletEmail" style="display:none" hidden></p>
@@ -5469,7 +5469,7 @@
         class="profileCreditsPill profileCreditsPill--toolbar"
         aria-label="Credits balance. Tap to manage credits."
       >
-        <strong id="profileCreditsBalance" class="profileCreditsPillValue">0</strong>
+        <strong id="profileCreditsBalance" class="profileCreditsPillValue isLoading">—</strong>
       </a>
       </div>
       <div class="profileAuraToolbar" role="toolbar" aria-label="Profile actions">

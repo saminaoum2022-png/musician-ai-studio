@@ -37282,14 +37282,21 @@ function renderCreditsBreakdown() {
 
 function paintCreditsDisplays() {
   const admin = Boolean(creditsState.isAdmin);
+  const ready = Boolean(creditsState.loaded);
   const v = Number.isFinite(Number(creditsState.balance)) ? Math.max(0, Number(creditsState.balance)) : 0;
-  const disp = formatCreditsAmount(v);
-  const aria = `App credits balance ${disp}`;
-  if (els.profileCreditsBalance) els.profileCreditsBalance.textContent = disp;
-  if (els.creditsBalanceBig) els.creditsBalanceBig.textContent = disp;
+  const disp = ready ? formatCreditsAmount(v) : "—";
+  const aria = ready ? `App credits balance ${disp}` : "Credits balance loading";
+  if (els.profileCreditsBalance) {
+    els.profileCreditsBalance.textContent = disp;
+    els.profileCreditsBalance.classList.toggle("isLoading", !ready);
+  }
+  if (els.creditsBalanceBig) {
+    els.creditsBalanceBig.textContent = disp;
+    els.creditsBalanceBig.classList.toggle("isLoading", !ready);
+  }
   if (els.profileCreditsLink) {
     els.profileCreditsLink.classList.toggle("isAdmin", admin);
-    els.profileCreditsLink.setAttribute("aria-label", `${aria}. Tap to manage credits.`);
+    els.profileCreditsLink.setAttribute("aria-label", ready ? `${aria}. Tap to manage credits.` : aria);
   }
   // Create header: quiet balance chip (status only — Credits stays one tap away on Profile).
   const createChip = document.getElementById("createCreditsChip");
@@ -37464,6 +37471,7 @@ async function refreshMyCredits({ silent = false } = {}) {
   } catch (e) {
     creditsState.lastError = e?.message || String(e);
     creditsState.loaded = true;
+    paintCreditsDisplays();
     paintCreditsAccountEmail(authSession?.user?.email || activeProfile?.email);
     try { patchSignupCoachWelcomeCredits(); } catch {}
     if (!silent) console.warn("[credits/me]", creditsState.lastError);
@@ -41512,7 +41520,7 @@ async function fetchPublicSongByOwnerTitle(ownerUserId, title) {
  *  table/columns are missing — resolves to an empty map. */
 async function fetchPublicSongsByIds(ids, opts = {}) {
   const out = new Map();
-  const uuids = [...new Set((ids || []).map((x) => String(x || "").trim()).filter(Boolean))].slice(0, 60);
+  const uuids = [...new Set((ids || []).map((x) => String(x || "").trim()).filter((id) => isShareUuid(id)))].slice(0, 60);
   if (!uuids.length || !SUPABASE_URL || !SUPABASE_ANON_KEY) return out;
   const metaCols = opts.lean ? FRIENDS_FEED_SONG_META_COLS : PUBLIC_LIBRARY_SONG_META_COLS;
   const cols =
@@ -90010,7 +90018,6 @@ try {
     setActiveCreateTab: (mode) => setActiveCreateTab(mode),
     getActiveCreateTab: () => getActiveCreateTabMode(),
   });
-  syncNabadVibeCreateTab();
 } catch (e) { console.warn("[nabad-vibe] init", e); }
 
 try {
@@ -90052,7 +90059,6 @@ try {
     setActiveCreateTab: (mode) => setActiveCreateTab(mode),
     getActiveCreateTab: () => getActiveCreateTabMode(),
   });
-  syncNabadSongEditCreateTab();
 } catch (e) { console.warn("[nabad-song-edit] init", e); }
 
 try {
@@ -91377,6 +91383,8 @@ if (createTabEls.edit) {
     try { syncCreateGenerateDock(); } catch {}
   });
 }
+try { syncNabadVibeCreateTab(); } catch {}
+try { syncNabadSongEditCreateTab(); } catch {}
 const createPhotoCtaBtn = document.getElementById("createPhotoCta");
 if (createPhotoCtaBtn) {
   createPhotoCtaBtn.addEventListener("click", () => {

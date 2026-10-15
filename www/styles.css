@@ -21679,6 +21679,9 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
   letter-spacing: -0.01em;
   line-height: 1;
 }
+.profileCreditsPillValue.isLoading{
+  opacity: 0.45;
+}
 .profileCreditsPill.isAdmin{
   border: 0;
   background: rgba(255, 255, 255, 0.08);
@@ -28849,6 +28852,9 @@ a.vwPrimary,
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+.creditsWalletValue.isLoading{
+  opacity: 0.38;
 }
 .creditsWalletLabel{
   font-size: 14px;

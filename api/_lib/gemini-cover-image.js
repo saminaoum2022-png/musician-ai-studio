@@ -33,10 +33,10 @@ function stagingDeploymentHint() {
   return branch === "staging" || url.includes("git-staging") || url.includes("-staging-");
 }
 
-/** Regen image backend — Flux/Pollinations default. Set COVER_REGEN_IMAGE_PROVIDER=gemini to opt into Gemini regen. */
+/** Regen image backend — Flux default. Set COVER_REGEN_IMAGE_PROVIDER=gemini to opt into Gemini regen. */
 function resolveCoverRegenImageProvider() {
   const explicit = String(process.env.COVER_REGEN_IMAGE_PROVIDER || "").trim().toLowerCase();
-  if (explicit === "gemini" || explicit === "pollinations" || explicit === "cloudflare") return explicit;
+  if (explicit === "gemini") return "gemini";
   return resolveDefaultCoverImageProvider();
 }
 

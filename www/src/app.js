@@ -73312,11 +73312,7 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
             ? `Cover updated via Flux (Gemini hint failed: ${fallback}).`
             : "Cover updated via Flux (Gemini hint failed).";
         } else if (provider === "cloudflare") coverStatus = "Cover updated via Cloudflare Flux.";
-        else if (provider === "pollinations") {
-          coverStatus = fallback
-            ? `Cover updated via Pollinations (${fallback}).`
-            : "Cover updated via Pollinations.";
-        } else if (provider) coverStatus = `Cover updated via ${provider}.`;
+        else if (provider) coverStatus = `Cover updated via ${provider}.`;
         if (coverStatus) {
           setStatus(coverStatus);
           window.setTimeout(() => setStatus(""), 5200);
@@ -73325,10 +73321,10 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
         }
         refreshCoverChangeSurfaces(updated, artUrl);
       } else {
-        setStatus("Cover regeneration failed.");
+        setStatus("Couldn\u2019t regenerate the cover \u2014 your current cover is kept. Try again in a moment.");
       }
     } else {
-      setStatus("Cover regeneration failed.");
+      setStatus("Couldn\u2019t regenerate the cover \u2014 your current cover is kept. Try again in a moment.");
     }
   } catch (e) {
     const msg = String(e?.message || e || "");

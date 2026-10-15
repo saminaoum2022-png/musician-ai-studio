@@ -392,6 +392,20 @@ async function runCoverJobForTrack(track, id, opts = {}) {
   try {
     console.warn("[cover-art]", lastErr?.message || lastErr || "Cover generation failed");
   } catch {}
+  if (opts.coverRegenerate) {
+    // Regen failed: the song already has a cover — keep it, drop the pending flag, let the UI say "try again".
+    await enqueueLibraryPatch(() => {
+      const { loadLibrary, saveLibrary } = d();
+      const items = loadLibrary().slice();
+      const idx = items.findIndex((x) => String(x.id) === id);
+      if (idx < 0) return null;
+      items[idx] = { ...items[idx], meta: { ...(items[idx].meta || {}), pollinationsCoverPending: false } };
+      saveLibrary(items);
+      return items[idx];
+    });
+    return null;
+  }
+  // First cover failed: music placeholder now; the pending flag stays so Flux is retried later with the same themed prompt.
   await enqueueLibraryPatch(() =>
     patchLibraryTrackCover(id, {
       dataUrl: DEFAULT_SONG_COVER_URL,

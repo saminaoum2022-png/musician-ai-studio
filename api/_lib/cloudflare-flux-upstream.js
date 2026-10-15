@@ -8,6 +8,7 @@
  * (free 10k neurons/day cap applies).
  */
 
+const FLUX_PROMPT_HARD_MAX = 2000;
 const MODEL_ID = "@cf/black-forest-labs/flux-1-schnell";
 const AIG_GATEWAY_DIRECT_ALIASES = /^(off|false|none|direct|0)$/i;
 
@@ -24,11 +25,9 @@ function isCloudflareFluxConfigured() {
   return Boolean(accountId && token);
 }
 
-/** Default abstract cover provider — cloudflare when creds exist, else Pollinations. */
+/** Abstract covers are Flux-only now (no third-party fallback renderer). */
 function resolveDefaultCoverImageProvider() {
-  const explicit = String(process.env.COVER_IMAGE_PROVIDER || "").trim().toLowerCase();
-  if (explicit === "pollinations" || explicit === "cloudflare") return explicit;
-  return isCloudflareFluxConfigured() ? "cloudflare" : "pollinations";
+  return "cloudflare";
 }
 
 function resolveFluxSteps() {
@@ -52,8 +51,14 @@ async function fetchCloudflareFluxCover({ prompt, timeoutMs = 65000, steps = res
   const { accountId, token } = getCloudflareCredentials();
   if (!accountId || !token) return { ok: false, error: "cloudflare_not_configured" };
 
-  const text = String(prompt || "").trim();
+  let text = String(prompt || "").trim();
   if (!text) return { ok: false, error: "empty_prompt" };
+  // Workers AI flux-1-schnell rejects prompts over 2048 chars — trim at a clause boundary.
+  if (text.length > FLUX_PROMPT_HARD_MAX) {
+    const cut = text.slice(0, FLUX_PROMPT_HARD_MAX);
+    const i = Math.max(cut.lastIndexOf(", "), cut.lastIndexOf(". "));
+    text = (i > FLUX_PROMPT_HARD_MAX * 0.5 ? cut.slice(0, i) : cut).trim();
+  }
 
   const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${MODEL_ID}`;
   const gatewayId = resolveAigGatewayId();
@@ -115,8 +120,31 @@ async function fetchCloudflareFluxCover({ prompt, timeoutMs = 65000, steps = res
   }
 }
 
+/** Errors worth one more try; prompt/content rejections and hard quota are not. */
+function isTransientFluxError(error) {
+  const e = String(error || "").toLowerCase();
+  if (!e) return false;
+  if (e === "timeout" || e === "empty_image" || e === "cloudflare_missing_image" || e === "cloudflare_invalid_json") return true;
+  if (/^http (408|425|429|5\d\d)$/.test(e)) return true;
+  return /rate.?limit|too many|overloaded|capacity|temporar|try again|internal|unavailable|timed out|econnreset|fetch failed/.test(e);
+}
+
+/**
+ * Flux with one short-backoff retry on transient failures. Budget is sized for the 60s
+ * function limit: 25s + 0.7s + 20s, leaving room for the caller's own work.
+ */
+async function fetchCloudflareFluxCoverWithRetry({ prompt, steps } = {}) {
+  const first = await fetchCloudflareFluxCover({ prompt, steps, timeoutMs: 25000 });
+  if (first.ok || !isTransientFluxError(first.error)) return { ...first, attempts: 1 };
+  await new Promise((r) => setTimeout(r, 700));
+  const second = await fetchCloudflareFluxCover({ prompt, steps, timeoutMs: 20000 });
+  return { ...second, attempts: 2, firstError: first.error };
+}
+
 module.exports = {
   MODEL_ID,
+  isTransientFluxError,
+  fetchCloudflareFluxCoverWithRetry,
   getCloudflareCredentials,
   isCloudflareFluxConfigured,
   resolveDefaultCoverImageProvider,

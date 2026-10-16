@@ -405,7 +405,8 @@ function paintProBackLink() {
 
 export function setProReturnRoute(route) {
   const r = String(route || "").trim();
-  _returnRoute = r && r !== "pro" ? r : "settings";
+  // A second route pass reports "pro" as the previous route — keep the page we were really opened from.
+  _returnRoute = r && r !== "pro" ? r : (_returnRoute || "settings");
   paintProBackLink();
 }
 

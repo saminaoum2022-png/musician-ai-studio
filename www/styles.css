@@ -34443,6 +34443,10 @@ body[data-profile-songs-seg="reposts"] .profileSongsToolbar{
   -webkit-tap-highlight-color: transparent;
   transition: color 190ms ease, opacity 190ms ease;
 }
+.profileSegTab[hidden],
+.homeDeskPromoCard[hidden]{
+  display: none !important;
+}
 .profileSegTab:hover:not(.is-active){
   opacity: calc(var(--seg-tab-inactive-opacity) + 0.12);
 }

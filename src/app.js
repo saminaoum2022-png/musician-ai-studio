@@ -58891,6 +58891,7 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
   }
   if (!opts.skipToggle && toggleDiscoverFeedPlaybackIfSameUrl(url)) return;
   primeGlobalPlayerInGesture();
+  prewarmSignedPlayback(url, playSource?.songId);
   if (el) primeDiscoverPlaybackPendingFromEl(el);
   const useReel = !isDeskWebLayout() && !opts.skipReel && shouldUseDiscoverReelPlayer() && opts.openPlayer !== false;
   discoverReelDebugLog("tap", `useReel=${useReel} tab=${_discoverFeedTab} n=${_discoveryFeedTracks?.length || 0}`);
@@ -58935,7 +58936,7 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
           // Cap the wait: a slow portrait download must not hold the player closed for seconds.
           await Promise.race([
             primeDiscoverReelCoverDecode(playerArtUrl),
-            new Promise((r) => window.setTimeout(r, 700)),
+            new Promise((r) => window.setTimeout(r, 400)),
           ]);
         }
         if (els.playerArt?.classList.contains("isReelCoverPending")) {
@@ -58943,7 +58944,7 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
           primeDiscoverReelCoverFirstFrame(pick, { title, subtitle: by });
         }
         if (isNativeShell() && !_discoverReelShellRevealed) {
-          await revealDiscoverReelCoverWhenReady(els.playerArt, { maxWaitMs: 500 });
+          await revealDiscoverReelCoverWhenReady(els.playerArt, { maxWaitMs: 300 });
         }
         discoverReelDebugLayout("pre-play");
         await playDiscoverReelAt(idx, { openPlayer: true, skipCoverPaint: true });
@@ -59002,6 +59003,7 @@ function playDiscoverTarget(el, opts = {}) {
   if (!t) return;
   haptic("light");
   if (!opts.skipToggle && toggleDiscoverFeedPlaybackIfSameUrl(t.raw)) return;
+  prewarmSignedPlayback(t.raw, t.playSource?.songId);
   if (
     !opts.skipReel &&
     opts.openPlayer !== false &&
@@ -74778,9 +74780,37 @@ function isSignedSongStreamPlaybackUrl(url) {
 }
 
 /** Mint GET /api/songs/stream?…&exp=&sig= (audio tags cannot send JWT). */
+/** Signed stream URLs are bound to the file key and valid ~1h — reuse them instead of a round trip per tap. */
+const _signedStreamCache = new Map();
+const _signedStreamInflight = new Map();
+const SIGNED_STREAM_REUSE_MARGIN_MS = 5 * 60 * 1000;
+
 async function trySignArchiveStreamUrl(key, songId) {
   const k = String(key || "").trim();
   if (!k) return "";
+  const cached = _signedStreamCache.get(k);
+  if (cached && cached.expAt - SIGNED_STREAM_REUSE_MARGIN_MS > Date.now()) return cached.url;
+  const pending = _signedStreamInflight.get(k);
+  if (pending) return pending;
+  const job = signArchiveStreamUrlNetwork(k, songId).finally(() => { _signedStreamInflight.delete(k); });
+  _signedStreamInflight.set(k, job);
+  return job;
+}
+
+/** Start signing a Discover/library song in the background so the tap itself finds it ready. */
+function prewarmSignedPlayback(rawUrl, songId = "") {
+  try {
+    const raw = String(rawUrl || "").trim();
+    if (!raw) return;
+    const leaf = unwrapInnermostHttpAudioUrl(raw) || raw;
+    if (!(isArchivedSongStorageUrl(leaf) || /\/api\/songs\/stream\b/i.test(leaf))) return;
+    if (isSignedSongStreamPlaybackUrl(leaf)) return;
+    const key = songArchiveKeyFromUrl(leaf);
+    if (key) void trySignArchiveStreamUrl(key, songId);
+  } catch {}
+}
+
+async function signArchiveStreamUrlNetwork(k, songId) {
   try {
     await prepareApiAuthForFetch();
     const token = getSupabaseAuthToken();
@@ -74795,7 +74825,13 @@ async function trySignArchiveStreamUrl(key, songId) {
       body: JSON.stringify({ key: k, songId: sid }),
     });
     const data = await r.json().catch(() => null);
-    if (r.ok && data?.playUrl) return normalizeAudioUrlForPlayback(data.playUrl);
+    if (r.ok && data?.playUrl) {
+      const url = normalizeAudioUrlForPlayback(data.playUrl);
+      const expSec = Number(data?.exp) || 0;
+      _signedStreamCache.set(k, { url, expAt: expSec ? expSec * 1000 : Date.now() + 50 * 60 * 1000 });
+      if (_signedStreamCache.size > 200) _signedStreamCache.delete(_signedStreamCache.keys().next().value);
+      return url;
+    }
   } catch {}
   return "";
 }

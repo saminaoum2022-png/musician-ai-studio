@@ -57864,7 +57864,26 @@ function resolveDiscoverPlayTarget(el) {
 function shouldUseDiscoverReelPlayer() {
   const route = String(document.body.getAttribute("data-route") || "").trim();
   if (route !== "discover") return false;
-  return _discoverFeedTab === "for-you" && (_discoveryFeedTracks?.length || 0) > 1;
+  // Any Discover surface (For You, Friends, charts, carousels) opens the scrollable reel.
+  return true;
+}
+
+/** Queue row for a song tapped from a Discover surface that is not part of the For You feed. */
+function discoverReelPickFromTap({ url, title, art, by, playSource } = {}) {
+  const songId = String(playSource?.songId || playSource?.cloudSongId || "").trim();
+  return {
+    id: songId || `tap_${Date.now().toString(36)}`,
+    songId,
+    url: String(url || "").trim(),
+    title: String(title || "Song"),
+    artUrl: String(art || ""),
+    byLine: String(by || ""),
+    ownerUserId: String(playSource?.ownerUserId || ""),
+    taskId: String(playSource?.taskId || ""),
+    audioId: String(playSource?.audioId || ""),
+    playCount: 0,
+    meta: {},
+  };
 }
 
 function shouldUseDiscoverReelInPlace() {
@@ -58778,6 +58797,7 @@ async function runDiscoverReelSlideTransition(direction, targetIdx, opts = {}) {
   previewDiscoverReelMeta(target);
 
   _discoverReelSlideAnimating = true;
+  try {
   const outOff = dir > 0 ? "-100%" : "100%";
   const inStart = dir > 0 ? "100%" : "-100%";
 
@@ -58805,8 +58825,10 @@ async function runDiscoverReelSlideTransition(direction, targetIdx, opts = {}) {
   await discoverReelSlideWait(DISCOVER_REEL_SLIDE_MS);
 
   await finishDiscoverReelSlideSwap(layer, outPanel, inPanel, targetIdx, target);
-  _discoverReelSlideAnimating = false;
   return true;
+  } finally {
+    _discoverReelSlideAnimating = false;
+  }
 }
 
 async function playDiscoverReelAt(index, opts = {}) {
@@ -58897,12 +58919,18 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
   discoverReelDebugLog("tap", `useReel=${useReel} tab=${_discoverFeedTab} n=${_discoveryFeedTracks?.length || 0}`);
   if (!useReel) resetDiscoverReelShellRevealState();
   if (useReel) {
-    setDiscoverReelQueue(buildDiscoverReelQueue());
-    const idx = findDiscoverReelIndexForTarget({
+    const baseQueue = buildDiscoverReelQueue();
+    setDiscoverReelQueue(baseQueue);
+    let idx = findDiscoverReelIndexForTarget({
       raw: url,
       songId: playSource?.songId,
       playSource,
     });
+    // Tapped song is not in the For You feed (Friends, charts, carousels…): put it first, feed follows.
+    if (idx < 0 && baseQueue.length >= 1) {
+      setDiscoverReelQueue([discoverReelPickFromTap({ url, title, art, by, playSource }), ...baseQueue]);
+      idx = 0;
+    }
     if (idx >= 0) {
       const tappedArt = String(art || "").trim();
       if (tappedArt && _discoverReelQueue[idx]) {
@@ -74270,6 +74298,7 @@ function wirePlayerDiscoverReelSwipeOnce() {
       return;
     }
     _discoverReelSlideAnimating = true;
+    try {
     setDiscoverReelRailFaded(true);
     const outOff = dir > 0 ? -h : h;
     const easing = "cubic-bezier(0.22, 1, 0.36, 1)";
@@ -74281,11 +74310,13 @@ function wirePlayerDiscoverReelSwipeOnce() {
     await discoverReelSlideWait(DISCOVER_REEL_SLIDE_MS);
     const target = discoverReelPickAt(targetIdx);
     await finishDiscoverReelSlideSwap(layer, outPanel, inPanel, targetIdx, target);
-    _discoverReelSlideAnimating = false;
-    touchDragging = false;
-    touchDragDir = 0;
-    touchDragTargetIdx = -1;
-    touchDragY = 0;
+    } finally {
+      _discoverReelSlideAnimating = false;
+      touchDragging = false;
+      touchDragDir = 0;
+      touchDragTargetIdx = -1;
+      touchDragY = 0;
+    }
   }
 
   shell.addEventListener("touchstart", (e) => {

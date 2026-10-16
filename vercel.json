@@ -26,6 +26,9 @@
     "api/songs/archive.js": {
       "maxDuration": 60
     },
+    "api/songs/instrumental.js": {
+      "maxDuration": 300
+    },
     "api/songs/stream.js": {
       "maxDuration": 60
     },

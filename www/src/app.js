@@ -56979,13 +56979,69 @@ async function startLibraryRemixForLibraryTrack(t) {
   }
 }
 
+/** Instrumental for any song (Lyria, Suno, ElevenLabs…) via stem separation. Returns false → use the old Suno path. */
+async function runElevenInstrumentalForTrack(t, title) {
+  const srcUrl = String(t?.url || "").trim();
+  if (!srcUrl) return false;
+  try {
+    hideCreateResultCards();
+    setStatus("Getting instrumental for selected song…");
+    beginCoachPriorityStatus(coachInstrumentalPillText(title), { generating: true });
+    const tok = getSupabaseAuthToken();
+    const r = await apiFetch("/api/songs/instrumental", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
+      },
+      body: JSON.stringify({ url: srcUrl, title, songId: String(t?.id || "") }),
+      nativeReadTimeoutMs: 200000,
+    });
+    const d = await r.json().catch(() => ({}));
+    if (d?.code === "stems_disabled") {
+      cancelCoachPriorityStatus();
+      return false;
+    }
+    if (d?.code === "pro_required") {
+      cancelCoachPriorityStatus();
+      promptWebProUpgrade("Instrumental");
+      return true;
+    }
+    if (r.status === 402 || d?.code === "insufficient_credits") {
+      cancelCoachPriorityStatus();
+      const need = Number(d?.needed ?? 0);
+      const have = Number(d?.balance || 0);
+      try { showOutOfCreditsPrompt({ needed: need, balance: have }); } catch {}
+      setStatus(`Not enough credits for an instrumental (you have ${have}, need ${need}).`);
+      return true;
+    }
+    if (!r.ok || !d?.url) throw new Error(d?.error || "Instrumental request failed");
+    try { void refreshMyCredits({ silent: true }); } catch {}
+    addToLibrary({
+      title: `${title} • Instrumental`,
+      artUrl: t.artUrl || (t.meta && t.meta.imageUrl) || "",
+      url: d.url,
+      kind: "instrumental",
+    });
+    setStatus("Instrumental version is ready — find it in your Library.");
+    finishCoachPriorityStatus("Instrumental ready ✓");
+    try { wireProfileSongsForActiveJob(); } catch {}
+    return true;
+  } catch (err) {
+    setStatus(`Library instrumental failed: ${err?.message || String(err)}`);
+    cancelCoachPriorityStatus();
+    return true;
+  }
+}
+
 async function runLibraryInstrumentalForTrack(t) {
   if (!requireProForWebFeature("Instrumental")) return;
+  const title = String(t?.title || "Your song").trim() || "Your song";
+  if (await runElevenInstrumentalForTrack(t, title)) return;
   if (!t?.taskId || !t?.audioId) {
-    setStatus("This song is missing generation ids for instrumental request.");
+    setStatus("Instrumental isn't available for this song yet.");
     return;
   }
-  const title = String(t?.title || "Your song").trim() || "Your song";
   try {
     hideCreateResultCards();
     setStatus("Getting instrumental for selected song…");

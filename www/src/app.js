@@ -9036,11 +9036,54 @@ function syncSettingsPushRow() {
   }
 }
 
+let _musicEnginePanelLoading = null;
+/** Admin only: pull the Music engine panel from the server and mount it in Settings. */
+function ensureMusicEnginePanel() {
+  if (document.getElementById("settingsMusicProviderSection")) return Promise.resolve(true);
+  if (_musicEnginePanelLoading) return _musicEnginePanelLoading;
+  _musicEnginePanelLoading = (async () => {
+    try {
+      const token = getSupabaseAuthToken();
+      if (!token || !creditsState.isAdmin) return false;
+      const r = await fetch(apiUrl("/api/admin/music-engine-panel"), {
+        headers: getApiFetchHeaders({ Authorization: `Bearer ${token}` }),
+        cache: "no-store",
+      });
+      if (!r.ok) return false;
+      const d = await r.json().catch(() => ({}));
+      if (!d?.html || !creditsState.isAdmin) return false;
+      if (document.getElementById("settingsMusicProviderSection")) return true;
+      const anchor = document.getElementById("settingsOrbTitle")?.closest("section");
+      if (!anchor) return false;
+      anchor.insertAdjacentHTML("beforebegin", d.html);
+      wireSettingsMusicProviderOnce();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      _musicEnginePanelLoading = null;
+      if (document.getElementById("settingsMusicProviderSection") && creditsState.isAdmin) {
+        try { syncSettingsMusicProviderRow(); } catch {}
+      }
+    }
+  })();
+  return _musicEnginePanelLoading;
+}
+
 function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   const section = document.getElementById("settingsMusicProviderSection");
   const root = document.getElementById("settingsMusicProviderPicker");
   const sub = document.getElementById("settingsMusicProviderSub");
   const show = Boolean(creditsState.isAdmin);
+  if (show && !section) {
+    // Panel markup is not in the public HTML: fetch it after the server confirms admin.
+    void ensureMusicEnginePanel();
+    return;
+  }
+  if (!show && section) {
+    section.remove();
+    return;
+  }
   if (section) {
     section.hidden = !show;
     section.style.display = show ? "" : "none";
@@ -9248,7 +9291,7 @@ function wireSettingsMusicProviderOnce() {
                   : "ElevenLabs enabled — base model (no finetune)."
                 : pref === "mureka"
                   ? "Mureka engine enabled — lyrics→song (~$0.045). Admin only."
-                  : "Suno engine restored (two variants).";
+                  : "Default engine restored (two variants).";
         showToast(toastMsg, {
           icon: pref === "suno" ? "✓" : "♪",
           durationMs: 3600,
@@ -9322,7 +9365,7 @@ function wireSettingsMusicProviderOnce() {
         showToast(
           conductorOn
             ? "Hum Conductor ON — Gemini hears your Hum, then Lyria plays the motif."
-            : "Hum Conductor OFF — Hum stays on Suno / ElevenLabs as before.",
+            : "Hum Conductor OFF — Hum stays on the default path as before.",
           { icon: "♪", durationMs: 3600 },
         );
       } catch {}
@@ -32733,7 +32776,7 @@ function musicProviderSubline(pref) {
       : "ElevenLabs — base music_v2.5, no finetune (~$0.45/song)";
   }
   if (pref === "mureka") return "Mureka — lyrics→song, one variant (~$0.045/song · admin)";
-  return "Suno — two variants per song";
+  return "Default engine — two variants per song";
 }
 
 function musicProviderShortLabel(pref = getMusicProviderPref()) {
@@ -32819,7 +32862,7 @@ function adminProviderCapabilityBlockReason({
   const pref = getMusicProviderPref();
   const label = musicProviderShortLabel(pref);
   if (personaId) {
-    return `${label} doesn't support persona yet — clear the persona chip, or switch Settings → engine to Suno.`;
+    return `${label} doesn't support persona yet — clear the persona chip, or switch Settings → engine back to Default.`;
   }
   if (hasReference) {
     if (pref === "elevenlabs") {

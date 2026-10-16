@@ -75406,5 +75406,10 @@ html[data-theme="light"] .aaGold{ background: rgba(0,0,0,.03); }
   appearance: none; border: 0; background: none; cursor: pointer; height: 42px;
   font: inherit; font-size: 15px; font-weight: 700; color: #9aa1b6;
 }
+.creditConfirmSheet .creditConfirmGo,
+.creditConfirmSheet .creditConfirmCancel{
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding-left: 0; padding-right: 0;
+}
 html[data-theme="light"] .creditConfirmCostValue{ color: #0b0b13; }
 html[data-theme="light"] .creditConfirmCostUnit{ color: rgba(60, 40, 140, 0.8); }

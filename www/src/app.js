@@ -365,7 +365,7 @@ import {
   screenshotProf,
   screenshotSanitizeCopy,
 } from "./screenshot-mode.js";
-import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED, NABAD_HUM_CONDUCTOR_PUBLIC_SHIPPED, NABAD_HUM_TRACK_PUBLIC_SHIPPED, NABAD_LYRIA_CREATE_PUBLIC_SHIPPED, NABAD_MASHUP_PUBLIC_SHIPPED, NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED, NABAD_PERSONA_PUBLIC_SHIPPED, NABAD_REVIBE_PUBLIC_SHIPPED } from "./feature-flags.js";
+import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED, NABAD_HUM_CONDUCTOR_PUBLIC_SHIPPED, NABAD_HUM_TRACK_PUBLIC_SHIPPED, NABAD_LYRIA_CREATE_PUBLIC_SHIPPED, NABAD_MASHUP_PUBLIC_SHIPPED, NABAD_ORIENTAL_STYLES_PUBLIC_SHIPPED, NABAD_PERSONA_PUBLIC_SHIPPED, NABAD_REVIBE_PUBLIC_SHIPPED, NABAD_STUDIO_PUBLIC_SHIPPED } from "./feature-flags.js";
 import {
   applyGoldToAvatarWrap,
   applyGoldNameGradient,
@@ -6737,7 +6737,22 @@ function applyRoute({ passGen } = {}) {
   if (prevRoute === "nabad-producer" && wanted !== "nabad-producer") {
     try { leaveNabadProducerRoot(); } catch {}
   }
-  if (wanted === "studio") {
+  if (wanted === "studio" && !nabadStudioVisible()) {
+    const blockStudio = () => {
+      try { leaveStudioRoot(); } catch {}
+      try { location.hash = "#/discover"; } catch {}
+      if (creditsState.loaded && !creditsState.isAdmin) {
+        try { showToast("Studio is admin-only right now.", { icon: "!", durationMs: 3200 }); } catch {}
+      }
+    };
+    if (!creditsState.loaded) {
+      void refreshMyCredits({ silent: true }).then(() => {
+        if (nabadStudioVisible()) { try { scheduleApplyRoute(); } catch {} } else blockStudio();
+      });
+    } else {
+      blockStudio();
+    }
+  } else if (wanted === "studio") {
     if (isWebOrDesktopShell() && !webProFeatureAllowed()) {
       promptWebProUpgrade("NabadAi Studio");
       try { leaveStudioRoot(); } catch {}
@@ -16626,6 +16641,7 @@ function bindHomeDeskOnce(page) {
         return;
       }
       if (card === "studio") {
+        if (!nabadStudioVisible()) return;
         if (!authSession?.user?.id) {
           setPostAuthReturnHash("#/studio");
           try { location.hash = "#/auth"; } catch {}
@@ -33816,6 +33832,11 @@ function nabadPersonaEnabled() {
   return NABAD_PERSONA_PUBLIC_SHIPPED === true;
 }
 
+/** Studio is frozen for polish: admins only until NABAD_STUDIO_PUBLIC_SHIPPED is flipped. */
+function nabadStudioVisible() {
+  return NABAD_STUDIO_PUBLIC_SHIPPED === true || creditsState.isAdmin === true;
+}
+
 function nabadMashupEnabled() {
   return NABAD_MASHUP_PUBLIC_SHIPPED === true;
 }
@@ -37044,6 +37065,11 @@ function syncProGatedWebUi() {
       el.setAttribute("aria-hidden", "true");
       return;
     }
+    if (el.getAttribute("data-home-card") === "studio" && !nabadStudioVisible()) {
+      el.hidden = true;
+      el.setAttribute("aria-hidden", "true");
+      return;
+    }
     if (el.getAttribute("data-home-card") === "persona" && !nabadPersonaEnabled()) {
       el.hidden = true;
       el.setAttribute("aria-hidden", "true");
@@ -37053,6 +37079,9 @@ function syncProGatedWebUi() {
     el.setAttribute("aria-hidden", "false");
     setWebProFeaturePillOnHomeCard(el, locked);
   });
+
+  const studioSegTab = document.getElementById("profileSongsSegVocals");
+  if (studioSegTab) studioSegTab.hidden = !nabadStudioVisible();
 
   const singerPill = document.getElementById("singerPersonaPill");
   if (singerPill) {
@@ -56220,7 +56249,7 @@ function renderTrackSheetLibrary(track) {
   `;
   // Instrumentals are great to sing over, so they're eligible too (the Studio
   // source chooser adapts — no "separate vocals" step for an instrumental).
-  const recordEligible = !isSound && Boolean(track?.url && String(track.url).trim());
+  const recordEligible = nabadStudioVisible() && !isSound && Boolean(track?.url && String(track.url).trim());
   const publishRow = profilePublic
     ? ""
     : `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--publish" data-track-sheet-action="library_pubprof" data-track-sheet-pub-to="public">Publish release</button>`;
@@ -57434,6 +57463,7 @@ function runTrackSheetAction(action, sourceEl) {
       return;
     }
     if (action === "library_record_voice") {
+      if (!nabadStudioVisible()) return;
       shut();
       try { openStudioForTrack(t); } catch {}
       return;
@@ -66756,6 +66786,7 @@ function wireProfileMusicOnce() {
 }
 
 function syncProfileSongsSegmentUi() {
+  if (_profileSongsSegment === "vocals" && creditsState.loaded && !nabadStudioVisible()) _profileSongsSegment = "music";
   const allCount = document.getElementById("libraryCount");
   const activitiesList = document.getElementById("profileActivitiesList");
   const libList = document.getElementById("libraryList");
@@ -67064,6 +67095,7 @@ function profileStudioEntryHtml() {
 }
 
 function openProfileStudio() {
+  if (!nabadStudioVisible()) return;
   if (!authSession?.user?.id) {
     try { setPostAuthReturnHash("#/studio"); } catch {}
     try { location.hash = "#/auth"; } catch {}

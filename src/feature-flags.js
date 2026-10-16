@@ -93,3 +93,10 @@ export const DISCOVER_SHOW_PLAY_COUNTS = false;
  * and the app always renders dark.
  */
 export const LIGHT_THEME_PUBLIC_SHIPPED = false;
+
+/**
+ * When true: NabadAi Studio (record your voice over a song: home card, Profile Studio tab,
+ * "Open in Studio" song row, #/studio) is live for users.
+ * Keep false while Studio is being polished — the code stays, only admins see it.
+ */
+export const NABAD_STUDIO_PUBLIC_SHIPPED = false;

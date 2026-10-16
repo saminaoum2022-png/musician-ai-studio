@@ -57468,7 +57468,7 @@ function runTrackSheetAction(action, sourceEl) {
       return;
     }
     if (action === "library_inst") {
-      if (!requireProForWebFeature("Instrumental")) return;
+      if (!webProFeatureAllowed()) { shut(); promptWebProUpgrade("Instrumental"); return; }
       shut();
       void runLibraryInstrumentalForTrack(t);
       return;

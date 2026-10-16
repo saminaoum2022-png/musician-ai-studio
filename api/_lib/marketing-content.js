@@ -173,11 +173,12 @@ function defaultHomeContentEn() {
       pro: {
         title: "NabadAi Pro",
         price: "",
-        body: "Weekly or monthly credits, Studio, cover refresh, unlimited Coach, and private song analytics.",
+        body: "Weekly or monthly credits, instrumentals, lyrics tools with a singability check, video export, cover refresh, unlimited Coach, and private song analytics.",
         features: [
           { label: "90 on trial · 400/week or 1,000/month · refreshes each period · giftable" },
           { label: "Unlimited NabadAi Coach" },
-          { label: "NabadAi Studio & cover refresh" },
+          { label: "Instrumentals, lyrics tools & singability check" },
+          { label: "Cover refresh" },
           { label: "Song analytics & Pro badge" },
         ],
         specialOffer: "Limited-time: songs cost fewer credits than usual.",

@@ -39,6 +39,37 @@ function isArchivedStorageUrl(url) {
   return /\/storage\/v1\/object\/(?:public\/)?song_archive\//i.test(String(url || ""));
 }
 
+/** True for loopback / private / link-local / metadata hosts we must never fetch on a user's behalf. */
+function isBlockedFetchUrl(url) {
+  let u;
+  try { u = new URL(String(url || "")); } catch { return true; }
+  if (!/^https?:$/.test(u.protocol)) return true;
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (!h || h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return true;
+  const v4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    return false;
+  }
+  if (h.includes(":")) {
+    if (h === "::1" || h === "::" || h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80") || h.startsWith("::ffff:")) return true;
+  }
+  return false;
+}
+
+/** Archived songs live at <ownerUserId>/<file>; only the owner (or an admin) may render them. */
+function archiveUrlOwnedBy(url, userId) {
+  const { keyFromStorageUrl } = require("./_lib/storage-private");
+  const key = keyFromStorageUrl(url, "song_archive");
+  const owner = String(key || "").split("/")[0] || "";
+  return Boolean(owner) && owner === String(userId || "");
+}
+
 function resolveFetchUrl(url) {
   const s = String(url || "").trim();
   if (!s) return s;
@@ -471,6 +502,32 @@ module.exports = async function handler(req, res) {
       return;
     }
 
+    // Video export is a Pro feature: sign-in + Pro (or admin) before any audio is fetched or rendered.
+    const { verifyUser, isAdminEmail } = require("./_lib/credits-auth");
+    const user = await verifyUser(req);
+    if (!user) {
+      res.statusCode = 401;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "Sign in to export video." }));
+      return;
+    }
+    let callerIsAdmin = isAdminEmail(user.email);
+    if (!callerIsAdmin) {
+      const { fetchProfileRole } = require("./_lib/admin-auth");
+      const role = await fetchProfileRole(user.userId);
+      callerIsAdmin = role === "admin";
+      if (!callerIsAdmin) {
+        const { requireProSubscription } = require("./_lib/pro-web-gate");
+        const gate = await requireProSubscription(user.userId);
+        if (!gate.ok) {
+          res.statusCode = gate.status;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "Video export is included with NabadAi Pro.", code: gate.code }));
+          return;
+        }
+      }
+    }
+
     const contentType = String(req.headers["content-type"] || "").toLowerCase();
 
     if (contentType.includes("multipart/form-data")) {
@@ -512,7 +569,7 @@ module.exports = async function handler(req, res) {
         audioBuffer,
         audioContentType: contentType.split(";")[0].trim() || "application/octet-stream",
         audioName: meta.audioName,
-        imageUrlFallback: meta.imageUrl,
+        imageUrlFallback: meta.imageUrl && !isBlockedFetchUrl(meta.imageUrl) ? meta.imageUrl : "",
         startedMs: Date.now(),
       });
       return;
@@ -527,7 +584,7 @@ module.exports = async function handler(req, res) {
     const title = String(params.title || "song").trim();
     const isFast = isFastRender(params);
     const imageUrl = String(params.imageUrl || "").trim();
-    const safeImageUrl = imageUrl && /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
+    const safeImageUrl = imageUrl && /^https?:\/\//i.test(imageUrl) && !isBlockedFetchUrl(imageUrl) ? imageUrl : "";
 
     let imageBufferFromParam = null;
     if (imageBase64Param) {
@@ -581,6 +638,19 @@ module.exports = async function handler(req, res) {
       res.statusCode = 400;
       res.setHeader("Content-Type", "application/json");
       res.end(JSON.stringify({ error: audioUrl ? "Invalid audioUrl" : "Missing audioUrl" }));
+      return;
+    }
+
+    if (isBlockedFetchUrl(audioUrl)) {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "Invalid audioUrl" }));
+      return;
+    }
+    if (isArchivedStorageUrl(audioUrl) && !callerIsAdmin && !archiveUrlOwnedBy(audioUrl, user.userId)) {
+      res.statusCode = 403;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "You can only export video for your own songs." }));
       return;
     }
 

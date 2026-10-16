@@ -73,9 +73,19 @@ export const PRO_FEATURES = Object.freeze([
     sub: "Free accounts have a daily message limit",
   },
   {
-    key: "studio",
-    label: "NabadAi Studio",
-    sub: "Record your voice over a track, AI mix, and save to My Vocals",
+    key: "instrumental",
+    label: "Get instrumental version",
+    sub: "Pull a clean instrumental from any song you make",
+  },
+  {
+    key: "video_export",
+    label: "Video export",
+    sub: "Download your song as a video with your cover art",
+  },
+  {
+    key: "lyrics_tools",
+    label: "Lyrics tools",
+    sub: "Singability check with line-by-line fixes, Polish, Fix for singing, and verse/chorus tags — lyrics that actually sing",
   },
   {
     key: "cover_regen",
@@ -163,7 +173,7 @@ export function subscriptionCreditUnitPrice() {
 
 export const PRO_LAUNCH_COPY = Object.freeze({
   eyebrow: "",
-  lead: "Weekly or monthly credits, Studio, cover refresh, unlimited Coach, and private song analytics.",
+  lead: "Weekly or monthly credits, instrumentals, lyrics tools with a singability check, video export, cover refresh, unlimited Coach, and private song analytics.",
   specialOffer: "Limited-time: songs cost fewer credits than usual.",
   footnote:
     "1 full song = 15 credits. Included Pro credits refresh each billing period and do not carry over (see Terms). You can create or gift eligible credits. Cancel anytime in Settings → Subscriptions.",

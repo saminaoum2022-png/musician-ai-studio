@@ -3304,6 +3304,14 @@ function getVercelProtectionBypass() {
 }
 
 /** Headers for native/web calls to Vercel `/api/*` (optional deployment-protection bypass). */
+/** render-video requires a signed-in Pro user (or admin) — send the bearer token. */
+function renderVideoHeaders(extra = {}) {
+  const h = getApiFetchHeaders(extra);
+  const token = getSupabaseAuthToken();
+  if (token) h.Authorization = `Bearer ${token}`;
+  return h;
+}
+
 function getApiFetchHeaders(extra = {}) {
   const headers = { ...(extra || {}) };
   const bypass = getVercelProtectionBypass();
@@ -57041,6 +57049,7 @@ function runTrackSheetAction(action, sourceEl) {
   }
 
   if (action === "library_dl_audio" || action === "library_dl_video") {
+    if (action === "library_dl_video" && !requireProFeature("Video export")) return;
     const fromProfileLib = ctx.mode === "profile_lib";
     const fromDiscoverOwn =
       (ctx.mode === "discover" || ctx.mode === "public") && trackSheetCtxIsOwnSong(ctx);
@@ -57386,6 +57395,7 @@ function runTrackSheetAction(action, sourceEl) {
       return;
     }
     if (action === "library_dl_video") {
+      if (!requireProFeature("Video export")) return;
       shut();
       void (async () => {
         try {
@@ -57583,6 +57593,7 @@ function runTrackSheetAction(action, sourceEl) {
       return;
     }
     if (action === "library_dl_video") {
+      if (!requireProFeature("Video export")) return;
       shut();
       const t = resolveTrackForVideoExport(hubDownloadTrack()) || hubDownloadTrack();
       if (!t?.url) {
@@ -69503,7 +69514,7 @@ async function requestRenderedVideoBase64Json({
   }
   const r = await apiFetch("/api/render-video", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: renderVideoHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
     signal,
   });
@@ -69542,10 +69553,7 @@ async function requestRenderedVideoRawBinary({
   const body = await audioBlob.arrayBuffer();
   const r = await fetch(`${apiUrl("/api/render-video")}?${qs.toString()}`, {
     method: "POST",
-    headers: {
-      ...getApiFetchHeaders(),
-      "Content-Type": "application/octet-stream",
-    },
+    headers: renderVideoHeaders({ "Content-Type": "application/octet-stream" }),
     body,
     signal,
   });
@@ -69580,7 +69588,7 @@ async function requestRenderedVideoMultipart({
   fd.append("fast", "1");
   const r = await fetch(apiUrl("/api/render-video"), {
     method: "POST",
-    headers: getApiFetchHeaders(),
+    headers: renderVideoHeaders(),
     body: fd,
     signal,
   });
@@ -69631,7 +69639,7 @@ async function requestRenderedVideoFromUrl({
   }
   const r = await apiFetch("/api/render-video", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: renderVideoHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
     signal,
   });
@@ -69772,6 +69780,7 @@ async function ensureTrackAudioArchivedForVideoExport(track, say) {
 }
 
 async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
+  if (!proFeatureAllowed()) throw new Error("Video export is included with NabadAi Pro.");
   if (!trackOffersVideoDownload(track)) {
     throw new Error("Video download is only available for clips.");
   }

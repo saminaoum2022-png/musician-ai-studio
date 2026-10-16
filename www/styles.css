@@ -72195,6 +72195,7 @@ body[data-route="profile"] .profileNabadCertBadge{ display: none !important; }
   font-weight: 700;
   color: rgba(255, 255, 255, 0.5);
 }
+:is(body[data-route="profile"], body[data-route="user"]) .profileSegTab[hidden]{ display: none !important; }
 :is(body[data-route="profile"], body[data-route="user"]) .profileSegTab .profileSegIconWrap{ display: none !important; }
 :is(body[data-route="profile"], body[data-route="user"]) .profileSegTab::before{ content: attr(aria-label); }
 :is(body[data-route="profile"], body[data-route="user"]) .profileSegTab.is-active{ color: #fff; }

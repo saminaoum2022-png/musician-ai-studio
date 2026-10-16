@@ -5505,9 +5505,7 @@ function setCreateTemplateLoadedHint(title) {
       ? `~30s clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`
       : isTemplateSparkLyriaFullFlow()
         ? `Full song · ${formatCreditsAmount(FULL_SONG_CREDIT_COST)} credits. Personalize, then Generate.`
-        : creditsState.isAdmin
-          ? `Admin engine: ${musicProviderSubline(getMusicProviderPref())}. Personalize, then Generate.`
-          : "Personalize, then tap Generate.";
+        : "Personalize, then tap Generate.";
   }
   els.createChallengeHint.hidden = false;
   try { syncNabadClipCreateUi(); } catch {}
@@ -32483,7 +32481,6 @@ function createAttachmentForcesSuno() {
 }
 
 function useLyriaMusicProvider() {
-  if (creditsState.isAdmin) return getMusicProviderPref() === "lyria";
   return Boolean(NABAD_LYRIA_CREATE_PUBLIC_SHIPPED) && !createAttachmentForcesSuno();
 }
 
@@ -32665,10 +32662,9 @@ function templateSparkClipEnabled() {
   return false;
 }
 
-/** Admins keep Settings → engine for shelf flows. Public users always get Lyria 3.5 full. */
+/** No engine picker any more: admins follow the same shelf rules as everyone (Lyria 3.5 full). */
 function adminHonorsTemplateEnginePicker() {
-  const pref = getMusicProviderPref();
-  return Boolean(creditsState.isAdmin) && pref !== "lyria" && pref !== "lyria_clip";
+  return false;
 }
 
 function templateUsesLyriaClip() {

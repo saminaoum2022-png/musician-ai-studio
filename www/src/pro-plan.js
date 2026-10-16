@@ -33,6 +33,8 @@ let _benefitsExpanded = true;
 let _pageBound = false;
 let _backBound = false;
 let _returnRoute = "settings";
+/** True when Pro was opened from a real in-app page, so the previous history entry is that page. */
+let _returnIsPreviousEntry = false;
 
 function esc(s) {
   return String(s ?? "")
@@ -373,6 +375,22 @@ function paintBenefitsExpanded() {
 
 function navigateAwayFromPro(route) {
   const target = String(route || "settings").trim() || "settings";
+  // Pro was pushed on top of the page we came from — step back instead of pushing that page again,
+  // otherwise Player ⇄ Pro keep stacking and Back loops forever.
+  if (_returnIsPreviousEntry && target === _returnRoute) {
+    _returnIsPreviousEntry = false;
+    let canGoBack = false;
+    try { canGoBack = (window.history?.length || 0) > 1; } catch {}
+    if (canGoBack) {
+      try { history.back(); } catch {}
+      window.setTimeout(() => {
+        if (!/^#\/pro\b/i.test(String(location.hash || ""))) return;
+        if (typeof _deps?.navigateToRoute === "function") _deps.navigateToRoute(target);
+        else { try { location.hash = `#/${target}`; } catch {} }
+      }, 450);
+      return;
+    }
+  }
   if (typeof _deps?.navigateToRoute === "function") {
     _deps.navigateToRoute(target);
     return;
@@ -406,6 +424,7 @@ function paintProBackLink() {
 export function setProReturnRoute(route) {
   const r = String(route || "").trim();
   // A second route pass reports "pro" as the previous route — keep the page we were really opened from.
+  if (r && r !== "pro") _returnIsPreviousEntry = true;
   _returnRoute = r && r !== "pro" ? r : (_returnRoute || "settings");
   paintProBackLink();
 }

@@ -56983,10 +56983,22 @@ async function startLibraryRemixForLibraryTrack(t) {
 async function runElevenInstrumentalForTrack(t, title) {
   const srcUrl = String(t?.url || "").trim();
   if (!srcUrl) return false;
+  // Same experience as a normal generation: jump to Library and show the shimmer card until it is ready.
+  const jobId = `inst_${Date.now().toString(36)}`;
+  let jobShown = false;
+  const endJob = () => {
+    if (!jobShown) return;
+    jobShown = false;
+    try { clearPriorityPending(jobId); } catch {}
+    try { syncGenerationPendingLibraryUi(); } catch {}
+  };
   try {
     hideCreateResultCards();
     setStatus("Getting instrumental for selected song…");
     beginCoachPriorityStatus(coachInstrumentalPillText(title), { generating: true });
+    setPriorityPending({ kind: "instrumental", taskId: jobId, title, sourceTrackId: String(t?.id || "") });
+    jobShown = true;
+    try { wireProfileSongsForActiveJob(); } catch {}
     const tok = getSupabaseAuthToken();
     const r = await apiFetch("/api/songs/instrumental", {
       method: "POST",
@@ -56999,15 +57011,18 @@ async function runElevenInstrumentalForTrack(t, title) {
     });
     const d = await r.json().catch(() => ({}));
     if (d?.code === "stems_disabled") {
+      endJob();
       cancelCoachPriorityStatus();
       return false;
     }
     if (d?.code === "pro_required") {
+      endJob();
       cancelCoachPriorityStatus();
       promptWebProUpgrade("Instrumental");
       return true;
     }
     if (r.status === 402 || d?.code === "insufficient_credits") {
+      endJob();
       cancelCoachPriorityStatus();
       const need = Number(d?.needed ?? 0);
       const have = Number(d?.balance || 0);
@@ -57023,12 +57038,15 @@ async function runElevenInstrumentalForTrack(t, title) {
       url: d.url,
       kind: "instrumental",
     });
-    setStatus("Instrumental version is ready — find it in your Library.");
+    endJob();
+    setStatus("Instrumental version is ready.");
     finishCoachPriorityStatus("Instrumental ready ✓");
-    try { wireProfileSongsForActiveJob(); } catch {}
+    try { refreshOwnSongsUi({ soft: false }); } catch {}
     return true;
   } catch (err) {
+    endJob();
     setStatus(`Library instrumental failed: ${err?.message || String(err)}`);
+    try { showToast(`Instrumental failed: ${err?.message || String(err)}`, { icon: "!", durationMs: 4600 }); } catch {}
     cancelCoachPriorityStatus();
     return true;
   }
@@ -85050,6 +85068,11 @@ function resumePriorityJobsIfPending() {
       fallbackTitle: pending.title,
       libraryMeta: { mode: "sound" },
     });
+    return;
+  }
+  if (pending.kind === "instrumental" && String(pending.taskId || "").startsWith("inst_")) {
+    // In-flight request from before the reload is gone — don't poll Suno with a local job id.
+    clearPriorityPending(pending.taskId);
     return;
   }
   if (pending.kind === "instrumental" && pending.taskId && !sunoStemsTaskId) {

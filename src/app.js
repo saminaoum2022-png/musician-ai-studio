@@ -56979,75 +56979,169 @@ async function startLibraryRemixForLibraryTrack(t) {
   }
 }
 
-/** Instrumental for any song (Lyria, Suno, ElevenLabs…) via stem separation. Returns false → use the old Suno path. */
+/* ---- Instrumental for any song (Lyria, Suno, ElevenLabs…) via stem separation ----
+ * The server writes a job record before the paid call, so closing the app mid-wait never loses the result:
+ * we keep the job id locally and pick the finished instrumental up on the next launch.
+ */
+const INSTRUMENTAL_JOBS_KEY = "nabad.instrumental.jobs.v1";
+
+function loadInstrumentalJobs() {
+  try {
+    const list = JSON.parse(localStorage.getItem(INSTRUMENTAL_JOBS_KEY) || "[]");
+    return Array.isArray(list) ? list.filter((j) => j && j.jobId) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveInstrumentalJobs(list) {
+  try { localStorage.setItem(INSTRUMENTAL_JOBS_KEY, JSON.stringify(list.slice(-10))); } catch {}
+}
+
+function removeInstrumentalJob(jobId) {
+  saveInstrumentalJobs(loadInstrumentalJobs().filter((j) => j.jobId !== jobId));
+  try { clearPriorityPending(jobId); } catch {}
+  try { syncGenerationPendingLibraryUi(); } catch {}
+}
+
+function instrumentalHeaders() {
+  const tok = getSupabaseAuthToken();
+  return { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) };
+}
+
+function finalizeInstrumentalJob(job, rec) {
+  const url = String(rec?.url || "").trim();
+  if (url && !loadLibrary().some((x) => String(x?.url || "") === url)) {
+    addToLibrary({
+      title: `${job.title} • Instrumental`,
+      artUrl: job.artUrl || "",
+      url,
+      kind: "instrumental",
+    });
+  }
+  removeInstrumentalJob(job.jobId);
+  try { void refreshMyCredits({ silent: true }); } catch {}
+  setStatus("Instrumental version is ready.");
+  try { finishCoachPriorityStatus("Instrumental ready ✓"); } catch {}
+  try { refreshOwnSongsUi({ soft: false }); } catch {}
+}
+
+function failInstrumentalJob(job, message) {
+  removeInstrumentalJob(job.jobId);
+  try { void refreshMyCredits({ silent: true }); } catch {}
+  const msg = String(message || "Instrumental failed.");
+  setStatus(msg);
+  try { showToast(msg, { icon: "!", durationMs: 5200 }); } catch {}
+  try { cancelCoachPriorityStatus(); } catch {}
+}
+
+/** Poll the saved job until it is done/failed (the server may have finished while the app was closed). */
+async function pollInstrumentalJob(job, { maxMs = 9 * 60 * 1000 } = {}) {
+  const startedAt = Number(job.startedAt) || Date.now();
+  while (Date.now() - startedAt < maxMs) {
+    await new Promise((r) => setTimeout(r, 5000));
+    try {
+      const r = await apiFetch(`/api/songs/instrumental?jobId=${encodeURIComponent(job.jobId)}`, {
+        headers: instrumentalHeaders(),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 404 || d?.code === "stems_disabled") { removeInstrumentalJob(job.jobId); return; }
+      if (!r.ok) continue;
+      if (d.state === "done" && d.url) { finalizeInstrumentalJob(job, d); return; }
+      if (d.state === "failed") { failInstrumentalJob(job, d.error || "Instrumental failed. Your credits were returned."); return; }
+    } catch {}
+  }
+  failInstrumentalJob(job, "The instrumental is taking too long. If you were charged, your credits are returned automatically.");
+}
+
+/** Pick up instrumentals that were started before the app was closed. */
+function resumeInstrumentalJobs() {
+  const jobs = loadInstrumentalJobs();
+  if (!jobs.length) return;
+  if (!getSupabaseAuthToken()) {
+    // Session may still be restoring at boot — try once more shortly.
+    window.setTimeout(() => { if (getSupabaseAuthToken()) resumeInstrumentalJobs(); }, 3000);
+    return;
+  }
+  const job = jobs[jobs.length - 1];
+  if (Date.now() - (Number(job.startedAt) || 0) < 15 * 60 * 1000) {
+    try { setPriorityPending({ kind: "instrumental", taskId: job.jobId, title: job.title, sourceTrackId: job.trackId || "" }); } catch {}
+    try { syncGenerationPendingLibraryUi(); } catch {}
+  }
+  for (const j of jobs) void pollInstrumentalJob(j, { maxMs: Math.max(15000, 9 * 60 * 1000 - (Date.now() - (Number(j.startedAt) || 0))) });
+}
+
+/** Returns false → fall back to the old Suno path (feature off on this server). */
 async function runElevenInstrumentalForTrack(t, title) {
   const srcUrl = String(t?.url || "").trim();
   if (!srcUrl) return false;
-  // Same experience as a normal generation: jump to Library and show the shimmer card until it is ready.
-  const jobId = `inst_${Date.now().toString(36)}`;
-  let jobShown = false;
-  const endJob = () => {
-    if (!jobShown) return;
-    jobShown = false;
-    try { clearPriorityPending(jobId); } catch {}
-    try { syncGenerationPendingLibraryUi(); } catch {}
+  const explain = (message) => {
+    setStatus(message);
+    try { showToast(message, { icon: "!", durationMs: 5200 }); } catch {}
   };
+  // 1) Price first (no charge), then ask.
+  setStatus("Checking your song…");
+  let quote;
   try {
-    hideCreateResultCards();
-    setStatus("Getting instrumental for selected song…");
-    beginCoachPriorityStatus(coachInstrumentalPillText(title), { generating: true });
-    setPriorityPending({ kind: "instrumental", taskId: jobId, title, sourceTrackId: String(t?.id || "") });
-    jobShown = true;
-    try { wireProfileSongsForActiveJob(); } catch {}
-    const tok = getSupabaseAuthToken();
+    const qr = await apiFetch("/api/songs/instrumental", {
+      method: "POST",
+      headers: instrumentalHeaders(),
+      body: JSON.stringify({ url: srcUrl, quote: true }),
+      nativeReadTimeoutMs: 60000,
+    });
+    quote = await qr.json().catch(() => ({}));
+    if (quote?.code === "stems_disabled") { setStatus(""); return false; }
+    if (quote?.code === "pro_required") { setStatus(""); promptWebProUpgrade("Instrumental"); return true; }
+    if (!qr.ok || !quote?.ok) { explain(quote?.error || "Couldn't prepare the instrumental."); return true; }
+  } catch (err) {
+    explain(`Couldn't prepare the instrumental: ${err?.message || String(err)}`);
+    return true;
+  }
+  const credits = Number(quote.credits) || 0;
+  if (credits > 0) {
+    const mins = Math.max(1, Math.round((Number(quote.seconds) || 180) / 60));
+    let ok = true;
+    try { ok = window.confirm(`Get an instrumental of "${title}"?\n\nThis song is about ${mins} min, so it uses ${credits} credits.`); } catch {}
+    if (!ok) { setStatus(""); return true; }
+  }
+  // 2) Same experience as a normal generation: Library + shimmer card, and the job survives closing the app.
+  const jobId = `inst_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const job = {
+    jobId,
+    title,
+    artUrl: t.artUrl || (t.meta && t.meta.imageUrl) || "",
+    trackId: String(t?.id || ""),
+    startedAt: Date.now(),
+  };
+  saveInstrumentalJobs([...loadInstrumentalJobs(), job]);
+  hideCreateResultCards();
+  setStatus("Getting instrumental for selected song…");
+  beginCoachPriorityStatus(coachInstrumentalPillText(title), { generating: true });
+  setPriorityPending({ kind: "instrumental", taskId: jobId, title, sourceTrackId: job.trackId });
+  try { wireProfileSongsForActiveJob(); } catch {}
+  try {
     const r = await apiFetch("/api/songs/instrumental", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
-      },
-      body: JSON.stringify({ url: srcUrl, title, songId: String(t?.id || "") }),
+      headers: instrumentalHeaders(),
+      body: JSON.stringify({ url: srcUrl, title, jobId }),
       nativeReadTimeoutMs: 200000,
     });
     const d = await r.json().catch(() => ({}));
-    if (d?.code === "stems_disabled") {
-      endJob();
-      cancelCoachPriorityStatus();
-      return false;
-    }
-    if (d?.code === "pro_required") {
-      endJob();
-      cancelCoachPriorityStatus();
-      promptWebProUpgrade("Instrumental");
-      return true;
-    }
+    if (d?.code === "pro_required") { removeInstrumentalJob(jobId); cancelCoachPriorityStatus(); promptWebProUpgrade("Instrumental"); return true; }
     if (r.status === 402 || d?.code === "insufficient_credits") {
-      endJob();
+      removeInstrumentalJob(jobId);
       cancelCoachPriorityStatus();
-      const need = Number(d?.needed ?? 0);
-      const have = Number(d?.balance || 0);
-      try { showOutOfCreditsPrompt({ needed: need, balance: have }); } catch {}
-      setStatus(`Not enough credits for an instrumental (you have ${have}, need ${need}).`);
+      try { showOutOfCreditsPrompt({ needed: Number(d?.needed ?? credits), balance: Number(d?.balance || 0) }); } catch {}
+      setStatus(`Not enough credits for an instrumental (need ${Number(d?.needed ?? credits)}).`);
       return true;
     }
-    if (!r.ok || !d?.url) throw new Error(d?.error || "Instrumental request failed");
-    try { void refreshMyCredits({ silent: true }); } catch {}
-    addToLibrary({
-      title: `${title} • Instrumental`,
-      artUrl: t.artUrl || (t.meta && t.meta.imageUrl) || "",
-      url: d.url,
-      kind: "instrumental",
-    });
-    endJob();
-    setStatus("Instrumental version is ready.");
-    finishCoachPriorityStatus("Instrumental ready ✓");
-    try { refreshOwnSongsUi({ soft: false }); } catch {}
+    if (r.ok && d?.state === "done" && d?.url) { finalizeInstrumentalJob(job, d); return true; }
+    if (r.ok && d?.state === "processing") { void pollInstrumentalJob(job); return true; }
+    failInstrumentalJob(job, d?.error || "Instrumental request failed.");
     return true;
-  } catch (err) {
-    endJob();
-    setStatus(`Library instrumental failed: ${err?.message || String(err)}`);
-    try { showToast(`Instrumental failed: ${err?.message || String(err)}`, { icon: "!", durationMs: 4600 }); } catch {}
-    cancelCoachPriorityStatus();
+  } catch {
+    // The connection dropped (e.g. app backgrounded) — the server keeps working; keep checking.
+    void pollInstrumentalJob(job);
     return true;
   }
 }
@@ -85139,6 +85233,7 @@ function resumePriorityJobsIfPending() {
   try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}
   try { syncCoachPriorityStatusFromPending(getPriorityPending()); } catch {}
   try { resumePriorityJobsIfPending(); } catch {}
+  try { resumeInstrumentalJobs(); } catch {}
   try { wireProfileSongsForActiveJob(); } catch {}
   // Watch the Create fields locally for the contextual tips. Fire on blur so
   // the orb pill isn't trapped behind the on-screen keyboard.

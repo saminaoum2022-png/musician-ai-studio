@@ -27,6 +27,7 @@
       "maxDuration": 60
     },
     "api/songs/instrumental.js": {
+      "includeFiles": "node_modules/ffmpeg-static/**",
       "maxDuration": 300
     },
     "api/songs/stream.js": {

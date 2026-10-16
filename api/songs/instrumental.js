@@ -1,22 +1,33 @@
 /**
- * POST /api/songs/instrumental   { url, title?, songId? }
- *
  * Instrumental version of one of the caller's own songs, from any engine (Lyria, Suno, ElevenLabs…),
- * via ElevenLabs stem separation (2 stems). The instrumental is saved to song_archive and returned.
+ * via ElevenLabs stem separation (2 stems). The result is saved to song_archive.
+ *
+ *   POST /api/songs/instrumental  { url, title?, jobId, quote? }
+ *        quote:true  -> { ok, quote:true, credits, seconds }   (no charge, nothing started)
+ *        otherwise   -> charges, runs, and returns { ok, state:"done", url, ... } (or an error + refund)
+ *   GET  /api/songs/instrumental?jobId=...  -> the job record { state: processing|done|failed, url? }
+ *
+ * A job record is written to storage BEFORE the paid call, so if the app is closed mid-wait the
+ * client can pick the finished instrumental up later (and a stuck job is refunded exactly once).
  *
  * Off on production until ELEVENLABS_STEMS_ENABLED=1 (always on for Vercel previews / staging).
+ * Price: INSTRUMENTAL_CREDITS_PER_MIN per started half-minute-rounded minute, min INSTRUMENTAL_MIN_CREDITS.
  */
 const { applyCors } = require("../_lib/cors");
 const { verifyUser, callRpc, isAdminEmail, sendJson, readJsonBody } = require("../_lib/credits-auth");
 const { requireProForWebApi } = require("../_lib/pro-web-gate");
 const { keyFromStorageUrl, fetchStorageObjectBuffer } = require("../_lib/storage-private");
-const { uploadObject } = require("../_lib/supabase-storage");
+const { uploadObject, publicObjectUrl, readStorageJson } = require("../_lib/supabase-storage");
 const { readZipEntries } = require("../_lib/zip-read");
 const { logProviderUsage } = require("../_lib/provider-usage-log");
 
+const BUCKET = "song_archive";
 const MAX_AUDIO_BYTES = 45 * 1024 * 1024;
+const MAX_SECONDS = 8 * 60;
 const ELEVEN_TIMEOUT_MS = 170000;
-const INSTRUMENTAL_CREDITS = Math.max(1, Number(process.env.INSTRUMENTAL_CREDITS || "40") || 40);
+const STALE_JOB_MS = 8 * 60 * 1000;
+const PER_MIN = Math.max(1, Number(process.env.INSTRUMENTAL_CREDITS_PER_MIN || "20") || 20);
+const MIN_CREDITS = Math.max(1, Number(process.env.INSTRUMENTAL_MIN_CREDITS || "30") || 30);
 
 function stemsEnabled() {
   if (String(process.env.VERCEL_ENV || "").toLowerCase() !== "production") return true;
@@ -76,6 +87,34 @@ async function fetchAudio(url, maxBytes) {
   }
 }
 
+function probeDurationSec(buf) {
+  try {
+    const fs = require("fs");
+    const os = require("os");
+    const path = require("path");
+    const { spawnSync } = require("child_process");
+    const ffmpegPath = require("ffmpeg-static");
+    if (!ffmpegPath) return 0;
+    const p = path.join(os.tmpdir(), `inst-probe-${Date.now()}-${Math.random().toString(36).slice(2)}.audio`);
+    fs.writeFileSync(p, buf);
+    try {
+      const r = spawnSync(ffmpegPath, ["-hide_banner", "-i", p], { encoding: "utf8" });
+      const m = `${r.stderr || ""}\n${r.stdout || ""}`.match(/Duration:\s*(\d+):(\d{2}):(\d{2}(?:\.\d+)?)/);
+      return m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + parseFloat(m[3]) : 0;
+    } finally {
+      try { fs.unlinkSync(p); } catch {}
+    }
+  } catch {
+    return 0;
+  }
+}
+
+/** Credits for a song of this length: per minute, rounded up to the next half minute, with a floor. */
+function creditsForSeconds(seconds) {
+  const halfMinutes = Math.max(1, Math.ceil((Number(seconds) || 0) / 30));
+  return Math.max(MIN_CREDITS, Math.ceil((halfMinutes / 2) * PER_MIN));
+}
+
 function pickInstrumentalEntry(entries) {
   const audio = entries.filter((e) => /\.(mp3|wav|flac|ogg|opus|m4a|aac)$/i.test(e.name));
   const byName = (re) => audio.find((e) => re.test(e.name.toLowerCase()));
@@ -86,50 +125,110 @@ function pickInstrumentalEntry(entries) {
   );
 }
 
+function jobKey(userId, jobId) {
+  return `${userId}/_jobs/inst-${jobId}.json`;
+}
+async function readJob(userId, jobId) {
+  return readStorageJson(publicObjectUrl(BUCKET, jobKey(userId, jobId)));
+}
+async function writeJob(userId, jobId, rec) {
+  const up = await uploadObject({
+    bucket: BUCKET,
+    key: jobKey(userId, jobId),
+    body: Buffer.from(JSON.stringify(rec)),
+    contentType: "application/json",
+  });
+  return up.ok;
+}
+
+async function isAdminUser(user) {
+  if (isAdminEmail(user.email)) return true;
+  try {
+    const { fetchProfileRole } = require("../_lib/admin-auth");
+    return (await fetchProfileRole(user.userId)) === "admin";
+  } catch {
+    return false;
+  }
+}
+
+async function refundOnce(user, rec) {
+  if (!rec || rec.refunded || !rec.credits) return rec;
+  const next = { ...rec, refunded: true };
+  try {
+    await callRpc("refund_credits", {
+      p_user_id: user.userId,
+      p_amount: rec.credits,
+      p_reason: "refund_instrumental_stems",
+      p_ref: String(rec.jobId || ""),
+    });
+  } catch {}
+  return next;
+}
+
+const VALID_JOB_ID = /^[a-z0-9_-]{6,48}$/i;
+
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
-  if (req.method !== "POST") return sendJson(res, 405, { error: "POST required" });
+  if (req.method !== "POST" && req.method !== "GET") return sendJson(res, 405, { error: "POST or GET required" });
 
   if (!stemsEnabled()) {
     return sendJson(res, 503, { error: "Instrumental extraction is not available yet.", code: "stems_disabled" });
   }
-  const apiKey = String(process.env.ELEVENLABS_API_KEY || "").trim();
-  if (!apiKey) return sendJson(res, 503, { error: "Instrumental service not configured.", code: "stems_disabled" });
-
   const user = await verifyUser(req);
   if (!user) return sendJson(res, 401, { error: "Sign in to get an instrumental." });
 
+  // ---- Job status (resume after the app was closed) ----
+  if (req.method === "GET") {
+    const q = new URL(req.url || "/", "https://x").searchParams;
+    const jobId = String(q.get("jobId") || "").trim();
+    if (!VALID_JOB_ID.test(jobId)) return sendJson(res, 400, { error: "Bad jobId" });
+    let rec = await readJob(user.userId, jobId);
+    if (!rec) return sendJson(res, 404, { error: "Job not found", code: "job_not_found" });
+    if (rec.state === "processing" && Date.now() - Number(rec.startedAt || 0) > STALE_JOB_MS) {
+      rec = await refundOnce(user, { ...rec, state: "failed", error: "The instrumental timed out. Your credits were returned." });
+      await writeJob(user.userId, jobId, rec);
+    }
+    return sendJson(res, 200, { ok: true, ...rec });
+  }
+
+  // ---- Start (or quote) ----
+  const apiKey = String(process.env.ELEVENLABS_API_KEY || "").trim();
+  if (!apiKey) return sendJson(res, 503, { error: "Instrumental service not configured.", code: "stems_disabled" });
+
   let body = {};
   try { body = await readJsonBody(req); } catch { body = {}; }
+  const quoteOnly = body?.quote === true;
+  const jobId = String(body?.jobId || "").trim();
+  if (!quoteOnly && !VALID_JOB_ID.test(jobId)) return sendJson(res, 400, { error: "Missing jobId" });
   const srcUrl = unwrapAudioProxy(String(body?.url || "").trim());
   if (!srcUrl || !/^https?:\/\//i.test(srcUrl) || isBlockedFetchUrl(srcUrl)) {
     return sendJson(res, 400, { error: "This song has no usable audio." });
   }
 
-  let isAdmin = isAdminEmail(user.email);
-  if (!isAdmin) {
-    try {
-      const { fetchProfileRole } = require("../_lib/admin-auth");
-      isAdmin = (await fetchProfileRole(user.userId)) === "admin";
-    } catch {}
-  }
+  const isAdmin = await isAdminUser(user);
   if (!isAdmin) {
     const gate = await requireProForWebApi(req, user.userId);
     if (!gate.ok) return sendJson(res, gate.status, { error: gate.error, code: gate.code });
+  }
+
+  // Same job id again (client retry / resume): never charge twice.
+  if (!quoteOnly) {
+    const existing = await readJob(user.userId, jobId);
+    if (existing) return sendJson(res, 200, { ok: true, ...existing });
   }
 
   // Load the source audio. Archived songs: owner (or admin) only.
   let audio;
   try {
     const archiveKey = /\/storage\/v1\/object\/(?:public\/)?song_archive\//i.test(srcUrl)
-      ? keyFromStorageUrl(srcUrl, "song_archive")
+      ? keyFromStorageUrl(srcUrl, BUCKET)
       : "";
     if (archiveKey) {
       const owner = archiveKey.split("/")[0] || "";
       if (!isAdmin && owner !== user.userId) {
         return sendJson(res, 403, { error: "You can only get an instrumental for your own songs." });
       }
-      audio = (await fetchStorageObjectBuffer("song_archive", archiveKey, MAX_AUDIO_BYTES)).buffer;
+      audio = (await fetchStorageObjectBuffer(BUCKET, archiveKey, MAX_AUDIO_BYTES)).buffer;
     } else {
       audio = await fetchAudio(srcUrl, MAX_AUDIO_BYTES);
     }
@@ -137,15 +236,21 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 502, { error: `Could not read the song audio (${e?.message || "error"}).` });
   }
 
-  // Charge up front, refund on any failure. Admin/owner accounts are not charged.
-  const cost = INSTRUMENTAL_CREDITS;
+  const seconds = probeDurationSec(audio);
+  if (seconds > MAX_SECONDS) {
+    return sendJson(res, 400, { error: "This song is too long for an instrumental (max 8 minutes).", code: "too_long" });
+  }
+  const credits = isAdmin ? 0 : creditsForSeconds(seconds || 180);
+  if (quoteOnly) return sendJson(res, 200, { ok: true, quote: true, credits, seconds: Math.round(seconds) });
+
+  // Charge up front; the job record exists before the paid call so closing the app cannot lose it.
   let balanceAfter = null;
-  if (!isAdmin) {
+  if (credits > 0) {
     const debit = await callRpc("consume_credits", {
       p_user_id: user.userId,
-      p_amount: cost,
+      p_amount: credits,
       p_reason: "instrumental_stems",
-      p_ref: "",
+      p_ref: jobId,
     });
     if (!debit.ok || !debit.data?.ok) {
       if (String(debit.data?.status || "") === "insufficient") {
@@ -153,23 +258,28 @@ module.exports = async function handler(req, res) {
           error: "Not enough credits",
           code: "insufficient_credits",
           balance: Number(debit.data?.balance || 0),
-          needed: cost,
+          needed: credits,
         });
       }
       return sendJson(res, 500, { error: "Credit check failed" });
     }
     balanceAfter = Number(debit.data?.balance || 0);
   }
-  const refund = async () => {
-    if (isAdmin) return;
-    try {
-      await callRpc("refund_credits", { p_user_id: user.userId, p_amount: cost, p_reason: "refund_instrumental_stems", p_ref: "" });
-    } catch {}
+  let rec = {
+    jobId,
+    state: "processing",
+    title: String(body?.title || "").slice(0, 160),
+    startedAt: Date.now(),
+    credits,
+    refunded: false,
   };
-  const fail = async (status, error, extra = {}) => {
-    await refund();
-    try { await logProviderUsage({ provider: "elevenlabs", kind: "stem_separation", userId: user.userId, status: "failed" }); } catch {}
-    return sendJson(res, status, { error, ...extra });
+  await writeJob(user.userId, jobId, rec);
+
+  const fail = async (status, error, code) => {
+    rec = await refundOnce(user, { ...rec, state: "failed", error, code });
+    await writeJob(user.userId, jobId, rec);
+    try { await logProviderUsage({ provider: "elevenlabs", kind: "stem_separation", userId: user.userId, status: "failed", ref: jobId }); } catch {}
+    return sendJson(res, status, { error, code, jobId, state: "failed" });
   };
 
   try {
@@ -192,29 +302,23 @@ module.exports = async function handler(req, res) {
     const zipBuf = Buffer.from(await r.arrayBuffer());
     if (!r.ok) {
       console.warn("[songs/instrumental] elevenlabs", r.status, zipBuf.toString("utf8").slice(0, 300));
-      return await fail(502, "The instrumental service could not process this song. You were not charged.", { code: "stems_failed" });
+      return await fail(502, "The instrumental service could not process this song. You were not charged.", "stems_failed");
     }
     const entries = readZipEntries(zipBuf);
     const pick = pickInstrumentalEntry(entries);
     if (!pick) {
       console.warn("[songs/instrumental] no instrumental stem in", entries.map((e) => e.name).join(", "));
-      return await fail(502, "No instrumental came back for this song. You were not charged.", { code: "stems_missing" });
+      return await fail(502, "No instrumental came back for this song. You were not charged.", "stems_missing");
     }
-    const out = pick.data();
     const key = `${user.userId}/inst-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp3`;
-    const up = await uploadObject({ bucket: "song_archive", key, body: out, contentType: "audio/mpeg" });
-    if (!up.ok) return await fail(502, "Could not save the instrumental. You were not charged.", { code: "stems_save_failed" });
-    try { await logProviderUsage({ provider: "elevenlabs", kind: "stem_separation", userId: user.userId, status: "completed" }); } catch {}
-    return sendJson(res, 200, {
-      ok: true,
-      url: up.url,
-      key,
-      stems: entries.map((e) => e.name),
-      creditsSpent: isAdmin ? 0 : cost,
-      balance: balanceAfter,
-    });
+    const up = await uploadObject({ bucket: BUCKET, key, body: pick.data(), contentType: "audio/mpeg" });
+    if (!up.ok) return await fail(502, "Could not save the instrumental. You were not charged.", "stems_save_failed");
+    rec = { ...rec, state: "done", url: up.url, key, finishedAt: Date.now(), seconds: Math.round(seconds) };
+    await writeJob(user.userId, jobId, rec);
+    try { await logProviderUsage({ provider: "elevenlabs", kind: "stem_separation", userId: user.userId, status: "completed", ref: jobId }); } catch {}
+    return sendJson(res, 200, { ok: true, ...rec, creditsSpent: credits, balance: balanceAfter });
   } catch (e) {
     console.warn("[songs/instrumental] failed", e?.message || e);
-    return await fail(502, "The instrumental service timed out. You were not charged.", { code: "stems_failed" });
+    return await fail(502, "The instrumental service timed out. You were not charged.", "stems_failed");
   }
 };

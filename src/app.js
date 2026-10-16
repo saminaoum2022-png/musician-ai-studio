@@ -509,7 +509,6 @@ try {
 }
 try {
   initTheme();
-  try { wireSettingsMusicProviderOnce(); } catch {}
   try { syncSettingsMusicProviderRow(); } catch {}
 } catch (e) {
   console.warn("[theme] init failed", e);
@@ -9036,341 +9035,26 @@ function syncSettingsPushRow() {
   }
 }
 
-let _musicEnginePanelLoading = null;
-/** Admin only: pull the Music engine panel from the server and mount it in Settings. */
-function ensureMusicEnginePanel() {
-  if (document.getElementById("settingsMusicProviderSection")) return Promise.resolve(true);
-  if (_musicEnginePanelLoading) return _musicEnginePanelLoading;
-  _musicEnginePanelLoading = (async () => {
-    try {
-      const token = getSupabaseAuthToken();
-      if (!token || !creditsState.isAdmin) return false;
-      const r = await fetch(apiUrl("/api/admin/music-engine-panel"), {
-        headers: getApiFetchHeaders({ Authorization: `Bearer ${token}` }),
-        cache: "no-store",
-      });
-      if (!r.ok) return false;
-      const d = await r.json().catch(() => ({}));
-      if (!d?.html || !creditsState.isAdmin) return false;
-      if (document.getElementById("settingsMusicProviderSection")) return true;
-      const anchor = document.getElementById("settingsOrbTitle")?.closest("section");
-      if (!anchor) return false;
-      anchor.insertAdjacentHTML("beforebegin", d.html);
-      wireSettingsMusicProviderOnce();
-      return true;
-    } catch {
-      return false;
-    } finally {
-      _musicEnginePanelLoading = null;
-      if (document.getElementById("settingsMusicProviderSection") && creditsState.isAdmin) {
-        try { syncSettingsMusicProviderRow(); } catch {}
-      }
-    }
-  })();
-  return _musicEnginePanelLoading;
-}
-
-function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
-  const section = document.getElementById("settingsMusicProviderSection");
-  const root = document.getElementById("settingsMusicProviderPicker");
-  const sub = document.getElementById("settingsMusicProviderSub");
-  const show = Boolean(creditsState.isAdmin);
-  if (show && !section) {
-    // Panel markup is not in the public HTML: fetch it after the server confirms admin.
-    void ensureMusicEnginePanel();
-    return;
-  }
-  if (!show && section) {
-    section.remove();
-    return;
-  }
-  if (section) {
-    section.hidden = !show;
-    section.style.display = show ? "" : "none";
-  }
-  if (!show) {
-    syncSettingsElevenFinetuneRow("suno");
-    syncSettingsGeminiProducerRow();
-    syncSettingsHumConductorRow();
-    return;
-  }
-  const p = normalizeMusicProviderPref(pref) || "suno";
-  if (root) {
-    root.querySelectorAll("[data-music-provider]").forEach((btn) => {
-      const active = String(btn.getAttribute("data-music-provider") || "") === p;
-      btn.classList.toggle("is-active", active);
-      btn.setAttribute("aria-checked", active ? "true" : "false");
-    });
-  }
-  if (sub) sub.textContent = musicProviderSubline(p);
-  syncSettingsElevenFinetuneRow(p);
-  syncSettingsGeminiProducerRow();
-  syncSettingsHumConductorRow();
+/** Re-sync the Create pieces that depend on the music engine (no Settings panel any more). */
+function syncSettingsMusicProviderRow() {
   try { syncElevenSongLengthPanel(); } catch {}
   try { syncCreateSongTitleField(); } catch {}
 }
 
-const ELEVENLABS_FINETUNE_LS_KEY = "nabadElevenFinetune";
-const GEMINI_PRODUCER_LS_KEY = "nabadGeminiProducer";
-const HUM_CONDUCTOR_LS_KEY = "nabadHumConductor";
-
-/** Admin ElevenLabs: use NabadAi DNA finetune (default on). */
 function getElevenlabsFinetunePref() {
-  if (!creditsState.isAdmin || getMusicProviderPref() !== "elevenlabs") return true;
-  try {
-    const saved = localStorage.getItem(ELEVENLABS_FINETUNE_LS_KEY);
-    if (saved === "0" || saved === "false") return false;
-  } catch {}
   return true;
 }
 
-function setElevenlabsFinetunePref(useFinetune) {
-  if (!creditsState.isAdmin) return;
-  const on = Boolean(useFinetune);
-  try {
-    localStorage.setItem(ELEVENLABS_FINETUNE_LS_KEY, on ? "1" : "0");
-  } catch {}
-  syncSettingsElevenFinetuneRow(getMusicProviderPref());
-  const providerSub = document.getElementById("settingsMusicProviderSub");
-  if (providerSub && getMusicProviderPref() === "elevenlabs") {
-    providerSub.textContent = musicProviderSubline("elevenlabs");
-  }
-}
-
-/** Admin A/B: Gemini producer before Lyria / ElevenLabs (default on). */
 function getGeminiProducerPref() {
-  if (!creditsState.isAdmin) return true;
-  try {
-    const saved = localStorage.getItem(GEMINI_PRODUCER_LS_KEY);
-    if (saved === "0" || saved === "false") return false;
-  } catch {}
   return true;
-}
-
-function setGeminiProducerPref(on) {
-  if (!creditsState.isAdmin) return;
-  const next = Boolean(on);
-  try {
-    localStorage.setItem(GEMINI_PRODUCER_LS_KEY, next ? "1" : "0");
-  } catch {}
-  syncSettingsGeminiProducerRow();
 }
 
 function humConductorPublicShipped() {
   return Boolean(NABAD_HUM_CONDUCTOR_PUBLIC_SHIPPED);
 }
 
-/** Public: on. Admin Settings can still turn it off. */
 function getHumConductorPref() {
-  if (creditsState.isAdmin) {
-    try {
-      const saved = localStorage.getItem(HUM_CONDUCTOR_LS_KEY);
-      if (saved === "0" || saved === "false") return false;
-      if (saved === "1" || saved === "true") return true;
-    } catch {}
-    return humConductorPublicShipped();
-  }
   return humConductorPublicShipped();
-}
-
-function setHumConductorPref(on) {
-  if (!creditsState.isAdmin) return;
-  const next = Boolean(on);
-  try {
-    localStorage.setItem(HUM_CONDUCTOR_LS_KEY, next ? "1" : "0");
-  } catch {}
-  syncSettingsHumConductorRow();
-}
-
-function syncSettingsHumConductorRow() {
-  const row = document.getElementById("settingsHumConductorRow");
-  const root = document.getElementById("settingsHumConductorPicker");
-  const sub = document.getElementById("settingsHumConductorSub");
-  const show = Boolean(creditsState.isAdmin);
-  if (row) {
-    row.hidden = !show;
-    row.style.display = show ? "" : "none";
-  }
-  if (!show) return;
-  const conductorOn = getHumConductorPref();
-  if (root) {
-    root.querySelectorAll("[data-hum-conductor]").forEach((btn) => {
-      const wantOn = String(btn.getAttribute("data-hum-conductor") || "") === "1";
-      const active = wantOn === conductorOn;
-      btn.classList.toggle("is-active", active);
-      btn.setAttribute("aria-checked", active ? "true" : "false");
-    });
-  }
-  if (sub) {
-    sub.textContent = conductorOn
-      ? "On — Gemini hears your Hum for Lyria. Instrumental + custom style = Hum to Track"
-      : "Off — Gemini does not read your Hum for Lyria";
-  }
-}
-
-function syncSettingsGeminiProducerRow() {
-  const row = document.getElementById("settingsGeminiProducerRow");
-  const root = document.getElementById("settingsGeminiProducerPicker");
-  const sub = document.getElementById("settingsGeminiProducerSub");
-  const pref = getMusicProviderPref();
-  const show = Boolean(creditsState.isAdmin) && pref !== "lyria_clip";
-  if (row) {
-    row.hidden = !show;
-    row.style.display = show ? "" : "none";
-  }
-  if (!show) return;
-  const producerOn = getGeminiProducerPref();
-  if (root) {
-    root.querySelectorAll("[data-gemini-producer]").forEach((btn) => {
-      const wantOn = String(btn.getAttribute("data-gemini-producer") || "") === "1";
-      const active = wantOn === producerOn;
-      btn.classList.toggle("is-active", active);
-      btn.setAttribute("aria-checked", active ? "true" : "false");
-    });
-  }
-  if (sub) {
-    sub.textContent = producerOn
-      ? "On — Gemini plans song sections and lyrics; your style line stays as written"
-      : "Off — direct prompt to Lyria (no Gemini producer)";
-  }
-}
-
-function syncSettingsElevenFinetuneRow(providerPref = getMusicProviderPref()) {
-  const row = document.getElementById("settingsElevenFinetuneRow");
-  const root = document.getElementById("settingsElevenFinetunePicker");
-  const sub = document.getElementById("settingsElevenFinetuneSub");
-  const show = Boolean(creditsState.isAdmin) && providerPref === "elevenlabs";
-  if (row) {
-    row.hidden = !show;
-    row.style.display = show ? "" : "none";
-  }
-  if (!show) return;
-  const useFinetune = getElevenlabsFinetunePref();
-  if (root) {
-    root.querySelectorAll("[data-eleven-finetune]").forEach((btn) => {
-      const wantOn = String(btn.getAttribute("data-eleven-finetune") || "") === "1";
-      const active = wantOn === useFinetune;
-      btn.classList.toggle("is-active", active);
-      btn.setAttribute("aria-checked", active ? "true" : "false");
-    });
-  }
-  if (sub) {
-    sub.textContent = useFinetune
-      ? "NabadAi DNA finetune — custom voice"
-      : "Base music_v2.5 — no finetune (generic model)";
-  }
-}
-
-function wireSettingsMusicProviderOnce() {
-  const root = document.getElementById("settingsMusicProviderPicker");
-  if (root && root.dataset.boundMusicProvider !== "1") {
-    root.dataset.boundMusicProvider = "1";
-    root.addEventListener("click", (ev) => {
-      const btn = ev.target?.closest?.("[data-music-provider]");
-      if (!btn || !root.contains(btn)) return;
-      ev.preventDefault();
-      if (!creditsState.isAdmin) return;
-      const pref = normalizeMusicProviderPref(btn.getAttribute("data-music-provider"));
-      if (!pref || pref === getMusicProviderPref()) return;
-      try {
-        if (typeof haptic === "function") haptic("light");
-      } catch {}
-      setMusicProviderPref(pref);
-      syncSettingsElevenFinetuneRow(pref);
-      try {
-        const toastMsg =
-          pref === "minimax"
-            ? "MiniMax engine enabled for your next songs."
-            : pref === "lyria"
-              ? "Lyria full song enabled for Create (~3 min)."
-              : pref === "lyria_clip"
-                ? "Lyria clip enabled — ~30s hooks from Create (clip model)."
-              : pref === "elevenlabs"
-                ? getElevenlabsFinetunePref()
-                  ? "ElevenLabs enabled — NabadAi DNA finetune on."
-                  : "ElevenLabs enabled — base model (no finetune)."
-                : pref === "mureka"
-                  ? "Mureka engine enabled — lyrics→song (~$0.045). Admin only."
-                  : "Default engine restored (two variants).";
-        showToast(toastMsg, {
-          icon: pref === "suno" ? "✓" : "♪",
-          durationMs: 3600,
-        });
-      } catch {}
-    });
-  }
-  const finetuneRoot = document.getElementById("settingsElevenFinetunePicker");
-  if (finetuneRoot && finetuneRoot.dataset.boundElevenFinetune !== "1") {
-    finetuneRoot.dataset.boundElevenFinetune = "1";
-    finetuneRoot.addEventListener("click", (ev) => {
-      const btn = ev.target?.closest?.("[data-eleven-finetune]");
-      if (!btn || !finetuneRoot.contains(btn)) return;
-      ev.preventDefault();
-      if (!creditsState.isAdmin || getMusicProviderPref() !== "elevenlabs") return;
-      const useFinetune = String(btn.getAttribute("data-eleven-finetune") || "") === "1";
-      if (useFinetune === getElevenlabsFinetunePref()) return;
-      try {
-        if (typeof haptic === "function") haptic("light");
-      } catch {}
-      setElevenlabsFinetunePref(useFinetune);
-      try {
-        showToast(
-          useFinetune
-            ? "ElevenLabs finetune ON — NabadAi DNA voice."
-            : "ElevenLabs finetune OFF — base music_v2.5 model.",
-          { icon: "♪", durationMs: 3600 },
-        );
-      } catch {}
-    });
-  }
-  const producerRoot = document.getElementById("settingsGeminiProducerPicker");
-  if (producerRoot && producerRoot.dataset.boundGeminiProducer !== "1") {
-    producerRoot.dataset.boundGeminiProducer = "1";
-    producerRoot.addEventListener("click", (ev) => {
-      const btn = ev.target?.closest?.("[data-gemini-producer]");
-      if (!btn || !producerRoot.contains(btn)) return;
-      ev.preventDefault();
-      if (!creditsState.isAdmin) return;
-      const producerOn = String(btn.getAttribute("data-gemini-producer") || "") === "1";
-      if (producerOn === getGeminiProducerPref()) return;
-      try {
-        if (typeof haptic === "function") haptic("light");
-      } catch {}
-      setGeminiProducerPref(producerOn);
-      try {
-        showToast(
-          producerOn
-            ? "Gemini producer ON — rewrites style/lyrics before Lyria."
-            : "Gemini producer OFF — direct prompt to Lyria (A/B).",
-          { icon: "♪", durationMs: 3600 },
-        );
-      } catch {}
-    });
-  }
-  const conductorRoot = document.getElementById("settingsHumConductorPicker");
-  if (conductorRoot && conductorRoot.dataset.boundHumConductor !== "1") {
-    conductorRoot.dataset.boundHumConductor = "1";
-    conductorRoot.addEventListener("click", (ev) => {
-      const btn = ev.target?.closest?.("[data-hum-conductor]");
-      if (!btn || !conductorRoot.contains(btn)) return;
-      ev.preventDefault();
-      if (!creditsState.isAdmin) return;
-      const conductorOn = String(btn.getAttribute("data-hum-conductor") || "") === "1";
-      if (conductorOn === getHumConductorPref()) return;
-      try {
-        if (typeof haptic === "function") haptic("light");
-      } catch {}
-      setHumConductorPref(conductorOn);
-      try {
-        showToast(
-          conductorOn
-            ? "Hum Conductor ON — Gemini hears your Hum, then Lyria plays the motif."
-            : "Hum Conductor OFF — Hum stays on the default path as before.",
-          { icon: "♪", durationMs: 3600 },
-        );
-      } catch {}
-    });
-  }
 }
 
 function syncSettingsOrbMode(mode = getCoachOrbMode()) {
@@ -32723,7 +32407,6 @@ function deepFindTaskIdString(obj, depth = 0) {
   return "";
 }
 
-const MUSIC_PROVIDER_LS_KEY = "nabadMusicProvider";
 const MUSIC_PROVIDER_PREFS = ["suno", "minimax", "lyria", "lyria_clip", "elevenlabs", "mureka"];
 
 function normalizeMusicProviderPref(raw) {
@@ -32732,30 +32415,9 @@ function normalizeMusicProviderPref(raw) {
 }
 
 /** Admin-only engine picker; defaults to Suno (alt providers for staging A/B). */
+/** No per-admin engine override any more: everyone follows the shipped flags. */
 function getMusicProviderPref() {
-  if (!creditsState.isAdmin) return "suno";
-  try {
-    const saved = normalizeMusicProviderPref(localStorage.getItem(MUSIC_PROVIDER_LS_KEY));
-    if (saved) return saved;
-  } catch {}
-  try {
-    if (String(window.__NABAD_CLIENT_ENV__?.environment || "") === "staging") return "lyria";
-  } catch {}
   return "suno";
-}
-
-function setMusicProviderPref(pref) {
-  if (!creditsState.isAdmin) return;
-  const p = normalizeMusicProviderPref(pref) || "suno";
-  try {
-    localStorage.setItem(MUSIC_PROVIDER_LS_KEY, p);
-  } catch {}
-  syncSettingsMusicProviderRow(p);
-  try { syncNabadClipCreateUi(); } catch {}
-  try { syncCreateHintForSelectedEngine(); } catch {}
-  try { syncCreateGenerateDock(); } catch {}
-  try { syncElevenSongLengthPanel(); } catch {}
-  try { syncCreateSongTitleField(); } catch {}
 }
 
 function formatElevenMusicModelLabel(raw) {

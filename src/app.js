@@ -33503,8 +33503,9 @@ function trackSheetDownloadRowsHtml(track) {
   const audioRow =
     `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>`;
   if (!trackOffersVideoDownload(track)) return audioRow;
+  const videoLocked = proFeatureLocked();
   return `${audioRow}
-    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>`;
+    <button type="button" class="discoverTrackSheetRow${videoLocked ? " isProLocked" : ""}" data-track-sheet-action="library_dl_video">Download video${videoLocked ? '<span class="webProFeaturePill webProFeaturePill--sheet" aria-hidden="true">Pro</span>' : ""}</button>`;
 }
 
 function libraryTrackForPlaybackSource(source) {
@@ -57049,7 +57050,7 @@ function runTrackSheetAction(action, sourceEl) {
   }
 
   if (action === "library_dl_audio" || action === "library_dl_video") {
-    if (action === "library_dl_video" && !requireProFeature("Video export")) return;
+    if (action === "library_dl_video" && !proFeatureAllowed()) { shut(); promptWebProUpgrade("Video export"); return; }
     const fromProfileLib = ctx.mode === "profile_lib";
     const fromDiscoverOwn =
       (ctx.mode === "discover" || ctx.mode === "public") && trackSheetCtxIsOwnSong(ctx);
@@ -57395,7 +57396,7 @@ function runTrackSheetAction(action, sourceEl) {
       return;
     }
     if (action === "library_dl_video") {
-      if (!requireProFeature("Video export")) return;
+      if (!proFeatureAllowed()) { shut(); promptWebProUpgrade("Video export"); return; }
       shut();
       void (async () => {
         try {
@@ -57593,7 +57594,7 @@ function runTrackSheetAction(action, sourceEl) {
       return;
     }
     if (action === "library_dl_video") {
-      if (!requireProFeature("Video export")) return;
+      if (!proFeatureAllowed()) { shut(); promptWebProUpgrade("Video export"); return; }
       shut();
       const t = resolveTrackForVideoExport(hubDownloadTrack()) || hubDownloadTrack();
       if (!t?.url) {

@@ -11,7 +11,8 @@
  * client can pick the finished instrumental up later (and a stuck job is refunded exactly once).
  *
  * Off on production until ELEVENLABS_STEMS_ENABLED=1 (always on for Vercel previews / staging).
- * Price: INSTRUMENTAL_CREDITS_PER_MIN per started half-minute-rounded minute, min INSTRUMENTAL_MIN_CREDITS.
+ * Price: flat INSTRUMENTAL_CREDITS (default 50) for songs up to 4 minutes (every Lyria song: its hard cap is ~3 min);
+ * INSTRUMENTAL_CREDITS_LONG (default 75) for longer songs from other engines, up to 8 minutes.
  */
 const { applyCors } = require("../_lib/cors");
 const { verifyUser, callRpc, isAdminEmail, sendJson, readJsonBody } = require("../_lib/credits-auth");
@@ -26,8 +27,9 @@ const MAX_AUDIO_BYTES = 45 * 1024 * 1024;
 const MAX_SECONDS = 8 * 60;
 const ELEVEN_TIMEOUT_MS = 170000;
 const STALE_JOB_MS = 8 * 60 * 1000;
-const PER_MIN = Math.max(1, Number(process.env.INSTRUMENTAL_CREDITS_PER_MIN || "20") || 20);
-const MIN_CREDITS = Math.max(1, Number(process.env.INSTRUMENTAL_MIN_CREDITS || "30") || 30);
+const FLAT_CREDITS = Math.max(1, Number(process.env.INSTRUMENTAL_CREDITS || "50") || 50);
+const LONG_CREDITS = Math.max(FLAT_CREDITS, Number(process.env.INSTRUMENTAL_CREDITS_LONG || "75") || 75);
+const FLAT_UP_TO_SECONDS = 4 * 60;
 
 function stemsEnabled() {
   if (String(process.env.VERCEL_ENV || "").toLowerCase() !== "production") return true;
@@ -109,10 +111,9 @@ function probeDurationSec(buf) {
   }
 }
 
-/** Credits for a song of this length: per minute, rounded up to the next half minute, with a floor. */
+/** One simple price; only long songs (other engines) cost more because the provider bills per minute. */
 function creditsForSeconds(seconds) {
-  const halfMinutes = Math.max(1, Math.ceil((Number(seconds) || 0) / 30));
-  return Math.max(MIN_CREDITS, Math.ceil((halfMinutes / 2) * PER_MIN));
+  return (Number(seconds) || 0) > FLAT_UP_TO_SECONDS ? LONG_CREDITS : FLAT_CREDITS;
 }
 
 function pickInstrumentalEntry(entries) {

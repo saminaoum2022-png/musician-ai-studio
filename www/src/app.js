@@ -57071,6 +57071,40 @@ function resumeInstrumentalJobs() {
   for (const j of jobs) void pollInstrumentalJob(j, { maxMs: Math.max(15000, 9 * 60 * 1000 - (Date.now() - (Number(j.startedAt) || 0))) });
 }
 
+/**
+ * Ask before spending credits. Resolves true on confirm, false on cancel/backdrop/close.
+ * `free` (admin accounts) still asks, so a stray tap never starts a job.
+ */
+function confirmCreditSpend({ heading = "Continue?", lead = "", credits = 0, balance = NaN, free = false, confirmLabel = "Continue" } = {}) {
+  const sheet = document.getElementById("creditConfirmSheet");
+  if (!sheet) return Promise.resolve(window.confirm?.(`${heading}\n${lead}`) !== false);
+  return new Promise((resolve) => {
+    const $ = (id) => document.getElementById(id);
+    $("creditConfirmTitle").textContent = heading;
+    $("creditConfirmLead").textContent = lead;
+    $("creditConfirmCost").textContent = free ? "Free" : formatCreditsAmount(credits);
+    $("creditConfirmUnit").textContent = free ? "admin account" : (Number(credits) === 1 ? "credit" : "credits");
+    $("creditConfirmBalance").textContent = !free && Number.isFinite(balance)
+      ? `You have ${formatCreditsAmount(balance)} credits · ${formatCreditsAmount(Math.max(0, balance - credits))} left after`
+      : "";
+    $("creditConfirmGo").textContent = confirmLabel;
+    const done = (ok) => {
+      sheet.hidden = true;
+      sheet.setAttribute("aria-hidden", "true");
+      sheet.removeEventListener("click", onClick);
+      resolve(ok);
+    };
+    const onClick = (e) => {
+      if (e.target.closest("#creditConfirmGo")) { try { haptic("medium"); } catch {} done(true); return; }
+      if (e.target.closest("#creditConfirmCancel") || e.target.closest("#creditConfirmClose") || e.target.closest("#creditConfirmBackdrop")) done(false);
+    };
+    sheet.addEventListener("click", onClick);
+    sheet.hidden = false;
+    sheet.setAttribute("aria-hidden", "false");
+    try { haptic("light"); } catch {}
+  });
+}
+
 /** Returns false → fall back to the old Suno path (feature off on this server). */
 async function runElevenInstrumentalForTrack(t, title) {
   const srcUrl = String(t?.url || "").trim();
@@ -57098,12 +57132,23 @@ async function runElevenInstrumentalForTrack(t, title) {
     return true;
   }
   const credits = Number(quote.credits) || 0;
-  if (credits > 0) {
-    const mins = Math.max(1, Math.round((Number(quote.seconds) || 180) / 60));
-    let ok = true;
-    try { ok = window.confirm(`Get an instrumental of "${title}"?\n\nThis song is about ${mins} min, so it uses ${credits} credits.`); } catch {}
-    if (!ok) { setStatus(""); return true; }
+  const free = credits === 0;
+  const balance = Number(creditsState.balance);
+  if (!free && Number.isFinite(balance) && balance < credits) {
+    setStatus("");
+    try { showOutOfCreditsPrompt({ needed: credits, balance }); } catch {}
+    return true;
   }
+  const mins = Math.max(1, Math.round((Number(quote.seconds) || 180) / 60));
+  const okToGo = await confirmCreditSpend({
+    heading: "Get instrumental?",
+    lead: `“${title}” · about ${mins} min. We remove the vocals and save the music-only version to your Library.`,
+    credits,
+    balance,
+    free,
+    confirmLabel: free ? "Get instrumental" : `Get instrumental · ${formatCreditsAmount(credits)} credits`,
+  });
+  if (!okToGo) { setStatus(""); return true; }
   // 2) Same experience as a normal generation: Library + shimmer card, and the job survives closing the app.
   const jobId = `inst_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const job = {

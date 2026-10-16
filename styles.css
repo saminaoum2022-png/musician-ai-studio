@@ -75383,3 +75383,28 @@ html[data-theme="light"] .aaGold{ background: rgba(0,0,0,.03); }
 .messagesStickersSheetLead{
   padding: 0 2px;
 }
+
+/* Spend-credits confirmation sheet (Get instrumental, …) — same glass sheet as out-of-credits. */
+.creditConfirmSheet[hidden]{ display: none !important; }
+.creditConfirmCostBox{
+  display: flex; align-items: baseline; justify-content: center; gap: 8px;
+  margin: 6px 0 4px; padding: 14px 12px; border-radius: 16px;
+  border: 1px solid rgba(167, 148, 230, 0.34);
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.18) 0%, rgba(124, 92, 255, 0.06) 100%);
+}
+.creditConfirmCostValue{ font-size: 40px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; color: #fff; }
+.creditConfirmCostUnit{ font-size: 15px; font-weight: 700; color: rgba(226, 218, 255, 0.82); }
+.creditConfirmBalance{ margin: 8px 0 14px; text-align: center; font-size: 13px; color: #9aa1b6; }
+.creditConfirmActions{ display: flex; flex-direction: column; gap: 8px; padding-bottom: 4px; }
+.creditConfirmGo{
+  appearance: none; border: 0; cursor: pointer; width: 100%; height: 50px; border-radius: 999px;
+  font: inherit; font-size: 16px; font-weight: 800; color: #fff;
+  background: linear-gradient(148deg, #23d5ab 0%, #2ec4b8 34%, #6b78e8 72%, #7c5cff 100%);
+}
+.creditConfirmGo:active{ transform: scale(0.985); }
+.creditConfirmCancel{
+  appearance: none; border: 0; background: none; cursor: pointer; height: 42px;
+  font: inherit; font-size: 15px; font-weight: 700; color: #9aa1b6;
+}
+html[data-theme="light"] .creditConfirmCostValue{ color: #0b0b13; }
+html[data-theme="light"] .creditConfirmCostUnit{ color: rgba(60, 40, 140, 0.8); }

@@ -58149,13 +58149,21 @@ function stashDiscoverReelCoverPending() {
   discoverReelDebugLog("stash", "hide art until portrait");
 }
 
-function revealDiscoverReelCoverWhenReady(img) {
+function revealDiscoverReelCoverWhenReady(img, { maxWaitMs = 0 } = {}) {
   return new Promise((resolve) => {
     const finishReveal = () => {
       revealDiscoverReelShell();
       discoverReelDebugLayout("after-reveal");
       resolve();
     };
+    // Slow network: open the player on its dark backdrop; the cover still fades in when it loads.
+    if (maxWaitMs > 0) {
+      window.setTimeout(() => {
+        if (_discoverReelShellRevealed) return;
+        discoverReelDebugLog("reveal", `timeout ${maxWaitMs}ms — open without cover`);
+        finishReveal();
+      }, maxWaitMs);
+    }
     if (!img) {
       finishReveal();
       return;
@@ -58924,14 +58932,18 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
         primeDiscoverReelOpenFirstFrame(pick, idx, { title, subtitle: by, el });
         if (playerArtUrl) {
           discoverReelDebugLog("decode", "await portrait");
-          await primeDiscoverReelCoverDecode(playerArtUrl);
+          // Cap the wait: a slow portrait download must not hold the player closed for seconds.
+          await Promise.race([
+            primeDiscoverReelCoverDecode(playerArtUrl),
+            new Promise((r) => window.setTimeout(r, 700)),
+          ]);
         }
         if (els.playerArt?.classList.contains("isReelCoverPending")) {
           discoverReelDebugLog("decode", "repaint after decode");
           primeDiscoverReelCoverFirstFrame(pick, { title, subtitle: by });
         }
         if (isNativeShell() && !_discoverReelShellRevealed) {
-          await revealDiscoverReelCoverWhenReady(els.playerArt);
+          await revealDiscoverReelCoverWhenReady(els.playerArt, { maxWaitMs: 500 });
         }
         discoverReelDebugLayout("pre-play");
         await playDiscoverReelAt(idx, { openPlayer: true, skipCoverPaint: true });
